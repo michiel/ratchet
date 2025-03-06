@@ -2,5 +2,27 @@
 name = "ratchet_cli"
 version = "0.1.0"
 edition = "2021"
+# Inherit workspace-level package configuration
+authors.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Ratchet CLI app"
 
+# Dependencies
 [dependencies]
+
+# Use workspace-level dependencies
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+log.workspace = true
+clap.workspace = true
+
+# Local dependencies
+ratchet_lib = { path = "../ratchet-lib" }
+
+# Binary-specific dependencies (commented out for now due to network issues)
+# dialoguer = "0.11"
+# indicatif = "0.17"
