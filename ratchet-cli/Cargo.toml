@@ -19,6 +19,7 @@ thiserror.workspace = true
 anyhow.workspace = true
 log.workspace = true
 clap.workspace = true
+env_logger.workspace = true
 
 # Local dependencies
 ratchet_lib = { path = "../ratchet-lib" }
