@@ -1628,7 +1628,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ratchet_cli"
+name = "ratchet"
 version = "0.1.0"
 dependencies = [
  "anyhow",
