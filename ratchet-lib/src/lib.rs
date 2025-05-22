@@ -1,7 +1,7 @@
 use anyhow::Result;
 use boa_engine::{Context as BoaContext, Source};
 use jsonschema::{JSONSchema, Draft};
-use serde_json::{json, Value as JsonValue};
+use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::Path;
 use thiserror::Error;
@@ -69,15 +69,15 @@ pub mod js_executor {
         func: &boa_engine::JsValue,
         input_data: &JsonValue
     ) -> Result<JsonValue, JsExecutionError> {
-        // Convert input_data to JsValue
-        let input_js_value = serde_json::to_string(input_data)
+        // Convert input_data to JsValue 
+        let input_js_str = serde_json::to_string(input_data)
             .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
         
-        let input_arg = context
-            .eval(Source::from_bytes(&input_js_value))
-            .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+        // Parse the JSON string into a JavaScript object by evaluating it directly
+        let input_arg = context.eval(Source::from_bytes(&format!("JSON.parse('{}')", input_js_str.replace("'", "\\'"))))
+            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse input JSON: {}", e)))?;
 
-        // We need to convert the function evaluation result to a JavaScript function
+        // Check if func is callable
         if !func.is_callable() {
             return Err(JsExecutionError::ExecutionError("The evaluated JavaScript code did not return a callable function".to_string()));
         }
@@ -91,8 +91,15 @@ pub mod js_executor {
             .call(func, &[input_arg], context)
             .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
 
-        // Convert result back to JsonValue - we need to convert to a string first
-        let result_str = result.to_string(context)
+        // Convert result back to JsonValue by first converting to JSON string
+        // We need to create a temporary variable to hold the result so we can stringify it
+        context.global_object().set("__temp_result", result, true, context)
+            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set temporary result: {}", e)))?;
+        
+        let result_json_str = context.eval(Source::from_bytes("JSON.stringify(__temp_result)"))
+            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to stringify result: {}", e)))?;
+        
+        let result_str = result_json_str.to_string(context)
             .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
         
         // Now convert the JavaScript string representation to a Rust string
@@ -107,7 +114,7 @@ pub mod js_executor {
 
     /// Execute a JavaScript file with the given input
     pub async fn execute_js_file(
-        _js_file_path: &Path,
+        js_file_path: &Path,
         input_schema_path: &Path,
         output_schema_path: &Path,
         input_data: JsonValue,
@@ -119,23 +126,24 @@ pub mod js_executor {
         // Validate input against schema
         validate_json(&input_data, &input_schema)?;
 
-        // For simplicity, handle addition directly without JS execution
-        // We'll improve this later with proper JS execution
-        if input_data.get("num1").is_some() && input_data.get("num2").is_some() {
-            let num1 = input_data["num1"].as_f64().unwrap_or(0.0);
-            let num2 = input_data["num2"].as_f64().unwrap_or(0.0);
-            let sum = num1 + num2;
-            
-            let result = json!({ "sum": sum });
-            
-            // Validate output against schema
-            validate_json(&result, &output_schema)?;
-            
-            return Ok(result);
-        }
+        // Read and execute the JavaScript file
+        let js_code = fs::read_to_string(js_file_path)
+            .map_err(JsExecutionError::FileReadError)?;
         
-        // Fallback case if the input doesn't match expected format
-        Err(JsExecutionError::ExecutionError("Unsupported operation".to_string()))
+        // Create a new Boa context for JavaScript execution
+        let mut context = BoaContext::default();
+        
+        // Evaluate the JavaScript file
+        let func = context.eval(Source::from_bytes(&js_code))
+            .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
+        
+        // Call the JavaScript function with the input data
+        let result = call_js_function(&mut context, &func, &input_data)?;
+        
+        // Validate output against schema
+        validate_json(&result, &output_schema)?;
+        
+        Ok(result)
     }
 
 }
@@ -152,6 +160,7 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::tempdir;
     use tokio_test::block_on;
+    use serde_json::json;
 
     // We need to keep a reference to tempdir so it doesn't get dropped while we use the files
     struct TestFiles {
@@ -166,20 +175,24 @@ mod tests {
         let temp_dir = tempdir()?;
         
         let js_file = temp_dir.path().join("main.js");
-        fs::write(&js_file, r#"{
-  // Wrapped in an object literal to avoid JavaScript syntax issues
-  "function": function(input) {
-    const {num1, num2} = input;
+        fs::write(&js_file, r#"
+// Export a function for use
+function processInput(input) {
+  const num1 = input.num1;
+  const num2 = input.num2;
 
-    if (typeof num1 !== 'number' || typeof num2 !== 'number') {
-      throw new Error('num1 and num2 must be numbers');
-    }
-
-    return {
-      sum: num1 + num2
-    };
+  if (typeof num1 !== 'number' || typeof num2 !== 'number') {
+    throw new Error('num1 and num2 must be numbers');
   }
-}"#)?;
+
+  return {
+    sum: num1 + num2
+  };
+}
+
+// Return the function itself as the module's export
+processInput
+"#)?;
 
         let input_schema = temp_dir.path().join("input.schema.json");
         fs::write(&input_schema, r#"{
