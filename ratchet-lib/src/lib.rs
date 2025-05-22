@@ -1,8 +1,6 @@
 use anyhow::Result;
 use boa_engine::{Context as BoaContext, Source};
 use jsonschema::{JSONSchema, Draft};
-use log::debug;
-use rand::Rng;
 use serde_json::{json, Value as JsonValue};
 use std::fs;
 use std::path::Path;
@@ -140,26 +138,6 @@ pub mod js_executor {
         Err(JsExecutionError::ExecutionError("Unsupported operation".to_string()))
     }
 
-    /// Execute a JavaScript task with random numeric inputs
-    pub async fn execute_js_task_with_random_inputs(
-        js_file_path: &Path,
-        input_schema_path: &Path,
-        output_schema_path: &Path,
-        min: i32,
-        max: i32,
-    ) -> Result<JsonValue, JsExecutionError> {
-        let mut rng = rand::thread_rng();
-        let num1 = rng.gen_range(min..=max);
-        let num2 = rng.gen_range(min..=max);
-
-        debug!("Executing JS task with random inputs: {} and {}", num1, num2);
-        let input_data = json!({
-            "num1": num1,
-            "num2": num2,
-        });
-
-        execute_js_file(js_file_path, input_schema_path, output_schema_path, input_data).await
-    }
 }
 
 /// Legacy addition function (kept for compatibility)
@@ -327,31 +305,4 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_random_inputs() {
-        block_on(async {
-            if let Ok(files) = setup_test_files() {
-                let result = execute_js_task_with_random_inputs(
-                    &files.js_file,
-                    &files.input_schema,
-                    &files.output_schema,
-                    1,
-                    100
-                ).await.unwrap();
-
-                // We can't check the exact value since it's random,
-                // but we can check that there's a "sum" field that's a number
-                assert!(result.is_object());
-                assert!(result.get("sum").is_some());
-                assert!(result["sum"].is_number());
-
-                // We know that given inputs 1-100, the sum must be in range 2-200
-                let sum = result["sum"].as_f64().unwrap();
-                assert!(sum >= 2.0 && sum <= 200.0);
-            } else {
-                // Skip test if files can't be created
-                println!("Skipping test_random_inputs due to file setup issues");
-            }
-        });
-    }
 }

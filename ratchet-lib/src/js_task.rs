@@ -1,12 +1,13 @@
-use crate::js_executor::{execute_js_task_with_random_inputs, JsExecutionError};
-use serde_json::Value as JsonValue;
+use crate::js_executor::{execute_js_file, JsExecutionError};
+use serde_json::{json, Value as JsonValue};
 use std::path::Path;
 use tokio::runtime::Runtime;
+use log::debug;
 
-/// Run the addition JavaScript task with random inputs
+/// Run the addition JavaScript task with explicit inputs
 pub fn run_addition_task(
-    min: i32,
-    max: i32,
+    num1: i32,
+    num2: i32,
 ) -> Result<JsonValue, JsExecutionError> {
     // Create Tokio runtime
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
@@ -19,7 +20,13 @@ pub fn run_addition_task(
 
     // Execute the task inside the runtime
     runtime.block_on(async {
-        execute_js_task_with_random_inputs(&js_file, &input_schema, &output_schema, min, max).await
+        debug!("Executing JS task with inputs: {} and {}", num1, num2);
+        let input_data = json!({
+            "num1": num1,
+            "num2": num2,
+        });
+
+        execute_js_file(&js_file, &input_schema, &output_schema, input_data).await
     })
 }
 
@@ -43,16 +50,20 @@ mod tests {
             return;
         }
 
-        let result = run_addition_task(1, 100).unwrap();
+        let num1 = 5;
+        let num2 = 7;
+        let expected_sum = 12.0;
+        
+        let result = run_addition_task(num1, num2).unwrap();
         
         // Verify result structure
         assert!(result.is_object());
         assert!(result.get("sum").is_some());
         assert!(result["sum"].is_number());
         
-        // Verify that sum is within expected range (for inputs 1-100)
+        // Verify the exact sum
         let sum = result["sum"].as_f64().unwrap();
-        assert!(sum >= 2.0 && sum <= 200.0);
+        assert_eq!(sum, expected_sum);
     }
     
     #[test]

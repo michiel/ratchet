@@ -13,13 +13,13 @@ struct Cli {
 enum Commands {
     /// Run the sample addition JS task
     RunAddition {
-        /// Minimum value for random numbers
-        #[arg(long, default_value_t = 1)]
-        min: i32,
+        /// First number to add
+        #[arg(long, default_value_t = 5)]
+        num1: i32,
 
-        /// Maximum value for random numbers
-        #[arg(long, default_value_t = 100)]
-        max: i32,
+        /// Second number to add
+        #[arg(long, default_value_t = 7)]
+        num2: i32,
     },
 }
 
@@ -28,12 +28,12 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::RunAddition { min, max }) => {
+        Some(Commands::RunAddition { num1, num2 }) => {
             println!(
-                "Running addition task with random numbers between {} and {}",
-                min, max
+                "Running addition task with inputs: {} and {}",
+                num1, num2
             );
-            match js_task::run_addition_task(*min, *max) {
+            match js_task::run_addition_task(*num1, *num2) {
                 Ok(result) => {
                     let formatted = to_string_pretty(&result).unwrap();
                     println!("Result: {}", formatted);
