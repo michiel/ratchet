@@ -7,6 +7,7 @@ use std::path::Path;
 use thiserror::Error;
 
 pub mod js_task;
+pub mod http;
 
 /// A module for executing JavaScript tasks
 pub mod js_executor {
@@ -90,6 +91,63 @@ pub mod js_executor {
         let result = func_obj
             .call(func, &[input_arg], context)
             .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+            
+        // Check if we need to process a fetch call
+        let fetch_marker = context.eval(Source::from_bytes(
+            "typeof __fetch_url === 'string' && __fetch_url !== null"
+        )).map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+        
+        if fetch_marker.as_boolean().unwrap_or(false) {
+            // Get the fetch parameters
+            let url_js = context.eval(Source::from_bytes("__fetch_url"))
+                .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+            
+            let params_js = context.eval(Source::from_bytes("__fetch_params"))
+                .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+                
+            let body_js = context.eval(Source::from_bytes("__fetch_body"))
+                .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+            
+            // Convert to Rust values
+            let url = url_js.to_string(context)
+                .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?
+                .to_std_string_escaped();
+                
+            // Parse params if provided
+            let params = if !params_js.is_null() && !params_js.is_undefined() {
+                let params_str = params_js.to_string(context)
+                    .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?
+                    .to_std_string_escaped();
+                    
+                serde_json::from_str(&params_str)
+                    .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?
+            } else {
+                None
+            };
+            
+            // Parse body if provided
+            let body = if !body_js.is_null() && !body_js.is_undefined() {
+                let body_str = body_js.to_string(context)
+                    .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?
+                    .to_std_string_escaped();
+                    
+                serde_json::from_str(&body_str)
+                    .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?
+            } else {
+                None
+            };
+            
+            // Perform the HTTP call
+            let http_result = crate::http::call_http(&url, params.as_ref(), body.as_ref())
+                .map_err(|e| JsExecutionError::ExecutionError(format!("HTTP error: {}", e)))?;
+                
+            // Clear the fetch state
+            context.eval(Source::from_bytes("__fetch_url = null; __fetch_params = null; __fetch_body = null;"))
+                .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+                
+            // Return the HTTP result instead
+            return Ok(http_result);
+        }
 
         // Convert result back to JsonValue by first converting to JSON string
         // We need to create a temporary variable to hold the result so we can stringify it
@@ -132,6 +190,14 @@ pub mod js_executor {
         
         // Create a new Boa context for JavaScript execution
         let mut context = BoaContext::default();
+        
+        // Register the fetch API
+        crate::http::register_fetch(&mut context)
+            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e)))?;
+        
+        // Initialize fetch variables
+        context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
+            .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
         
         // Evaluate the JavaScript file
         let func = context.eval(Source::from_bytes(&js_code))
