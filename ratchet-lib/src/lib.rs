@@ -173,21 +173,58 @@ pub mod js_executor {
 
     /// Execute a task with the given input
     pub async fn execute_task(
-        task: &crate::task::Task,
+        task: &mut crate::task::Task,
         input_data: JsonValue,
     ) -> Result<JsonValue, JsExecutionError> {
         match &task.task_type {
-            crate::task::TaskType::JsTask(js_path) => {
-                let js_file_path = Path::new(js_path);
+            crate::task::TaskType::JsTask { .. } => {
+                // Load content if not already loaded
+                task.ensure_content_loaded()
+                    .map_err(|e| JsExecutionError::FileReadError(std::io::Error::new(
+                        std::io::ErrorKind::Other, 
+                        format!("Failed to load JavaScript content: {}", e)
+                    )))?;
+                
+                let js_content = task.get_js_content()
+                    .map_err(|e| JsExecutionError::FileReadError(std::io::Error::new(
+                        std::io::ErrorKind::Other, 
+                        format!("Failed to get JavaScript content: {}", e)
+                    )))?;
+                
                 let input_schema_path = task.path.join("input.schema.json");
                 let output_schema_path = task.path.join("output.schema.json");
                 
-                execute_js_file(
-                    js_file_path,
-                    &input_schema_path,
-                    &output_schema_path,
-                    input_data
-                ).await
+                // Parse input and output schemas
+                let input_schema = parse_schema(&input_schema_path)?;
+                let output_schema = parse_schema(&output_schema_path)?;
+
+                // Validate input against schema
+                validate_json(&input_data, &input_schema)?;
+                
+                // Create a new Boa context for JavaScript execution
+                let mut context = BoaContext::default();
+                
+                // Register the fetch API
+                crate::http::register_fetch(&mut context)
+                    .map_err(|e| JsExecutionError::ExecutionError(
+                        format!("Failed to register fetch API: {}", e)
+                    ))?;
+                
+                // Initialize fetch variables
+                context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
+                    .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
+                
+                // Evaluate the JavaScript code from memory
+                let func = context.eval(Source::from_bytes(&js_content.as_ref()))
+                    .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
+                
+                // Call the JavaScript function with the input data
+                let result = call_js_function(&mut context, &func, &input_data)?;
+                
+                // Validate output against schema
+                validate_json(&result, &output_schema)?;
+                
+                Ok(result)
             }
         }
     }
@@ -361,14 +398,17 @@ processInput
         block_on(async {
             if let Ok(files) = setup_test_files() {
                 // Create a test task
-                let task = Task {
+                let mut task = Task {
                     metadata: TaskMetadata {
                         uuid: Uuid::parse_str("bd6c6f98-4896-44cc-8c82-30328c3aefda").unwrap(),
                         version: "1.0.0".to_string(),
                         label: "Test Task".to_string(),
                         description: "Test task for unit testing".to_string(),
                     },
-                    task_type: TaskType::JsTask(files.js_file.to_string_lossy().to_string()),
+                    task_type: TaskType::JsTask { 
+                        path: files.js_file.to_string_lossy().to_string(),
+                        content: None,
+                    },
                     input_schema: json!({
                         "type": "object",
                         "properties": {
@@ -393,13 +433,35 @@ processInput
                 });
                 
                 // Execute the task
-                let result = execute_task(&task, input_data).await.unwrap();
+                let result = execute_task(&mut task, input_data).await.unwrap();
                 
                 // Check the result
                 assert!(result.is_object());
                 assert!(result.get("sum").is_some());
                 let sum = result["sum"].as_f64().unwrap();
                 assert_eq!(sum, 30.0);
+                
+                // Content should now be loaded
+                match &task.task_type {
+                    TaskType::JsTask { content, .. } => {
+                        assert!(content.is_some());
+                    }
+                }
+                
+                // Purge content and test executing again
+                task.purge_content();
+                
+                let input_data = json!({
+                    "num1": 30,
+                    "num2": 40
+                });
+                
+                // Execute the task again
+                let result = execute_task(&mut task, input_data).await.unwrap();
+                
+                // Check the result
+                let sum = result["sum"].as_f64().unwrap();
+                assert_eq!(sum, 70.0);
             } else {
                 // Skip test if files can't be created
                 println!("Skipping test_execute_task due to file setup issues");

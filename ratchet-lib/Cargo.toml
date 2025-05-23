@@ -26,6 +26,8 @@ boa_runtime = "0.17"
 jsonschema = "0.17"
 rand = "0.8"
 uuid = { version = "1.4", features = ["v4", "serde"] }
+lru = "0.10"
+lazy_static = "1.4"
 
 [dev-dependencies]
 tokio-test = "0.4"

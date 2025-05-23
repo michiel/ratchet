@@ -25,11 +25,11 @@ pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsTaskError> {
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
     // Load the task from the file system
-    let task = Task::from_fs(from_fs)?;
+    let mut task = Task::from_fs(from_fs)?;
 
     // Ensure it's a JavaScript task
     match &task.task_type {
-        TaskType::JsTask(_) => {},
+        TaskType::JsTask { path: _, content: _ } => {},
     }
 
     // Execute the task inside the runtime
@@ -44,8 +44,8 @@ pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsTaskError> {
             "num2": 7
         });
 
-        // Use the new execute_task function from js_executor
-        crate::js_executor::execute_task(&task, input_data).await
+        // Use the new execute_task function from js_executor with mutable task
+        crate::js_executor::execute_task(&mut task, input_data).await
             .map_err(JsTaskError::from)
     })
 }

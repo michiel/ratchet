@@ -1,10 +1,23 @@
 use anyhow::Result;
+use lazy_static::lazy_static;
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::fs;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use uuid::Uuid;
+
+// Define a global LRU cache for file contents
+// Cache size is 100 entries - adjust based on expected number of tasks
+lazy_static! {
+    static ref CONTENT_CACHE: Mutex<LruCache<String, Arc<String>>> = {
+        let cache_size = NonZeroUsize::new(100).unwrap();
+        Mutex::new(LruCache::new(cache_size))
+    };
+}
 
 /// Errors that can occur during task operations
 #[derive(Error, Debug)]
@@ -25,7 +38,11 @@ pub enum TaskError {
 /// Type of task to be executed
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TaskType {
-    JsTask(String), // String contains the path to the JS file
+    JsTask {
+        path: String, // Path to the JS file (for reference/debugging)
+        #[serde(skip)] // Skip content during serialization
+        content: Option<Arc<String>>, // Lazily loaded content
+    },
 }
 
 /// Metadata for a task
@@ -104,8 +121,11 @@ impl Task {
             )));
         }
         
-        // Create the task type
-        let task_type = TaskType::JsTask(js_file_path.to_string_lossy().to_string());
+        // Create the task type (without loading content initially)
+        let task_type = TaskType::JsTask {
+            path: js_file_path.to_string_lossy().to_string(),
+            content: None, // Content is loaded lazily
+        };
         
         Ok(Task {
             metadata,
@@ -119,13 +139,72 @@ impl Task {
     /// Get the path to the JavaScript file for JS tasks
     pub fn js_file_path(&self) -> Option<PathBuf> {
         match &self.task_type {
-            TaskType::JsTask(path) => Some(PathBuf::from(path)),
+            TaskType::JsTask { path, .. } => Some(PathBuf::from(path)),
         }
     }
     
     /// Get the UUID of the task
     pub fn uuid(&self) -> Uuid {
         self.metadata.uuid
+    }
+    
+    /// Ensure the JavaScript content is loaded in memory
+    pub fn ensure_content_loaded(&mut self) -> Result<(), TaskError> {
+        match &mut self.task_type {
+            TaskType::JsTask { path, content } => {
+                if content.is_none() {
+                    // Make a clone of the path for use in file operations
+                    let path_str = path.clone();
+                    
+                    // Try to get content from cache first
+                    let mut cache = CONTENT_CACHE.lock().unwrap();
+                    
+                    if let Some(cached_content) = cache.get(&path_str) {
+                        // Content found in cache, use it
+                        *content = Some(cached_content.clone());
+                    } else {
+                        // Content not in cache, load from filesystem
+                        let file_content = fs::read_to_string(&path_str)?;
+                        let arc_content = Arc::new(file_content);
+                        
+                        // Store in cache for future use
+                        cache.put(path_str, arc_content.clone());
+                        
+                        // Update task with content
+                        *content = Some(arc_content);
+                    }
+                }
+                
+                Ok(())
+            }
+        }
+    }
+    
+    /// Get the JavaScript content if loaded, or load it if not
+    pub fn get_js_content(&mut self) -> Result<Arc<String>, TaskError> {
+        self.ensure_content_loaded()?;
+        
+        match &self.task_type {
+            TaskType::JsTask { content, .. } => {
+                content.clone().ok_or_else(|| 
+                    TaskError::InvalidTaskStructure("Failed to load JavaScript content".to_string())
+                )
+            }
+        }
+    }
+    
+    /// Pre-load the JavaScript content
+    pub fn preload(&mut self) -> Result<(), TaskError> {
+        self.ensure_content_loaded()
+    }
+    
+    /// Purge content from memory to save space
+    pub fn purge_content(&mut self) {
+        match &mut self.task_type {
+            TaskType::JsTask { content, .. } => {
+                *content = None;
+            }
+        }
     }
 }
 
@@ -193,17 +272,23 @@ mod tests {
         // Test with the sample task in the project
         let sample_path = Path::new("/home/michiel/dev/ratchet/sample/js-tasks/addition");
         if sample_path.exists() {
-            let task = Task::from_fs(sample_path).unwrap();
+            let mut task = Task::from_fs(sample_path).unwrap();
             
             assert_eq!(task.metadata.uuid.to_string(), "bd6c6f98-4896-44cc-8c82-30328c3aefda");
             assert_eq!(task.metadata.version, "1.0.0");
             assert_eq!(task.metadata.label, "Addition Task");
             
             match &task.task_type {
-                TaskType::JsTask(path) => {
+                TaskType::JsTask { path, content } => {
                     assert!(path.contains("main.js"));
+                    assert!(content.is_none()); // Content should not be loaded initially
                 }
             }
+            
+            // Test content loading
+            task.ensure_content_loaded().unwrap();
+            let content = task.get_js_content().unwrap();
+            assert!(!content.is_empty());
             
             // Check schema properties
             assert!(task.input_schema.get("properties").is_some());
@@ -217,7 +302,7 @@ mod tests {
         let test_dir = create_test_task_files().unwrap();
         
         // Load the task
-        let task = Task::from_fs(&test_dir).unwrap();
+        let mut task = Task::from_fs(&test_dir).unwrap();
         
         // Verify the task properties
         assert_eq!(task.metadata.uuid.to_string(), "bd6c6f98-4896-44cc-8c82-30328c3aefda");
@@ -226,8 +311,33 @@ mod tests {
         assert_eq!(task.metadata.description, "This is a sample task that adds two numbers together.");
         
         match &task.task_type {
-            TaskType::JsTask(path) => {
+            TaskType::JsTask { path, content } => {
                 assert!(path.contains("main.js"));
+                assert!(content.is_none()); // Content should not be loaded initially
+            }
+        }
+        
+        // Test loading content
+        task.ensure_content_loaded().unwrap();
+        
+        match &task.task_type {
+            TaskType::JsTask { content, .. } => {
+                assert!(content.is_some()); // Content should be loaded now
+                let js_content = content.as_ref().unwrap();
+                assert!(js_content.contains("function")); // Check content contains expected text
+            }
+        }
+        
+        // Test get_js_content
+        let js_content = task.get_js_content().unwrap();
+        assert!(js_content.contains("function"));
+        
+        // Test purge_content
+        task.purge_content();
+        
+        match &task.task_type {
+            TaskType::JsTask { content, .. } => {
+                assert!(content.is_none()); // Content should be purged
             }
         }
         
