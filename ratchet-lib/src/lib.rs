@@ -8,6 +8,7 @@ use thiserror::Error;
 
 pub mod js_task;
 pub mod http;
+pub mod task;
 
 /// A module for executing JavaScript tasks
 pub mod js_executor {
