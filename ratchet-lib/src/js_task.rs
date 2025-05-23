@@ -1,30 +1,26 @@
 use crate::js_executor::{execute_js_file, JsExecutionError};
-use serde_json::{json, Value as JsonValue};
+use serde_json::Value as JsonValue;
 use std::path::Path;
 use tokio::runtime::Runtime;
 use log::debug;
 
-/// Run the addition JavaScript task with explicit inputs
-pub fn run_addition_task(
-    num1: i32,
-    num2: i32,
-) -> Result<JsonValue, JsExecutionError> {
+/// Run a JavaScript task from a file system path
+pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsExecutionError> {
     // Create Tokio runtime
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
-    // Get the paths for the sample JS file and its schemas
-    let base_dir = Path::new("sample/js-tasks/addition");
+    // Resolve the base directory from the provided path
+    let base_dir = Path::new(from_fs);
     let js_file = base_dir.join("main.js");
     let input_schema = base_dir.join("input.schema.json");
     let output_schema = base_dir.join("output.schema.json");
 
     // Execute the task inside the runtime
     runtime.block_on(async {
-        debug!("Executing JS task with inputs: {} and {}", num1, num2);
-        let input_data = json!({
-            "num1": num1,
-            "num2": num2,
-        });
+        debug!("Executing JS task from file system path: {}", from_fs);
+
+        // Example input data (this should be adjusted based on your use case)
+        let input_data = serde_json::json!({});
 
         execute_js_file(&js_file, &input_schema, &output_schema, input_data).await
     })
@@ -43,29 +39,26 @@ mod tests {
     use tokio_test::block_on;
 
     #[test]
-    fn test_run_addition_task() {
-        // This test will be skipped if running without the sample directory
-        if !Path::new("sample/js-tasks/addition/main.js").exists() {
-            println!("Skipping test_run_addition_task as sample files don't exist");
+    fn test_run_task_from_fs() {
+        // This test will be skipped if the provided path doesn't exist
+        let test_path = "sample/js-tasks/addition";
+        if !Path::new(test_path).exists() {
+            println!("Skipping test_run_task_from_fs as sample files don't exist");
             return;
         }
 
-        let num1 = 5;
-        let num2 = 7;
-        let expected_sum = 12.0;
-        
-        let result = run_addition_task(num1, num2).unwrap();
-        
+        let result = run_task_from_fs(test_path).unwrap();
+
         // Verify result structure
         assert!(result.is_object());
         assert!(result.get("sum").is_some());
         assert!(result["sum"].is_number());
-        
-        // Verify the exact sum
+
+        // Verify the exact sum (example value, adjust as needed)
         let sum = result["sum"].as_f64().unwrap();
-        assert_eq!(sum, expected_sum);
+        assert_eq!(sum, 12.0);
     }
-    
+
     #[test]
     fn test_add_two_numbers() {
         block_on(async {
@@ -73,7 +66,7 @@ mod tests {
             assert_eq!(result, 12);
         });
     }
-    
+
     #[test]
     fn test_add_negative_numbers() {
         block_on(async {

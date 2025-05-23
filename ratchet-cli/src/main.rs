@@ -11,15 +11,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run the sample addition JS task
-    RunAddition {
-        /// First number to add
-        #[arg(long, default_value_t = 5)]
-        num1: i32,
-
-        /// Second number to add
-        #[arg(long, default_value_t = 7)]
-        num2: i32,
+    /// Run a single task from a file system path
+    RunOnce {
+        /// Path to the file system resource
+        #[arg(long, value_name = "STRING")]
+        from_fs: String,
     },
 }
 
@@ -28,18 +24,15 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::RunAddition { num1, num2 }) => {
-            println!(
-                "Running addition task with inputs: {} and {}",
-                num1, num2
-            );
-            match js_task::run_addition_task(*num1, *num2) {
+        Some(Commands::RunOnce { from_fs }) => {
+            println!("Running task from file system path: {}", from_fs);
+            match js_task::run_task_from_fs(from_fs) {
                 Ok(result) => {
                     let formatted = to_string_pretty(&result).unwrap();
                     println!("Result: {}", formatted);
                 }
                 Err(err) => {
-                    eprintln!("Error running addition task: {}", err);
+                    eprintln!("Error running task: {}", err);
                     std::process::exit(1);
                 }
             }
