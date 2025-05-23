@@ -171,6 +171,27 @@ pub mod js_executor {
         Ok(result_json)
     }
 
+    /// Execute a task with the given input
+    pub async fn execute_task(
+        task: &crate::task::Task,
+        input_data: JsonValue,
+    ) -> Result<JsonValue, JsExecutionError> {
+        match &task.task_type {
+            crate::task::TaskType::JsTask(js_path) => {
+                let js_file_path = Path::new(js_path);
+                let input_schema_path = task.path.join("input.schema.json");
+                let output_schema_path = task.path.join("output.schema.json");
+                
+                execute_js_file(
+                    js_file_path,
+                    &input_schema_path,
+                    &output_schema_path,
+                    input_data
+                ).await
+            }
+        }
+    }
+
     /// Execute a JavaScript file with the given input
     pub async fn execute_js_file(
         js_file_path: &Path,
@@ -228,6 +249,8 @@ mod tests {
     use tempfile::tempdir;
     use tokio_test::block_on;
     use serde_json::json;
+    use crate::task::{Task, TaskMetadata, TaskType};
+    use uuid::Uuid;
 
     // We need to keep a reference to tempdir so it doesn't get dropped while we use the files
     struct TestFiles {
@@ -329,6 +352,57 @@ processInput
             } else {
                 // Skip test if files can't be created
                 println!("Skipping test_valid_execution due to file setup issues");
+            }
+        });
+    }
+    
+    #[test]
+    fn test_execute_task() {
+        block_on(async {
+            if let Ok(files) = setup_test_files() {
+                // Create a test task
+                let task = Task {
+                    metadata: TaskMetadata {
+                        uuid: Uuid::parse_str("bd6c6f98-4896-44cc-8c82-30328c3aefda").unwrap(),
+                        version: "1.0.0".to_string(),
+                        label: "Test Task".to_string(),
+                        description: "Test task for unit testing".to_string(),
+                    },
+                    task_type: TaskType::JsTask(files.js_file.to_string_lossy().to_string()),
+                    input_schema: json!({
+                        "type": "object",
+                        "properties": {
+                            "num1": { "type": "number" },
+                            "num2": { "type": "number" }
+                        },
+                        "required": ["num1", "num2"]
+                    }),
+                    output_schema: json!({
+                        "type": "object",
+                        "properties": {
+                            "sum": { "type": "number" }
+                        },
+                        "required": ["sum"]
+                    }),
+                    path: files._temp_dir.path().to_path_buf(),
+                };
+                
+                let input_data = json!({
+                    "num1": 10,
+                    "num2": 20
+                });
+                
+                // Execute the task
+                let result = execute_task(&task, input_data).await.unwrap();
+                
+                // Check the result
+                assert!(result.is_object());
+                assert!(result.get("sum").is_some());
+                let sum = result["sum"].as_f64().unwrap();
+                assert_eq!(sum, 30.0);
+            } else {
+                // Skip test if files can't be created
+                println!("Skipping test_execute_task due to file setup issues");
             }
         });
     }

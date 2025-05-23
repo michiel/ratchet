@@ -1,28 +1,52 @@
-use crate::js_executor::{execute_js_file, JsExecutionError};
+use crate::js_executor::JsExecutionError;
+use crate::task::{Task, TaskError, TaskType};
 use serde_json::Value as JsonValue;
 use std::path::Path;
 use tokio::runtime::Runtime;
 use log::debug;
+use thiserror::Error;
+
+/// Errors that can occur when running a JS task
+#[derive(Error, Debug)]
+pub enum JsTaskError {
+    #[error("JavaScript execution error: {0}")]
+    ExecutionError(#[from] JsExecutionError),
+
+    #[error("Task error: {0}")]
+    TaskError(#[from] TaskError),
+
+    #[error("Invalid task type: expected JavaScript task")]
+    InvalidTaskType,
+}
 
 /// Run a JavaScript task from a file system path
-pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsExecutionError> {
+pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsTaskError> {
     // Create Tokio runtime
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
-    // Resolve the base directory from the provided path
-    let base_dir = Path::new(from_fs);
-    let js_file = base_dir.join("main.js");
-    let input_schema = base_dir.join("input.schema.json");
-    let output_schema = base_dir.join("output.schema.json");
+    // Load the task from the file system
+    let task = Task::from_fs(from_fs)?;
+
+    // Ensure it's a JavaScript task
+    match &task.task_type {
+        TaskType::JsTask(_) => {},
+    }
 
     // Execute the task inside the runtime
     runtime.block_on(async {
         debug!("Executing JS task from file system path: {}", from_fs);
+        debug!("Task UUID: {}", task.uuid());
+        debug!("Task label: {}", task.metadata.label);
 
         // Example input data (this should be adjusted based on your use case)
-        let input_data = serde_json::json!({});
+        let input_data = serde_json::json!({
+            "num1": 5,
+            "num2": 7
+        });
 
-        execute_js_file(&js_file, &input_schema, &output_schema, input_data).await
+        // Use the new execute_task function from js_executor
+        crate::js_executor::execute_task(&task, input_data).await
+            .map_err(JsTaskError::from)
     })
 }
 
@@ -37,6 +61,7 @@ pub async fn add_two_numbers(num1: i32, num2: i32) -> Result<i32, JsExecutionErr
 mod tests {
     use super::*;
     use tokio_test::block_on;
+    use crate::task::Task;
 
     #[test]
     fn test_run_task_from_fs() {
@@ -47,6 +72,11 @@ mod tests {
             return;
         }
 
+        // First verify we can load the task
+        let task = Task::from_fs(test_path).unwrap();
+        assert_eq!(task.metadata.label, "Addition Task");
+        
+        // Then run the task
         let result = run_task_from_fs(test_path).unwrap();
 
         // Verify result structure
