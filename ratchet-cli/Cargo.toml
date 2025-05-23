@@ -20,6 +20,7 @@ anyhow.workspace = true
 log.workspace = true
 clap.workspace = true
 env_logger.workspace = true
+tokio.workspace = true
 
 # Local dependencies
 ratchet_lib = { path = "../ratchet-lib" }

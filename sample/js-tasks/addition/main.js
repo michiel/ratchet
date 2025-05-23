@@ -1,4 +1,4 @@
-function(input) {
+(function(input) {
   const {num1, num2} = input;
 
   if (typeof num1 !== 'number' || typeof num2 !== 'number') {
@@ -7,5 +7,5 @@ function(input) {
 
   return {
     sum: num1 + num2
-  }
-}
+  };
+})
