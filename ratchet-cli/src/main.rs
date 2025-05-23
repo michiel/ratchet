@@ -22,6 +22,13 @@ enum Commands {
         #[arg(long, value_name = "JSON")]
         input_json: Option<String>,
     },
+    
+    /// Validate a task's structure and syntax
+    Validate {
+        /// Path to the file system resource
+        #[arg(long, value_name = "STRING")]
+        from_fs: String,
+    },
 }
 
 /// Parse JSON input string into a JsonValue
@@ -49,6 +56,27 @@ async fn run_task(task_path: &str, input_json: &JsonValue) -> Result<JsonValue> 
         .context("Failed to execute task")?;
     
     Ok(result)
+}
+
+/// Validate a task's structure and syntax
+fn validate_task(task_path: &str) -> Result<()> {
+    println!("Validating task at: {}", task_path);
+    
+    // Load the task from the filesystem
+    let mut task = Task::from_fs(task_path)
+        .context(format!("Failed to load task from path: {}", task_path))?;
+    
+    // Validate the task
+    task.validate()
+        .context("Task validation failed")?;
+    
+    println!("✓ Task validated successfully!");
+    println!("  UUID: {}", task.uuid());
+    println!("  Label: {}", task.metadata.label);
+    println!("  Version: {}", task.metadata.version);
+    println!("  Description: {}", task.metadata.description);
+    
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -79,11 +107,13 @@ fn main() -> Result<()> {
                 
             println!("Result: {}", formatted);
             Ok(())
-        }
+        },
+        Some(Commands::Validate { from_fs }) => {
+            validate_task(from_fs)
+        },
         None => {
             println!("No command specified. Use --help to see available commands.");
             Ok(())
         }
     }
 }
-

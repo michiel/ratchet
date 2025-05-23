@@ -33,6 +33,12 @@ pub enum TaskError {
 
     #[error("Task file not found: {0}")]
     TaskFileNotFound(String),
+    
+    #[error("Invalid JSON schema: {0}")]
+    InvalidJsonSchema(String),
+    
+    #[error("JavaScript parse error: {0}")]
+    JavaScriptParseError(String),
 }
 
 /// Type of task to be executed
@@ -205,6 +211,55 @@ impl Task {
                 *content = None;
             }
         }
+    }
+    
+    /// Validate that the task is properly structured and syntactically correct
+    pub fn validate(&mut self) -> Result<(), TaskError> {
+        // 1. Validate input schema is valid JSON Schema
+        if !self.input_schema.is_object() {
+            return Err(TaskError::InvalidJsonSchema(
+                "Input schema must be a valid JSON object".to_string()
+            ));
+        }
+        
+        // 2. Validate output schema is valid JSON Schema
+        if !self.output_schema.is_object() {
+            return Err(TaskError::InvalidJsonSchema(
+                "Output schema must be a valid JSON object".to_string()
+            ));
+        }
+        
+        // 3. Validate that the JavaScript code can be parsed
+        self.ensure_content_loaded()?;
+        let js_content = self.get_js_content()?;
+        
+        // We'll use a basic heuristic first - check if it contains a function definition
+        if !js_content.contains("function") {
+            return Err(TaskError::JavaScriptParseError(
+                "JavaScript code does not contain a function definition".to_string()
+            ));
+        }
+        
+        // 4. Try to parse the JavaScript code using BoaJS
+        // This will catch syntax errors in the JavaScript code
+        let mut context = boa_engine::Context::default();
+        let result = context.eval(boa_engine::Source::from_bytes(js_content.as_ref()));
+        if result.is_err() {
+            return Err(TaskError::JavaScriptParseError(
+                format!("JavaScript syntax error: {}", result.err().unwrap())
+            ));
+        }
+        
+        // 5. Validate that the code returns a function or is a callable object
+        let js_result = result.unwrap();
+        if !js_result.is_callable() && !js_result.is_object() {
+            return Err(TaskError::JavaScriptParseError(
+                "JavaScript code must return a callable function or object".to_string()
+            ));
+        }
+        
+        // All validations passed
+        Ok(())
     }
 }
 
