@@ -1,7 +1,6 @@
 use crate::js_executor::JsExecutionError;
 use crate::task::{Task, TaskError, TaskType};
 use serde_json::Value as JsonValue;
-use std::path::Path;
 use tokio::runtime::Runtime;
 use log::debug;
 use thiserror::Error;
@@ -67,7 +66,7 @@ mod tests {
     fn test_run_task_from_fs() {
         // This test will be skipped if the provided path doesn't exist
         let test_path = "sample/js-tasks/addition";
-        if !Path::new(test_path).exists() {
+        if !std::path::Path::new(test_path).exists() {
             println!("Skipping test_run_task_from_fs as sample files don't exist");
             return;
         }

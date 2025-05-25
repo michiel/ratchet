@@ -1,6 +1,5 @@
 use ratchet_lib::task::{Task, TaskError};
 use std::fs;
-use std::path::Path;
 use tempfile::tempdir;
 
 // Create a test task with valid files

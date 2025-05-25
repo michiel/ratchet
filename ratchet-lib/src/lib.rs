@@ -425,6 +425,7 @@ processInput
                         "required": ["sum"]
                     }),
                     path: files._temp_dir.path().to_path_buf(),
+                    _temp_dir: None,
                 };
                 
                 let input_data = json!({
