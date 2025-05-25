@@ -4,12 +4,8 @@
     "units": "metric"
   },
   "expected_output": {
-    "success": true,
-    "location": "NonExistentCity, US",
-    "temperature": 20,
-    "units": "C",
-    "description": "sunny",
-    "humidity": 50
+    "success": false,
+    "error": "API error: 404 Not Found"
   },
   "mock": {
     "http": {

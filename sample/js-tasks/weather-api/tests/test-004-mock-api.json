@@ -5,7 +5,7 @@
   },
   "expected_output": {
     "success": true,
-    "location": "Paris, US",
+    "location": "Paris, FR",
     "temperature": 20,
     "units": "C",
     "description": "sunny",
@@ -25,12 +25,12 @@
             "country": "FR"
           },
           "main": {
-            "temp": 25.5,
-            "humidity": 55
+            "temp": 20,
+            "humidity": 50
           },
           "weather": [
             {
-              "description": "broken clouds"
+              "description": "sunny"
             }
           ]
         }
