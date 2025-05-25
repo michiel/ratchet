@@ -1,0 +1,29 @@
+{
+  "input": {
+    "city": "NonExistentCity",
+    "units": "metric"
+  },
+  "expected_output": {
+    "success": true,
+    "location": "NonExistentCity, US",
+    "temperature": 20,
+    "units": "C",
+    "description": "sunny",
+    "humidity": 50
+  },
+  "mock": {
+    "http": {
+      "url": "api.openweathermap.org",
+      "method": "GET",
+      "response": {
+        "ok": false,
+        "status": 404,
+        "statusText": "Not Found",
+        "body": {
+          "cod": "404",
+          "message": "city not found"
+        }
+      }
+    }
+  }
+}

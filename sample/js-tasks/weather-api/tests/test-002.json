@@ -1,0 +1,14 @@
+{
+  "input": {
+    "city": "New York",
+    "units": "imperial"
+  },
+  "expected_output": {
+    "success": true,
+    "location": "New York, US",
+    "temperature": 72.5,
+    "units": "F",
+    "description": "partly cloudy",
+    "humidity": 65
+  }
+}

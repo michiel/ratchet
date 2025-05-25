@@ -34,6 +34,7 @@ pub struct TestCase {
     pub file_path: PathBuf,
     pub input: JsonValue,
     pub expected_output: JsonValue,
+    pub mock: Option<JsonValue>,
 }
 
 /// Represents the result of a test case
@@ -93,10 +94,14 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
             TestError::InvalidTestFile(format!("Missing 'expected_output' field in test file: {:?}", path))
         })?;
         
+        // Check for optional mock data
+        let mock = test_json.get("mock").map(|m| m.clone());
+        
         test_cases.push(TestCase {
             file_path: path,
             input: input.clone(),
             expected_output: expected_output.clone(),
+            mock,
         });
     }
     
@@ -110,7 +115,18 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
 
 /// Run a single test case
 pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult {
+    // Setup mock data if provided
+    if let Some(mock) = &test_case.mock {
+        crate::http::set_mock_http_data(Some(mock.clone()));
+    } else {
+        crate::http::set_mock_http_data(None);
+    }
+    
+    // Execute the task
     let result = execute_task(task, test_case.input.clone()).await;
+    
+    // Clear mock data after the test
+    crate::http::set_mock_http_data(None);
     
     match result {
         Ok(output) => {

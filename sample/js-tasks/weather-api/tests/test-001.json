@@ -1,0 +1,14 @@
+{
+  "input": {
+    "city": "London",
+    "units": "metric"
+  },
+  "expected_output": {
+    "success": true,
+    "location": "London, GB",
+    "temperature": 15.2,
+    "units": "C",
+    "description": "partly cloudy",
+    "humidity": 65
+  }
+}

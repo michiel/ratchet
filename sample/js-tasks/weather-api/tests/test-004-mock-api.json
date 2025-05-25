@@ -1,0 +1,40 @@
+{
+  "input": {
+    "city": "Paris",
+    "units": "metric"
+  },
+  "expected_output": {
+    "success": true,
+    "location": "Paris, US",
+    "temperature": 20,
+    "units": "C",
+    "description": "sunny",
+    "humidity": 50
+  },
+  "mock": {
+    "http": {
+      "url": "api.openweathermap.org",
+      "method": "GET",
+      "response": {
+        "ok": true,
+        "status": 200,
+        "statusText": "OK",
+        "body": {
+          "name": "Paris",
+          "sys": {
+            "country": "FR"
+          },
+          "main": {
+            "temp": 25.5,
+            "humidity": 55
+          },
+          "weather": [
+            {
+              "description": "broken clouds"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

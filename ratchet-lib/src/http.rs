@@ -7,6 +7,28 @@ use reqwest::{self, blocking::Client, Method, header::{HeaderMap, HeaderName, He
 use serde_json::{Value as JsonValue, json};
 use std::str::FromStr;
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::cell::RefCell;
+use lazy_static::lazy_static;
+
+// Thread-local storage for mock data during tests
+thread_local! {
+    static MOCK_HTTP_DATA: RefCell<Option<JsonValue>> = RefCell::new(None);
+}
+
+// Global flag to indicate if we're in mock mode
+lazy_static! {
+    static ref MOCK_ENABLED: AtomicBool = AtomicBool::new(false);
+}
+
+/// Set mock data for HTTP calls
+pub fn set_mock_http_data(mock_data: Option<JsonValue>) {
+    let has_mock = mock_data.is_some();
+    MOCK_HTTP_DATA.with(|cell| {
+        *cell.borrow_mut() = mock_data;
+    });
+    MOCK_ENABLED.store(has_mock, Ordering::SeqCst);
+}
 
 /// Error type for HTTP operations
 #[derive(Debug, thiserror::Error)]
@@ -42,6 +64,54 @@ pub fn call_http(
     params: Option<&JsonValue>,
     body: Option<&JsonValue>,
 ) -> Result<JsonValue, HttpError> {
+    // Check if we're in mock mode and return mock data if available
+    if MOCK_ENABLED.load(Ordering::SeqCst) {
+        let mut mock_response = None;
+        
+        // Extract method from params or default to GET
+        let method_str = if let Some(params) = params {
+            if let Some(method_str) = params.get("method").and_then(|m| m.as_str()) {
+                method_str
+            } else {
+                "GET"
+            }
+        } else {
+            "GET"
+        };
+        
+        // Get the mock data from thread-local storage
+        MOCK_HTTP_DATA.with(|cell| {
+            if let Some(mock_data) = &*cell.borrow() {
+                // Check if we have HTTP mock data
+                if let Some(http_mock) = mock_data.get("http") {
+                    // Check if URL and method match
+                    let mock_url = http_mock.get("url").and_then(|u| u.as_str()).unwrap_or("");
+                    let mock_method = http_mock.get("method").and_then(|m| m.as_str()).unwrap_or("GET");
+                    
+                    // If the URL and method match, use the mock response
+                    if (mock_url.is_empty() || url.contains(mock_url)) && 
+                       (mock_method.eq_ignore_ascii_case(method_str)) {
+                        if let Some(response) = http_mock.get("response") {
+                            // Create a response object from the mock data
+                            mock_response = Some(json!({
+                                "ok": true,
+                                "status": 200,
+                                "statusText": "OK",
+                                "headers": {},
+                                "body": response
+                            }));
+                        }
+                    }
+                }
+            }
+        });
+        
+        if let Some(response) = mock_response {
+            return Ok(response);
+        }
+    }
+    
+    // If no mock data or mock doesn't match, perform a real HTTP request
     // Create a client with default settings
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
