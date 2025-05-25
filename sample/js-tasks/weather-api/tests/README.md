@@ -4,42 +4,54 @@ This directory contains test cases for the Weather API task. Tests are defined a
 
 ## Task Implementation
 
-The Weather API task is implemented as a simple JavaScript function that:
+The Weather API task is implemented as a pure JavaScript function that:
 
 1. Takes city and units as input parameters
-2. Would typically use the fetch API to call a weather service
+2. Uses the fetch API to call the OpenWeatherMap service
 3. Returns weather data in a structured format
 
-For demonstration purposes, the implementation returns hard-coded values based on the city name. This simulates the behavior of a real API call without requiring an actual API key or internet connection.
+The implementation has no awareness of testing or mocks. It makes pure API calls through the fetch() function, which gets intercepted by the test framework during testing.
 
-**Note:** The file includes commented-out code showing how the fetch API would be used in a real implementation. In practice, you would remove the hard-coded values and uncomment the fetch code.
-
-## Test Structure
+## Test Structure and HTTP Mocking
 
 Each test file follows this structure:
 
 ```json
 {
   "input": {
-    // Input parameters that match the task's input schema
+    // Input parameters for the task
   },
   "expected_output": {
-    // Expected output that matches the task's output schema
+    // Expected output from the task
   },
   "mock": {
-    // Documentation of what API responses would look like
+    // Mock HTTP data for testing
     "http": {
       "url": "api.openweathermap.org",
       "method": "GET",
       "response": {
+        "ok": true,
+        "status": 200,
+        "statusText": "OK",
         "body": {
-          // The API response body that would be returned
+          // The API response body
         }
       }
     }
   }
 }
 ```
+
+The `mock` section provides data that the test framework should return when the task makes fetch() calls. This allows testing the task without making real API requests.
+
+## Current Testing Status
+
+**Note:** Currently, the tests are failing with a "Schema validation error: 'success' is a required property" message. This suggests that the mocking system in Ratchet isn't properly intercepting the fetch() calls or returning the expected mock data.
+
+The issue could be:
+1. The mock system may not be fully implemented yet
+2. There might be a specific way to structure mock data that we're not following
+3. The task might need a special configuration to work with mocks
 
 ## Example Tests
 
@@ -58,22 +70,26 @@ Tests can be run using the `ratchet test` command:
 ratchet test --from-fs sample/js-tasks/weather-api
 ```
 
-## API Response Documentation
+## Real Production Implementation
 
-While not actively used in the current implementation, the mock section in each test file documents:
+The current implementation:
 
-1. What URL would be called
-2. What HTTP method would be used
-3. What response body would be expected from the real API
+1. Uses a placeholder API key ("your-api-key-here")
+2. Makes standard fetch() calls to the OpenWeatherMap API
+3. Handles success and error responses appropriately
+4. Has no awareness of testing or mocks
 
-This serves as documentation for developers who want to understand how the API would behave if implemented with real HTTP calls.
+In a production environment, you would:
 
-## Benefits of This Approach
+1. Replace the placeholder API key with a real one
+2. Consider adding more error handling
+3. Potentially add caching for frequently requested cities
 
-1. **Simplified Testing**: Tests don't rely on complex mocking mechanisms
-2. **No External Dependencies**: No need for API keys or internet access
-3. **Deterministic Results**: Tests always return the same output for the same input
-4. **API Documentation**: Test files document expected API responses
-5. **Easy Upgrades**: Can be updated to use real fetch calls by uncommenting the code
+## Dual Approach for Development
 
-This approach provides a balance between realism (through documented API responses) and simplicity (through deterministic behavior).
+For development purposes only, you might consider maintaining two versions of the code:
+
+1. **Production Version (current)**: Uses pure fetch() calls, no test awareness
+2. **Development Version**: Hard-codes responses for common test cases
+
+This allows faster development cycles without API calls, while ensuring the production version remains pure.
