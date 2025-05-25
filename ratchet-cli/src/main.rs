@@ -29,6 +29,13 @@ enum Commands {
         #[arg(long, value_name = "STRING")]
         from_fs: String,
     },
+    
+    /// Run tests for a task
+    Test {
+        /// Path to the file system resource
+        #[arg(long, value_name = "STRING")]
+        from_fs: String,
+    },
 }
 
 /// Parse JSON input string into a JsonValue
@@ -79,6 +86,83 @@ fn validate_task(task_path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Run tests for a task
+async fn test_task(task_path: &str) -> Result<()> {
+    println!("Running tests for task at: {}", task_path);
+    
+    // First validate the task
+    let mut task = Task::from_fs(task_path)
+        .context(format!("Failed to load task from path: {}", task_path))?;
+    
+    task.validate()
+        .context("Task validation failed")?;
+    
+    println!("Task validated successfully!");
+    println!("  UUID: {}", task.uuid());
+    println!("  Label: {}", task.metadata.label);
+    println!("  Version: {}", task.metadata.version);
+    
+    // Run tests
+    match ratchet_lib::test::run_tests(task_path).await {
+        Ok(summary) => {
+            println!("\nTest Results:");
+            println!("-------------");
+            println!("Total tests: {}", summary.total);
+            println!("Passed: {}", summary.passed);
+            println!("Failed: {}", summary.failed);
+            println!("-------------");
+            
+            // Print details of failed tests
+            if summary.failed > 0 {
+                println!("\nFailed Tests:");
+                for (i, result) in summary.results.iter().enumerate() {
+                    if !result.passed {
+                        let file_name = result.file_path.file_name().unwrap().to_string_lossy();
+                        println!("\n{}. Test: {}", i + 1, file_name);
+                        
+                        if let Some(actual) = &result.actual_output {
+                            // Get the expected output from the test file
+                            let test_file_content = std::fs::read_to_string(&result.file_path)
+                                .context(format!("Failed to read test file: {:?}", result.file_path))?;
+                            let test_json: JsonValue = serde_json::from_str(&test_file_content)
+                                .context(format!("Failed to parse test file: {:?}", result.file_path))?;
+                            let expected = test_json.get("expected_output").unwrap();
+                            
+                            println!("   Expected: {}", serde_json::to_string_pretty(expected)?);
+                            println!("   Actual: {}", serde_json::to_string_pretty(actual)?);
+                        } else if let Some(error) = &result.error_message {
+                            println!("   Error: {}", error);
+                        }
+                    }
+                }
+                
+                // Return non-zero exit code for CI/CD pipelines
+                std::process::exit(1);
+            } else if summary.total == 0 {
+                println!("\nNo tests found. Create test files in the 'tests' directory.");
+            } else {
+                println!("\nAll tests passed! ✓");
+            }
+            
+            Ok(())
+        },
+        Err(err) => {
+            match err {
+                ratchet_lib::test::TestError::NoTestsDirectory => {
+                    println!("\nNo tests directory found.");
+                    println!("Create a 'tests' directory with JSON test files to run tests.");
+                    println!("Each test file should contain 'input' and 'expected_output' fields.");
+                    println!("Example: {{ \"input\": {{ \"num1\": 5, \"num2\": 10 }}, \"expected_output\": {{ \"sum\": 15 }} }}");
+                    Ok(())
+                },
+                _ => {
+                    Err(err).context("Test execution failed")
+                }
+            }
+        }
+    }
+}
+
 fn main() -> Result<()> {
     env_logger::init();
     let cli = Cli::parse();
@@ -110,6 +194,9 @@ fn main() -> Result<()> {
         },
         Some(Commands::Validate { from_fs }) => {
             validate_task(from_fs)
+        },
+        Some(Commands::Test { from_fs }) => {
+            runtime.block_on(test_task(from_fs))
         },
         None => {
             println!("No command specified. Use --help to see available commands.");
