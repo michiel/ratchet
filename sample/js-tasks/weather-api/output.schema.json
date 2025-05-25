@@ -1,0 +1,34 @@
+{
+    "type": "object",
+    "properties": {
+        "location": {
+            "type": "string",
+            "description": "The location name returned by the API"
+        },
+        "temperature": {
+            "type": "number",
+            "description": "Current temperature"
+        },
+        "units": {
+            "type": "string",
+            "description": "Temperature units (C or F)"
+        },
+        "description": {
+            "type": "string",
+            "description": "Weather description"
+        },
+        "humidity": {
+            "type": "number",
+            "description": "Humidity percentage"
+        },
+        "success": {
+            "type": "boolean",
+            "description": "Whether the API call was successful"
+        },
+        "error": {
+            "type": "string",
+            "description": "Error message if success is false"
+        }
+    },
+    "required": ["success"]
+}

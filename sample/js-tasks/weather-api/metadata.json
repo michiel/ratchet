@@ -1,0 +1,6 @@
+{
+    "uuid": "c1f8c4a5-d17c-4ab8-b7e0-9527d7a11030",
+    "version": "1.0.0",
+    "label": "Weather API Task",
+    "description": "A task that fetches weather data from a public API and returns formatted results"
+}

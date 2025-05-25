@@ -234,6 +234,10 @@ pub fn register_fetch(context: &mut Context) -> Result<(), JsError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::SocketAddr;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use warp::Filter;
 
     #[test]
     fn test_register_fetch() {
@@ -248,6 +252,153 @@ mod tests {
         assert!(is_fetch_defined.as_boolean().unwrap());
     }
 
-    // Note: More tests would typically include mocking HTTP requests
-    // to avoid external dependencies during testing
+    // Helper function to start a mock HTTP server for testing
+    fn start_mock_server(port: u16) -> (thread::JoinHandle<()>, Arc<Mutex<Vec<String>>>) {
+        // Create a shared vector to record requests
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let requests_clone = requests.clone();
+
+        // Create routes
+        let echo = warp::any()
+            .and(warp::body::json())
+            .map(move |body: JsonValue| {
+                // Record the request
+                if let Ok(mut req_list) = requests_clone.lock() {
+                    req_list.push(body.to_string());
+                }
+                warp::reply::json(&body)
+            });
+
+        let get_json = warp::path("json")
+            .and(warp::get())
+            .map(|| {
+                warp::reply::json(&json!({
+                    "message": "Hello, World!",
+                    "status": "success"
+                }))
+            });
+
+        let get_text = warp::path("text")
+            .and(warp::get())
+            .map(|| warp::reply::html("Plain text response"));
+
+        let routes = echo.or(get_json).or(get_text);
+
+        // Start the server in a separate thread
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let server = thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                warp::serve(routes).run(addr).await;
+            });
+        });
+
+        // Give the server a moment to start
+        thread::sleep(Duration::from_millis(100));
+
+        (server, requests)
+    }
+
+    #[test]
+    fn test_call_http_get_json() {
+        let (_server, _requests) = start_mock_server(3030);
+
+        // Test a GET request to JSON endpoint
+        let result = call_http(
+            "http://localhost:3030/json", 
+            Some(&json!({"method": "GET"})),
+            None
+        ).unwrap();
+
+        assert!(result.get("ok").unwrap().as_bool().unwrap());
+        assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
+        assert!(result.get("body").is_some());
+        
+        let body = result.get("body").unwrap();
+        assert_eq!(body.get("message").unwrap().as_str().unwrap(), "Hello, World!");
+        assert_eq!(body.get("status").unwrap().as_str().unwrap(), "success");
+    }
+
+    #[test]
+    fn test_call_http_post() {
+        let (_server, requests) = start_mock_server(3031);
+        
+        // Test a POST request with a JSON body
+        let test_body = json!({
+            "name": "Test User",
+            "email": "test@example.com"
+        });
+
+        let result = call_http(
+            "http://localhost:3031/", 
+            Some(&json!({"method": "POST"})),
+            Some(&test_body)
+        ).unwrap();
+
+        assert!(result.get("ok").unwrap().as_bool().unwrap());
+        assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
+        
+        // Verify the request was recorded correctly
+        let recorded_requests = requests.lock().unwrap();
+        assert!(!recorded_requests.is_empty());
+        
+        // The request should match our test body
+        let request_json: JsonValue = serde_json::from_str(&recorded_requests[0]).unwrap();
+        assert_eq!(request_json.get("name").unwrap().as_str().unwrap(), "Test User");
+        assert_eq!(request_json.get("email").unwrap().as_str().unwrap(), "test@example.com");
+    }
+
+    #[test]
+    fn test_js_fetch_integration() {
+        let (_server, _requests) = start_mock_server(3032);
+        
+        // Create a JavaScript context
+        let mut context = Context::default();
+        
+        // Register the fetch API
+        register_fetch(&mut context).unwrap();
+        
+        // Initialize fetch variables
+        context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
+            .unwrap();
+        
+        // Create a JavaScript fetch call
+        context.eval(Source::from_bytes(r#"
+            function testFetch() {
+                return fetch("http://localhost:3032/json", { method: "GET" });
+            }
+            
+            // Call the function to set up the fetch parameters
+            testFetch();
+        "#)).unwrap();
+        
+        // Verify that the fetch variables were set correctly
+        let url = context.eval(Source::from_bytes("__fetch_url")).unwrap();
+        assert_eq!(url.to_string(&mut context).unwrap().to_std_string().unwrap(), "http://localhost:3032/json");
+        
+        let params = context.eval(Source::from_bytes("__fetch_params")).unwrap();
+        assert!(!params.is_null());
+        
+        // Now we would need to extract the parameters and make the actual HTTP call,
+        // which is what happens in the execute_task function in lib.rs
+        
+        // Extract URL
+        let url_js = context.eval(Source::from_bytes("__fetch_url")).unwrap();
+        let url = url_js.to_string(&mut context).unwrap().to_std_string().unwrap();
+        
+        // Extract params
+        let params_js = context.eval(Source::from_bytes("__fetch_params")).unwrap();
+        let params_str = params_js.to_string(&mut context).unwrap().to_std_string().unwrap();
+        let params: Option<JsonValue> = Some(serde_json::from_str(&params_str).unwrap());
+        
+        // Make the HTTP call
+        let result = call_http(&url, params.as_ref(), None).unwrap();
+        
+        // Verify the result
+        assert!(result.get("ok").unwrap().as_bool().unwrap());
+        assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
+        
+        let body = result.get("body").unwrap();
+        assert_eq!(body.get("message").unwrap().as_str().unwrap(), "Hello, World!");
+    }
 }

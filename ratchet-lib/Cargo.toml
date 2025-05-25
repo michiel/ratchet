@@ -31,5 +31,7 @@ lazy_static = "1.4"
 zip = "0.6"
 tempfile = "3.8"
 
+# Testing dependencies (only used in #[cfg(test)])
 [dev-dependencies]
 tokio-test = "0.4"
+warp = "0.3" # For HTTP testing server
