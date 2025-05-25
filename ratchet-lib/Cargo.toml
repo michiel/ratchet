@@ -34,4 +34,6 @@ tempfile = "3.8"
 # Testing dependencies (only used in #[cfg(test)])
 [dev-dependencies]
 tokio-test = "0.4"
-warp = "0.3" # For HTTP testing server
+axum = "0.7" # For HTTP testing server
+tower-http = { version = "0.5", features = ["trace"] }
+tower = "0.4"

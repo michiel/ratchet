@@ -31,6 +31,7 @@ pub enum HttpError {
 }
 
 /// Convert a JS error to an HttpError
+#[allow(dead_code)]
 fn js_error_to_http_error(err: JsError) -> HttpError {
     HttpError::JsError(err.to_string())
 }
@@ -118,6 +119,7 @@ pub fn call_http(
 }
 
 /// Native function to handle fetch calls from JavaScript
+#[allow(dead_code)]
 fn fetch_native(
     _this: &JsValue,
     args: &[JsValue],
@@ -237,7 +239,15 @@ mod tests {
     use std::net::SocketAddr;
     use std::sync::{Arc, Mutex};
     use std::thread;
-    use warp::Filter;
+    use axum::{
+        routing::{get, post},
+        Router,
+        http::StatusCode,
+        response::Json,
+        extract::State,
+    };
+    use tower::ServiceBuilder;
+    use tower_http::trace::TraceLayer;
 
     #[test]
     fn test_register_fetch() {
@@ -252,44 +262,63 @@ mod tests {
         assert!(is_fetch_defined.as_boolean().unwrap());
     }
 
+    // Define the shared state for our test server
+    #[derive(Clone)]
+    struct AppState {
+        requests: Arc<Mutex<Vec<String>>>,
+    }
+
     // Helper function to start a mock HTTP server for testing
     fn start_mock_server(port: u16) -> (thread::JoinHandle<()>, Arc<Mutex<Vec<String>>>) {
         // Create a shared vector to record requests
         let requests = Arc::new(Mutex::new(Vec::new()));
-        let requests_clone = requests.clone();
+        let state = AppState {
+            requests: requests.clone(),
+        };
 
-        // Create routes
-        let echo = warp::any()
-            .and(warp::body::json())
-            .map(move |body: JsonValue| {
-                // Record the request
-                if let Ok(mut req_list) = requests_clone.lock() {
-                    req_list.push(body.to_string());
-                }
-                warp::reply::json(&body)
-            });
+        // Define the Echo handler for POST requests
+        async fn echo_handler(
+            State(state): State<AppState>,
+            Json(payload): Json<JsonValue>,
+        ) -> Json<JsonValue> {
+            // Record the request
+            if let Ok(mut req_list) = state.requests.lock() {
+                req_list.push(payload.to_string());
+            }
+            
+            // Return the payload as-is
+            Json(payload)
+        }
 
-        let get_json = warp::path("json")
-            .and(warp::get())
-            .map(|| {
-                warp::reply::json(&json!({
-                    "message": "Hello, World!",
-                    "status": "success"
-                }))
-            });
+        // Define the JSON handler for GET requests
+        async fn json_handler() -> Json<JsonValue> {
+            Json(json!({
+                "message": "Hello, World!",
+                "status": "success"
+            }))
+        }
 
-        let get_text = warp::path("text")
-            .and(warp::get())
-            .map(|| warp::reply::html("Plain text response"));
+        // Define the Text handler for GET requests
+        async fn text_handler() -> (StatusCode, &'static str) {
+            (StatusCode::OK, "Plain text response")
+        }
 
-        let routes = echo.or(get_json).or(get_text);
+        // Create the router with our routes
+        let app = Router::new()
+            .route("/", post(echo_handler))
+            .route("/json", get(json_handler))
+            .route("/text", get(text_handler))
+            .with_state(state)
+            .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
 
-        // Start the server in a separate thread
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        
+        // Start the server in a separate thread
         let server = thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
-                warp::serve(routes).run(addr).await;
+                let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+                axum::serve(listener, app).await.unwrap();
             });
         });
 
