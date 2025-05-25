@@ -172,8 +172,33 @@ pub fn call_http(
 
     // Add body if provided
     if let Some(body) = body {
-        debug!("Adding JSON body to request");
-        request = request.json(body);
+        // Check if the Content-Type header indicates form data
+        let is_form_data = if let Some(params) = params {
+            if let Some(headers) = params.get("headers").and_then(|h| h.as_object()) {
+                headers.get("Content-Type")
+                    .and_then(|ct| ct.as_str())
+                    .map(|ct| ct.contains("application/x-www-form-urlencoded"))
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        
+        if is_form_data {
+            // Send as form data if body is a string
+            if let Some(body_str) = body.as_str() {
+                debug!("Adding form-encoded body to request");
+                request = request.body(body_str.to_string());
+            } else {
+                debug!("Adding JSON body to request (form data expected but body is not string)");
+                request = request.json(body);
+            }
+        } else {
+            debug!("Adding JSON body to request");
+            request = request.json(body);
+        }
     }
 
     // Send the request and get the response
@@ -312,7 +337,7 @@ pub fn register_fetch(context: &mut Context) -> Result<(), JsError> {
             
             // Convert params and body to strings so they can be parsed in Rust
             let paramsStr = params ? JSON.stringify(params) : null;
-            let bodyStr = body ? JSON.stringify(body) : null;
+            let bodyStr = body ? (typeof body === 'string' ? body : JSON.stringify(body)) : null;
             
             // This will be processed by the Rust function call_http directly
             // We'll capture these values in the execute_js_file function
