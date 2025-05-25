@@ -4,15 +4,11 @@
     "units": "metric"
   },
   "expected_output": {
-    "location": "NonExistentCity, Unknown",
-    "temperature": 0,
-    "units": "C",
-    "description": "unavailable",
-    "humidity": 0
+    "error": "API error"
   },
   "mock": {
     "http": {
-      "url": "api.openweathermap.org",
+      "url": "api.openweathermap.org/data/2.5/weather",
       "method": "GET",
       "response": {
         "ok": false,

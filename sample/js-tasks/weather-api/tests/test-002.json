@@ -12,7 +12,7 @@
   },
   "mock": {
     "http": {
-      "url": "api.openweathermap.org",
+      "url": "api.openweathermap.org/data/2.5/weather",
       "method": "GET",
       "response": {
         "ok": true,
