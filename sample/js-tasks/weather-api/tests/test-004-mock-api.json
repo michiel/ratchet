@@ -4,7 +4,6 @@
     "units": "metric"
   },
   "expected_output": {
-    "success": true,
     "location": "Paris, FR",
     "temperature": 20,
     "units": "C",

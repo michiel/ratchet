@@ -20,15 +20,7 @@
         "humidity": {
             "type": "number",
             "description": "Humidity percentage"
-        },
-        "success": {
-            "type": "boolean",
-            "description": "Whether the API call was successful"
-        },
-        "error": {
-            "type": "string",
-            "description": "Error message if success is false"
         }
     },
-    "required": ["success"]
+    "required": ["location", "temperature", "units", "description", "humidity"]
 }

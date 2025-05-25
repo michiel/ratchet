@@ -4,7 +4,6 @@
     "units": "metric"
   },
   "expected_output": {
-    "success": true,
     "location": "Berlin, DE",
     "temperature": 22.5,
     "units": "C",

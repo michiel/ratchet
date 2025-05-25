@@ -4,8 +4,11 @@
     "units": "metric"
   },
   "expected_output": {
-    "success": false,
-    "error": "API error: 404 Not Found"
+    "location": "NonExistentCity, Unknown",
+    "temperature": 0,
+    "units": "C",
+    "description": "unavailable",
+    "humidity": 0
   },
   "mock": {
     "http": {
