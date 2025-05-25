@@ -5,6 +5,7 @@ use serde_json::{Value as JsonValue};
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+use tracing::{debug, info, warn};
 
 /// Errors that can occur during test execution
 #[derive(Error, Debug)]
@@ -66,7 +67,10 @@ impl TestSummary {
 pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
     let tests_dir = task_path.join("tests");
     
+    debug!("Loading test cases from: {:?}", tests_dir);
+    
     if !tests_dir.exists() || !tests_dir.is_dir() {
+        warn!("Tests directory not found: {:?}", tests_dir);
         return Err(TestError::NoTestsDirectory);
     }
     
@@ -78,24 +82,34 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
         
         // Skip non-JSON files
         if path.extension().map_or(true, |ext| ext != "json") {
+            debug!("Skipping non-JSON file: {:?}", path);
             continue;
         }
         
+        debug!("Reading test file: {:?}", path);
         // Read the test file
         let content = fs::read_to_string(&path)?;
         let test_json: JsonValue = serde_json::from_str(&content)?;
         
         // Validate test file structure
         let input = test_json.get("input").ok_or_else(|| {
+            warn!("Missing 'input' field in test file: {:?}", path);
             TestError::InvalidTestFile(format!("Missing 'input' field in test file: {:?}", path))
         })?;
         
         let expected_output = test_json.get("expected_output").ok_or_else(|| {
+            warn!("Missing 'expected_output' field in test file: {:?}", path);
             TestError::InvalidTestFile(format!("Missing 'expected_output' field in test file: {:?}", path))
         })?;
         
         // Check for optional mock data
         let mock = test_json.get("mock").map(|m| m.clone());
+        
+        let test_name = path.file_name().unwrap().to_string_lossy();
+        debug!("Loaded test case: {}", test_name);
+        if mock.is_some() {
+            debug!("Test case {} includes mock data", test_name);
+        }
         
         test_cases.push(TestCase {
             file_path: path,
@@ -110,28 +124,42 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
         a.file_path.file_name().unwrap().cmp(b.file_path.file_name().unwrap())
     });
     
+    info!("Loaded {} test cases from: {:?}", test_cases.len(), tests_dir);
+    
     Ok(test_cases)
 }
 
 /// Run a single test case
 pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult {
+    let test_name = test_case.file_path.file_name().unwrap().to_string_lossy();
+    debug!("Running test case: {}", test_name);
+    
     // Setup mock data if provided
     if let Some(mock) = &test_case.mock {
+        debug!("Setting up mock data for test: {}", test_name);
         crate::http::set_mock_http_data(Some(mock.clone()));
     } else {
         crate::http::set_mock_http_data(None);
     }
     
     // Execute the task
+    debug!("Executing task for test: {}", test_name);
     let result = execute_task(task, test_case.input.clone()).await;
     
     // Clear mock data after the test
+    debug!("Clearing mock data after test: {}", test_name);
     crate::http::set_mock_http_data(None);
     
     match result {
         Ok(output) => {
             // Compare actual output with expected output
             let passed = output == test_case.expected_output;
+            
+            if passed {
+                debug!("Test passed: {}", test_name);
+            } else {
+                warn!("Test failed: {} - output mismatch", test_name);
+            }
             
             TestResult {
                 file_path: test_case.file_path.clone(),
@@ -141,6 +169,7 @@ pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult 
             }
         },
         Err(err) => {
+            warn!("Test failed: {} - execution error: {}", test_name, err);
             TestResult {
                 file_path: test_case.file_path.clone(),
                 passed: false,
@@ -153,13 +182,17 @@ pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult 
 
 /// Run all test cases for a task
 pub async fn run_tests(task_path: &str) -> Result<TestSummary, TestError> {
+    info!("Running tests for task at: {}", task_path);
+    
     // Load the task
+    debug!("Loading task from: {}", task_path);
     let mut task = Task::from_fs(task_path)?;
     
     // Load test cases
     let test_cases = load_test_cases(&task.path)?;
     
     if test_cases.is_empty() {
+        warn!("No test cases found for task: {}", task_path);
         return Ok(TestSummary {
             total: 0,
             passed: 0,
@@ -169,8 +202,10 @@ pub async fn run_tests(task_path: &str) -> Result<TestSummary, TestError> {
     }
     
     // Run each test case
+    info!("Executing {} test cases", test_cases.len());
     let mut results = Vec::new();
-    for test_case in &test_cases {
+    for (i, test_case) in test_cases.iter().enumerate() {
+        debug!("Running test case {}/{}", i + 1, test_cases.len());
         let result = run_test_case(&mut task, test_case).await;
         results.push(result);
     }
@@ -179,6 +214,8 @@ pub async fn run_tests(task_path: &str) -> Result<TestSummary, TestError> {
     let total = results.len();
     let passed = results.iter().filter(|r| r.passed).count();
     let failed = total - passed;
+    
+    info!("Test execution completed - Total: {}, Passed: {}, Failed: {}", total, passed, failed);
     
     Ok(TestSummary {
         total,

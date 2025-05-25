@@ -5,6 +5,7 @@ use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::Path;
 use thiserror::Error;
+use tracing::{debug, info, warn};
 
 pub mod js_task;
 pub mod http;
@@ -72,6 +73,7 @@ pub mod js_executor {
         func: &boa_engine::JsValue,
         input_data: &JsonValue
     ) -> Result<JsonValue, JsExecutionError> {
+        debug!("Converting input data to JavaScript format");
         // Convert input_data to JsValue 
         let input_js_str = serde_json::to_string(input_data)
             .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
@@ -82,6 +84,7 @@ pub mod js_executor {
 
         // Check if func is callable
         if !func.is_callable() {
+            warn!("JavaScript code did not return a callable function");
             return Err(JsExecutionError::ExecutionError("The evaluated JavaScript code did not return a callable function".to_string()));
         }
         
@@ -95,11 +98,13 @@ pub mod js_executor {
             .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
             
         // Check if we need to process a fetch call
+        debug!("Checking for fetch API calls");
         let fetch_marker = context.eval(Source::from_bytes(
             "typeof __fetch_url === 'string' && __fetch_url !== null"
         )).map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
         
         if fetch_marker.as_boolean().unwrap_or(false) {
+            debug!("Detected fetch API call, processing HTTP request");
             // Get the fetch parameters
             let url_js = context.eval(Source::from_bytes("__fetch_url"))
                 .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
@@ -139,18 +144,22 @@ pub mod js_executor {
                 None
             };
             
+            debug!("Making HTTP call to: {}", url);
             // Perform the HTTP call
             let http_result = crate::http::call_http(&url, params.as_ref(), body.as_ref())
                 .map_err(|e| JsExecutionError::ExecutionError(format!("HTTP error: {}", e)))?;
                 
+            debug!("Clearing fetch state variables");
             // Clear the fetch state
             context.eval(Source::from_bytes("__fetch_url = null; __fetch_params = null; __fetch_body = null;"))
                 .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
                 
+            debug!("Returning HTTP result");
             // Return the HTTP result instead
             return Ok(http_result);
         }
 
+        debug!("Converting JavaScript result back to JSON");
         // Convert result back to JsonValue by first converting to JSON string
         // We need to create a temporary variable to hold the result so we can stringify it
         context.global_object().set("__temp_result", result, true, context)
@@ -177,8 +186,12 @@ pub mod js_executor {
         task: &mut crate::task::Task,
         input_data: JsonValue,
     ) -> Result<JsonValue, JsExecutionError> {
+        info!("Executing task: {} ({})", task.metadata.label, task.metadata.uuid);
+        debug!("Input data: {}", serde_json::to_string(&input_data).unwrap_or_else(|_| "<invalid json>".to_string()));
+        
         match &task.task_type {
             crate::task::TaskType::JsTask { .. } => {
+                debug!("Loading JavaScript content for execution");
                 // Load content if not already loaded
                 task.ensure_content_loaded()
                     .map_err(|e| JsExecutionError::FileReadError(std::io::Error::new(
@@ -195,16 +208,20 @@ pub mod js_executor {
                 let input_schema_path = task.path.join("input.schema.json");
                 let output_schema_path = task.path.join("output.schema.json");
                 
+                debug!("Parsing input and output schemas");
                 // Parse input and output schemas
                 let input_schema = parse_schema(&input_schema_path)?;
                 let output_schema = parse_schema(&output_schema_path)?;
 
+                debug!("Validating input data against schema");
                 // Validate input against schema
                 validate_json(&input_data, &input_schema)?;
                 
+                debug!("Creating JavaScript execution context");
                 // Create a new Boa context for JavaScript execution
                 let mut context = BoaContext::default();
                 
+                debug!("Registering fetch API");
                 // Register the fetch API
                 crate::http::register_fetch(&mut context)
                     .map_err(|e| JsExecutionError::ExecutionError(
@@ -212,18 +229,25 @@ pub mod js_executor {
                     ))?;
                 
                 // Initialize fetch variables
+                debug!("Initializing fetch variables");
                 context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
                     .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
                 
+                debug!("Compiling JavaScript code");
                 // Evaluate the JavaScript code from memory
                 let func = context.eval(Source::from_bytes(&js_content.as_ref()))
                     .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
                 
+                debug!("Calling JavaScript function");
                 // Call the JavaScript function with the input data
                 let result = call_js_function(&mut context, &func, &input_data)?;
                 
+                debug!("Validating output against schema");
                 // Validate output against schema
                 validate_json(&result, &output_schema)?;
+                
+                info!("Task execution completed successfully: {} ({})", task.metadata.label, task.metadata.uuid);
+                debug!("Output data: {}", serde_json::to_string(&result).unwrap_or_else(|_| "<invalid json>".to_string()));
                 
                 Ok(result)
             }
@@ -237,37 +261,52 @@ pub mod js_executor {
         output_schema_path: &Path,
         input_data: JsonValue,
     ) -> Result<JsonValue, JsExecutionError> {
+        info!("Executing JavaScript file: {:?}", js_file_path);
+        debug!("Input data: {}", serde_json::to_string(&input_data).unwrap_or_else(|_| "<invalid json>".to_string()));
+        
+        debug!("Parsing input and output schemas");
         // Parse input and output schemas
         let input_schema = parse_schema(input_schema_path)?;
         let output_schema = parse_schema(output_schema_path)?;
 
+        debug!("Validating input against schema");
         // Validate input against schema
         validate_json(&input_data, &input_schema)?;
 
+        debug!("Reading JavaScript file: {:?}", js_file_path);
         // Read and execute the JavaScript file
         let js_code = fs::read_to_string(js_file_path)
             .map_err(JsExecutionError::FileReadError)?;
         
+        debug!("Creating JavaScript execution context");
         // Create a new Boa context for JavaScript execution
         let mut context = BoaContext::default();
         
+        debug!("Registering fetch API");
         // Register the fetch API
         crate::http::register_fetch(&mut context)
             .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e)))?;
         
         // Initialize fetch variables
+        debug!("Initializing fetch variables");
         context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
             .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
         
+        debug!("Compiling JavaScript code");
         // Evaluate the JavaScript file
         let func = context.eval(Source::from_bytes(&js_code))
             .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
         
+        debug!("Calling JavaScript function");
         // Call the JavaScript function with the input data
         let result = call_js_function(&mut context, &func, &input_data)?;
         
+        debug!("Validating output against schema");
         // Validate output against schema
         validate_json(&result, &output_schema)?;
+        
+        info!("JavaScript file execution completed successfully: {:?}", js_file_path);
+        debug!("Output data: {}", serde_json::to_string(&result).unwrap_or_else(|_| "<invalid json>".to_string()));
         
         Ok(result)
     }

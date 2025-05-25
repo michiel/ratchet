@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 use thiserror::Error;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 use zip::ZipArchive;
 
@@ -84,8 +85,11 @@ impl Task {
     pub fn from_fs(path: impl AsRef<Path>) -> Result<Self, TaskError> {
         let path = path.as_ref();
         
+        debug!("Loading task from path: {:?}", path);
+        
         // Check if path exists
         if !path.exists() {
+            warn!("Task path does not exist: {:?}", path);
             return Err(TaskError::TaskFileNotFound(path.to_string_lossy().to_string()));
         }
         
@@ -94,27 +98,34 @@ impl Task {
             // Check if it's a ZIP file
             let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             if extension.to_lowercase() == "zip" {
+                debug!("Loading task from ZIP file: {:?}", path);
                 return Self::from_zip(path);
             } else {
+                warn!("File is not a ZIP file: {:?}", path);
                 return Err(TaskError::InvalidTaskStructure(format!(
                     "File {} is not a ZIP file", path.to_string_lossy()
                 )));
             }
         } else if !path.is_dir() {
+            warn!("Path is neither a directory nor a ZIP file: {:?}", path);
             return Err(TaskError::InvalidTaskStructure(format!(
                 "Path {} is neither a directory nor a ZIP file", path.to_string_lossy()
             )));
         }
         
         // Path is a directory, process it directly
+        debug!("Loading task from directory: {:?}", path);
         Self::from_directory(path)
     }
     
     /// Load a task from a directory
     fn from_directory(path: &Path) -> Result<Self, TaskError> {
+        debug!("Loading task from directory: {:?}", path);
+        
         // Read metadata.json
         let metadata_path = path.join("metadata.json");
         if !metadata_path.exists() {
+            warn!("Metadata file not found: {:?}", metadata_path);
             return Err(TaskError::TaskFileNotFound(format!(
                 "Metadata file not found at {}", metadata_path.to_string_lossy()
             )));
@@ -123,9 +134,12 @@ impl Task {
         let metadata_json = fs::read_to_string(&metadata_path)?;
         let metadata: TaskMetadata = serde_json::from_str(&metadata_json)?;
         
+        debug!("Task metadata loaded: {} ({})", metadata.label, metadata.uuid);
+        
         // Read input schema
         let input_schema_path = path.join("input.schema.json");
         if !input_schema_path.exists() {
+            warn!("Input schema file not found: {:?}", input_schema_path);
             return Err(TaskError::TaskFileNotFound(format!(
                 "Input schema file not found at {}", input_schema_path.to_string_lossy()
             )));
@@ -137,6 +151,7 @@ impl Task {
         // Read output schema
         let output_schema_path = path.join("output.schema.json");
         if !output_schema_path.exists() {
+            warn!("Output schema file not found: {:?}", output_schema_path);
             return Err(TaskError::TaskFileNotFound(format!(
                 "Output schema file not found at {}", output_schema_path.to_string_lossy()
             )));
@@ -148,6 +163,7 @@ impl Task {
         // Check for JS file
         let js_file_path = path.join("main.js");
         if !js_file_path.exists() {
+            warn!("JavaScript file not found: {:?}", js_file_path);
             return Err(TaskError::TaskFileNotFound(format!(
                 "JavaScript file not found at {}", js_file_path.to_string_lossy()
             )));
@@ -158,6 +174,8 @@ impl Task {
             path: js_file_path.to_string_lossy().to_string(),
             content: None, // Content is loaded lazily
         };
+        
+        info!("Successfully loaded task: {} ({})", metadata.label, metadata.uuid);
         
         Ok(Task {
             metadata,
@@ -171,21 +189,29 @@ impl Task {
     
     /// Load a task from a ZIP file
     fn from_zip(zip_path: &Path) -> Result<Self, TaskError> {
+        debug!("Loading task from ZIP file: {:?}", zip_path);
+        
         // Create a temporary directory to extract the ZIP
         let temp_dir = TempDir::new()?;
         let temp_dir_arc = Arc::new(temp_dir);
         let extract_path = temp_dir_arc.path();
+        
+        debug!("Created temporary directory: {:?}", extract_path);
         
         // Open the ZIP file
         let zip_file = fs::File::open(zip_path)?;
         let mut archive = ZipArchive::new(zip_file)?;
         
         // Extract all files from the ZIP to the temporary directory
+        debug!("Extracting {} files from ZIP", archive.len());
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
             let file_path = match file.enclosed_name() {
                 Some(path) => path.to_owned(),
-                None => continue, // Skip files with unsafe names
+                None => {
+                    warn!("Skipping file with unsafe name at index {}", i);
+                    continue; // Skip files with unsafe names
+                }
             };
             
             let output_path = extract_path.join(&file_path);
@@ -229,10 +255,13 @@ impl Task {
         };
         
         // Now load the task from the extracted directory
+        debug!("Loading task from extracted directory: {:?}", root_dir);
         let mut task = Self::from_directory(&root_dir)?;
         
         // Store the temp_dir in the task to keep it alive as long as the task exists
         task._temp_dir = Some(temp_dir_arc);
+        
+        info!("Successfully loaded task from ZIP: {} ({})", task.metadata.label, task.metadata.uuid);
         
         Ok(task)
     }
@@ -254,6 +283,8 @@ impl Task {
         match &mut self.task_type {
             TaskType::JsTask { path, content } => {
                 if content.is_none() {
+                    debug!("Loading JavaScript content for: {}", path);
+                    
                     // Make a clone of the path for use in file operations
                     let path_str = path.clone();
                     
@@ -261,13 +292,16 @@ impl Task {
                     let mut cache = CONTENT_CACHE.lock().unwrap();
                     
                     if let Some(cached_content) = cache.get(&path_str) {
+                        debug!("JavaScript content found in cache for: {}", path);
                         // Content found in cache, use it
                         *content = Some(cached_content.clone());
                     } else {
+                        debug!("Loading JavaScript content from filesystem: {}", path);
                         // Content not in cache, load from filesystem
                         let file_content = fs::read_to_string(&path_str)?;
                         let arc_content = Arc::new(file_content);
                         
+                        debug!("Storing JavaScript content in cache for: {}", path);
                         // Store in cache for future use
                         cache.put(path_str, arc_content.clone());
                         
@@ -302,7 +336,10 @@ impl Task {
     /// Purge content from memory to save space
     pub fn purge_content(&mut self) {
         match &mut self.task_type {
-            TaskType::JsTask { content, .. } => {
+            TaskType::JsTask { path, content } => {
+                if content.is_some() {
+                    debug!("Purging JavaScript content from memory for: {}", path);
+                }
                 *content = None;
             }
         }
@@ -310,26 +347,34 @@ impl Task {
     
     /// Validate that the task is properly structured and syntactically correct
     pub fn validate(&mut self) -> Result<(), TaskError> {
+        debug!("Validating task: {} ({})", self.metadata.label, self.metadata.uuid);
+        
         // 1. Validate input schema is valid JSON Schema
+        debug!("Validating input schema");
         if !self.input_schema.is_object() {
+            warn!("Input schema is not a valid JSON object");
             return Err(TaskError::InvalidJsonSchema(
                 "Input schema must be a valid JSON object".to_string()
             ));
         }
         
         // 2. Validate output schema is valid JSON Schema
+        debug!("Validating output schema");
         if !self.output_schema.is_object() {
+            warn!("Output schema is not a valid JSON object");
             return Err(TaskError::InvalidJsonSchema(
                 "Output schema must be a valid JSON object".to_string()
             ));
         }
         
         // 3. Validate that the JavaScript code can be parsed
+        debug!("Validating JavaScript content");
         self.ensure_content_loaded()?;
         let js_content = self.get_js_content()?;
         
         // We'll use a basic heuristic first - check if it contains a function definition
         if !js_content.contains("function") {
+            warn!("JavaScript code does not contain a function definition");
             return Err(TaskError::JavaScriptParseError(
                 "JavaScript code does not contain a function definition".to_string()
             ));
@@ -337,23 +382,28 @@ impl Task {
         
         // 4. Try to parse the JavaScript code using BoaJS
         // This will catch syntax errors in the JavaScript code
+        debug!("Parsing JavaScript with BoaJS engine");
         let mut context = boa_engine::Context::default();
         let result = context.eval(boa_engine::Source::from_bytes(js_content.as_ref()));
         if result.is_err() {
+            let error = result.err().unwrap();
+            warn!("JavaScript syntax error: {}", error);
             return Err(TaskError::JavaScriptParseError(
-                format!("JavaScript syntax error: {}", result.err().unwrap())
+                format!("JavaScript syntax error: {}", error)
             ));
         }
         
         // 5. Validate that the code returns a function or is a callable object
         let js_result = result.unwrap();
         if !js_result.is_callable() && !js_result.is_object() {
+            warn!("JavaScript code does not return a callable function or object");
             return Err(TaskError::JavaScriptParseError(
                 "JavaScript code must return a callable function or object".to_string()
             ));
         }
         
         // All validations passed
+        info!("Task validation completed successfully: {} ({})", self.metadata.label, self.metadata.uuid);
         Ok(())
     }
 }

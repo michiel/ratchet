@@ -10,6 +10,7 @@ use std::time::Duration;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::cell::RefCell;
 use lazy_static::lazy_static;
+use tracing::{debug, info, warn};
 
 // Thread-local storage for mock data during tests
 thread_local! {
@@ -24,6 +25,11 @@ lazy_static! {
 /// Set mock data for HTTP calls
 pub fn set_mock_http_data(mock_data: Option<JsonValue>) {
     let has_mock = mock_data.is_some();
+    if has_mock {
+        debug!("Enabling HTTP mock mode");
+    } else {
+        debug!("Disabling HTTP mock mode");
+    }
     MOCK_HTTP_DATA.with(|cell| {
         *cell.borrow_mut() = mock_data;
     });
@@ -64,8 +70,13 @@ pub fn call_http(
     params: Option<&JsonValue>,
     body: Option<&JsonValue>,
 ) -> Result<JsonValue, HttpError> {
+    info!("Making HTTP request to: {}", url);
+    debug!("Request params: {:?}", params);
+    debug!("Request body: {:?}", body);
+    
     // Check if we're in mock mode and return mock data if available
     if MOCK_ENABLED.load(Ordering::SeqCst) {
+        debug!("Mock mode enabled, checking for mock response");
         let mut mock_response = None;
         
         // Extract method from params or default to GET
@@ -92,6 +103,7 @@ pub fn call_http(
                     if (mock_url.is_empty() || url.contains(mock_url)) && 
                        (mock_method.eq_ignore_ascii_case(method_str)) {
                         if let Some(response) = http_mock.get("response") {
+                            debug!("Found matching mock response for {} {}", method_str, url);
                             // Create a response object from the mock data
                             mock_response = Some(json!({
                                 "ok": true,
@@ -107,11 +119,15 @@ pub fn call_http(
         });
         
         if let Some(response) = mock_response {
+            debug!("Returning mock HTTP response");
             return Ok(response);
+        } else {
+            debug!("No matching mock response found, proceeding with real HTTP call");
         }
     }
     
     // If no mock data or mock doesn't match, perform a real HTTP request
+    debug!("Creating HTTP client with 30s timeout");
     // Create a client with default settings
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
@@ -131,12 +147,14 @@ pub fn call_http(
     let method = Method::from_str(method_str)
         .map_err(|_| HttpError::InvalidMethod(method_str.to_string()))?;
 
+    debug!("Building {} request to {}", method_str, url);
     // Build the request
     let mut request = client.request(method, url);
 
     // Add headers if provided
     if let Some(params) = params {
         if let Some(headers) = params.get("headers").and_then(|h| h.as_object()) {
+            debug!("Adding {} custom headers", headers.len());
             let mut header_map = HeaderMap::new();
             for (key, value) in headers {
                 if let Some(value_str) = value.as_str() {
@@ -154,29 +172,40 @@ pub fn call_http(
 
     // Add body if provided
     if let Some(body) = body {
+        debug!("Adding JSON body to request");
         request = request.json(body);
     }
 
     // Send the request and get the response
+    debug!("Sending HTTP request");
     let response = request.send()?;
     
     // Get status info
     let status = response.status();
     let status_code = status.as_u16();
     let status_text = status.canonical_reason().unwrap_or("Unknown Status");
+    
+    info!("HTTP response received: {} {}", status_code, status_text);
 
     // Try to parse the response as JSON, fall back to text if it fails
+    debug!("Parsing response body");
     let response_body = match response.json::<JsonValue>() {
-        Ok(json_data) => json_data,
+        Ok(json_data) => {
+            debug!("Successfully parsed response as JSON");
+            json_data
+        },
         Err(_) => {
+            warn!("Failed to parse response as JSON, falling back to text");
             // Fall back to text - we need to send a new request since json() consumes the response
             let text_response = client.request(Method::from_str(method_str).unwrap(), url).send()?;
             let text = text_response.text()?;
+            debug!("Response parsed as text: {} bytes", text.len());
             json!(text)
         }
     };
 
     // Construct a response object similar to JavaScript's Response
+    debug!("Constructing response object");
     let result = json!({
         "ok": status.is_success(),
         "status": status_code,
@@ -185,6 +214,7 @@ pub fn call_http(
         "body": response_body
     });
 
+    debug!("HTTP call completed successfully");
     Ok(result)
 }
 
