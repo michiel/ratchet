@@ -2,7 +2,7 @@ use crate::js_executor::JsExecutionError;
 use crate::task::{Task, TaskError, TaskType};
 use serde_json::Value as JsonValue;
 use tokio::runtime::Runtime;
-use log::debug;
+use tracing::debug;
 use thiserror::Error;
 
 /// Errors that can occur when running a JS task

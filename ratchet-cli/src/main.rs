@@ -2,10 +2,16 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ratchet_lib::task::Task;
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
+use tracing::{debug, error, info, warn};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
+    /// Set the log level (trace, debug, info, warn, error)
+    #[arg(long, value_name = "LEVEL", global = true)]
+    log_level: Option<String>,
+    
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -38,13 +44,40 @@ enum Commands {
     },
 }
 
+/// Initialize tracing with environment variable override support
+fn init_tracing(log_level: Option<&String>) {
+    let env_filter = match log_level {
+        Some(level) => {
+            // Use provided log level
+            EnvFilter::try_new(level)
+                .unwrap_or_else(|_| {
+                    eprintln!("Invalid log level '{}', falling back to 'info'", level);
+                    EnvFilter::new("info")
+                })
+        }
+        None => {
+            // Try environment variable first, then default to info
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info"))
+        }
+    };
+    
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .init();
+    
+    debug!("Tracing initialized");
+}
+
 /// Parse JSON input string into a JsonValue
 fn parse_input_json(input: Option<&String>) -> Result<JsonValue> {
     match input {
         Some(json_str) => {
+            debug!("Parsing input JSON: {}", json_str);
             from_str(json_str).context("Failed to parse input JSON")
         }
         None => {
+            debug!("No input JSON provided, using empty object");
             // Default empty JSON object if no input provided
             Ok(json!({}))
         }
@@ -53,25 +86,33 @@ fn parse_input_json(input: Option<&String>) -> Result<JsonValue> {
 
 /// Run a task with the given input
 async fn run_task(task_path: &str, input_json: &JsonValue) -> Result<JsonValue> {
+    info!("Loading task from: {}", task_path);
+    
     // Load the task from the filesystem
     let mut task = Task::from_fs(task_path)
         .context(format!("Failed to load task from path: {}", task_path))?;
     
+    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
+    
     // Execute the task with the provided input
+    info!("Executing task with input");
     let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone())
         .await
         .context("Failed to execute task")?;
     
+    info!("Task execution completed successfully");
     Ok(result)
 }
 
 /// Validate a task's structure and syntax
 fn validate_task(task_path: &str) -> Result<()> {
-    println!("Validating task at: {}", task_path);
+    info!("Validating task at: {}", task_path);
     
     // Load the task from the filesystem
     let mut task = Task::from_fs(task_path)
         .context(format!("Failed to load task from path: {}", task_path))?;
+    
+    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
     
     // Validate the task
     task.validate()
@@ -83,16 +124,19 @@ fn validate_task(task_path: &str) -> Result<()> {
     println!("  Version: {}", task.metadata.version);
     println!("  Description: {}", task.metadata.description);
     
+    info!("Task validation completed successfully");
     Ok(())
 }
 
 /// Run tests for a task
 async fn test_task(task_path: &str) -> Result<()> {
-    println!("Running tests for task at: {}", task_path);
+    info!("Running tests for task at: {}", task_path);
     
     // First validate the task
     let mut task = Task::from_fs(task_path)
         .context(format!("Failed to load task from path: {}", task_path))?;
+    
+    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
     
     task.validate()
         .context("Task validation failed")?;
@@ -103,8 +147,12 @@ async fn test_task(task_path: &str) -> Result<()> {
     println!("  Version: {}", task.metadata.version);
     
     // Run tests
+    info!("Starting test execution");
     match ratchet_lib::test::run_tests(task_path).await {
         Ok(summary) => {
+            info!("Tests completed - Total: {}, Passed: {}, Failed: {}", 
+                  summary.total, summary.passed, summary.failed);
+            
             println!("\nTest Results:");
             println!("-------------");
             println!("Total tests: {}", summary.total);
@@ -114,10 +162,12 @@ async fn test_task(task_path: &str) -> Result<()> {
             
             // Print details of failed tests
             if summary.failed > 0 {
+                warn!("Found {} failed tests", summary.failed);
                 println!("\nFailed Tests:");
                 for (i, result) in summary.results.iter().enumerate() {
                     if !result.passed {
                         let file_name = result.file_path.file_name().unwrap().to_string_lossy();
+                        warn!("Test failed: {}", file_name);
                         println!("\n{}. Test: {}", i + 1, file_name);
                         
                         if let Some(actual) = &result.actual_output {
@@ -131,16 +181,20 @@ async fn test_task(task_path: &str) -> Result<()> {
                             println!("   Expected: {}", serde_json::to_string_pretty(expected)?);
                             println!("   Actual: {}", serde_json::to_string_pretty(actual)?);
                         } else if let Some(error) = &result.error_message {
+                            error!("Test error: {}", error);
                             println!("   Error: {}", error);
                         }
                     }
                 }
                 
                 // Return non-zero exit code for CI/CD pipelines
+                error!("Tests failed, exiting with code 1");
                 std::process::exit(1);
             } else if summary.total == 0 {
+                warn!("No tests found");
                 println!("\nNo tests found. Create test files in the 'tests' directory.");
             } else {
+                info!("All tests passed successfully");
                 println!("\nAll tests passed! ✓");
             }
             
@@ -149,6 +203,7 @@ async fn test_task(task_path: &str) -> Result<()> {
         Err(err) => {
             match err {
                 ratchet_lib::test::TestError::NoTestsDirectory => {
+                    info!("No tests directory found");
                     println!("\nNo tests directory found.");
                     println!("Create a 'tests' directory with JSON test files to run tests.");
                     println!("Each test file should contain 'input' and 'expected_output' fields.");
@@ -156,6 +211,7 @@ async fn test_task(task_path: &str) -> Result<()> {
                     Ok(())
                 },
                 _ => {
+                    error!("Test execution failed: {:?}", err);
                     Err(err).context("Test execution failed")
                 }
             }
@@ -164,8 +220,12 @@ async fn test_task(task_path: &str) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
     let cli = Cli::parse();
+    
+    // Initialize tracing before doing anything else
+    init_tracing(cli.log_level.as_ref());
+    
+    info!("Ratchet CLI starting");
 
     // Create a tokio runtime for async operations
     let runtime = tokio::runtime::Runtime::new()
@@ -173,12 +233,14 @@ fn main() -> Result<()> {
 
     match &cli.command {
         Some(Commands::RunOnce { from_fs, input_json }) => {
+            info!("Running task from file system path: {}", from_fs);
             println!("Running task from file system path: {}", from_fs);
             
             // Parse input JSON
             let input = parse_input_json(input_json.as_ref())?;
             
             if input_json.is_some() {
+                debug!("Using provided input: {}", input_json.as_ref().unwrap());
                 println!("Using provided input: {}", input_json.as_ref().unwrap());
             }
             
@@ -190,6 +252,7 @@ fn main() -> Result<()> {
                 .context("Failed to format result as JSON")?;
                 
             println!("Result: {}", formatted);
+            info!("Task execution completed");
             Ok(())
         },
         Some(Commands::Validate { from_fs }) => {
@@ -199,6 +262,7 @@ fn main() -> Result<()> {
             runtime.block_on(test_task(from_fs))
         },
         None => {
+            warn!("No command specified");
             println!("No command specified. Use --help to see available commands.");
             Ok(())
         }

@@ -17,6 +17,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 log.workspace = true
+tracing.workspace = true
 tokio.workspace = true
 
 # For crate-specific dependencies
