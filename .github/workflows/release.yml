@@ -28,17 +28,13 @@ jobs:
         if: matrix.platform.runs-on == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config musl-dev # Install musl-dev
+          sudo apt-get install -y libssl-dev pkg-config musl-dev
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
-        env:
-          OPENSSL_DIR: /usr
-          OPENSSL_INCLUDE_DIR: /usr/include
-          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu # Adjust if necessary
         with:
           command: build
           target: ${{ matrix.platform.target }}
-          args: "--locked --release -p ratchet"
+          args: "--locked --release -p ratchet --features=vendored" # Try the 'vendored' feature
           strip: true
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
