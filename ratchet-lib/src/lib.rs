@@ -68,8 +68,8 @@ pub mod js_executor {
     }
 
     /// Call a JavaScript function with the given input
-    pub fn call_js_function(
-        context: &mut BoaContext,
+    pub async fn call_js_function(
+        context: &mut BoaContext<'_>,
         func: &boa_engine::JsValue,
         input_data: &JsonValue,
         http_manager: &crate::http::HttpManager,
@@ -106,7 +106,7 @@ pub mod js_executor {
         // Call the function with itself as the 'this' value
         trace!("Calling JavaScript function with input data",);
         let result = func_obj
-            .call(func, &[input_arg], context)
+            .call(func, &[input_arg.clone()], context)
             .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
 
         // Check if we need to process a fetch call
@@ -172,20 +172,71 @@ pub mod js_executor {
 
             debug!("Making HTTP call to: {}", url);
             // Perform the HTTP call using the provided HttpManager
-            let http_result = http_manager.call_http(&url, params.as_ref(), body.as_ref())
+            let http_result = http_manager.call_http(&url, params.as_ref(), body.as_ref()).await
                 .map_err(|e| JsExecutionError::ExecutionError(format!("HTTP error: {}", e)))?;
+
+            debug!("Injecting HTTP result back into JavaScript context");
+            // Store the HTTP result in a global variable
+            context
+                .global_object()
+                .set("__http_result", 
+                     context.eval(Source::from_bytes(&format!("({})", 
+                        serde_json::to_string(&http_result)
+                            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e)))?
+                     )))
+                     .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e)))?, 
+                     true, 
+                     context)
+                .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set HTTP result: {}", e)))?;
+            
+            // Replace the fetch function to return the stored result
+            context
+                .eval(Source::from_bytes(r#"
+                    fetch = function(url, params, body) {
+                        return __http_result;
+                    };
+                "#))
+                .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e)))?;
+
+            debug!("Re-calling JavaScript function with updated fetch");
+            // Re-call the JavaScript function now that fetch will return the real result
+            let result = func_obj
+                .call(func, &[input_arg], context)
+                .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
 
             debug!("Clearing fetch state variables");
             // Clear the fetch state
             context
                 .eval(Source::from_bytes(
-                    "__fetch_url = null; __fetch_params = null; __fetch_body = null;",
+                    "__fetch_url = null; __fetch_params = null; __fetch_body = null; __http_result = null;",
                 ))
                 .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+            
+            debug!("Converting result from second function call");
+            // Process the result from the second call the same way as normal
+            context
+                .global_object()
+                .set("__temp_result", result, true, context)
+                .map_err(|e| {
+                    JsExecutionError::ExecutionError(format!("Failed to set temporary result: {}", e))
+                })?;
 
-            debug!("Returning HTTP result");
-            // Return the HTTP result instead
-            return Ok(http_result);
+            let result_json_str = context
+                .eval(Source::from_bytes("JSON.stringify(__temp_result)"))
+                .map_err(|e| {
+                    JsExecutionError::ExecutionError(format!("Failed to stringify result: {}", e))
+                })?;
+
+            let result_str = result_json_str
+                .to_string(context)
+                .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?
+                .to_std_string_escaped();
+
+            let result_json: JsonValue = serde_json::from_str(&result_str)
+                .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
+
+            debug!("HTTP call completed successfully");
+            return Ok(result_json);
         }
 
         debug!("Converting JavaScript result back to JSON");
@@ -293,7 +344,7 @@ pub mod js_executor {
 
                 debug!("Calling JavaScript function");
                 // Call the JavaScript function with the input data
-                let result = call_js_function(&mut context, &func, &input_data, http_manager)?;
+                let result = call_js_function(&mut context, &func, &input_data, http_manager).await?;
 
                 debug!("Validating output against schema");
                 // Validate output against schema
@@ -373,7 +424,7 @@ pub mod js_executor {
 
         debug!("Calling JavaScript function");
         // Call the JavaScript function with the input data
-        let result = call_js_function(&mut context, &func, &input_data, http_manager)?;
+        let result = call_js_function(&mut context, &func, &input_data, http_manager).await?;
 
         debug!("Validating output against schema");
         // Validate output against schema

@@ -3,7 +3,7 @@ use boa_engine::{
     Context, JsValue, JsError, Source,
     JsNativeError, JsResult
 };
-use reqwest::{self, blocking::Client, Method, header::{HeaderMap, HeaderName, HeaderValue}};
+use reqwest::{self, Client, Method, header::{HeaderMap, HeaderName, HeaderValue}};
 use serde_json::{Value as JsonValue, json};
 use std::str::FromStr;
 use std::time::Duration;
@@ -66,7 +66,7 @@ impl HttpManager {
     }
     
     /// Perform an HTTP request similar to the JavaScript fetch API
-    pub fn call_http(
+    pub async fn call_http(
         &self,
         url: &str,
         params: Option<&JsonValue>,
@@ -219,7 +219,7 @@ impl HttpManager {
 
         // Send the request and get the response
         debug!("Sending HTTP request");
-        let response = request.send()?;
+        let response = request.send().await?;
         
         // Get status info
         let status = response.status();
@@ -238,7 +238,7 @@ impl HttpManager {
 
         // Try to parse the response as JSON, fall back to text if it fails
         debug!("Parsing response body");
-        let response_body = match response.json::<JsonValue>() {
+        let response_body = match response.json::<JsonValue>().await {
             Ok(json_data) => {
                 debug!("Successfully parsed response as JSON");
                 json_data
@@ -246,8 +246,8 @@ impl HttpManager {
             Err(_) => {
                 warn!("Failed to parse response as JSON, falling back to text");
                 // Fall back to text - we need to send a new request since json() consumes the response
-                let text_response = client.request(Method::from_str(method_str).unwrap(), url).send()?;
-                let text = text_response.text()?;
+                let text_response = client.request(Method::from_str(method_str).unwrap(), url).send().await?;
+                let text = text_response.text().await?;
                 debug!("Response parsed as text: {} bytes", text.len());
                 json!(text)
             }
@@ -323,22 +323,22 @@ pub fn create_http_manager() -> HttpManager {
 }
 
 /// Perform an HTTP request using a default HttpManager (for backward compatibility)
-pub fn call_http(
+pub async fn call_http(
     url: &str,
     params: Option<&JsonValue>,
     body: Option<&JsonValue>,
 ) -> Result<JsonValue, HttpError> {
     let manager = HttpManager::new();
-    manager.call_http(url, params, body)
+    manager.call_http(url, params, body).await
 }
 
 
 /// Native function to handle fetch calls from JavaScript
 #[allow(dead_code)]
-fn fetch_native(
+async fn fetch_native(
     _this: &JsValue,
     args: &[JsValue],
-    context: &mut Context,
+    context: &mut Context<'_>,
 ) -> JsResult<JsValue> {
     // Extract arguments
     let url = if args.is_empty() {
@@ -391,7 +391,7 @@ fn fetch_native(
     };
 
     // Make the HTTP call
-    let result = match call_http(&url, params_json.as_ref(), body_json.as_ref()) {
+    let result = match call_http(&url, params_json.as_ref(), body_json.as_ref()).await {
         Ok(result) => result,
         Err(e) => {
             return Err(JsNativeError::error()
@@ -544,8 +544,8 @@ mod tests {
         (server, requests)
     }
 
-    #[test]
-    fn test_call_http_get_json() {
+    #[tokio::test]
+    async fn test_call_http_get_json() {
         let (_server, _requests) = start_mock_server(3030);
 
         // Test a GET request to JSON endpoint
@@ -553,7 +553,7 @@ mod tests {
             "http://localhost:3030/json", 
             Some(&json!({"method": "GET"})),
             None
-        ).unwrap();
+        ).await.unwrap();
 
         assert!(result.get("ok").unwrap().as_bool().unwrap());
         assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
@@ -564,8 +564,8 @@ mod tests {
         assert_eq!(body.get("status").unwrap().as_str().unwrap(), "success");
     }
 
-    #[test]
-    fn test_call_http_post() {
+    #[tokio::test]
+    async fn test_call_http_post() {
         let (_server, requests) = start_mock_server(3031);
         
         // Test a POST request with a JSON body
@@ -578,7 +578,7 @@ mod tests {
             "http://localhost:3031/", 
             Some(&json!({"method": "POST"})),
             Some(&test_body)
-        ).unwrap();
+        ).await.unwrap();
 
         assert!(result.get("ok").unwrap().as_bool().unwrap());
         assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
@@ -593,8 +593,8 @@ mod tests {
         assert_eq!(request_json.get("email").unwrap().as_str().unwrap(), "test@example.com");
     }
 
-    #[test]
-    fn test_js_fetch_integration() {
+    #[tokio::test]
+    async fn test_js_fetch_integration() {
         let (_server, _requests) = start_mock_server(3032);
         
         // Create a JavaScript context
@@ -637,7 +637,7 @@ mod tests {
         let params: Option<JsonValue> = Some(serde_json::from_str(&params_str).unwrap());
         
         // Make the HTTP call
-        let result = call_http(&url, params.as_ref(), None).unwrap();
+        let result = call_http(&url, params.as_ref(), None).await.unwrap();
         
         // Verify the result
         assert!(result.get("ok").unwrap().as_bool().unwrap());
@@ -647,8 +647,8 @@ mod tests {
         assert_eq!(body.get("message").unwrap().as_str().unwrap(), "Hello, World!");
     }
     
-    #[test]
-    fn test_http_manager_offline_mode() {
+    #[tokio::test]
+    async fn test_http_manager_offline_mode() {
         let mut manager = HttpManager::new();
         manager.set_offline();
         
@@ -663,7 +663,7 @@ mod tests {
             "http://example.com/api",
             Some(&json!({"method": "GET"})),
             None
-        ).unwrap();
+        ).await.unwrap();
         
         assert!(result.get("ok").unwrap().as_bool().unwrap());
         assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
@@ -673,8 +673,8 @@ mod tests {
         assert_eq!(body.get("id").unwrap().as_u64().unwrap(), 123);
     }
     
-    #[test]
-    fn test_http_manager_offline_mode_no_mock() {
+    #[tokio::test]
+    async fn test_http_manager_offline_mode_no_mock() {
         let mut manager = HttpManager::new();
         manager.set_offline();
         
@@ -683,13 +683,13 @@ mod tests {
             "http://example.com/api",
             Some(&json!({"method": "GET"})),
             None
-        );
+        ).await;
         
         assert!(result.is_err());
     }
     
-    #[test]
-    fn test_http_manager_add_mocks() {
+    #[tokio::test]
+    async fn test_http_manager_add_mocks() {
         let mut manager = HttpManager::new();
         manager.set_offline();
         
@@ -704,7 +704,7 @@ mod tests {
             "http://api1.com",
             Some(&json!({"method": "GET"})),
             None
-        ).unwrap();
+        ).await.unwrap();
         
         let body1 = result1.get("body").unwrap();
         assert_eq!(body1.get("data").unwrap().as_str().unwrap(), "response1");
@@ -714,7 +714,7 @@ mod tests {
             "http://api2.com",
             Some(&json!({"method": "POST"})),
             None
-        ).unwrap();
+        ).await.unwrap();
         
         let body2 = result2.get("body").unwrap();
         assert_eq!(body2.get("data").unwrap().as_str().unwrap(), "response2");
