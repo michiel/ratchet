@@ -7,6 +7,7 @@ use std::path::Path;
 use thiserror::Error;
 use tracing::{debug, info, trace, warn};
 
+pub mod generate;
 pub mod http;
 pub mod js_task;
 pub mod recording;

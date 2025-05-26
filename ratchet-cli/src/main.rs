@@ -6,7 +6,6 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use std::path::PathBuf;
 use std::fs;
-use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -355,136 +354,55 @@ fn generate_task(
 ) -> Result<()> {
     info!("Generating task template at: {:?}", path);
 
-    // Check if directory already exists
-    if path.exists() {
-        return Err(anyhow::anyhow!("Directory already exists: {:?}", path));
+    // Build configuration using the builder pattern
+    let mut config = ratchet_lib::generate::TaskGenerationConfig::new(path.clone());
+    
+    if let Some(label) = label {
+        config = config.with_label(label);
+    }
+    if let Some(description) = description {
+        config = config.with_description(description);
+    }
+    if let Some(version) = version {
+        config = config.with_version(version);
     }
 
-    // Create the task directory
-    fs::create_dir_all(path)
-        .context(format!("Failed to create task directory: {:?}", path))?;
+    // Generate the task using ratchet-lib
+    let generated_info = ratchet_lib::generate::generate_task(config)
+        .context("Failed to generate task template")?;
 
-    // Generate UUID for the task
-    let task_uuid = Uuid::new_v4();
-
-    // Use provided values or defaults
-    let task_label = label.map(|s| s.as_str()).unwrap_or("My Task");
-    let task_description = description.map(|s| s.as_str()).unwrap_or("A task that performs a specific operation");
-    let task_version = version.map(|s| s.as_str()).unwrap_or("1.0.0");
-
-    info!("Creating task files with UUID: {}", task_uuid);
-
-    // Create metadata.json
-    let metadata = json!({
-        "uuid": task_uuid,
-        "version": task_version,
-        "label": task_label,
-        "description": task_description
-    });
-    let metadata_path = path.join("metadata.json");
-    let metadata_content = serde_json::to_string_pretty(&metadata)?;
-    fs::write(&metadata_path, metadata_content)
-        .context(format!("Failed to write metadata.json: {:?}", metadata_path))?;
-
-    // Create input.schema.json
-    let input_schema = json!({
-        "type": "object",
-        "properties": {
-            "value": {
-                "type": "string",
-                "description": "Input value for the task"
-            }
-        },
-        "required": ["value"]
-    });
-    let input_schema_path = path.join("input.schema.json");
-    let input_schema_content = serde_json::to_string_pretty(&input_schema)?;
-    fs::write(&input_schema_path, input_schema_content)
-        .context(format!("Failed to write input.schema.json: {:?}", input_schema_path))?;
-
-    // Create output.schema.json
-    let output_schema = json!({
-        "type": "object",
-        "properties": {
-            "result": {
-                "type": "string",
-                "description": "Result of the task operation"
-            }
-        },
-        "required": ["result"]
-    });
-    let output_schema_path = path.join("output.schema.json");
-    let output_schema_content = serde_json::to_string_pretty(&output_schema)?;
-    fs::write(&output_schema_path, output_schema_content)
-        .context(format!("Failed to write output.schema.json: {:?}", output_schema_path))?;
-
-    // Create main.js
-    let main_js_content = r#"// Task implementation
-// This function receives input matching input.schema.json
-// and must return output matching output.schema.json
-
-function main(input) {
-    // Validate input
-    if (!input || typeof input.value !== 'string') {
-        throw new Error('Invalid input: value must be a string');
-    }
-    
-    // Process the input
-    const processedValue = `Processed: ${input.value}`;
-    
-    // Return the result matching the output schema
-    return {
-        result: processedValue
-    };
-}
-
-// Export the main function (required)
-main;
-"#;
-    let main_js_path = path.join("main.js");
-    fs::write(&main_js_path, main_js_content)
-        .context(format!("Failed to write main.js: {:?}", main_js_path))?;
-
-    // Create tests directory with a sample test
-    let tests_dir = path.join("tests");
-    fs::create_dir_all(&tests_dir)
-        .context(format!("Failed to create tests directory: {:?}", tests_dir))?;
-
-    // Create a sample test file
-    let test_data = json!({
-        "input": {
-            "value": "test input"
-        },
-        "expected_output": {
-            "result": "Processed: test input"
-        }
-    });
-    let test_path = tests_dir.join("test-001.json");
-    let test_content = serde_json::to_string_pretty(&test_data)?;
-    fs::write(&test_path, test_content)
-        .context(format!("Failed to write test file: {:?}", test_path))?;
-
+    // Display success information
     println!("✓ Task template created successfully!");
-    println!("  Path: {:?}", path);
-    println!("  UUID: {}", task_uuid);
-    println!("  Label: {}", task_label);
-    println!("  Version: {}", task_version);
-    println!("  Description: {}", task_description);
+    println!("  Path: {:?}", generated_info.path);
+    println!("  UUID: {}", generated_info.uuid);
+    println!("  Label: {}", generated_info.label);
+    println!("  Version: {}", generated_info.version);
+    println!("  Description: {}", generated_info.description);
     println!("\nFiles created:");
-    println!("  - metadata.json        (task metadata)");
-    println!("  - input.schema.json    (input validation schema)");
-    println!("  - output.schema.json   (output validation schema)");
-    println!("  - main.js              (task implementation)");
-    println!("  - tests/test-001.json  (sample test case)");
+    for file in &generated_info.files_created {
+        println!("  - {}        ({})", file, get_file_description(file));
+    }
     println!("\nNext steps:");
     println!("  1. Edit main.js to implement your task logic");
     println!("  2. Update input.schema.json and output.schema.json as needed");
     println!("  3. Add more test cases in the tests/ directory");
-    println!("  4. Validate: ratchet validate --from-fs={}", path.display());
-    println!("  5. Test: ratchet test --from-fs={}", path.display());
+    println!("  4. Validate: ratchet validate --from-fs={}", generated_info.path.display());
+    println!("  5. Test: ratchet test --from-fs={}", generated_info.path.display());
 
     info!("Task template generation completed successfully");
     Ok(())
+}
+
+/// Get a human-readable description for a file type
+fn get_file_description(file: &str) -> &'static str {
+    match file {
+        "metadata.json" => "task metadata",
+        "input.schema.json" => "input validation schema",
+        "output.schema.json" => "output validation schema", 
+        "main.js" => "task implementation",
+        "tests/test-001.json" => "sample test case",
+        _ => "generated file",
+    }
 }
 
 fn main() -> Result<()> {
