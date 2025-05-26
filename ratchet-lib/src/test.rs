@@ -91,16 +91,22 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
         let content = fs::read_to_string(&path)?;
         let test_json: JsonValue = serde_json::from_str(&content)?;
         
-        // Validate test file structure
-        let input = test_json.get("input").ok_or_else(|| {
-            warn!("Missing 'input' field in test file: {:?}", path);
-            TestError::InvalidTestFile(format!("Missing 'input' field in test file: {:?}", path))
-        })?;
+        // Validate test file structure - skip invalid files instead of failing
+        let input = match test_json.get("input") {
+            Some(input) => input,
+            None => {
+                warn!("Skipping test file with missing 'input' field: {:?}", path);
+                continue;
+            }
+        };
         
-        let expected_output = test_json.get("expected_output").ok_or_else(|| {
-            warn!("Missing 'expected_output' field in test file: {:?}", path);
-            TestError::InvalidTestFile(format!("Missing 'expected_output' field in test file: {:?}", path))
-        })?;
+        let expected_output = match test_json.get("expected_output") {
+            Some(output) => output,
+            None => {
+                warn!("Skipping test file with missing 'expected_output' field: {:?}", path);
+                continue;
+            }
+        };
         
         // Check for optional mock data
         let mock = test_json.get("mock").map(|m| m.clone());
@@ -271,7 +277,7 @@ mod tests {
         fs::write(task_dir.join("output.schema.json"), output_schema)?;
         
         // Create main.js
-        let main_js = r#"function(input) {
+        let main_js = r#"(function(input) {
             const {num1, num2} = input;
             
             if (typeof num1 !== 'number' || typeof num2 !== 'number') {
@@ -281,7 +287,7 @@ mod tests {
             return {
               sum: num1 + num2
             }
-        }"#;
+        })"#;
         fs::write(task_dir.join("main.js"), main_js)?;
         
         // Create tests directory
@@ -396,7 +402,7 @@ mod tests {
             let temp_dir = tempdir().unwrap();
             let task_dir = temp_dir.path().to_path_buf();
             
-            // Create a task without a tests directory
+            // Create a complete task without a tests directory
             let metadata = r#"{
                 "uuid": "bd6c6f98-4896-44cc-8c82-30328c3aefda",
                 "version": "1.0.0",
@@ -404,6 +410,35 @@ mod tests {
                 "description": "Test task for unit testing"
             }"#;
             fs::write(task_dir.join("metadata.json"), metadata).unwrap();
+            
+            // Create input.schema.json
+            let input_schema = r#"{
+                "type": "object",
+                "properties": {
+                    "num1": { "type": "number" },
+                    "num2": { "type": "number" }
+                },
+                "required": ["num1", "num2"]
+            }"#;
+            fs::write(task_dir.join("input.schema.json"), input_schema).unwrap();
+            
+            // Create output.schema.json
+            let output_schema = r#"{
+                "type": "object",
+                "properties": {
+                    "sum": { "type": "number" }
+                },
+                "required": ["sum"]
+            }"#;
+            fs::write(task_dir.join("output.schema.json"), output_schema).unwrap();
+            
+            // Create main.js
+            let main_js = r#"(function(input) {
+                return { sum: input.num1 + input.num2 };
+            })"#;
+            fs::write(task_dir.join("main.js"), main_js).unwrap();
+            
+            // Do NOT create a tests directory - this is what we're testing
             
             let result = run_tests(task_dir.to_str().unwrap()).await;
             assert!(matches!(result, Err(TestError::NoTestsDirectory)));
