@@ -21,6 +21,7 @@ tracing-appender = "0.2"
 lazy_static = "1.4"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
+openssl = { version = "0.10.72", features = ["vendored"] }
 
 # Workspace-level configuration for targets
 [workspace.package]
