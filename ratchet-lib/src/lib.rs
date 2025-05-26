@@ -259,6 +259,13 @@ pub mod js_executor {
                 debug!("Validating input data against schema");
                 // Validate input against schema
                 validate_json(&input_data, &input_schema)?;
+                
+                // Record input if recording is active
+                if crate::recording::is_recording() {
+                    crate::recording::record_input(&input_data).map_err(|e| {
+                        JsExecutionError::ExecutionError(format!("Failed to record input: {}", e))
+                    })?;
+                }
 
                 debug!("Creating JavaScript execution context");
                 // Create a new Boa context for JavaScript execution
@@ -288,6 +295,13 @@ pub mod js_executor {
                 debug!("Validating output against schema");
                 // Validate output against schema
                 validate_json(&result, &output_schema)?;
+                
+                // Record output if recording is active
+                if crate::recording::is_recording() {
+                    crate::recording::record_output(&result).map_err(|e| {
+                        JsExecutionError::ExecutionError(format!("Failed to record output: {}", e))
+                    })?;
+                }
 
                 info!(
                     "Task execution completed successfully: {} ({})",

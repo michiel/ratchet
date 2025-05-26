@@ -181,3 +181,37 @@ pub fn get_recording_dir() -> Option<PathBuf> {
     let state = RECORDING_STATE.lock().unwrap();
     state.as_ref().map(|s| s.session_dir.clone())
 }
+
+/// Record task input JSON
+pub fn record_input(input_json: &JsonValue) -> Result<()> {
+    let state = RECORDING_STATE.lock().unwrap();
+    
+    if let Some(recording_state) = state.as_ref() {
+        debug!("Recording task input JSON");
+        
+        let input_file = recording_state.session_dir.join("input.json");
+        let input_pretty = serde_json::to_string_pretty(input_json)?;
+        fs::write(&input_file, input_pretty)?;
+        
+        info!("Saved input JSON: {:?}", input_file);
+    }
+    
+    Ok(())
+}
+
+/// Record task output JSON
+pub fn record_output(output_json: &JsonValue) -> Result<()> {
+    let state = RECORDING_STATE.lock().unwrap();
+    
+    if let Some(recording_state) = state.as_ref() {
+        debug!("Recording task output JSON");
+        
+        let output_file = recording_state.session_dir.join("output.json");
+        let output_pretty = serde_json::to_string_pretty(output_json)?;
+        fs::write(&output_file, output_pretty)?;
+        
+        info!("Saved output JSON: {:?}", output_file);
+    }
+    
+    Ok(())
+}

@@ -6,7 +6,6 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use std::path::PathBuf;
 use std::fs;
-use std::io::Write;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -49,6 +48,17 @@ enum Commands {
         #[arg(long, value_name = "STRING")]
         from_fs: String,
     },
+
+    /// Replay a task using recorded inputs from a previous session
+    Replay {
+        /// Path to the file system resource
+        #[arg(long, value_name = "STRING")]
+        from_fs: String,
+
+        /// Path to the recording directory with input.json, output.json, etc.
+        #[arg(long, value_name = "PATH")]
+        recording: PathBuf,
+    },
 }
 
 /// Initialize tracing with environment variable override support
@@ -73,8 +83,7 @@ fn init_tracing(log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Res
         let session_dir = record_path.join(format!("ratchet_session_{}", timestamp));
         fs::create_dir_all(&session_dir).context("Failed to create recording directory")?;
         
-        // Create log file
-        let log_file = session_dir.join("tracing.log");
+        // Create log file appender
         let file_appender = tracing_appender::rolling::never(&session_dir, "tracing.log");
         
         // Setup tracing with both console and file output
@@ -250,6 +259,64 @@ async fn test_task(task_path: &str) -> Result<()> {
     }
 }
 
+/// Replay a task using recorded inputs from a previous session
+async fn replay_task(task_path: &str, recording_dir: &PathBuf) -> Result<JsonValue> {
+    info!("Replaying task from: {} with recording: {:?}", task_path, recording_dir);
+
+    // Load the recorded input
+    let input_file = recording_dir.join("input.json");
+    if !input_file.exists() {
+        return Err(anyhow::anyhow!("No input.json found in recording directory: {:?}", recording_dir));
+    }
+
+    let input_content = fs::read_to_string(&input_file)
+        .context(format!("Failed to read input file: {:?}", input_file))?;
+    let input_json: JsonValue = from_str(&input_content)
+        .context("Failed to parse input JSON from recording")?;
+
+    info!("Loaded recorded input from: {:?}", input_file);
+    debug!("Input data: {}", to_string_pretty(&input_json)?);
+
+    // Load the task from the filesystem
+    let mut task = Task::from_fs(task_path)
+        .context(format!("Failed to load task from path: {}", task_path))?;
+
+    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
+
+    // Execute the task with the recorded input
+    info!("Executing task with recorded input");
+    let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone())
+        .await
+        .context("Failed to execute task")?;
+
+    info!("Task replay completed successfully");
+    
+    // Compare with recorded output if available
+    let output_file = recording_dir.join("output.json");
+    if output_file.exists() {
+        let recorded_output_content = fs::read_to_string(&output_file)
+            .context(format!("Failed to read output file: {:?}", output_file))?;
+        let recorded_output: JsonValue = from_str(&recorded_output_content)
+            .context("Failed to parse recorded output JSON")?;
+
+        if result == recorded_output {
+            println!("✓ Output matches recorded output");
+            info!("Output matches recorded output");
+        } else {
+            println!("⚠ Output differs from recorded output");
+            warn!("Output differs from recorded output");
+            println!("\nRecorded output:");
+            println!("{}", to_string_pretty(&recorded_output)?);
+            println!("\nActual output:");
+            println!("{}", to_string_pretty(&result)?);
+        }
+    } else {
+        warn!("No recorded output found for comparison at: {:?}", output_file);
+    }
+
+    Ok(result)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -305,6 +372,20 @@ fn main() -> Result<()> {
         }
         Some(Commands::Validate { from_fs }) => validate_task(from_fs),
         Some(Commands::Test { from_fs }) => runtime.block_on(test_task(from_fs)),
+        Some(Commands::Replay { from_fs, recording }) => {
+            info!("Replaying task from file system path: {} with recording: {:?}", from_fs, recording);
+
+            // Run the replay
+            let result = runtime.block_on(replay_task(from_fs, recording))?;
+
+            // Pretty-print the result
+            let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
+
+            println!("Replay Result: {}", formatted);
+            info!("Task replay completed");
+            
+            Ok(())
+        }
         None => {
             warn!("No command specified");
             println!("No command specified. Use --help to see available commands.");
