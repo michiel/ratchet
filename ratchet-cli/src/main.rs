@@ -4,6 +4,9 @@ use ratchet_lib::task::Task;
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
+use std::path::PathBuf;
+use std::fs;
+use std::io::Write;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -27,6 +30,10 @@ enum Commands {
         /// JSON input for the task (example: --input-json='{"num1":5,"num2":10}')
         #[arg(long, value_name = "JSON")]
         input_json: Option<String>,
+        
+        /// Record execution to directory with timestamp
+        #[arg(long, value_name = "PATH")]
+        record: Option<PathBuf>,
     },
 
     /// Validate a task's structure and syntax
@@ -45,7 +52,7 @@ enum Commands {
 }
 
 /// Initialize tracing with environment variable override support
-fn init_tracing(log_level: Option<&String>) {
+fn init_tracing(log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Result<()> {
     let env_filter = match log_level {
         Some(level) => {
             // Use provided log level
@@ -59,10 +66,34 @@ fn init_tracing(log_level: Option<&String>) {
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
         }
     };
-
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    
+    if let Some(record_path) = record_dir {
+        // Create timestamp directory
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        let session_dir = record_path.join(format!("ratchet_session_{}", timestamp));
+        fs::create_dir_all(&session_dir).context("Failed to create recording directory")?;
+        
+        // Create log file
+        let log_file = session_dir.join("tracing.log");
+        let file_appender = tracing_appender::rolling::never(&session_dir, "tracing.log");
+        
+        // Setup tracing with both console and file output
+        use tracing_subscriber::fmt::writer::MakeWriterExt;
+        tracing_subscriber::fmt()
+            .with_env_filter(env_filter)
+            .with_writer(std::io::stdout.and(file_appender))
+            .init();
+            
+        // Store the session directory for use by other components
+        ratchet_lib::recording::set_recording_dir(session_dir)?;
+        
+        info!("Recording session to: {:?}", record_path.join(format!("ratchet_session_{}", timestamp)));
+    } else {
+        tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    }
 
     debug!("Tracing initialized");
+    Ok(())
 }
 
 /// Parse JSON input string into a JsonValue
@@ -223,7 +254,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Initialize tracing before doing anything else
-    init_tracing(cli.log_level.as_ref());
+    init_tracing(cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
+        match cmd {
+            Commands::RunOnce { record, .. } => record.as_ref(),
+            _ => None,
+        }
+    }))?;
 
     info!("Ratchet CLI starting");
 
@@ -234,6 +270,7 @@ fn main() -> Result<()> {
         Some(Commands::RunOnce {
             from_fs,
             input_json,
+            record,
         }) => {
             info!("Running task from file system path: {}", from_fs);
 
@@ -252,6 +289,18 @@ fn main() -> Result<()> {
 
             println!("Result: {}", formatted);
             info!("Task execution completed");
+            
+            // Finalize recording if it was enabled
+            if record.is_some() {
+                if let Err(e) = ratchet_lib::recording::finalize_recording() {
+                    warn!("Failed to finalize recording: {}", e);
+                } else {
+                    if let Some(dir) = ratchet_lib::recording::get_recording_dir() {
+                        println!("Recording saved to: {:?}", dir);
+                    }
+                }
+            }
+            
             Ok(())
         }
         Some(Commands::Validate { from_fs }) => validate_task(from_fs),

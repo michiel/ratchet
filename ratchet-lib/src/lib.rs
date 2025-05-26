@@ -9,6 +9,7 @@ use tracing::{debug, info, trace, warn};
 
 pub mod http;
 pub mod js_task;
+pub mod recording;
 pub mod task;
 pub mod test;
 

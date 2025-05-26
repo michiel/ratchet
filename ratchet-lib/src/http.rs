@@ -9,8 +9,10 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use lazy_static::lazy_static;
 use tracing::{debug, info, warn};
+use chrono::Utc;
 
 // Thread-local storage for mock data during tests
 thread_local! {
@@ -70,6 +72,8 @@ pub fn call_http(
     params: Option<&JsonValue>,
     body: Option<&JsonValue>,
 ) -> Result<JsonValue, HttpError> {
+    let start_time = Utc::now();
+    
     info!("Making HTTP request to: {}", url);
     debug!("Request params: {:?}", params);
     debug!("Request body: {:?}", body);
@@ -144,6 +148,28 @@ pub fn call_http(
         "GET"
     };
     
+    // Extract headers for recording
+    let request_headers: Option<HashMap<String, String>> = if let Some(params) = params {
+        if let Some(headers) = params.get("headers").and_then(|h| h.as_object()) {
+            Some(headers.iter().filter_map(|(k, v)| {
+                v.as_str().map(|s| (k.clone(), s.to_string()))
+            }).collect())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    // Convert body to string for recording
+    let request_body_str = body.map(|b| {
+        if let Some(s) = b.as_str() {
+            s.to_string()
+        } else {
+            serde_json::to_string(b).unwrap_or_default()
+        }
+    });
+    
     let method = Method::from_str(method_str)
         .map_err(|_| HttpError::InvalidMethod(method_str.to_string()))?;
 
@@ -211,6 +237,14 @@ pub fn call_http(
     let status_text = status.canonical_reason().unwrap_or("Unknown Status");
     
     info!("HTTP response received: {} {}", status_code, status_text);
+    
+    // Collect response headers for recording
+    let response_headers: HashMap<String, String> = response.headers()
+        .iter()
+        .filter_map(|(name, value)| {
+            value.to_str().ok().map(|v| (name.to_string(), v.to_string()))
+        })
+        .collect();
 
     // Try to parse the response as JSON, fall back to text if it fails
     debug!("Parsing response body");
@@ -229,13 +263,34 @@ pub fn call_http(
         }
     };
 
+    // Record the HTTP request if recording is enabled
+    let end_time = Utc::now();
+    let duration_ms = (end_time - start_time).num_milliseconds() as u64;
+    
+    if crate::recording::is_recording() {
+        let response_body_str = serde_json::to_string(&response_body).unwrap_or_default();
+        if let Err(e) = crate::recording::record_http_request(
+            url,
+            method_str,
+            request_headers.as_ref(),
+            request_body_str.as_deref(),
+            status_code,
+            Some(&response_headers),
+            &response_body_str,
+            start_time,
+            duration_ms,
+        ) {
+            warn!("Failed to record HTTP request: {}", e);
+        }
+    }
+    
     // Construct a response object similar to JavaScript's Response
     debug!("Constructing response object");
     let result = json!({
         "ok": status.is_success(),
         "status": status_code,
         "statusText": status_text,
-        "headers": {},  // We could parse headers here if needed
+        "headers": response_headers,
         "body": response_body
     });
 
