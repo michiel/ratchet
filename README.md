@@ -297,6 +297,171 @@ HAR files can be:
    find ./recordings -name "ratchet_session_*" -mtime +30 -exec rm -rf {} \;
    ```
 
+## Replay Functionality
+
+The `replay` command allows you to re-execute tasks using previously recorded inputs and compare outputs, enabling powerful debugging, regression testing, and behavior analysis workflows.
+
+### Basic Usage
+
+```bash
+# Replay a task using recorded inputs
+ratchet replay --from-fs=path/to/task --recording=path/to/recording/dir
+
+# Example with actual paths
+ratchet replay --from-fs=sample/js-tasks/addition --recording=./recordings/ratchet_session_20250526_143022
+```
+
+### How Replay Works
+
+1. **Loads recorded input**: Reads `input.json` from the recording directory
+2. **Executes task**: Runs the specified task with the recorded input
+3. **Compares output**: Automatically compares result with recorded `output.json`
+4. **Reports differences**: Shows clear feedback on whether outputs match
+
+### Recording Directory Structure
+
+A recording directory for replay must contain:
+```
+ratchet_session_20250526_143022/
+├── input.json          # Original task input (required for replay)
+├── output.json         # Original task output (used for comparison)
+├── requests.har        # HTTP requests made during execution
+└── tracing.log         # Execution logs
+```
+
+### Output Comparison
+
+#### Matching Output
+```bash
+$ ratchet replay --from-fs=my-task --recording=./session_dir
+✓ Output matches recorded output
+Replay Result: {
+  "status": "success",
+  "result": 42
+}
+```
+
+#### Different Output
+```bash
+$ ratchet replay --from-fs=my-task --recording=./session_dir
+⚠ Output differs from recorded output
+
+Recorded output:
+{
+  "status": "success",
+  "result": 42
+}
+
+Actual output:
+{
+  "status": "success", 
+  "result": 43
+}
+```
+
+### Use Cases
+
+#### 1. **Regression Testing**
+```bash
+# Record known good behavior
+ratchet run-once --from-fs=my-task \
+  --input-json='{"param":"value"}' \
+  --record=./baseline
+
+# After making changes, test for regressions
+ratchet replay --from-fs=my-task --recording=./baseline/ratchet_session_*
+```
+
+#### 2. **Bug Reproduction**
+```bash
+# Record failing case
+ratchet run-once --from-fs=problematic-task \
+  --input-json='{"edge_case":"data"}' \
+  --record=./bug-reproduction
+
+# Replay after fixes to verify resolution
+ratchet replay --from-fs=problematic-task --recording=./bug-reproduction/ratchet_session_*
+```
+
+#### 3. **Environment Differences**
+```bash
+# Record on staging environment
+ratchet run-once --from-fs=api-task \
+  --input-json='{"env":"staging"}' \
+  --record=./staging-baseline
+
+# Test same inputs on production environment  
+ratchet replay --from-fs=api-task --recording=./staging-baseline/ratchet_session_*
+```
+
+#### 4. **Code Review Validation**
+```bash
+# Before code changes
+ratchet run-once --from-fs=updated-task \
+  --input-json='{"test":"scenario"}' \
+  --record=./pre-change
+
+# After code changes 
+ratchet replay --from-fs=updated-task --recording=./pre-change/ratchet_session_*
+```
+
+#### 5. **Debugging with Context**
+```bash
+# Replay with detailed logging to understand differences
+RUST_LOG=debug ratchet replay \
+  --from-fs=my-task \
+  --recording=./problematic-session/ratchet_session_* \
+  --log-level=debug
+```
+
+### Replay Best Practices
+
+1. **Organize recordings by purpose**:
+   ```bash
+   recordings/
+   ├── baselines/           # Known good states
+   ├── bug-reports/         # Issue reproduction
+   ├── regression-tests/    # Pre-change captures
+   └── experiments/         # Testing variations
+   ```
+
+2. **Use descriptive recording names**:
+   ```bash
+   --record=./recordings/oauth-flow-working-$(date +%Y%m%d)
+   --record=./recordings/edge-case-failure-reproduction
+   ```
+
+3. **Combine with version control**:
+   ```bash
+   # Tag recordings with commit hashes
+   git_hash=$(git rev-parse --short HEAD)
+   ratchet run-once --from-fs=my-task \
+     --input-json='{"test":"data"}' \
+     --record=./recordings/commit-${git_hash}
+   ```
+
+4. **Automate regression testing**:
+   ```bash
+   #!/bin/bash
+   # Replay all baseline recordings
+   for recording in ./baselines/*/; do
+     echo "Testing against baseline: $recording"
+     ratchet replay --from-fs=my-task --recording="$recording"
+   done
+   ```
+
+### Schema Validation
+
+Replay validates that recorded inputs match the target task's input schema:
+
+```bash
+# This will fail if recorded input doesn't match task schema
+$ ratchet replay --from-fs=addition-task --recording=./weather-task-recording/
+Error: Schema validation error: "num1" is a required property, "num2" is a required property
+```
+
+This prevents accidental mismatches between recordings and tasks, ensuring replay integrity.
+
 ## Task Structure
 
 A complete task directory includes:
