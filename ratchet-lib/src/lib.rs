@@ -18,6 +18,43 @@ pub mod test;
 pub mod js_executor {
     use super::*;
 
+    /// JavaScript error types that can be thrown from JS code
+    #[derive(Error, Debug, Clone)]
+    pub enum JsErrorType {
+        #[error("Authentication failed: {0}")]
+        AuthenticationError(String),
+
+        #[error("Authorization failed: {0}")]
+        AuthorizationError(String),
+
+        #[error("Network error: {0}")]
+        NetworkError(String),
+
+        #[error("HTTP error {status}: {message}")]
+        HttpError { status: u16, message: String },
+
+        #[error("Validation error: {0}")]
+        ValidationError(String),
+
+        #[error("Configuration error: {0}")]
+        ConfigurationError(String),
+
+        #[error("Rate limit exceeded: {0}")]
+        RateLimitError(String),
+
+        #[error("Service unavailable: {0}")]
+        ServiceUnavailableError(String),
+
+        #[error("Timeout error: {0}")]
+        TimeoutError(String),
+
+        #[error("Data error: {0}")]
+        DataError(String),
+
+        #[error("Unknown error: {0}")]
+        UnknownError(String),
+    }
+
     /// Errors that can occur during JavaScript execution
     #[derive(Error, Debug)]
     pub enum JsExecutionError {
@@ -29,6 +66,9 @@ pub mod js_executor {
 
         #[error("Failed to execute JavaScript: {0}")]
         ExecutionError(String),
+
+        #[error("JavaScript threw typed error: {0}")]
+        TypedJsError(#[from] JsErrorType),
 
         #[error("Schema validation error: {0}")]
         SchemaValidationError(String),
@@ -65,6 +105,148 @@ pub mod js_executor {
 
         serde_json::from_str(&schema_str)
             .map_err(|e| JsExecutionError::InvalidInputSchema(e.to_string()))
+    }
+
+    /// Register custom error types in the JavaScript context
+    pub fn register_error_types(context: &mut BoaContext<'_>) -> Result<(), JsExecutionError> {
+        // Define JavaScript error classes
+        let error_classes = r#"
+            // Authentication Error
+            function AuthenticationError(message) {
+                this.name = "AuthenticationError";
+                this.message = message || "Authentication failed";
+                this.stack = (new Error()).stack;
+            }
+            AuthenticationError.prototype = Object.create(Error.prototype);
+            AuthenticationError.prototype.constructor = AuthenticationError;
+            
+            // Authorization Error
+            function AuthorizationError(message) {
+                this.name = "AuthorizationError";
+                this.message = message || "Authorization failed";
+                this.stack = (new Error()).stack;
+            }
+            AuthorizationError.prototype = Object.create(Error.prototype);
+            AuthorizationError.prototype.constructor = AuthorizationError;
+            
+            // Network Error
+            function NetworkError(message) {
+                this.name = "NetworkError";
+                this.message = message || "Network error";
+                this.stack = (new Error()).stack;
+            }
+            NetworkError.prototype = Object.create(Error.prototype);
+            NetworkError.prototype.constructor = NetworkError;
+            
+            // HTTP Error
+            function HttpError(status, message) {
+                this.name = "HttpError";
+                this.status = status;
+                this.message = message || "HTTP error";
+                this.stack = (new Error()).stack;
+            }
+            HttpError.prototype = Object.create(Error.prototype);
+            HttpError.prototype.constructor = HttpError;
+            
+            // Validation Error
+            function ValidationError(message) {
+                this.name = "ValidationError";
+                this.message = message || "Validation error";
+                this.stack = (new Error()).stack;
+            }
+            ValidationError.prototype = Object.create(Error.prototype);
+            ValidationError.prototype.constructor = ValidationError;
+            
+            // Configuration Error
+            function ConfigurationError(message) {
+                this.name = "ConfigurationError";
+                this.message = message || "Configuration error";
+                this.stack = (new Error()).stack;
+            }
+            ConfigurationError.prototype = Object.create(Error.prototype);
+            ConfigurationError.prototype.constructor = ConfigurationError;
+            
+            // Rate Limit Error
+            function RateLimitError(message) {
+                this.name = "RateLimitError";
+                this.message = message || "Rate limit exceeded";
+                this.stack = (new Error()).stack;
+            }
+            RateLimitError.prototype = Object.create(Error.prototype);
+            RateLimitError.prototype.constructor = RateLimitError;
+            
+            // Service Unavailable Error
+            function ServiceUnavailableError(message) {
+                this.name = "ServiceUnavailableError";
+                this.message = message || "Service unavailable";
+                this.stack = (new Error()).stack;
+            }
+            ServiceUnavailableError.prototype = Object.create(Error.prototype);
+            ServiceUnavailableError.prototype.constructor = ServiceUnavailableError;
+            
+            // Timeout Error
+            function TimeoutError(message) {
+                this.name = "TimeoutError";
+                this.message = message || "Timeout error";
+                this.stack = (new Error()).stack;
+            }
+            TimeoutError.prototype = Object.create(Error.prototype);
+            TimeoutError.prototype.constructor = TimeoutError;
+            
+            // Data Error
+            function DataError(message) {
+                this.name = "DataError";
+                this.message = message || "Data error";
+                this.stack = (new Error()).stack;
+            }
+            DataError.prototype = Object.create(Error.prototype);
+            DataError.prototype.constructor = DataError;
+        "#;
+
+        context
+            .eval(Source::from_bytes(error_classes))
+            .map_err(|e| JsExecutionError::CompileError(format!("Failed to register error types: {}", e)))?;
+        
+        Ok(())
+    }
+
+    /// Parse JavaScript error and convert to JsErrorType
+    pub fn parse_js_error(error_message: &str) -> JsErrorType {
+        // Try to extract error type and message from the error string
+        if let Some(captures) = regex::Regex::new(r"(\w+Error): (.+)")
+            .unwrap()
+            .captures(error_message) 
+        {
+            let error_type = &captures[1];
+            let message = captures[2].to_string();
+            
+            match error_type {
+                "AuthenticationError" => JsErrorType::AuthenticationError(message),
+                "AuthorizationError" => JsErrorType::AuthorizationError(message),
+                "NetworkError" => JsErrorType::NetworkError(message),
+                "HttpError" => {
+                    // Try to extract status code from message
+                    if let Some(status_captures) = regex::Regex::new(r"(\d+)")
+                        .unwrap()
+                        .captures(&message) 
+                    {
+                        if let Ok(status) = status_captures[1].parse::<u16>() {
+                            return JsErrorType::HttpError { status, message };
+                        }
+                    }
+                    JsErrorType::HttpError { status: 0, message }
+                },
+                "ValidationError" => JsErrorType::ValidationError(message),
+                "ConfigurationError" => JsErrorType::ConfigurationError(message),
+                "RateLimitError" => JsErrorType::RateLimitError(message),
+                "ServiceUnavailableError" => JsErrorType::ServiceUnavailableError(message),
+                "TimeoutError" => JsErrorType::TimeoutError(message),
+                "DataError" => JsErrorType::DataError(message),
+                _ => JsErrorType::UnknownError(message),
+            }
+        } else {
+            JsErrorType::UnknownError(error_message.to_string())
+        }
     }
 
     /// Call a JavaScript function with the given input
@@ -107,7 +289,16 @@ pub mod js_executor {
         trace!("Calling JavaScript function with input data",);
         let result = func_obj
             .call(func, &[input_arg.clone()], context)
-            .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+            .map_err(|e| {
+                let error_message = e.to_string();
+                // Try to parse as a typed JS error first
+                if error_message.contains("Error:") {
+                    let parsed_error = parse_js_error(&error_message);
+                    JsExecutionError::TypedJsError(parsed_error)
+                } else {
+                    JsExecutionError::ExecutionError(error_message)
+                }
+            })?;
 
         // Check if we need to process a fetch call
         debug!("Checking for fetch API calls");
@@ -189,11 +380,34 @@ pub mod js_executor {
                      context)
                 .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set HTTP result: {}", e)))?;
             
-            // Replace the fetch function to return the stored result
+            // Replace the fetch function to return the stored result and throw appropriate errors
             context
                 .eval(Source::from_bytes(r#"
                     fetch = function(url, params, body) {
-                        return __http_result;
+                        var response = __http_result;
+                        
+                        // Check if response is OK, throw appropriate errors if not
+                        if (!response.ok) {
+                            var status = response.status || 0;
+                            var statusText = response.statusText || "Unknown Status";
+                            
+                            // Map status codes to appropriate error types
+                            if (status === 401) {
+                                throw new AuthenticationError("HTTP " + status + ": " + statusText);
+                            } else if (status === 403) {
+                                throw new AuthorizationError("HTTP " + status + ": " + statusText);
+                            } else if (status === 429) {
+                                throw new RateLimitError("HTTP " + status + ": " + statusText);
+                            } else if (status >= 500 && status < 600) {
+                                throw new ServiceUnavailableError("HTTP " + status + ": " + statusText);
+                            } else if (status >= 400 && status < 500) {
+                                throw new HttpError(status, "HTTP " + status + ": " + statusText);
+                            } else {
+                                throw new NetworkError("HTTP " + status + ": " + statusText);
+                            }
+                        }
+                        
+                        return response;
                     };
                 "#))
                 .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e)))?;
@@ -202,7 +416,16 @@ pub mod js_executor {
             // Re-call the JavaScript function now that fetch will return the real result
             let result = func_obj
                 .call(func, &[input_arg], context)
-                .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+                .map_err(|e| {
+                    let error_message = e.to_string();
+                    // Try to parse as a typed JS error first
+                    if error_message.contains("Error:") {
+                        let parsed_error = parse_js_error(&error_message);
+                        JsExecutionError::TypedJsError(parsed_error)
+                    } else {
+                        JsExecutionError::ExecutionError(error_message)
+                    }
+                })?;
 
             debug!("Clearing fetch state variables");
             // Clear the fetch state
@@ -331,6 +554,12 @@ pub mod js_executor {
                     JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e))
                 })?;
 
+                debug!("Registering error types");
+                // Register custom error types
+                register_error_types(&mut context).map_err(|e| {
+                    JsExecutionError::ExecutionError(format!("Failed to register error types: {}", e))
+                })?;
+
                 // Initialize fetch variables
                 debug!("Initializing fetch variables");
                 context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
@@ -406,6 +635,12 @@ pub mod js_executor {
         // Register the fetch API
         crate::http::register_fetch(&mut context).map_err(|e| {
             JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e))
+        })?;
+
+        debug!("Registering error types");
+        // Register custom error types
+        register_error_types(&mut context).map_err(|e| {
+            JsExecutionError::ExecutionError(format!("Failed to register error types: {}", e))
         })?;
 
         // Initialize fetch variables

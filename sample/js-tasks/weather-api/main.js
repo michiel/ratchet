@@ -11,15 +11,16 @@
     
     try {
         // Make the HTTP request using the fetch API
+        // The fetch API will automatically throw typed errors for non-OK responses
         const response = fetch(url, { method: "GET" });
-        
-        // Check if the request was successful
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status} ${response.statusText}`);
-        }
         
         // Parse the response body
         const data = response.body;
+        
+        // Validate response data
+        if (!data || !data.name || !data.sys || !data.main || !data.weather || !data.weather[0]) {
+            throw new DataError("Invalid response format from weather API");
+        }
         
         // Format and return the weather data
         return {
@@ -30,6 +31,11 @@
             humidity: data.main.humidity
         };
     } catch (error) {
-        throw new Error(`Failed to fetch weather data: ${error.message}`);
+        // Re-throw typed errors as-is, wrap others in appropriate error types
+        if (error.name && error.name.endsWith('Error')) {
+            throw error;
+        } else {
+            throw new NetworkError(`Failed to fetch weather data: ${error.message}`);
+        }
     }
 })

@@ -32,6 +32,7 @@ uuid = { version = "1.4", features = ["v4", "serde"] }
 lru = "0.10"
 zip = "0.6"
 tempfile = "3.8"
+regex = "1.10"
 
 # Testing dependencies (only used in #[cfg(test)])
 [dev-dependencies]
