@@ -32,10 +32,11 @@ jobs:
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         env:
-          # These environment variables might help the openssl-sys crate find OpenSSL
+          # Explicitly set the include path for cross-compilation
+          CARGO_ENCODED_RUSTFLAGS: "-Clink-arg=-I/usr/include"
           OPENSSL_DIR: /usr
           OPENSSL_INCLUDE_DIR: /usr/include
-          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu # Adjust if your lib directory is different
+          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu # Adjust if necessary
         with:
           command: build
           target: ${{ matrix.platform.target }}
