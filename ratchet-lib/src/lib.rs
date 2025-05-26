@@ -72,6 +72,7 @@ pub mod js_executor {
         context: &mut BoaContext,
         func: &boa_engine::JsValue,
         input_data: &JsonValue,
+        http_manager: &crate::http::HttpManager,
     ) -> Result<JsonValue, JsExecutionError> {
         trace!("Converting input data to JavaScript format");
         // Convert input_data to JsValue
@@ -170,8 +171,8 @@ pub mod js_executor {
             };
 
             debug!("Making HTTP call to: {}", url);
-            // Perform the HTTP call
-            let http_result = crate::http::call_http(&url, params.as_ref(), body.as_ref())
+            // Perform the HTTP call using the provided HttpManager
+            let http_result = http_manager.call_http(&url, params.as_ref(), body.as_ref())
                 .map_err(|e| JsExecutionError::ExecutionError(format!("HTTP error: {}", e)))?;
 
             debug!("Clearing fetch state variables");
@@ -221,6 +222,7 @@ pub mod js_executor {
     pub async fn execute_task(
         task: &mut crate::task::Task,
         input_data: JsonValue,
+        http_manager: &crate::http::HttpManager,
     ) -> Result<JsonValue, JsExecutionError> {
         info!(
             "Executing task: {} ({})",
@@ -291,7 +293,7 @@ pub mod js_executor {
 
                 debug!("Calling JavaScript function");
                 // Call the JavaScript function with the input data
-                let result = call_js_function(&mut context, &func, &input_data)?;
+                let result = call_js_function(&mut context, &func, &input_data, http_manager)?;
 
                 debug!("Validating output against schema");
                 // Validate output against schema
@@ -324,6 +326,7 @@ pub mod js_executor {
         input_schema_path: &Path,
         output_schema_path: &Path,
         input_data: JsonValue,
+        http_manager: &crate::http::HttpManager,
     ) -> Result<JsonValue, JsExecutionError> {
         info!("Executing JavaScript file: {:?}", js_file_path);
         debug!(
@@ -370,7 +373,7 @@ pub mod js_executor {
 
         debug!("Calling JavaScript function");
         // Call the JavaScript function with the input data
-        let result = call_js_function(&mut context, &func, &input_data)?;
+        let result = call_js_function(&mut context, &func, &input_data, http_manager)?;
 
         debug!("Validating output against schema");
         // Validate output against schema
@@ -502,11 +505,13 @@ processInput
                     "num2": 7
                 });
 
+                let http_manager = crate::http::HttpManager::new();
                 let result = execute_js_file(
                     &files.js_file,
                     &files.input_schema,
                     &files.output_schema,
                     input_data,
+                    &http_manager,
                 )
                 .await
                 .unwrap();
@@ -564,7 +569,8 @@ processInput
                 });
 
                 // Execute the task
-                let result = execute_task(&mut task, input_data).await.unwrap();
+                let http_manager = crate::http::HttpManager::new();
+                let result = execute_task(&mut task, input_data, &http_manager).await.unwrap();
 
                 // Check the result
                 assert!(result.is_object());
@@ -588,7 +594,8 @@ processInput
                 });
 
                 // Execute the task again
-                let result = execute_task(&mut task, input_data).await.unwrap();
+                let http_manager = crate::http::HttpManager::new();
+                let result = execute_task(&mut task, input_data, &http_manager).await.unwrap();
 
                 // Check the result
                 let sum = result["sum"].as_f64().unwrap();
@@ -609,11 +616,13 @@ processInput
                     "num2": 7
                 });
 
+                let http_manager = crate::http::HttpManager::new();
                 let result = execute_js_file(
                     &files.js_file,
                     &files.input_schema,
                     &files.output_schema,
                     input_data,
+                    &http_manager,
                 )
                 .await;
 
@@ -638,11 +647,13 @@ processInput
                     "num2": 7
                 });
 
+                let http_manager = crate::http::HttpManager::new();
                 let result = execute_js_file(
                     &files.js_file,
                     &files.bad_input_schema,
                     &files.output_schema,
                     input_data,
+                    &http_manager,
                 )
                 .await;
 

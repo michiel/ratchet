@@ -160,7 +160,8 @@ async fn run_task(task_path: &str, input_json: &JsonValue) -> Result<JsonValue> 
 
     // Execute the task with the provided input
     info!("Executing task with input");
-    let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone())
+    let http_manager = ratchet_lib::http::HttpManager::new();
+    let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone(), &http_manager)
         .await
         .context("Failed to execute task")?;
 
@@ -313,7 +314,8 @@ async fn replay_task(task_path: &str, recording_dir: &PathBuf) -> Result<JsonVal
 
     // Execute the task with the recorded input
     info!("Executing task with recorded input");
-    let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone())
+    let http_manager = ratchet_lib::http::HttpManager::new();
+    let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone(), &http_manager)
         .await
         .context("Failed to execute task")?;
 

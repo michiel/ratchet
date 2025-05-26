@@ -134,21 +134,26 @@ pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult 
     let test_name = test_case.file_path.file_name().unwrap().to_string_lossy();
     debug!("Running test case: {}", test_name);
     
-    // Setup mock data if provided
+    // Setup HttpManager with mock data if provided
+    let mut http_manager = crate::http::HttpManager::new();
     if let Some(mock) = &test_case.mock {
-        debug!("Setting up mock data for test: {}", test_name);
-        crate::http::set_mock_http_data(Some(mock.clone()));
-    } else {
-        crate::http::set_mock_http_data(None);
+        debug!("Setting up HTTP manager with mock data for test: {}", test_name);
+        http_manager.set_offline();
+        
+        // Parse mock data and setup mocks
+        if let Some(http_mock) = mock.get("http") {
+            let url = http_mock.get("url").and_then(|u| u.as_str()).unwrap_or("");
+            let method = http_mock.get("method").and_then(|m| m.as_str()).unwrap_or("GET");
+            if let Some(response) = http_mock.get("response") {
+                http_manager.add_mock(method, url, response.clone());
+                debug!("Added HTTP mock for {} {}", method, url);
+            }
+        }
     }
     
     // Execute the task
     debug!("Executing task for test: {}", test_name);
-    let result = execute_task(task, test_case.input.clone()).await;
-    
-    // Clear mock data after the test
-    debug!("Clearing mock data after test: {}", test_name);
-    crate::http::set_mock_http_data(None);
+    let result = execute_task(task, test_case.input.clone(), &http_manager).await;
     
     match result {
         Ok(output) => {
@@ -230,10 +235,6 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use tokio_test::block_on;
-    use crate::task::{TaskMetadata, TaskType};
-    use uuid::Uuid;
-    use std::fs::File;
-    use std::io::Write;
     
     fn create_test_task_with_tests() -> Result<(PathBuf, tempfile::TempDir), std::io::Error> {
         let temp_dir = tempdir()?;
@@ -353,7 +354,7 @@ mod tests {
                 &fs::read_to_string(invalid_test_path).unwrap()
             ).unwrap();
             
-            let input = test_json.get("input").unwrap();
+            let _input = test_json.get("input").unwrap();
             let expected_output = test_json.get("expected_output");
             assert!(expected_output.is_none());
         }

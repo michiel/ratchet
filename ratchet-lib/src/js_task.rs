@@ -44,7 +44,8 @@ pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsTaskError> {
         });
 
         // Use the new execute_task function from js_executor with mutable task
-        crate::js_executor::execute_task(&mut task, input_data).await
+        let http_manager = crate::http::HttpManager::new();
+        crate::js_executor::execute_task(&mut task, input_data, &http_manager).await
             .map_err(JsTaskError::from)
     })
 }

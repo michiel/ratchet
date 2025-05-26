@@ -332,14 +332,6 @@ pub fn call_http(
     manager.call_http(url, params, body)
 }
 
-/// Deprecated: Set mock data for HTTP calls (for backward compatibility)
-/// Use HttpManager with set_offline() and add_mocks() instead
-#[deprecated(since = "0.1.1", note = "Use HttpManager with set_offline() and add_mocks() instead")]
-pub fn set_mock_http_data(_mock_data: Option<JsonValue>) {
-    // This function is kept for backward compatibility but does nothing
-    // The new approach uses HttpManager instances with offline mode and mocks
-    warn!("set_mock_http_data is deprecated. Use HttpManager with set_offline() and add_mocks() instead");
-}
 
 /// Native function to handle fetch calls from JavaScript
 #[allow(dead_code)]
