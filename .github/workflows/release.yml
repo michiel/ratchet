@@ -28,12 +28,10 @@ jobs:
         if: matrix.platform.runs-on == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
+          sudo apt-get install -y libssl-dev pkg-config musl-dev # Install musl-dev
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         env:
-          # Explicitly set the include path for cross-compilation
-          CARGO_ENCODED_RUSTFLAGS: "-Clink-arg=-I/usr/include"
           OPENSSL_DIR: /usr
           OPENSSL_INCLUDE_DIR: /usr/include
           OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu # Adjust if necessary
