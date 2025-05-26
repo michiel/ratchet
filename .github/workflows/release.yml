@@ -8,17 +8,26 @@ jobs:
     strategy:
       matrix:
         platform:
-          - os-name: linux-x86_64
-            runs-on: ubuntu-22.04
+
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-24.04
             target: x86_64-unknown-linux-musl
 
-          - os-name: windows-x86_64
+          - os-name: Linux-aarch64
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+
+          - os-name: Linux-riscv64
+            runs-on: ubuntu-24.04
+            target: riscv64gc-unknown-linux-gnu
+
+          - os-name: Windows-x86_64
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
 
-          - os-name: macos-aarch64
+          - os-name: macOS-x86_64
             runs-on: macOS-latest
-            target: aarch64-apple-darwin
+            target: x86_64-apple-darwin
 
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
@@ -31,6 +40,8 @@ jobs:
           sudo apt-get install -y libssl-dev pkg-config musl-dev
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
+        env:
+          OPENSSL_STATIC: "1"
         with:
           command: build
           target: ${{ matrix.platform.target }}
