@@ -24,6 +24,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up dependencies
+        commands: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+        uses: actions/checkout@v4
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
