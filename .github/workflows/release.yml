@@ -25,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Set up dependencies
-        commands: |
+        command: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
         uses: actions/checkout@v4
