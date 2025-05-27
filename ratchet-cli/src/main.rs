@@ -1,11 +1,14 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ratchet_lib::task::Task;
+use ratchet_lib::execution::ipc::{CoordinatorMessage, TaskExecutionResult};
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use std::path::PathBuf;
 use std::fs;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -13,6 +16,14 @@ struct Cli {
     /// Set the log level (trace, debug, info, warn, error)
     #[arg(long, value_name = "LEVEL", global = true)]
     log_level: Option<String>,
+
+    /// Run as worker process (internal use)
+    #[arg(long, hide = true)]
+    worker: bool,
+    
+    /// Worker ID (used with --worker)
+    #[arg(long, value_name = "ID", hide = true)]
+    worker_id: Option<String>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -407,8 +418,228 @@ fn get_file_description(file: &str) -> &'static str {
     }
 }
 
+/// Run as a worker process that handles IPC messages
+async fn run_worker_process(worker_id: String) -> Result<()> {
+    use ratchet_lib::execution::ipc::{
+        WorkerMessage, CoordinatorMessage, MessageEnvelope, 
+        WorkerError,
+    };
+    
+    info!("Worker process {} starting", worker_id);
+    
+    let stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
+    let mut reader = tokio::io::BufReader::new(stdin);
+    let mut line = String::new();
+    
+    // Send ready message
+    let ready_msg = CoordinatorMessage::Ready {
+        worker_id: worker_id.clone(),
+    };
+    send_message(&mut stdout, &ready_msg).await?;
+    
+    info!("Worker {} ready for tasks", worker_id);
+    
+    // Process messages
+    loop {
+        line.clear();
+        
+        match reader.read_line(&mut line).await {
+            Ok(0) => {
+                info!("Worker {} received EOF, shutting down", worker_id);
+                break;
+            }
+            Ok(_) => {
+                // Remove newline
+                line.truncate(line.trim_end().len());
+                
+                if line.is_empty() {
+                    continue;
+                }
+                
+                // Parse message
+                match serde_json::from_str::<MessageEnvelope<WorkerMessage>>(&line) {
+                    Ok(envelope) => {
+                        debug!("Worker {} received message: {:?}", worker_id, envelope.message);
+                        
+                        let response = match envelope.message {
+                            WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, correlation_id } => {
+                                execute_task_worker(job_id, task_id, &task_path, &input_data, correlation_id).await
+                            }
+                            WorkerMessage::ValidateTask { task_path, correlation_id } => {
+                                validate_task_worker(&task_path, correlation_id).await
+                            }
+                            WorkerMessage::Ping { correlation_id } => {
+                                handle_ping_worker(&worker_id, correlation_id).await
+                            }
+                            WorkerMessage::Shutdown => {
+                                info!("Worker {} received shutdown signal", worker_id);
+                                break;
+                            }
+                        };
+                        
+                        if let Err(e) = send_message(&mut stdout, &response).await {
+                            error!("Worker {} failed to send response: {}", worker_id, e);
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Worker {} failed to parse message: {} - line: {}", worker_id, e, line);
+                        
+                        let error_msg = CoordinatorMessage::Error {
+                            correlation_id: None,
+                            error: WorkerError::MessageParseError(e.to_string()),
+                        };
+                        
+                        if let Err(e) = send_message(&mut stdout, &error_msg).await {
+                            error!("Worker {} failed to send error response: {}", worker_id, e);
+                            break;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Worker {} failed to read from stdin: {}", worker_id, e);
+                break;
+            }
+        }
+    }
+    
+    info!("Worker {} shutting down", worker_id);
+    Ok(())
+}
+
+/// Send a message to stdout
+async fn send_message(stdout: &mut tokio::io::Stdout, message: &CoordinatorMessage) -> Result<()> {
+    let envelope = ratchet_lib::execution::ipc::MessageEnvelope::new(message.clone());
+    let json = serde_json::to_string(&envelope)?;
+    let line = format!("{}\n", json);
+    
+    stdout.write_all(line.as_bytes()).await?;
+    stdout.flush().await?;
+    
+    Ok(())
+}
+
+/// Execute a task in the worker process
+async fn execute_task_worker(
+    _job_id: i32,
+    _task_id: i32,
+    task_path: &str,
+    input_data: &JsonValue,
+    correlation_id: Uuid,
+) -> CoordinatorMessage {
+    use ratchet_lib::execution::ipc::CoordinatorMessage;
+    
+    let started_at = chrono::Utc::now();
+    
+    // Execute the task
+    match run_task(task_path, input_data).await {
+        Ok(output) => {
+            let completed_at = chrono::Utc::now();
+            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+            
+            CoordinatorMessage::TaskResult {
+                job_id: _job_id,
+                correlation_id,
+                result: TaskExecutionResult {
+                    success: true,
+                    output: Some(output),
+                    error_message: None,
+                    error_details: None,
+                    started_at,
+                    completed_at,
+                    duration_ms,
+                },
+            }
+        }
+        Err(e) => {
+            let completed_at = chrono::Utc::now();
+            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+            
+            CoordinatorMessage::TaskResult {
+                job_id: _job_id,
+                correlation_id,
+                result: TaskExecutionResult {
+                    success: false,
+                    output: None,
+                    error_message: Some(e.to_string()),
+                    error_details: None,
+                    started_at,
+                    completed_at,
+                    duration_ms,
+                },
+            }
+        }
+    }
+}
+
+/// Validate a task in the worker process
+async fn validate_task_worker(
+    task_path: &str,
+    correlation_id: Uuid,
+) -> CoordinatorMessage {
+    use ratchet_lib::execution::ipc::{TaskValidationResult, CoordinatorMessage};
+    
+    match validate_task(task_path) {
+        Ok(_) => CoordinatorMessage::ValidationResult {
+            correlation_id,
+            result: TaskValidationResult {
+                valid: true,
+                error_message: None,
+                error_details: None,
+            },
+        },
+        Err(e) => CoordinatorMessage::ValidationResult {
+            correlation_id,
+            result: TaskValidationResult {
+                valid: false,
+                error_message: Some(e.to_string()),
+                error_details: None,
+            },
+        },
+    }
+}
+
+/// Handle ping message in the worker process
+async fn handle_ping_worker(
+    worker_id: &str,
+    correlation_id: Uuid,
+) -> CoordinatorMessage {
+    use ratchet_lib::execution::ipc::{WorkerStatus, CoordinatorMessage};
+    
+    CoordinatorMessage::Pong {
+        correlation_id,
+        worker_id: worker_id.to_string(),
+        status: WorkerStatus {
+            worker_id: worker_id.to_string(),
+            pid: std::process::id(),
+            started_at: chrono::Utc::now(), // TODO: Track actual start time
+            last_activity: chrono::Utc::now(),
+            tasks_executed: 0, // TODO: Track task count
+            tasks_failed: 0, // TODO: Track failure count
+            memory_usage_mb: None,
+            cpu_usage_percent: None,
+        },
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Check if running as worker process
+    if cli.worker {
+        let worker_id = cli.worker_id.unwrap_or_else(|| "unknown".to_string());
+        
+        // Initialize minimal tracing for worker
+        init_tracing(cli.log_level.as_ref(), None)?;
+        
+        // Create a tokio runtime for async operations
+        let runtime = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+        
+        // Run worker process
+        return runtime.block_on(run_worker_process(worker_id));
+    }
 
     // Initialize tracing before doing anything else
     init_tracing(cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {

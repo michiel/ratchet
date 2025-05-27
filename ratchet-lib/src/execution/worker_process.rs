@@ -370,6 +370,69 @@ impl WorkerProcessManager {
         
         results
     }
+    
+    /// Send a task to an available worker and wait for the result
+    pub async fn send_task(
+        &mut self,
+        message: WorkerMessage,
+        timeout_duration: Duration,
+    ) -> Result<CoordinatorMessage, WorkerProcessError> {
+        use tokio::time::timeout;
+        
+        // Extract correlation ID from message
+        let correlation_id = match &message {
+            WorkerMessage::ExecuteTask { correlation_id, .. } => *correlation_id,
+            WorkerMessage::ValidateTask { correlation_id, .. } => *correlation_id,
+            WorkerMessage::Ping { correlation_id } => *correlation_id,
+            WorkerMessage::Shutdown => return Err(WorkerProcessError::CommunicationError("Cannot send shutdown to specific worker".to_string())),
+        };
+        
+        // Find worker index instead of borrowing the worker directly
+        let worker_idx = self.workers.iter()
+            .position(|w| w.is_available())
+            .ok_or_else(|| WorkerProcessError::CommunicationError("No available workers".to_string()))?;
+        
+        // Create response channel
+        let (tx, rx) = oneshot::channel();
+        
+        // Store the response channel based on message type
+        match &message {
+            WorkerMessage::ExecuteTask { .. } => {
+                self.pending_tasks.insert(correlation_id, tx);
+            }
+            WorkerMessage::ValidateTask { .. } => {
+                // For validation tasks, we need a different channel type
+                // For now, let's handle this as a task execution
+                self.pending_tasks.insert(correlation_id, tx);
+            }
+            WorkerMessage::Ping { .. } => {
+                // For ping messages, we also use the task channel for simplicity
+                self.pending_tasks.insert(correlation_id, tx);
+            }
+            _ => {}
+        }
+        
+        // Send message to worker
+        self.workers[worker_idx].send_message(message).await?;
+        
+        // Wait for response with timeout
+        match timeout(timeout_duration, rx).await {
+            Ok(Ok(result)) => {
+                // Convert TaskExecutionResult to CoordinatorMessage
+                Ok(CoordinatorMessage::TaskResult {
+                    job_id: 0, // We'll need to track this properly
+                    correlation_id,
+                    result,
+                })
+            }
+            Ok(Err(_)) => Err(WorkerProcessError::CommunicationError("Response channel closed".to_string())),
+            Err(_) => {
+                // Clean up pending task on timeout
+                self.pending_tasks.remove(&correlation_id);
+                Err(WorkerProcessError::Timeout)
+            }
+        }
+    }
 }
 
 /// Worker process errors

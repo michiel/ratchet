@@ -130,6 +130,9 @@ pub enum WorkerError {
         error: String,
         backtrace: Option<String>,
     },
+    
+    /// Message parse error
+    MessageParseError(String),
 }
 
 impl std::fmt::Display for WorkerError {
@@ -149,6 +152,9 @@ impl std::fmt::Display for WorkerError {
             }
             WorkerError::WorkerPanic { error, .. } => {
                 write!(f, "Worker panic: {}", error)
+            }
+            WorkerError::MessageParseError(error) => {
+                write!(f, "Message parse error: {}", error)
             }
         }
     }

@@ -24,6 +24,9 @@ pub enum ServiceError {
     
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+    
+    #[error("Startup error: {0}")]
+    StartupError(String),
 }
 
 /// Result type for service operations

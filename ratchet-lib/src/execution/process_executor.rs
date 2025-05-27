@@ -38,15 +38,19 @@ impl ProcessTaskExecutor {
         })
     }
     
-    /// Start the worker processes (placeholder)
+    /// Start the worker processes
     pub async fn start(&self) -> Result<(), ServiceError> {
-        // TODO: Implement actual worker starting
+        let mut manager = self.worker_manager.write().await;
+        manager.start().await
+            .map_err(|e| ServiceError::StartupError(format!("Failed to start workers: {}", e)))?;
         Ok(())
     }
     
-    /// Stop the worker processes (placeholder)
+    /// Stop the worker processes
     pub async fn stop(&self) -> Result<(), ServiceError> {
-        // TODO: Implement actual worker stopping
+        let mut manager = self.worker_manager.write().await;
+        manager.stop().await
+            .map_err(|e| ServiceError::StartupError(format!("Failed to stop workers: {}", e)))?;
         Ok(())
     }
     
@@ -113,8 +117,16 @@ impl ProcessTaskExecutor {
     
     /// Send-compatible health check method for GraphQL resolvers
     pub async fn health_check_send(&self) -> Result<(), ExecutionError> {
-        // Simple health check - just return OK since ProcessTaskExecutor itself is healthy
-        // TODO: Implement actual worker process health checks
+        let mut manager = self.worker_manager.write().await;
+        let health_results = manager.health_check_all().await;
+        
+        // Check if any workers failed health check
+        for result in health_results {
+            if let Err(e) = result {
+                return Err(ExecutionError::TaskExecutionError(format!("Worker health check failed: {}", e)));
+            }
+        }
+        
         Ok(())
     }
 }
@@ -210,33 +222,39 @@ impl TaskExecutor for ProcessTaskExecutor {
 }
 
 impl ProcessTaskExecutor {
-    /// Execute a task in a worker process (simplified implementation)
+    /// Execute a task in a worker process via IPC
     async fn execute_task_in_worker(
         &self,
-        _job_id: i32,
-        _task_id: i32,
-        _task_path: &str,
-        _input_data: &JsonValue,
+        job_id: i32,
+        task_id: i32,
+        task_path: &str,
+        input_data: &JsonValue,
     ) -> Result<TaskExecutionResult, ExecutionError> {
-        // For now, let's create a simple task execution result
-        // TODO: Implement actual worker process communication
-        let started_at = chrono::Utc::now();
+        use crate::execution::ipc::{WorkerMessage, CoordinatorMessage};
+        use uuid::Uuid;
+        use tokio::time::Duration;
         
-        // Simulate task execution
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        let correlation_id = Uuid::new_v4();
+        let message = WorkerMessage::ExecuteTask {
+            job_id,
+            task_id,
+            task_path: task_path.to_string(),
+            input_data: input_data.clone(),
+            correlation_id,
+        };
         
-        let completed_at = chrono::Utc::now();
-        let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+        // Get worker manager and send task to a worker
+        let mut manager = self.worker_manager.write().await;
+        let result = manager.send_task(message, Duration::from_secs(300)).await; // 5 minute timeout
         
-        Ok(TaskExecutionResult {
-            success: true,
-            output: Some(serde_json::json!({"message": "Task executed successfully via process executor"})),
-            error_message: None,
-            error_details: None,
-            started_at,
-            completed_at,
-            duration_ms,
-        })
+        match result {
+            Ok(CoordinatorMessage::TaskResult { result, .. }) => Ok(result),
+            Ok(CoordinatorMessage::Error { error, .. }) => {
+                Err(ExecutionError::TaskExecutionError(format!("Worker error: {:?}", error)))
+            }
+            Ok(_) => Err(ExecutionError::TaskExecutionError("Unexpected response from worker".to_string())),
+            Err(e) => Err(ExecutionError::TaskExecutionError(format!("IPC error: {}", e))),
+        }
     }
 }
 

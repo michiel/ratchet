@@ -28,6 +28,9 @@ pub enum ExecutionError {
     #[error("Job not found: {0}")]
     JobNotFound(i32),
     
+    #[error("Task execution error: {0}")]
+    TaskExecutionError(String),
+    
     #[error("Invalid execution state: {0}")]
     InvalidState(String),
 }
