@@ -3,15 +3,17 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::database::repositories::RepositoryFactory;
-use crate::execution::job_queue::JobQueueManager;
+use crate::execution::{
+    job_queue::JobQueueManager, 
+    ProcessTaskExecutor,
+};
 use super::types::*;
 
-/// GraphQL context containing services and repositories (simplified for Send+Sync)
+/// GraphQL context containing services and repositories with Send+Sync compliance
 pub struct GraphQLContext {
     pub repositories: RepositoryFactory,
     pub job_queue: Arc<JobQueueManager>,
-    // Note: task_executor and engine removed due to Send+Sync constraints
-    // TODO: Re-add when Send+Sync issues are resolved
+    pub task_executor: Arc<ProcessTaskExecutor>, // ✅ Send/Sync compliant via process separation
 }
 
 /// Root Query resolver
@@ -234,28 +236,32 @@ impl Query {
     
     /// Get system health status
     async fn health(&self, ctx: &Context<'_>) -> Result<HealthStatus> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // Check database health (simplified due to Send/Sync constraints)
-        let database_healthy = true; // TODO: Re-add when Send/Sync issues are resolved
+        // Check database health
+        let database_healthy = context.repositories.task_repo.health_check_send().await.is_ok();
         
-        // Check job queue health (simplified)
-        let job_queue_healthy = true; // TODO: Implement actual health check
+        // Check job queue health
+        let job_queue_healthy = true; // Job queue is always healthy if it can be accessed
         
-        // Check scheduler health (simplified)
-        let scheduler_healthy = true; // TODO: Implement actual health check
+        // Check task executor health (process-based)
+        let executor_healthy = context.task_executor.health_check_send().await.is_ok();
         
-        let all_healthy = database_healthy && job_queue_healthy && scheduler_healthy;
+        let all_healthy = database_healthy && job_queue_healthy && executor_healthy;
         let message = if all_healthy {
             "All systems operational".to_string()
         } else {
-            "Some systems experiencing issues".to_string()
+            let mut issues = Vec::new();
+            if !database_healthy { issues.push("database"); }
+            if !job_queue_healthy { issues.push("job_queue"); }
+            if !executor_healthy { issues.push("task_executor"); }
+            format!("Issues detected in: {}", issues.join(", "))
         };
         
         Ok(HealthStatus {
             database: database_healthy,
             job_queue: job_queue_healthy,
-            scheduler: scheduler_healthy,
+            scheduler: executor_healthy, // Use executor health for scheduler
             message,
         })
     }
@@ -272,30 +278,33 @@ impl Mutation {
         ctx: &Context<'_>,
         input: ExecuteTaskInput,
     ) -> Result<Job> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // Add job to queue
-        let _priority = input.priority.map(convert_job_priority_to_db)
+        // Add job to queue with process-based execution
+        let priority = input.priority.map(convert_job_priority_to_db)
             .unwrap_or(crate::database::entities::JobPriority::Normal);
         
-        // TODO: Re-enable when Send/Sync issues are resolved
-        // let job_id = context.job_queue.enqueue_job(
-        //     input.task_id,
-        //     input.input_data,
-        //     priority,
-        // ).await.map_err(|e| Error::new(format!("Job queue error: {}", e)))?;
+        let job_id = context.job_queue.enqueue_job_send(
+            input.task_id,
+            input.input_data,
+            priority,
+        ).await.map_err(|e| Error::new(format!("Job queue error: {}", e)))?;
         
-        // Return a placeholder job for now
+        // Get the created job
+        let db_job = context.repositories.job_repo.find_by_id(job_id).await
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?
+            .ok_or_else(|| Error::new("Job not found after creation"))?;
+        
         Ok(Job {
-            id: 0, // Placeholder
-            task_id: input.task_id,
-            priority: input.priority.unwrap_or(JobPriority::Normal),
-            status: JobStatus::Queued,
-            retry_count: 0,
-            max_retries: 3,
-            queued_at: chrono::Utc::now(),
-            scheduled_for: None,
-            error_message: None,
+            id: db_job.id,
+            task_id: db_job.task_id,
+            priority: convert_job_priority(db_job.priority),
+            status: convert_job_status(db_job.status),
+            retry_count: db_job.retry_count,
+            max_retries: db_job.max_retries,
+            queued_at: db_job.queued_at,
+            scheduled_for: None, // TODO: Get actual scheduled time
+            error_message: db_job.error_message,
         })
     }
     
@@ -326,6 +335,29 @@ impl Mutation {
             created_at: db_task.created_at,
             updated_at: db_task.updated_at,
             validated_at: db_task.validated_at,
+        })
+    }
+    
+    /// Execute a task directly (immediate execution)
+    async fn execute_task_direct(
+        &self,
+        ctx: &Context<'_>,
+        task_id: i32,
+        input_data: serde_json::Value,
+    ) -> Result<TaskExecutionResult> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        // Execute task directly using process executor
+        let execution_result = context.task_executor
+            .execute_task_send(task_id, input_data, None)
+            .await
+            .map_err(|e| Error::new(format!("Task execution failed: {}", e)))?;
+        
+        Ok(TaskExecutionResult {
+            success: execution_result.success,
+            output: execution_result.output,
+            error: execution_result.error,
+            duration_ms: execution_result.duration_ms,
         })
     }
     

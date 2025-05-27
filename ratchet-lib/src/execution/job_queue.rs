@@ -124,6 +124,35 @@ impl JobQueueManager {
         let stats = self.repositories.job_repo.get_queue_stats().await?;
         Ok(stats.total >= self.config.max_queue_size)
     }
+    
+    /// Send-compatible enqueue job method for GraphQL resolvers
+    pub async fn enqueue_job_send(
+        &self,
+        task_id: i32,
+        input_data: JsonValue,
+        priority: JobPriority,
+    ) -> Result<i32, JobQueueError> {
+        // Direct implementation to avoid ?Send trait issues
+        // Check queue capacity
+        if self.config.max_queue_size > 0 {
+            let stats = self.repositories.job_repo.get_queue_stats().await?;
+            if stats.total >= self.config.max_queue_size {
+                return Err(JobQueueError::QueueFull);
+            }
+        }
+        
+        // Create job
+        let mut job = Job::new(task_id, input_data, priority);
+        job.max_retries = self.config.default_max_retries;
+        job.retry_delay_seconds = self.config.default_retry_delay;
+        
+        let created_job = self.repositories.job_repo.create(job).await?;
+        
+        info!("Enqueued job {} for task {} with priority {:?}", 
+              created_job.id, task_id, priority);
+        
+        Ok(created_job.id)
+    }
 }
 
 #[async_trait(?Send)]

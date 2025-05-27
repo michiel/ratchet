@@ -178,6 +178,14 @@ impl TaskRepository {
             .await?;
         Ok(count > 0)
     }
+    
+    /// Send-compatible health check method for GraphQL resolvers
+    pub async fn health_check_send(&self) -> Result<(), DatabaseError> {
+        // Direct implementation to avoid ?Send trait issues
+        // Simple health check - try to count tasks
+        self.count().await?;
+        Ok(())
+    }
 }
 
 #[async_trait(?Send)]

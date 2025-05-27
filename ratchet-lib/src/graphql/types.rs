@@ -46,6 +46,15 @@ pub struct Job {
     pub error_message: Option<String>,
 }
 
+/// Task execution result for direct execution
+#[derive(SimpleObject)]
+pub struct TaskExecutionResult {
+    pub success: bool,
+    pub output: Option<JsonValue>,
+    pub error: Option<String>,
+    pub duration_ms: i64,
+}
+
 /// Schedule representation in GraphQL
 #[derive(SimpleObject)]
 pub struct Schedule {
