@@ -1,0 +1,424 @@
+use tokio::process::{Child, Command};
+use tokio::sync::{mpsc, oneshot};
+use uuid::Uuid;
+use tracing::{debug, error, info, warn};
+use std::collections::HashMap;
+use std::time::Duration;
+
+use crate::execution::ipc::{
+    CoordinatorMessage, WorkerMessage, MessageEnvelope, TaskExecutionResult,
+    TaskValidationResult, WorkerStatus, IpcError,
+};
+
+/// Configuration for worker processes
+#[derive(Debug, Clone)]
+pub struct WorkerConfig {
+    pub worker_count: usize,
+    pub restart_on_crash: bool,
+    pub max_restart_attempts: u32,
+    pub restart_delay_seconds: u64,
+    pub health_check_interval_seconds: u64,
+    pub task_timeout_seconds: u64,
+    pub worker_idle_timeout_seconds: Option<u64>,
+}
+
+impl Default for WorkerConfig {
+    fn default() -> Self {
+        Self {
+            worker_count: num_cpus::get(),
+            restart_on_crash: true,
+            max_restart_attempts: 3,
+            restart_delay_seconds: 5,
+            health_check_interval_seconds: 30,
+            task_timeout_seconds: 300, // 5 minutes
+            worker_idle_timeout_seconds: Some(3600), // 1 hour
+        }
+    }
+}
+
+/// A single worker process handle
+#[derive(Debug)]
+pub struct WorkerProcess {
+    pub id: String,
+    pub pid: Option<u32>,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub restart_count: u32,
+    pub status: WorkerProcessStatus,
+    child: Option<Child>,
+    stdin_tx: Option<mpsc::UnboundedSender<WorkerMessage>>,
+    last_health_check: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkerProcessStatus {
+    Starting,
+    Ready,
+    Busy,
+    Unresponsive,
+    Failed,
+    Stopped,
+}
+
+impl WorkerProcess {
+    /// Spawn a new worker process
+    pub async fn spawn(worker_id: String, _config: &WorkerConfig) -> Result<Self, WorkerProcessError> {
+        info!("Spawning worker process: {}", worker_id);
+        
+        // Get current executable path
+        let current_exe = std::env::current_exe()
+            .map_err(|e| WorkerProcessError::SpawnError(format!("Failed to get current exe: {}", e)))?;
+        
+        let mut cmd = Command::new(&current_exe);
+        cmd.arg("--worker")
+            .arg("--worker-id")
+            .arg(&worker_id)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
+        
+        let mut child = cmd.spawn()
+            .map_err(|e| WorkerProcessError::SpawnError(format!("Failed to spawn worker: {}", e)))?;
+        
+        let pid = child.id();
+        
+        // Set up communication channels
+        let stdin = child.stdin.take()
+            .ok_or_else(|| WorkerProcessError::SpawnError("Failed to get stdin".to_string()))?;
+        
+        let stdout = child.stdout.take()
+            .ok_or_else(|| WorkerProcessError::SpawnError("Failed to get stdout".to_string()))?;
+        
+        let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
+        
+        // Spawn stdin writer task
+        let worker_id_clone = worker_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = Self::stdin_writer_task(worker_id_clone, stdin, stdin_rx).await {
+                error!("Worker stdin writer failed: {}", e);
+            }
+        });
+        
+        // Spawn stdout reader task
+        let worker_id_clone = worker_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = Self::stdout_reader_task(worker_id_clone, stdout).await {
+                error!("Worker stdout reader failed: {}", e);
+            }
+        });
+        
+        Ok(Self {
+            id: worker_id,
+            pid,
+            started_at: chrono::Utc::now(),
+            restart_count: 0,
+            status: WorkerProcessStatus::Starting,
+            child: Some(child),
+            stdin_tx: Some(stdin_tx),
+            last_health_check: None,
+        })
+    }
+    
+    /// Send a message to the worker
+    pub async fn send_message(&mut self, message: WorkerMessage) -> Result<(), WorkerProcessError> {
+        if let Some(stdin_tx) = &self.stdin_tx {
+            stdin_tx.send(message)
+                .map_err(|e| WorkerProcessError::CommunicationError(format!("Failed to send message: {}", e)))?;
+            Ok(())
+        } else {
+            Err(WorkerProcessError::WorkerNotRunning)
+        }
+    }
+    
+    /// Execute a task on this worker
+    pub async fn execute_task(
+        &mut self,
+        job_id: i32,
+        task_id: i32,
+        task_path: String,
+        input_data: serde_json::Value,
+    ) -> Result<TaskExecutionResult, WorkerProcessError> {
+        let correlation_id = Uuid::new_v4();
+        
+        let message = WorkerMessage::ExecuteTask {
+            job_id,
+            task_id,
+            task_path,
+            input_data,
+            correlation_id,
+        };
+        
+        self.status = WorkerProcessStatus::Busy;
+        self.send_message(message).await?;
+        
+        // TODO: Wait for response with timeout
+        // For now, return a placeholder
+        Ok(TaskExecutionResult {
+            success: true,
+            output: Some(serde_json::json!({"placeholder": true})),
+            error_message: None,
+            error_details: None,
+            started_at: chrono::Utc::now(),
+            completed_at: chrono::Utc::now(),
+            duration_ms: 100,
+        })
+    }
+    
+    /// Perform health check on the worker
+    pub async fn health_check(&mut self) -> Result<WorkerStatus, WorkerProcessError> {
+        let correlation_id = Uuid::new_v4();
+        
+        let message = WorkerMessage::Ping { correlation_id };
+        self.send_message(message).await?;
+        
+        self.last_health_check = Some(chrono::Utc::now());
+        
+        // TODO: Wait for pong response with timeout
+        // For now, return a placeholder
+        Ok(WorkerStatus {
+            worker_id: self.id.clone(),
+            pid: self.pid.unwrap_or(0),
+            started_at: self.started_at,
+            last_activity: chrono::Utc::now(),
+            tasks_executed: 0,
+            tasks_failed: 0,
+            memory_usage_mb: None,
+            cpu_usage_percent: None,
+        })
+    }
+    
+    /// Stop the worker process gracefully
+    pub async fn stop(&mut self) -> Result<(), WorkerProcessError> {
+        info!("Stopping worker process: {}", self.id);
+        
+        // Send shutdown message
+        if let Err(e) = self.send_message(WorkerMessage::Shutdown).await {
+            warn!("Failed to send shutdown message to worker {}: {}", self.id, e);
+        }
+        
+        // Wait a bit for graceful shutdown
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        
+        // Force kill if still running
+        if let Some(mut child) = self.child.take() {
+            if let Err(e) = child.kill().await {
+                warn!("Failed to kill worker process {}: {}", self.id, e);
+            }
+        }
+        
+        self.status = WorkerProcessStatus::Stopped;
+        self.stdin_tx = None;
+        
+        Ok(())
+    }
+    
+    /// Check if the worker is available for work
+    pub fn is_available(&self) -> bool {
+        matches!(self.status, WorkerProcessStatus::Ready)
+    }
+    
+    /// Stdin writer task
+    async fn stdin_writer_task(
+        worker_id: String,
+        mut stdin: tokio::process::ChildStdin,
+        mut rx: mpsc::UnboundedReceiver<WorkerMessage>,
+    ) -> Result<(), WorkerProcessError> {
+        use tokio::io::AsyncWriteExt;
+        
+        while let Some(message) = rx.recv().await {
+            let envelope = MessageEnvelope::new(message);
+            let json = serde_json::to_string(&envelope)
+                .map_err(|e| WorkerProcessError::CommunicationError(e.to_string()))?;
+            
+            let line = format!("{}\n", json);
+            
+            if let Err(e) = stdin.write_all(line.as_bytes()).await {
+                error!("Failed to write to worker {} stdin: {}", worker_id, e);
+                break;
+            }
+            
+            if let Err(e) = stdin.flush().await {
+                error!("Failed to flush worker {} stdin: {}", worker_id, e);
+                break;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Stdout reader task
+    async fn stdout_reader_task(
+        worker_id: String,
+        stdout: tokio::process::ChildStdout,
+    ) -> Result<(), WorkerProcessError> {
+        use tokio::io::AsyncBufReadExt;
+        
+        let mut reader = tokio::io::BufReader::new(stdout);
+        let mut line = String::new();
+        
+        loop {
+            line.clear();
+            
+            match reader.read_line(&mut line).await {
+                Ok(0) => {
+                    debug!("Worker {} stdout closed", worker_id);
+                    break;
+                }
+                Ok(_) => {
+                    // Remove newline
+                    line.truncate(line.trim_end().len());
+                    
+                    match serde_json::from_str::<MessageEnvelope<CoordinatorMessage>>(&line) {
+                        Ok(envelope) => {
+                            debug!("Received message from worker {}: {:?}", worker_id, envelope.message);
+                            // TODO: Handle the message (send to coordinator)
+                        }
+                        Err(e) => {
+                            warn!("Failed to parse message from worker {}: {} - line: {}", worker_id, e, line);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to read from worker {} stdout: {}", worker_id, e);
+                    break;
+                }
+            }
+        }
+        
+        Ok(())
+    }
+}
+
+/// Worker process manager
+pub struct WorkerProcessManager {
+    config: WorkerConfig,
+    workers: Vec<WorkerProcess>,
+    pending_tasks: HashMap<Uuid, oneshot::Sender<TaskExecutionResult>>,
+    pending_validations: HashMap<Uuid, oneshot::Sender<TaskValidationResult>>,
+    pending_health_checks: HashMap<Uuid, oneshot::Sender<WorkerStatus>>,
+}
+
+impl WorkerProcessManager {
+    /// Create a new worker process manager
+    pub fn new(config: WorkerConfig) -> Self {
+        Self {
+            config,
+            workers: Vec::new(),
+            pending_tasks: HashMap::new(),
+            pending_validations: HashMap::new(),
+            pending_health_checks: HashMap::new(),
+        }
+    }
+    
+    /// Start all worker processes
+    pub async fn start(&mut self) -> Result<(), WorkerProcessError> {
+        info!("Starting {} worker processes", self.config.worker_count);
+        
+        for i in 0..self.config.worker_count {
+            let worker_id = format!("worker-{}", i);
+            
+            match WorkerProcess::spawn(worker_id.clone(), &self.config).await {
+                Ok(worker) => {
+                    self.workers.push(worker);
+                    info!("Successfully started worker: {}", worker_id);
+                }
+                Err(e) => {
+                    error!("Failed to start worker {}: {}", worker_id, e);
+                    return Err(e);
+                }
+            }
+        }
+        
+        info!("All worker processes started successfully");
+        Ok(())
+    }
+    
+    /// Stop all worker processes
+    pub async fn stop(&mut self) -> Result<(), WorkerProcessError> {
+        info!("Stopping all worker processes");
+        
+        for worker in &mut self.workers {
+            if let Err(e) = worker.stop().await {
+                warn!("Failed to stop worker {}: {}", worker.id, e);
+            }
+        }
+        
+        self.workers.clear();
+        info!("All worker processes stopped");
+        Ok(())
+    }
+    
+    /// Get an available worker for task execution
+    pub fn get_available_worker(&mut self) -> Option<&mut WorkerProcess> {
+        self.workers.iter_mut().find(|w| w.is_available())
+    }
+    
+    /// Get worker statistics
+    pub fn get_worker_stats(&self) -> Vec<(String, WorkerProcessStatus)> {
+        self.workers.iter()
+            .map(|w| (w.id.clone(), w.status.clone()))
+            .collect()
+    }
+    
+    /// Perform health checks on all workers
+    pub async fn health_check_all(&mut self) -> Vec<Result<WorkerStatus, WorkerProcessError>> {
+        let mut results = Vec::new();
+        
+        for worker in &mut self.workers {
+            results.push(worker.health_check().await);
+        }
+        
+        results
+    }
+}
+
+/// Worker process errors
+#[derive(Debug, thiserror::Error)]
+pub enum WorkerProcessError {
+    #[error("Failed to spawn worker process: {0}")]
+    SpawnError(String),
+    
+    #[error("Worker communication error: {0}")]
+    CommunicationError(String),
+    
+    #[error("Worker is not running")]
+    WorkerNotRunning,
+    
+    #[error("Worker timeout")]
+    Timeout,
+    
+    #[error("Worker process crashed")]
+    WorkerCrashed,
+    
+    #[error("IPC error: {0}")]
+    IpcError(#[from] IpcError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_worker_config_default() {
+        let config = WorkerConfig::default();
+        assert!(config.worker_count > 0);
+        assert!(config.restart_on_crash);
+    }
+    
+    #[test]
+    fn test_worker_process_status() {
+        let worker = WorkerProcess {
+            id: "test-worker".to_string(),
+            pid: Some(12345),
+            started_at: chrono::Utc::now(),
+            restart_count: 0,
+            status: WorkerProcessStatus::Ready,
+            child: None,
+            stdin_tx: None,
+            last_health_check: None,
+        };
+        
+        assert!(worker.is_available());
+        assert_eq!(worker.id, "test-worker");
+    }
+}
