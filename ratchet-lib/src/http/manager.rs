@@ -1,9 +1,9 @@
+use crate::config::HttpConfig;
 use crate::types::{HttpMethod, HttpMethodError};
 use anyhow::Result;
 use reqwest::{self, Client, header::{HeaderMap, HeaderName, HeaderValue}};
 use serde_json::{Value as JsonValue, json};
 use std::str::FromStr;
-use std::time::Duration;
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
 use chrono::Utc;
@@ -13,6 +13,7 @@ use chrono::Utc;
 pub struct HttpManager {
     offline: bool,
     mocks: HashMap<String, JsonValue>,
+    config: HttpConfig,
 }
 
 impl Default for HttpManager {
@@ -22,11 +23,18 @@ impl Default for HttpManager {
 }
 
 impl HttpManager {
-    /// Create a new HttpManager in online mode
+    /// Create a new HttpManager in online mode with default configuration
     pub fn new() -> Self {
+        Self::with_config(HttpConfig::default())
+    }
+    
+    /// Create a new HttpManager with specific configuration
+    pub fn with_config(config: HttpConfig) -> Self {
+        debug!("Creating HttpManager with timeout: {}s", config.timeout.as_secs());
         Self {
             offline: false,
             mocks: HashMap::new(),
+            config,
         }
     }
     
@@ -136,10 +144,13 @@ impl HttpManager {
         }
         
         // If no mock data or mock doesn't match, perform a real HTTP request
-        debug!("Creating HTTP client with 30s timeout");
-        // Create a client with default settings
+        debug!("Creating HTTP client with {}s timeout", self.config.timeout.as_secs());
+        // Create a client with configured settings
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(self.config.timeout)
+            .user_agent(&self.config.user_agent)
+            .danger_accept_invalid_certs(!self.config.verify_ssl)
+            .redirect(reqwest::redirect::Policy::limited(self.config.max_redirects as usize))
             .build()?;
         
         // Extract headers for recording

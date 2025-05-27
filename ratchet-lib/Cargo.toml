@@ -33,6 +33,8 @@ lru = "0.10"
 zip = "0.6"
 tempfile = "3.8"
 regex = "1.10"
+serde_yaml = "0.9"
+async-trait = "0.1"
 
 # Testing dependencies (only used in #[cfg(test)])
 [dev-dependencies]
