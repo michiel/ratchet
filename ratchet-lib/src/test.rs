@@ -1,4 +1,5 @@
-use crate::js_executor::{execute_task, JsExecutionError};
+use crate::js_executor::execute_task;
+use crate::errors::JsExecutionError;
 use crate::task::{Task, TaskError};
 use crate::types::HttpMethod;
 use anyhow::Result;

@@ -1,4 +1,4 @@
-use crate::js_executor::JsExecutionError;
+use crate::errors::JsExecutionError;
 use crate::task::{Task, TaskError, TaskType};
 use serde_json::Value as JsonValue;
 use tokio::runtime::Runtime;
