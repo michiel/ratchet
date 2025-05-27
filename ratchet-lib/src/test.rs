@@ -1,5 +1,6 @@
 use crate::js_executor::{execute_task, JsExecutionError};
 use crate::task::{Task, TaskError};
+use crate::types::HttpMethod;
 use anyhow::Result;
 use serde_json::{Value as JsonValue};
 use std::fs;
@@ -149,7 +150,8 @@ pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult 
         // Parse mock data and setup mocks
         if let Some(http_mock) = mock.get("http") {
             let url = http_mock.get("url").and_then(|u| u.as_str()).unwrap_or("");
-            let method = http_mock.get("method").and_then(|m| m.as_str()).unwrap_or("GET");
+            let method_str = http_mock.get("method").and_then(|m| m.as_str()).unwrap_or("GET");
+            let method: HttpMethod = method_str.parse().unwrap_or(HttpMethod::Get);
             if let Some(response) = http_mock.get("response") {
                 http_manager.add_mock(method, url, response.clone());
                 debug!("Added HTTP mock for {} {}", method, url);

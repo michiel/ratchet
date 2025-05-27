@@ -13,6 +13,7 @@ pub mod js_task;
 pub mod recording;
 pub mod task;
 pub mod test;
+pub mod types;
 
 /// A module for executing JavaScript tasks
 pub mod js_executor {

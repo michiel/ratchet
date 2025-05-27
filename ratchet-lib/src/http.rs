@@ -3,13 +3,14 @@ use boa_engine::{
     Context, JsValue, JsError, Source,
     JsNativeError, JsResult
 };
-use reqwest::{self, Client, Method, header::{HeaderMap, HeaderName, HeaderValue}};
+use reqwest::{self, Client, header::{HeaderMap, HeaderName, HeaderValue}};
 use serde_json::{Value as JsonValue, json};
 use std::str::FromStr;
 use std::time::Duration;
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
 use chrono::Utc;
+use crate::types::{HttpMethod, HttpMethodError};
 
 /// HTTP Manager for handling HTTP requests with mock support
 #[derive(Debug, Clone)]
@@ -53,10 +54,17 @@ impl HttpManager {
     }
     
     /// Add a single HTTP mock
-    pub fn add_mock(&mut self, method: &str, url: &str, response: JsonValue) {
-        let key = format!("{}:{}", method.to_uppercase(), url);
+    pub fn add_mock(&mut self, method: HttpMethod, url: &str, response: JsonValue) {
+        let key = format!("{}:{}", method.as_str(), url);
         self.mocks.insert(key, response);
         debug!("Added HTTP mock for {} {}", method, url);
+    }
+
+    /// Add a single HTTP mock using string method (for backward compatibility)
+    pub fn add_mock_str(&mut self, method: &str, url: &str, response: JsonValue) -> Result<(), HttpMethodError> {
+        let http_method: HttpMethod = method.parse()?;
+        self.add_mock(http_method, url, response);
+        Ok(())
     }
     
     /// Clear all mocks
@@ -79,23 +87,23 @@ impl HttpManager {
         debug!("Request body: {:?}", body);
         
         // Extract method from params or default to GET
-        let method_str = if let Some(params) = params {
+        let method = if let Some(params) = params {
             if let Some(method_str) = params.get("method").and_then(|m| m.as_str()) {
-                method_str
+                method_str.parse().unwrap_or(HttpMethod::Get)
             } else {
-                "GET"
+                HttpMethod::Get
             }
         } else {
-            "GET"
+            HttpMethod::Get
         };
         
         // Check if we're in offline mode and return mock data if available
         if self.offline {
             debug!("Offline mode enabled, checking for mock response");
-            let mock_key = format!("{}:{}", method_str.to_uppercase(), url);
+            let mock_key = format!("{}:{}", method.as_str(), url);
             
             if let Some(mock_response) = self.mocks.get(&mock_key) {
-                debug!("Found matching mock response for {} {}", method_str, url);
+                debug!("Found matching mock response for {} {}", method, url);
                 // Create a response object from the mock data
                 let response = json!({
                     "ok": true,
@@ -109,9 +117,9 @@ impl HttpManager {
                 // Check for partial URL matches
                 for (key, response) in &self.mocks {
                     if let Some((mock_method, mock_url)) = key.split_once(':') {
-                        if mock_method.eq_ignore_ascii_case(method_str) && 
+                        if mock_method.eq_ignore_ascii_case(method.as_str()) && 
                            (url.contains(mock_url) || mock_url.contains(url)) {
-                            debug!("Found partial matching mock response for {} {}", method_str, url);
+                            debug!("Found partial matching mock response for {} {}", method, url);
                             let response = json!({
                                 "ok": true,
                                 "status": 200,
@@ -124,7 +132,7 @@ impl HttpManager {
                     }
                 }
                 
-                debug!("No matching mock response found for {} {}", method_str, url);
+                debug!("No matching mock response found for {} {}", method, url);
                 return Err(HttpError::InvalidUrl(
                     "No mock response available in offline mode".to_string()
                 ));
@@ -160,12 +168,11 @@ impl HttpManager {
             }
         });
         
-        let method = Method::from_str(method_str)
-            .map_err(|_| HttpError::InvalidMethod(method_str.to_string()))?;
+        let reqwest_method = reqwest::Method::from(method);
 
-        debug!("Building {} request to {}", method_str, url);
+        debug!("Building {} request to {}", method, url);
         // Build the request
-        let mut request = client.request(method, url);
+        let mut request = client.request(reqwest_method, url);
 
         // Add headers if provided
         if let Some(params) = params {
@@ -246,7 +253,7 @@ impl HttpManager {
             Err(_) => {
                 warn!("Failed to parse response as JSON, falling back to text");
                 // Fall back to text - we need to send a new request since json() consumes the response
-                let text_response = client.request(Method::from_str(method_str).unwrap(), url).send().await?;
+                let text_response = client.request(reqwest::Method::from(method), url).send().await?;
                 let text = text_response.text().await?;
                 debug!("Response parsed as text: {} bytes", text.len());
                 json!(text)
@@ -261,7 +268,7 @@ impl HttpManager {
             let response_body_str = serde_json::to_string(&response_body).unwrap_or_default();
             if let Err(e) = crate::recording::record_http_request(
                 url,
-                method_str,
+                method.as_str(),
                 request_headers.as_ref(),
                 request_body_str.as_deref(),
                 status_code,
@@ -296,7 +303,7 @@ pub enum HttpError {
     NetworkError(#[from] reqwest::Error),
 
     #[error("Invalid HTTP method: {0}")]
-    InvalidMethod(String),
+    InvalidMethod(#[from] HttpMethodError),
 
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
@@ -653,7 +660,7 @@ mod tests {
         manager.set_offline();
         
         // Add a mock for GET request
-        manager.add_mock("GET", "http://example.com/api", json!({
+        manager.add_mock(HttpMethod::Get, "http://example.com/api", json!({
             "message": "Mock response",
             "id": 123
         }));
