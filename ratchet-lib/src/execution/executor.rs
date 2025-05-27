@@ -55,8 +55,8 @@ pub struct ExecutionResult {
 }
 
 /// Task executor trait for different execution strategies
-#[async_trait]
-pub trait TaskExecutor: Send + Sync {
+#[async_trait(?Send)]
+pub trait TaskExecutor {
     /// Execute a task with given input
     async fn execute_task(
         &self,
@@ -135,7 +135,7 @@ impl DatabaseTaskExecutor {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl TaskExecutor for DatabaseTaskExecutor {
     async fn execute_task(
         &self,

@@ -89,7 +89,7 @@ impl ScheduleRepository {
 
     /// Update schedule next run time
     pub async fn update_next_run(&self, id: i32, next_run_at: Option<chrono::DateTime<chrono::Utc>>) -> Result<(), DatabaseError> {
-        let mut active_model = ScheduleActiveModel {
+        let active_model = ScheduleActiveModel {
             id: Set(id),
             next_run_at: Set(next_run_at),
             updated_at: Set(chrono::Utc::now()),
@@ -107,7 +107,7 @@ impl ScheduleRepository {
         if let Some(mut schedule) = schedule {
             schedule.record_execution();
             
-            let mut active_model = ScheduleActiveModel {
+            let active_model = ScheduleActiveModel {
                 id: Set(id),
                 last_run_at: Set(schedule.last_run_at),
                 execution_count: Set(schedule.execution_count),
@@ -122,7 +122,7 @@ impl ScheduleRepository {
 
     /// Enable or disable schedule
     pub async fn set_enabled(&self, id: i32, enabled: bool) -> Result<(), DatabaseError> {
-        let mut active_model = ScheduleActiveModel {
+        let active_model = ScheduleActiveModel {
             id: Set(id),
             enabled: Set(enabled),
             updated_at: Set(chrono::Utc::now()),
@@ -157,7 +157,7 @@ impl ScheduleRepository {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl super::Repository for ScheduleRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         self.count().await?;

@@ -123,7 +123,7 @@ impl JobRepository {
 
     /// Mark job as processing with execution ID
     pub async fn mark_processing(&self, id: i32, execution_id: i32) -> Result<(), DatabaseError> {
-        let mut active_model = JobActiveModel {
+        let active_model = JobActiveModel {
             id: Set(id),
             status: Set(JobStatus::Processing),
             execution_id: Set(Some(execution_id)),
@@ -147,7 +147,7 @@ impl JobRepository {
         if let Some(mut job) = job {
             let will_retry = job.fail(error, details);
             
-            let mut active_model = JobActiveModel {
+            let active_model = JobActiveModel {
                 id: Set(id),
                 status: Set(job.status),
                 retry_count: Set(job.retry_count),
@@ -219,7 +219,7 @@ pub struct JobQueueStats {
     pub retrying: u64,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl super::Repository for JobRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         self.count().await?;

@@ -46,8 +46,8 @@ pub trait TaskService {
 }
 
 /// HTTP service trait for dependency injection
-#[async_trait]
-pub trait HttpService: Send + Sync {
+#[async_trait(?Send)]
+pub trait HttpService {
     /// Make an HTTP request
     async fn make_request(
         &self,
@@ -57,8 +57,8 @@ pub trait HttpService: Send + Sync {
     ) -> ServiceResult<JsonValue>;
 }
 
-/// Configuration service trait for dependency injection
-pub trait ConfigService: Send + Sync {
+/// Configuration service trait for dependency injection  
+pub trait ConfigService {
     /// Get the current configuration
     fn get_config(&self) -> &RatchetConfig;
     
@@ -69,8 +69,8 @@ pub trait ConfigService: Send + Sync {
 /// Main service provider that coordinates all services
 pub struct ServiceProvider {
     task_service: Box<dyn TaskService>,
-    http_service: Box<dyn HttpService + Send + Sync>,
-    config_service: Box<dyn ConfigService + Send + Sync>,
+    http_service: Box<dyn HttpService>,
+    config_service: Box<dyn ConfigService>,
 }
 
 impl ServiceProvider {
@@ -150,7 +150,7 @@ impl DefaultHttpService {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl HttpService for DefaultHttpService {
     async fn make_request(
         &self,
@@ -167,6 +167,7 @@ impl HttpService for DefaultHttpService {
 
 /// Default implementation of TaskService
 pub struct DefaultTaskService {
+    #[allow(dead_code)]
     config: Arc<RatchetConfig>,
 }
 
