@@ -189,25 +189,43 @@ impl WorkerProcess {
     
     /// Stop the worker process gracefully
     pub async fn stop(&mut self) -> Result<(), WorkerProcessError> {
-        info!("Stopping worker process: {}", self.id);
+        debug!("Stopping worker process: {}", self.id);
         
-        // Send shutdown message
-        if let Err(e) = self.send_message(WorkerMessage::Shutdown).await {
-            warn!("Failed to send shutdown message to worker {}: {}", self.id, e);
+        // Check if worker is already stopped
+        if self.status == WorkerProcessStatus::Stopped || self.child.is_none() {
+            debug!("Worker {} already stopped", self.id);
+            return Ok(());
         }
         
-        // Wait a bit for graceful shutdown
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        // Send shutdown message (ignore errors as worker may have already terminated)
+        let _ = self.send_message(WorkerMessage::Shutdown).await;
         
-        // Force kill if still running
+        // Close stdin to signal shutdown
+        self.stdin_tx = None;
+        
+        // Wait for graceful shutdown with timeout
         if let Some(mut child) = self.child.take() {
-            if let Err(e) = child.kill().await {
-                warn!("Failed to kill worker process {}: {}", self.id, e);
+            // Use a shorter timeout and check if process is still alive
+            let shutdown_timeout = Duration::from_millis(500);
+            
+            match tokio::time::timeout(shutdown_timeout, child.wait()).await {
+                Ok(Ok(_exit_status)) => {
+                    debug!("Worker {} terminated gracefully", self.id);
+                }
+                Ok(Err(e)) => {
+                    debug!("Worker {} wait failed: {}", self.id, e);
+                }
+                Err(_) => {
+                    // Timeout - force kill
+                    debug!("Worker {} didn't respond to shutdown, force killing", self.id);
+                    if let Err(e) = child.kill().await {
+                        debug!("Failed to kill worker process {}: {}", self.id, e);
+                    }
+                }
             }
         }
         
         self.status = WorkerProcessStatus::Stopped;
-        self.stdin_tx = None;
         
         Ok(())
     }
@@ -233,12 +251,22 @@ impl WorkerProcess {
             let line = format!("{}\n", json);
             
             if let Err(e) = stdin.write_all(line.as_bytes()).await {
-                error!("Failed to write to worker {} stdin: {}", worker_id, e);
+                // During shutdown, broken pipe errors are expected - don't log as error
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    debug!("Worker {} stdin closed (worker likely terminated)", worker_id);
+                } else {
+                    error!("Failed to write to worker {} stdin: {}", worker_id, e);
+                }
                 break;
             }
             
             if let Err(e) = stdin.flush().await {
-                error!("Failed to flush worker {} stdin: {}", worker_id, e);
+                // During shutdown, broken pipe errors are expected - don't log as error
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    debug!("Worker {} stdin closed during flush (worker likely terminated)", worker_id);
+                } else {
+                    error!("Failed to flush worker {} stdin: {}", worker_id, e);
+                }
                 break;
             }
         }
@@ -337,9 +365,11 @@ impl WorkerProcessManager {
     pub async fn stop(&mut self) -> Result<(), WorkerProcessError> {
         info!("Stopping all worker processes");
         
+        // Stop all workers sequentially but with improved error handling
         for worker in &mut self.workers {
-            if let Err(e) = worker.stop().await {
-                warn!("Failed to stop worker {}: {}", worker.id, e);
+            match worker.stop().await {
+                Ok(_) => debug!("Successfully stopped worker: {}", worker.id),
+                Err(e) => debug!("Worker {} stop completed with: {}", worker.id, e),
             }
         }
         
