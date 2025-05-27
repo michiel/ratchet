@@ -145,16 +145,58 @@
   - [ ] Improve error context and diagnostic information
   - [ ] Add health check endpoints for monitoring
 
-## New Features
+## Server Architecture & Persistence
 
-### 19. Advanced Task Features
-- [ ] **Extended Task Capabilities**
+### 19. Database Layer & Models
+- [ ] **Database Infrastructure** (Critical for Server)
+  - [ ] Create database schema for tasks, executions, schedules, and jobs
+  - [ ] Implement SQLite connection pool and migration system
+  - [ ] Create domain models: `TaskEntity`, `ExecutionEntity`, `ScheduleEntity`, `JobEntity`
+  - [ ] Add database traits/interfaces for testability (Repository pattern)
+  - [ ] Implement CRUD operations for all entities with proper error handling
+
+### 20. Configuration Management (Server Prerequisites)
+- [ ] **Server Configuration System** (Critical for Server)
+  - [ ] Design `ServerConfig` struct with database, HTTP, security settings
+  - [ ] Implement YAML configuration loading with validation
+  - [ ] Add environment variable override support
+  - [ ] Create configuration profiles (development, testing, production)
+  - [ ] Add configuration validation and error reporting
+
+### 21. Async Task Execution Framework
+- [ ] **Background Job System** (Critical for Server)
+  - [ ] Abstract task execution into `TaskExecutor` trait
+  - [ ] Create job queue system with priority and retry logic
+  - [ ] Implement task scheduler with cron-like syntax
+  - [ ] Add execution status tracking and progress reporting
+  - [ ] Create worker pool for concurrent task execution
+
+### 22. API Layer Foundation
+- [ ] **GraphQL & HTTP Infrastructure** (Critical for Server)
+  - [ ] Separate CLI logic from core library in main.rs
+  - [ ] Create `ratchet-server` crate with GraphQL schema
+  - [ ] Implement REST endpoints for health checks and metrics
+  - [ ] Add authentication/authorization middleware
+  - [ ] Create error handling for API responses
+
+### 23. Core Library Abstraction
+- [ ] **Library Preparation for Server** (Critical for Server)
+  - [ ] Extract task execution logic from CLI-specific code
+  - [ ] Create service layer abstraction (`TaskService`, `ExecutionService`)
+  - [ ] Make HTTP manager configurable and injectable
+  - [ ] Add proper async/await throughout execution pipeline
+  - [ ] Ensure thread-safety for concurrent task execution
+
+## Advanced Features
+
+### 24. Extended Task Capabilities
+- [ ] **Advanced Task Features**
   - [ ] Add support for task dependencies and pipelines
-  - [ ] Implement task scheduling and cron-like execution
+  - [ ] Implement task chaining and conditional execution
   - [ ] Add support for streaming data processing
   - [ ] Create task composition and workflow management
 
-### 20. Monitoring & Observability
+### 25. Monitoring & Observability
 - [ ] **Production Readiness**
   - [ ] Add metrics collection and reporting
   - [ ] Implement distributed tracing
@@ -165,32 +207,144 @@
 
 ## Priority Levels
 
+**Critical for Server Implementation** (Must complete before server):
+- [ ] Configuration management (#9, #20) - Required for server config
+- [ ] Function complexity reduction (#2) - Needed for service abstraction 
+- [ ] Core library abstraction (#23) - Extract CLI-specific logic
+- [ ] Task execution framework (#21) - Background job system
+- [ ] Database layer (#19) - Persistence infrastructure
+
 **High Priority** (Foundation improvements):
-- [ ] Function complexity reduction (#2)
 - [ ] Magic string constants (#3)
+- [ ] HTTP manager enhancements (#4) - Make configurable/injectable
+- [ ] Memory management (#11) - Critical for long-running server
 - [x] Type safety improvements (#7) ✅
 - [x] Module organization (#10) ✅
 
 **Medium Priority** (Performance & UX):
-- [ ] HTTP manager enhancements (#4)
 - [ ] CLI user experience (#6)
-- [ ] Memory management (#11)
+- [ ] API layer foundation (#22) - GraphQL & HTTP infrastructure
+- [ ] Async improvements (#13) - Better concurrency
 - [ ] Documentation improvements (#14)
 
 **Low Priority** (Advanced features):
 - [ ] Plugin architecture (#8)
-- [ ] Advanced task features (#19)
-- [ ] Monitoring & observability (#20)
+- [ ] Extended task capabilities (#24)
+- [ ] Monitoring & observability (#25)
 
 ---
 
+## Server Implementation Roadmap
+
+### Phase 1: Foundation Refactoring (Critical)
+**Objective**: Prepare codebase for server architecture
+
+1. **Configuration Management (#9, #20)**
+   - Extract hardcoded values to configuration structs
+   - Implement YAML config loading with validation
+   - Support for different environments (dev/test/prod)
+
+2. **Function Complexity Reduction (#2)**
+   - Break down large functions in js_executor.rs:call_js_function
+   - Create focused, testable functions for service layer
+
+3. **Core Library Abstraction (#23)**  
+   - Separate CLI-specific logic from library code
+   - Create service layer interfaces (TaskService, ExecutionService)
+   - Make dependencies injectable (HTTP manager, configurations)
+
+### Phase 2: Persistence & Background Jobs (Critical)
+**Objective**: Add database and async execution capabilities
+
+4. **Database Layer (#19)**
+   - Design schema for tasks, executions, schedules, jobs
+   - Implement SQLite with connection pooling
+   - Create repository pattern with proper error handling
+
+5. **Task Execution Framework (#21)**
+   - Abstract execution into TaskExecutor trait
+   - Implement job queue with priority and retry logic
+   - Add scheduling system with cron-like syntax
+
+### Phase 3: Server Infrastructure (Medium Priority)
+**Objective**: Build GraphQL API and server foundation
+
+6. **API Layer Foundation (#22)**
+   - Create ratchet-server crate
+   - Implement GraphQL schema and resolvers
+   - Add authentication and error handling
+
+### Phase 4: Production Readiness (Low Priority)
+**Objective**: Monitoring, security, and advanced features
+
+7. **Monitoring & Security**
+   - Add health checks and metrics
+   - Implement proper authentication/authorization
+   - Add request validation and rate limiting
+
 ## Getting Started
 
+**For Server Implementation:**
+1. Complete all **Critical for Server Implementation** items in order
+2. Each phase builds on the previous - don't skip ahead
+3. Maintain backward compatibility for CLI functionality
+4. Add comprehensive tests for new server components
+
+**For General Development:**
 1. Start with **High Priority** items to establish a solid foundation
 2. Focus on one category at a time to maintain code stability
 3. Write tests for each refactoring before making changes
 4. Update documentation as you implement improvements
 5. Consider breaking large changes into smaller, reviewable commits
+
+## Current Codebase Analysis for Server
+
+### Key Issues Preventing Server Implementation
+
+1. **Tight CLI Coupling** (`ratchet-cli/src/main.rs:410-493`)
+   - Task execution logic embedded in CLI command handlers
+   - HTTP manager instantiated directly in CLI code
+   - No service layer abstraction for reuse
+
+2. **Hardcoded Values** (Multiple files)
+   - Magic strings in js_executor.rs: `__fetch_url`, `__http_result`
+   - No centralized configuration management
+   - Environment-specific settings scattered throughout code
+
+3. **Synchronous Task Loading** (`task.rs:85-100`)
+   - Uses `std::fs` instead of `tokio::fs` for file operations
+   - LRU cache size hardcoded to 100 entries
+   - No async/await in task loading pipeline
+
+4. **Complex Execution Function** (`js_executor.rs` - `call_js_function`)
+   - Single large function handling multiple responsibilities
+   - Difficult to unit test individual components
+   - Hard to extract for service layer usage
+
+5. **No Persistence Layer**
+   - All task data loaded from filesystem on each execution
+   - No tracking of execution history or job status
+   - No support for scheduled or queued executions
+
+### Required Dependencies for Server
+
+**New Crates Needed:**
+- `sqlx` or `sea-orm` - Database operations and migrations
+- `async-graphql` - GraphQL schema and resolvers  
+- `axum` or `warp` - HTTP server and routing
+- `serde_yaml` - Configuration file parsing
+- `tokio-cron-scheduler` - Job scheduling
+- `uuid` - Already available, extend usage for job IDs
+
+**Workspace Structure After Server Addition:**
+```
+ratchet/
+├── ratchet-lib/          # Core task execution (current)
+├── ratchet-cli/          # CLI interface (refactored)
+├── ratchet-server/       # GraphQL server (new)
+├── ratchet-db/           # Database models & migrations (new)
+└── ratchet-common/       # Shared types & configs (new)
+```
 
 ## Notes
 
@@ -198,3 +352,5 @@
 - Add deprecation warnings before removing existing APIs
 - Update the CHANGELOG.md for any user-facing changes
 - Consider the impact on existing task definitions and user workflows
+- Server implementation requires completing Foundation Refactoring first
+- Plan for database migrations and schema evolution from the start
