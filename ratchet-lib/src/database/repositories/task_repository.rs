@@ -51,7 +51,7 @@ impl TaskRepository {
     /// Find task by UUID
     pub async fn find_by_uuid(&self, uuid: Uuid) -> Result<Option<Task>, DatabaseError> {
         let task = Tasks::find()
-            .filter(tasks::Column::Uuid.eq(uuid.to_string()))
+            .filter(tasks::Column::Uuid.eq(uuid))
             .one(self.db.get_connection())
             .await?;
         Ok(task)
@@ -83,8 +83,21 @@ impl TaskRepository {
 
     /// Update a task
     pub async fn update(&self, task: Task) -> Result<Task, DatabaseError> {
-        let mut active_model: TaskActiveModel = task.into();
-        active_model.updated_at = Set(chrono::Utc::now());
+        let active_model = TaskActiveModel {
+            id: Set(task.id),
+            uuid: Set(task.uuid),
+            name: Set(task.name),
+            description: Set(task.description),
+            version: Set(task.version),
+            path: Set(task.path),
+            metadata: Set(task.metadata),
+            input_schema: Set(task.input_schema),
+            output_schema: Set(task.output_schema),
+            enabled: Set(task.enabled),
+            created_at: Set(task.created_at), // Keep original creation time
+            updated_at: Set(chrono::Utc::now()), // Update the timestamp
+            validated_at: Set(task.validated_at),
+        };
         
         let updated_task = active_model.update(self.db.get_connection()).await?;
         Ok(updated_task)
@@ -127,7 +140,7 @@ impl TaskRepository {
     /// Delete a task by UUID
     pub async fn delete_by_uuid(&self, uuid: Uuid) -> Result<(), DatabaseError> {
         Tasks::delete_many()
-            .filter(tasks::Column::Uuid.eq(uuid.to_string()))
+            .filter(tasks::Column::Uuid.eq(uuid))
             .exec(self.db.get_connection())
             .await?;
         Ok(())
@@ -160,7 +173,7 @@ impl TaskRepository {
     /// Check if task UUID exists
     pub async fn uuid_exists(&self, uuid: Uuid) -> Result<bool, DatabaseError> {
         let count = Tasks::find()
-            .filter(tasks::Column::Uuid.eq(uuid.to_string()))
+            .filter(tasks::Column::Uuid.eq(uuid))
             .count(self.db.get_connection())
             .await?;
         Ok(count > 0)
@@ -181,17 +194,14 @@ mod tests {
     use super::*;
     use crate::config::DatabaseConfig;
     use crate::database::entities::Task;
+    use crate::database::repositories::Repository;
     use sea_orm::prelude::Json;
     use serde_json::json;
     use std::time::Duration;
-    use tempfile::NamedTempFile;
 
     async fn create_test_db() -> DatabaseConnection {
-        let temp_file = NamedTempFile::new().unwrap();
-        let db_path = temp_file.path().to_string_lossy().to_string();
-        
         let config = DatabaseConfig {
-            url: format!("sqlite://{}?mode=rwc", db_path),
+            url: "sqlite::memory:".to_string(),
             max_connections: 5,
             connection_timeout: Duration::from_secs(10),
         };

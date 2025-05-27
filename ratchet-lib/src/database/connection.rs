@@ -121,14 +121,10 @@ pub struct ConnectionStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     
     async fn create_test_config() -> DatabaseConfig {
-        let temp_file = NamedTempFile::new().unwrap();
-        let db_path = temp_file.path().to_string_lossy().to_string();
-        
         DatabaseConfig {
-            url: format!("sqlite://{}?mode=rwc", db_path),
+            url: "sqlite::memory:".to_string(),
             max_connections: 5,
             connection_timeout: Duration::from_secs(10),
         }
