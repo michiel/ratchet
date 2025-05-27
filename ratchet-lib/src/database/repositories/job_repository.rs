@@ -219,7 +219,7 @@ pub struct JobQueueStats {
     pub retrying: u64,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl super::Repository for JobRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         self.count().await?;

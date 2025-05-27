@@ -12,8 +12,8 @@ use crate::database::DatabaseError;
 use async_trait::async_trait;
 
 /// Common repository trait for all database operations
-#[async_trait(?Send)]
-pub trait Repository {
+#[async_trait]
+pub trait Repository: Send + Sync {
     /// Health check for the repository
     async fn health_check(&self) -> Result<(), DatabaseError>;
 }

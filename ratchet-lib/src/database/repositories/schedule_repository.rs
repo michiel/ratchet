@@ -157,7 +157,7 @@ impl ScheduleRepository {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl super::Repository for ScheduleRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         self.count().await?;

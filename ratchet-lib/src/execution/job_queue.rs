@@ -27,8 +27,8 @@ pub enum JobQueueError {
 }
 
 /// Job queue interface
-#[async_trait(?Send)]
-pub trait JobQueue {
+#[async_trait]
+pub trait JobQueue: Send + Sync {
     /// Add a job to the queue
     async fn enqueue_job(
         &self,
@@ -126,7 +126,7 @@ impl JobQueueManager {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl JobQueue for JobQueueManager {
     async fn enqueue_job(
         &self,
@@ -299,7 +299,7 @@ impl CachedJobQueueManager {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl JobQueue for CachedJobQueueManager {
     async fn enqueue_job(
         &self,

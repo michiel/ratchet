@@ -222,7 +222,7 @@ pub struct ExecutionStats {
     pub failed: u64,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl super::Repository for ExecutionRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         // Simple health check - try to count executions
