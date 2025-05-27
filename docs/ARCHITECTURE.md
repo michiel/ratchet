@@ -423,6 +423,68 @@ pub struct WorkerConfig {
 - **Error Information**: Sensitive data filtered from error messages
 - **Audit Trail**: All IPC messages logged for security monitoring
 
+## Database Architecture
+
+### Overview
+
+Ratchet uses SQLite with Sea-ORM for persistent storage of tasks, executions, jobs, and schedules. The database layer provides full CRUD operations with proper relationship management and migration support.
+
+### Entity Relationship Diagram
+
+```
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│      Tasks      │       │   Executions    │       │      Jobs       │
+├─────────────────┤       ├─────────────────┤       ├─────────────────┤
+│ id (PK)         │◄──────┤│ id (PK)         │       │ id (PK)         │
+│ uuid            │   1:N ││ uuid            │   N:1 │ uuid            │
+│ name            │       ││ task_id (FK)    │──────►│ task_id (FK)    │
+│ description     │       ││ job_id (FK)     │◄──────┤│ priority        │
+│ input_schema    │       ││ status          │   1:N ││ status          │
+│ output_schema   │       ││ started_at      │       ││ created_at      │
+│ content         │       ││ completed_at    │       ││ scheduled_for   │
+│ created_at      │       ││ error_message   │       ││ retry_count     │
+│ updated_at      │       ││ input_data      │       ││ max_retries     │
+└─────────────────┘       ││ output_data     │       ││ metadata        │
+                          ││ execution_time  │       └─────────────────┘
+                          │└─────────────────┘                │
+                          │                                    │
+                          │ ┌─────────────────┐               │
+                          │ │   Schedules     │               │
+                          │ ├─────────────────┤               │
+                          │ │ id (PK)         │               │
+                          │ │ uuid            │               │
+                          │ │ task_id (FK)    │               │
+                          │ │ cron_expression │               │
+                          └►│ last_run        │◄──────────────┘
+                            │ next_run        │
+                            │ is_active       │
+                            │ created_at      │
+                            │ updated_at      │
+                            └─────────────────┘
+```
+
+## Server Architecture
+
+### Overview
+
+Ratchet provides a complete server implementation with GraphQL API, REST endpoints, and background job processing. The server architecture follows clean architecture principles with clear separation between API, business logic, and data persistence layers.
+
+## Configuration Management
+
+### Configuration Structure
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RatchetConfig {
+    pub server: Option<ServerConfig>,
+    pub database: Option<DatabaseConfig>,
+    pub execution: Option<ExecutionConfig>,
+    pub logging: Option<LoggingConfig>,
+}
+```
+
+The configuration system provides comprehensive management of all Ratchet settings with YAML file loading and environment variable overrides. See the complete implementation in the server architecture section above.
+
 ## Conventions
 
 ### Naming Conventions
