@@ -40,7 +40,8 @@ impl DatabaseConnection {
             .acquire_timeout(config.connection_timeout)
             .idle_timeout(Duration::from_secs(300)) // 5 minutes idle timeout
             .max_lifetime(Duration::from_secs(3600)) // 1 hour max lifetime
-            .sqlx_logging(true);
+            .sqlx_logging(true) // Enable SQLx query logging
+            .sqlx_logging_level(log::LevelFilter::Debug); // Set SQLx logging to DEBUG level instead of INFO
         
         let connection = Database::connect(opts).await?;
         

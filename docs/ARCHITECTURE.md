@@ -7,6 +7,7 @@ This document outlines the architecture, design principles, and conventions used
 - [Overview](#overview)
 - [Code Layout](#code-layout)
 - [Module Structure](#module-structure)
+- [Process Execution IPC Model](#process-execution-ipc-model)
 - [Conventions](#conventions)
 - [Error Handling](#error-handling)
 - [Type Safety](#type-safety)
@@ -132,6 +133,357 @@ ratchet-lib/src/
   - `fetch.js`: JavaScript fetch API integration
   - `tests.rs`: Comprehensive test suite
   - `mod.rs`: Module exports and public API
+
+## Process Execution IPC Model
+
+### Overview
+
+The Process Execution IPC (Inter-Process Communication) Model is a core architectural component that solves Send/Sync compliance issues by isolating JavaScript execution in separate worker processes. This enables the main coordinator process to remain fully thread-safe while still executing JavaScript tasks using the Boa engine.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Coordinator Process                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │   GraphQL API   │  │   Job Queue     │  │   Database      │  │
+│  │   (Send/Sync)   │  │   Manager       │  │   Repositories  │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+│                              │                                  │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │            ProcessTaskExecutor                              │  │
+│  │  ┌─────────────────────────────────────────────────────────┐│  │
+│  │  │          WorkerProcessManager                           ││  │
+│  │  │                                                         ││  │
+│  │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ ││  │
+│  │  │  │ WorkerProcess│  │ WorkerProcess│  │ WorkerProcess│ ││  │
+│  │  │  │     #1       │  │     #2       │  │     #3       │ ││  │
+│  │  │  └──────────────┘  └──────────────┘  └──────────────┘ ││  │
+│  │  └─────────────────────────────────────────────────────────┘│  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │ IPC Messages
+                              │ (STDIN/STDOUT)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Worker Process #1                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                    Worker                                   │  │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │  │
+│  │  │  RatchetEngine  │  │  Task Cache     │  │ IPC Transport││  │
+│  │  │  (Boa Engine)   │  │                 │  │ (Stdio)     ││  │
+│  │  │  [NOT Send/Sync]│  │                 │  │             ││  │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────┘ │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Send/Sync Problem Solution
+
+#### The Challenge
+- **Boa JavaScript Engine**: Not Send/Sync compatible due to internal non-thread-safe structures
+- **GraphQL/Axum Requirements**: Require Send/Sync bounds for multi-threaded async runtime
+- **Direct Conflict**: Cannot use Boa engine directly in GraphQL resolvers or async handlers
+
+#### The Solution
+```rust
+// ❌ This doesn't work - Boa engine is not Send/Sync
+pub struct DirectExecutor {
+    engine: RatchetEngine, // Contains Boa - not Send/Sync
+}
+
+// ✅ This works - ProcessTaskExecutor is Send/Sync
+pub struct ProcessTaskExecutor {
+    worker_manager: Arc<RwLock<WorkerProcessManager>>, // Send/Sync
+    repositories: RepositoryFactory,                   // Send/Sync
+    config: RatchetConfig,                            // Send/Sync
+}
+
+impl TaskExecutor for ProcessTaskExecutor {
+    // This can be used in GraphQL resolvers safely
+    async fn execute_task(&self, ...) -> Result<ExecutionResult, ExecutionError> {
+        // Delegates to worker processes via IPC
+    }
+}
+```
+
+### IPC Protocol
+
+#### Message Format
+All messages use JSON serialization with versioned envelopes:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageEnvelope<T> {
+    pub protocol_version: u32,      // For backward compatibility
+    pub timestamp: DateTime<Utc>,   // For debugging and monitoring
+    pub message: T,                 // Actual message payload
+}
+```
+
+#### Message Types
+
+**Coordinator → Worker Messages**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WorkerMessage {
+    ExecuteTask {
+        job_id: i32,
+        task_id: i32,
+        task_path: String,
+        input_data: JsonValue,
+        correlation_id: Uuid,  // For request/response matching
+    },
+    ValidateTask {
+        task_path: String,
+        correlation_id: Uuid,
+    },
+    Ping {
+        correlation_id: Uuid,
+    },
+    Shutdown,
+}
+```
+
+**Worker → Coordinator Messages**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CoordinatorMessage {
+    TaskExecutionResponse {
+        correlation_id: Uuid,
+        result: TaskExecutionResult,
+    },
+    TaskExecutionError {
+        correlation_id: Uuid,
+        error: WorkerError,
+    },
+    WorkerStatusUpdate {
+        status: WorkerStatus,
+    },
+    WorkerReady {
+        worker_id: String,
+        capabilities: Vec<String>,
+    },
+    Pong {
+        correlation_id: Uuid,
+    },
+}
+```
+
+#### Transport Implementation
+Communication uses STDIN/STDOUT with line-delimited JSON:
+
+```rust
+#[async_trait::async_trait]
+pub trait IpcTransport {
+    type Error: std::error::Error + Send + Sync + 'static;
+    
+    async fn send<T: Serialize + Send + Sync>(
+        &mut self, 
+        message: &MessageEnvelope<T>
+    ) -> Result<(), Self::Error>;
+    
+    async fn receive<T: for<'de> Deserialize<'de>>(
+        &mut self
+    ) -> Result<MessageEnvelope<T>, Self::Error>;
+}
+
+pub struct StdioTransport {
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+```
+
+### Process Lifecycle
+
+#### Worker Startup Sequence
+1. **Spawn**: Coordinator spawns worker process using `tokio::process::Command`
+2. **Initialize**: Worker loads RatchetEngine and establishes IPC transport
+3. **Handshake**: Worker sends `WorkerReady` message with capabilities
+4. **Registration**: Coordinator adds worker to available pool
+5. **Health Check**: Initial ping/pong to verify communication
+
+#### Task Execution Flow
+```
+Coordinator                           Worker Process
+     │                                      │
+     │ 1. ExecuteTask{correlation_id}      │
+     ├─────────────────────────────────────►│
+     │                                      │ 2. Load task from filesystem
+     │                                      │ 3. Validate input schema
+     │                                      │ 4. Execute in Boa engine
+     │                                      │ 5. Validate output schema
+     │                                      │
+     │ 6. TaskExecutionResponse            │
+     ◄─────────────────────────────────────┤
+     │                                      │
+     │ 7. Update job status in database     │
+     │                                      │
+```
+
+#### Error Handling and Recovery
+- **Process Crash**: Detected via process exit code, automatic worker respawn
+- **Communication Timeout**: Correlation IDs enable request timeout handling
+- **Task Failure**: Detailed error information via `TaskExecutionError` messages
+- **Resource Limits**: Process-level memory and CPU monitoring
+
+### Integration with Existing Architecture
+
+#### TaskExecutor Trait Compatibility
+```rust
+// Existing trait - no changes needed
+#[async_trait(?Send)]
+pub trait TaskExecutor {
+    async fn execute_task(
+        &self,
+        task_id: i32,
+        input_data: JsonValue,
+        context: Option<ExecutionContext>,
+    ) -> Result<ExecutionResult, ExecutionError>;
+    
+    async fn execute_job(&self, job_id: i32) -> Result<ExecutionResult, ExecutionError>;
+    async fn health_check(&self) -> Result<(), ExecutionError>;
+}
+
+// ProcessTaskExecutor implements this trait
+impl TaskExecutor for ProcessTaskExecutor {
+    // Send/Sync compatible implementation using worker processes
+}
+```
+
+#### GraphQL Context Integration
+```rust
+// Before: Could not include engine due to Send/Sync constraints
+pub struct GraphQLContext {
+    pub repositories: RepositoryFactory,
+    pub job_queue: Arc<JobQueueManager>,
+    // pub engine: RatchetEngine, // ❌ Not Send/Sync
+}
+
+// After: Process executor is Send/Sync compatible
+pub struct GraphQLContext {
+    pub repositories: RepositoryFactory,
+    pub job_queue: Arc<JobQueueManager>,
+    pub task_executor: Arc<ProcessTaskExecutor>, // ✅ Send/Sync
+}
+```
+
+### Performance Characteristics
+
+#### Benefits
+- **True Parallelism**: Multiple worker processes can execute tasks simultaneously
+- **Fault Isolation**: Worker crashes don't affect coordinator or other workers
+- **Resource Management**: Per-process memory limits and monitoring
+- **Scalability**: Worker pool can be scaled based on load
+
+#### Trade-offs
+- **Process Overhead**: Higher memory usage and spawn cost vs threads
+- **IPC Latency**: Message serialization/deserialization overhead
+- **Complexity**: More complex than direct in-process execution
+
+#### Optimization Strategies
+- **Process Pooling**: Reuse worker processes for multiple tasks
+- **Task Batching**: Send multiple tasks per worker process
+- **Caching**: Cache parsed tasks and schemas in worker processes
+- **Binary Protocol**: Consider binary serialization for performance-critical paths
+
+### Configuration and Monitoring
+
+#### Worker Configuration
+```rust
+pub struct WorkerConfig {
+    pub worker_count: usize,              // Number of worker processes
+    pub max_tasks_per_worker: u32,        // Restart threshold
+    pub worker_timeout: Duration,         // Task execution timeout
+    pub health_check_interval: Duration,  // Health monitoring frequency
+    pub restart_delay: Duration,          // Delay before worker restart
+    pub max_restarts: u32,               // Maximum restart attempts
+}
+```
+
+#### Monitoring and Observability
+- **Worker Health**: Process status, memory usage, task counts
+- **IPC Metrics**: Message throughput, latency, error rates
+- **Task Execution**: Success rates, execution times, error patterns
+- **Resource Usage**: Memory consumption, CPU utilization per worker
+
+### Security Considerations
+
+#### Process Isolation
+- **Sandboxing**: Each worker runs in separate process space
+- **Resource Limits**: OS-level memory and CPU constraints
+- **File System**: Limited file system access for workers
+- **Network**: No direct network access (coordinator proxies HTTP requests)
+
+#### Data Flow Security
+- **Input Validation**: All task inputs validated before worker execution
+- **Output Sanitization**: Task outputs validated before returning to client
+- **Error Information**: Sensitive data filtered from error messages
+- **Audit Trail**: All IPC messages logged for security monitoring
+
+## Database Architecture
+
+### Overview
+
+Ratchet uses SQLite with Sea-ORM for persistent storage of tasks, executions, jobs, and schedules. The database layer provides full CRUD operations with proper relationship management and migration support.
+
+### Entity Relationship Diagram
+
+```
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│      Tasks      │       │   Executions    │       │      Jobs       │
+├─────────────────┤       ├─────────────────┤       ├─────────────────┤
+│ id (PK)         │◄──────┤│ id (PK)         │       │ id (PK)         │
+│ uuid            │   1:N ││ uuid            │   N:1 │ uuid            │
+│ name            │       ││ task_id (FK)    │──────►│ task_id (FK)    │
+│ description     │       ││ job_id (FK)     │◄──────┤│ priority        │
+│ input_schema    │       ││ status          │   1:N ││ status          │
+│ output_schema   │       ││ started_at      │       ││ created_at      │
+│ content         │       ││ completed_at    │       ││ scheduled_for   │
+│ created_at      │       ││ error_message   │       ││ retry_count     │
+│ updated_at      │       ││ input_data      │       ││ max_retries     │
+└─────────────────┘       ││ output_data     │       ││ metadata        │
+                          ││ execution_time  │       └─────────────────┘
+                          │└─────────────────┘                │
+                          │                                    │
+                          │ ┌─────────────────┐               │
+                          │ │   Schedules     │               │
+                          │ ├─────────────────┤               │
+                          │ │ id (PK)         │               │
+                          │ │ uuid            │               │
+                          │ │ task_id (FK)    │               │
+                          │ │ cron_expression │               │
+                          └►│ last_run        │◄──────────────┘
+                            │ next_run        │
+                            │ is_active       │
+                            │ created_at      │
+                            │ updated_at      │
+                            └─────────────────┘
+```
+
+## Server Architecture
+
+### Overview
+
+Ratchet provides a complete server implementation with GraphQL API, REST endpoints, and background job processing. The server architecture follows clean architecture principles with clear separation between API, business logic, and data persistence layers.
+
+## Configuration Management
+
+### Configuration Structure
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RatchetConfig {
+    pub server: Option<ServerConfig>,
+    pub database: Option<DatabaseConfig>,
+    pub execution: Option<ExecutionConfig>,
+    pub logging: Option<LoggingConfig>,
+}
+```
+
+The configuration system provides comprehensive management of all Ratchet settings with YAML file loading and environment variable overrides. See the complete implementation in the server architecture section above.
 
 ## Conventions
 

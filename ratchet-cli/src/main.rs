@@ -1,11 +1,14 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ratchet_lib::task::Task;
+use ratchet_lib::execution::ipc::{CoordinatorMessage, TaskExecutionResult};
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use std::path::PathBuf;
 use std::fs;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -13,6 +16,14 @@ struct Cli {
     /// Set the log level (trace, debug, info, warn, error)
     #[arg(long, value_name = "LEVEL", global = true)]
     log_level: Option<String>,
+
+    /// Run as worker process (internal use)
+    #[arg(long, hide = true)]
+    worker: bool,
+    
+    /// Worker ID (used with --worker)
+    #[arg(long, value_name = "ID", hide = true)]
+    worker_id: Option<String>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -33,6 +44,13 @@ enum Commands {
         /// Record execution to directory with timestamp
         #[arg(long, value_name = "PATH")]
         record: Option<PathBuf>,
+    },
+
+    /// Start the Ratchet server with GraphQL API and task execution
+    Serve {
+        /// Path to configuration file (YAML)
+        #[arg(long, value_name = "PATH")]
+        config: Option<PathBuf>,
     },
 
     /// Validate a task's structure and syntax
@@ -89,6 +107,163 @@ enum GenerateCommands {
     },
 }
 
+/// Load configuration from file or use defaults
+fn load_config(config_path: Option<&PathBuf>) -> Result<ratchet_lib::config::RatchetConfig> {
+    use ratchet_lib::config::{RatchetConfig, ServerConfig, DatabaseConfig};
+    use std::time::Duration;
+    
+    let mut config = match config_path {
+        Some(path) => {
+            info!("Loading configuration from: {:?}", path);
+            RatchetConfig::from_file(path)
+                .context(format!("Failed to load configuration from {:?}", path))?
+        }
+        None => {
+            info!("Using default configuration with environment overrides");
+            RatchetConfig::from_env()
+                .context("Failed to load configuration from environment")?
+        }
+    };
+    
+    // Ensure server configuration exists for serve command
+    if config.server.is_none() {
+        info!("No server configuration found, using defaults");
+        config.server = Some(ServerConfig {
+            bind_address: std::env::var("RATCHET_SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
+            port: std::env::var("RATCHET_SERVER_PORT")
+                .unwrap_or_else(|_| "8080".to_string())
+                .parse()
+                .unwrap_or(8080),
+            database: DatabaseConfig {
+                url: std::env::var("RATCHET_DATABASE_URL").unwrap_or_else(|_| "sqlite::memory:".to_string()),
+                max_connections: std::env::var("RATCHET_DATABASE_MAX_CONNECTIONS")
+                    .unwrap_or_else(|_| "10".to_string())
+                    .parse()
+                    .unwrap_or(10),
+                connection_timeout: Duration::from_secs(
+                    std::env::var("RATCHET_DATABASE_TIMEOUT")
+                        .unwrap_or_else(|_| "30".to_string())
+                        .parse()
+                        .unwrap_or(30)
+                ),
+            },
+            auth: None,
+        });
+    }
+    
+    Ok(config)
+}
+
+/// Start the Ratchet server
+async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
+    use ratchet_lib::{
+        database::DatabaseConnection,
+        database::repositories::RepositoryFactory,
+        execution::{JobQueueManager, ProcessTaskExecutor},
+        server::create_app,
+    };
+    use std::sync::Arc;
+    use tokio::signal;
+
+    info!("Starting Ratchet server");
+
+    // Load configuration
+    let config = load_config(config_path)?;
+    
+    // Get server configuration (guaranteed to exist from load_config)
+    let server_config = config.server.as_ref().unwrap();
+
+    info!("Server configuration loaded: {}:{}", server_config.bind_address, server_config.port);
+
+    // Initialize database
+    info!("Connecting to database: {}", server_config.database.url);
+    let database = DatabaseConnection::new(server_config.database.clone()).await
+        .context("Failed to connect to database")?;
+    
+    // Run migrations
+    info!("Running database migrations");
+    database.migrate().await.context("Failed to run database migrations")?;
+    
+    // Initialize repositories
+    let repositories = RepositoryFactory::new(database);
+    
+    // Initialize job queue
+    let job_queue = Arc::new(JobQueueManager::with_default_config(repositories.clone()));
+    
+    // Initialize process task executor
+    info!("Initializing process task executor");
+    let task_executor = Arc::new(
+        ProcessTaskExecutor::new(repositories.clone(), config.clone()).await
+            .context("Failed to initialize process task executor")?
+    );
+    
+    // Start worker processes
+    info!("Starting worker processes");
+    task_executor.start().await.context("Failed to start worker processes")?;
+    
+    // Create the application
+    let app = create_app(repositories, job_queue, task_executor.clone());
+    
+    // Create server address
+    let addr = format!("{}:{}", server_config.bind_address, server_config.port);
+    let addr: std::net::SocketAddr = addr.parse()
+        .context(format!("Failed to parse address: {}", addr))?;
+    
+    info!("🚀 Ratchet server starting on http://{}", addr);
+    info!("📊 GraphQL playground available at http://{}/playground", addr);
+    info!("🏥 Health check available at http://{}/health", addr);
+    
+    // Create shutdown signal
+    let shutdown_signal = async {
+        let ctrl_c = async {
+            signal::ctrl_c()
+                .await
+                .expect("Failed to install Ctrl+C handler");
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("Failed to install signal handler")
+                .recv()
+                .await;
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => {},
+            _ = terminate => {},
+        }
+
+        info!("Shutdown signal received, starting graceful shutdown");
+    };
+    
+    // Start the server with graceful shutdown (axum 0.6 style)
+    let server = axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal);
+    
+    // Run server and handle shutdown
+    match server.await {
+        Ok(_) => {
+            info!("Server stopped gracefully");
+        }
+        Err(e) => {
+            error!("Server error: {}", e);
+            return Err(e.into());
+        }
+    }
+    
+    // Stop worker processes
+    info!("Stopping worker processes");
+    task_executor.stop().await.context("Failed to stop worker processes")?;
+    
+    info!("Ratchet server shutdown complete");
+    Ok(())
+}
+
 /// Initialize tracing with environment variable override support
 fn init_tracing(log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Result<()> {
     let env_filter = match log_level {
@@ -130,6 +305,31 @@ fn init_tracing(log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Res
     }
 
     debug!("Tracing initialized");
+    Ok(())
+}
+
+/// Initialize tracing for worker processes (output to stderr to avoid IPC conflicts)
+fn init_worker_tracing(log_level: Option<&String>) -> Result<()> {
+    let env_filter = match log_level {
+        Some(level) => {
+            // Use provided log level
+            EnvFilter::try_new(level).unwrap_or_else(|_| {
+                eprintln!("Invalid log level '{}', falling back to 'info'", level);
+                EnvFilter::new("info")
+            })
+        }
+        None => {
+            // Try environment variable first, then default to info
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+        }
+    };
+    
+    // Configure tracing to output to stderr only (stdout is used for IPC)
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr)
+        .init();
+
     Ok(())
 }
 
@@ -407,8 +607,228 @@ fn get_file_description(file: &str) -> &'static str {
     }
 }
 
+/// Run as a worker process that handles IPC messages
+async fn run_worker_process(worker_id: String) -> Result<()> {
+    use ratchet_lib::execution::ipc::{
+        WorkerMessage, CoordinatorMessage, MessageEnvelope, 
+        WorkerError,
+    };
+    
+    info!("Worker process {} starting", worker_id);
+    
+    let stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
+    let mut reader = tokio::io::BufReader::new(stdin);
+    let mut line = String::new();
+    
+    // Send ready message
+    let ready_msg = CoordinatorMessage::Ready {
+        worker_id: worker_id.clone(),
+    };
+    send_message(&mut stdout, &ready_msg).await?;
+    
+    info!("Worker {} ready for tasks", worker_id);
+    
+    // Process messages
+    loop {
+        line.clear();
+        
+        match reader.read_line(&mut line).await {
+            Ok(0) => {
+                info!("Worker {} received EOF, shutting down", worker_id);
+                break;
+            }
+            Ok(_) => {
+                // Remove newline
+                line.truncate(line.trim_end().len());
+                
+                if line.is_empty() {
+                    continue;
+                }
+                
+                // Parse message
+                match serde_json::from_str::<MessageEnvelope<WorkerMessage>>(&line) {
+                    Ok(envelope) => {
+                        debug!("Worker {} received message: {:?}", worker_id, envelope.message);
+                        
+                        let response = match envelope.message {
+                            WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, correlation_id } => {
+                                execute_task_worker(job_id, task_id, &task_path, &input_data, correlation_id).await
+                            }
+                            WorkerMessage::ValidateTask { task_path, correlation_id } => {
+                                validate_task_worker(&task_path, correlation_id).await
+                            }
+                            WorkerMessage::Ping { correlation_id } => {
+                                handle_ping_worker(&worker_id, correlation_id).await
+                            }
+                            WorkerMessage::Shutdown => {
+                                info!("Worker {} received shutdown signal", worker_id);
+                                break;
+                            }
+                        };
+                        
+                        if let Err(e) = send_message(&mut stdout, &response).await {
+                            error!("Worker {} failed to send response: {}", worker_id, e);
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Worker {} failed to parse message: {} - line: {}", worker_id, e, line);
+                        
+                        let error_msg = CoordinatorMessage::Error {
+                            correlation_id: None,
+                            error: WorkerError::MessageParseError(e.to_string()),
+                        };
+                        
+                        if let Err(e) = send_message(&mut stdout, &error_msg).await {
+                            error!("Worker {} failed to send error response: {}", worker_id, e);
+                            break;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Worker {} failed to read from stdin: {}", worker_id, e);
+                break;
+            }
+        }
+    }
+    
+    info!("Worker {} shutting down", worker_id);
+    Ok(())
+}
+
+/// Send a message to stdout
+async fn send_message(stdout: &mut tokio::io::Stdout, message: &CoordinatorMessage) -> Result<()> {
+    let envelope = ratchet_lib::execution::ipc::MessageEnvelope::new(message.clone());
+    let json = serde_json::to_string(&envelope)?;
+    let line = format!("{}\n", json);
+    
+    stdout.write_all(line.as_bytes()).await?;
+    stdout.flush().await?;
+    
+    Ok(())
+}
+
+/// Execute a task in the worker process
+async fn execute_task_worker(
+    _job_id: i32,
+    _task_id: i32,
+    task_path: &str,
+    input_data: &JsonValue,
+    correlation_id: Uuid,
+) -> CoordinatorMessage {
+    use ratchet_lib::execution::ipc::CoordinatorMessage;
+    
+    let started_at = chrono::Utc::now();
+    
+    // Execute the task
+    match run_task(task_path, input_data).await {
+        Ok(output) => {
+            let completed_at = chrono::Utc::now();
+            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+            
+            CoordinatorMessage::TaskResult {
+                job_id: _job_id,
+                correlation_id,
+                result: TaskExecutionResult {
+                    success: true,
+                    output: Some(output),
+                    error_message: None,
+                    error_details: None,
+                    started_at,
+                    completed_at,
+                    duration_ms,
+                },
+            }
+        }
+        Err(e) => {
+            let completed_at = chrono::Utc::now();
+            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+            
+            CoordinatorMessage::TaskResult {
+                job_id: _job_id,
+                correlation_id,
+                result: TaskExecutionResult {
+                    success: false,
+                    output: None,
+                    error_message: Some(e.to_string()),
+                    error_details: None,
+                    started_at,
+                    completed_at,
+                    duration_ms,
+                },
+            }
+        }
+    }
+}
+
+/// Validate a task in the worker process
+async fn validate_task_worker(
+    task_path: &str,
+    correlation_id: Uuid,
+) -> CoordinatorMessage {
+    use ratchet_lib::execution::ipc::{TaskValidationResult, CoordinatorMessage};
+    
+    match validate_task(task_path) {
+        Ok(_) => CoordinatorMessage::ValidationResult {
+            correlation_id,
+            result: TaskValidationResult {
+                valid: true,
+                error_message: None,
+                error_details: None,
+            },
+        },
+        Err(e) => CoordinatorMessage::ValidationResult {
+            correlation_id,
+            result: TaskValidationResult {
+                valid: false,
+                error_message: Some(e.to_string()),
+                error_details: None,
+            },
+        },
+    }
+}
+
+/// Handle ping message in the worker process
+async fn handle_ping_worker(
+    worker_id: &str,
+    correlation_id: Uuid,
+) -> CoordinatorMessage {
+    use ratchet_lib::execution::ipc::{WorkerStatus, CoordinatorMessage};
+    
+    CoordinatorMessage::Pong {
+        correlation_id,
+        worker_id: worker_id.to_string(),
+        status: WorkerStatus {
+            worker_id: worker_id.to_string(),
+            pid: std::process::id(),
+            started_at: chrono::Utc::now(), // TODO: Track actual start time
+            last_activity: chrono::Utc::now(),
+            tasks_executed: 0, // TODO: Track task count
+            tasks_failed: 0, // TODO: Track failure count
+            memory_usage_mb: None,
+            cpu_usage_percent: None,
+        },
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Check if running as worker process
+    if cli.worker {
+        let worker_id = cli.worker_id.unwrap_or_else(|| "unknown".to_string());
+        
+        // Initialize tracing for worker (stderr only to avoid IPC conflicts)
+        init_worker_tracing(cli.log_level.as_ref())?;
+        
+        // Create a tokio runtime for async operations
+        let runtime = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+        
+        // Run worker process
+        return runtime.block_on(run_worker_process(worker_id));
+    }
 
     // Initialize tracing before doing anything else
     init_tracing(cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
@@ -459,6 +879,10 @@ fn main() -> Result<()> {
             }
             
             Ok(())
+        }
+        Some(Commands::Serve { config }) => {
+            info!("Starting Ratchet server");
+            runtime.block_on(serve_command(config.as_ref()))
         }
         Some(Commands::Validate { from_fs }) => validate_task(from_fs),
         Some(Commands::Test { from_fs }) => runtime.block_on(test_task(from_fs)),

@@ -22,6 +22,8 @@ lazy_static = "1.4"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 openssl = { version = "0.10.72", features = ["vendored"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+axum = "0.6"
 
 # Workspace-level configuration for targets
 [workspace.package]
