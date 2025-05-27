@@ -135,7 +135,7 @@ fn load_config(config_path: Option<&PathBuf>) -> Result<ratchet_lib::config::Rat
                 .parse()
                 .unwrap_or(8080),
             database: DatabaseConfig {
-                url: std::env::var("RATCHET_DATABASE_URL").unwrap_or_else(|_| "sqlite:ratchet.db".to_string()),
+                url: std::env::var("RATCHET_DATABASE_URL").unwrap_or_else(|_| "sqlite::memory:".to_string()),
                 max_connections: std::env::var("RATCHET_DATABASE_MAX_CONNECTIONS")
                     .unwrap_or_else(|_| "10".to_string())
                     .parse()
@@ -305,6 +305,31 @@ fn init_tracing(log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Res
     }
 
     debug!("Tracing initialized");
+    Ok(())
+}
+
+/// Initialize tracing for worker processes (output to stderr to avoid IPC conflicts)
+fn init_worker_tracing(log_level: Option<&String>) -> Result<()> {
+    let env_filter = match log_level {
+        Some(level) => {
+            // Use provided log level
+            EnvFilter::try_new(level).unwrap_or_else(|_| {
+                eprintln!("Invalid log level '{}', falling back to 'info'", level);
+                EnvFilter::new("info")
+            })
+        }
+        None => {
+            // Try environment variable first, then default to info
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+        }
+    };
+    
+    // Configure tracing to output to stderr only (stdout is used for IPC)
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr)
+        .init();
+
     Ok(())
 }
 
@@ -795,8 +820,8 @@ fn main() -> Result<()> {
     if cli.worker {
         let worker_id = cli.worker_id.unwrap_or_else(|| "unknown".to_string());
         
-        // Initialize minimal tracing for worker
-        init_tracing(cli.log_level.as_ref(), None)?;
+        // Initialize tracing for worker (stderr only to avoid IPC conflicts)
+        init_worker_tracing(cli.log_level.as_ref())?;
         
         // Create a tokio runtime for async operations
         let runtime = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;

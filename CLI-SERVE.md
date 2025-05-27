@@ -12,8 +12,10 @@ ratchet serve
 This starts the server with default configuration:
 - **Host**: 127.0.0.1
 - **Port**: 8080
-- **Database**: sqlite:ratchet.db
+- **Database**: sqlite::memory: (in-memory database)
 - **Workers**: Number of CPU cores
+
+The default in-memory database is automatically initialized with migrations on startup, making it perfect for development and testing.
 
 ### With Configuration File
 ```bash
@@ -92,8 +94,9 @@ server:
 
 ### Database Integration
 - SQLite database with automatic migrations
-- Persistent storage for tasks, executions, jobs, and schedules
-- Complete audit trail of all task executions
+- **Default**: In-memory database for development/testing (no persistence)
+- **Production**: Set `RATCHET_DATABASE_URL=sqlite:filename.db` for persistent storage
+- Complete audit trail of all task executions during session
 
 ### Graceful Shutdown
 - Responds to SIGTERM and SIGINT (Ctrl+C)
