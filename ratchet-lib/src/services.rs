@@ -335,11 +335,38 @@ mod tests {
         assert!(engine.is_ok());
     }
 
+    /// Mock HTTP service for testing
+    struct MockHttpService {
+        should_fail: bool,
+    }
+
+    impl MockHttpService {
+        fn new(should_fail: bool) -> Self {
+            Self { should_fail }
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl HttpService for MockHttpService {
+        async fn make_request(
+            &self,
+            _url: &str,
+            _params: Option<&JsonValue>,
+            _body: Option<&JsonValue>,
+        ) -> ServiceResult<JsonValue> {
+            if self.should_fail {
+                Err(ServiceError::ExecutionError(JsExecutionError::ExecutionError("mock http error".to_string())))
+            } else {
+                Ok(json!({"status": "mock_success", "data": "test_response"}))
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_mock_task_service() {
         let config = RatchetConfig::default();
         let config_service = Box::new(DefaultConfigService::new(config.clone()));
-        let http_service = Box::new(DefaultHttpService::new(&config).unwrap());
+        let http_service = Box::new(MockHttpService::new(false)); // Use mock instead of real HTTP
         let task_service = Box::new(MockTaskService::new(false));
         
         let services = ServiceProvider::with_services(task_service, http_service, config_service);
@@ -348,16 +375,20 @@ mod tests {
         let result = services.task_service().load_task("test").await;
         assert!(result.is_err());
         
-        // Test HTTP service works
+        // Test HTTP service works (now using mock)
         let http_result = services.http_service().make_request("http://example.com", None, None).await;
-        assert!(http_result.is_ok()); // Should work with mock or real HTTP
+        assert!(http_result.is_ok());
+        
+        // Verify mock response content
+        let response = http_result.unwrap();
+        assert_eq!(response["status"], "mock_success");
     }
 
     #[tokio::test]
     async fn test_error_handling() {
         let config = RatchetConfig::default();
         let config_service = Box::new(DefaultConfigService::new(config.clone()));
-        let http_service = Box::new(DefaultHttpService::new(&config).unwrap());
+        let http_service = Box::new(MockHttpService::new(false)); // Use mock HTTP service
         let task_service = Box::new(MockTaskService::new(true)); // Configure to fail
         
         let services = ServiceProvider::with_services(task_service, http_service, config_service);
