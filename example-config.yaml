@@ -1,0 +1,40 @@
+# Example Ratchet Server Configuration
+
+# Task execution configuration
+execution:
+  max_execution_duration: 300  # 5 minutes in seconds
+  validate_schemas: true
+  fetch_variables:
+    url_var: "__fetch_url"
+    params_var: "__fetch_params"
+    body_var: "__fetch_body"
+    result_var: "__http_result"
+    temp_result_var: "__temp_result"
+
+# HTTP client configuration
+http:
+  timeout: 30  # seconds
+  max_redirects: 10
+  user_agent: "Ratchet/1.0"
+  verify_ssl: true
+
+# Caching configuration
+cache:
+  task_content_cache_size: 100
+  enabled: true
+
+# Logging configuration
+logging:
+  level: "info"
+  log_to_file: false
+  log_file_path: null
+
+# Server configuration
+server:
+  bind_address: "127.0.0.1"
+  port: 8080
+  database:
+    url: "sqlite::memory:"
+    max_connections: 5
+    connection_timeout: 30  # seconds
+  auth: null  # Authentication disabled for development

@@ -26,6 +26,7 @@ tracing-appender.workspace = true
 chrono.workspace = true
 tokio.workspace = true
 uuid.workspace = true
+axum.workspace = true
 
 # Local dependencies
 ratchet_lib = { path = "../ratchet-lib" }
