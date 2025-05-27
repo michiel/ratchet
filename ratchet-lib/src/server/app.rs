@@ -16,29 +16,29 @@ use super::{
     middleware::{logging_middleware, cors_layer, trace_layer},
 };
 
-/// Server application state
+/// Server application state (simplified for Send+Sync)
 #[derive(Clone)]
 pub struct ServerState {
     pub schema: RatchetSchema,
     pub repositories: RepositoryFactory,
     pub job_queue: Arc<JobQueueManager>,
-    pub task_executor: Arc<DatabaseTaskExecutor>,
-    pub engine: Arc<RatchetEngine>,
+    // Note: task_executor and engine removed due to Send+Sync constraints
+    // TODO: Re-add when Send+Sync issues are resolved
 }
 
-/// Create the main Axum application with all routes and middleware
+/// Create the main Axum application with all routes and middleware (simplified for Send+Sync)
 pub fn create_app(
     repositories: RepositoryFactory,
     job_queue: Arc<JobQueueManager>,
-    task_executor: Arc<DatabaseTaskExecutor>,
-    engine: Arc<RatchetEngine>,
+    task_executor: Arc<DatabaseTaskExecutor>, // unused due to Send+Sync constraints
+    engine: Arc<RatchetEngine>, // unused due to Send+Sync constraints
 ) -> Router {
     // Create GraphQL schema
     let schema = create_schema(
         repositories.clone(),
         job_queue.clone(),
-        task_executor.clone(),
-        engine.clone(),
+        task_executor,
+        engine,
     );
 
     // Create server state
@@ -46,8 +46,7 @@ pub fn create_app(
         schema,
         repositories,
         job_queue,
-        task_executor,
-        engine,
+        // Note: task_executor and engine removed due to Send+Sync constraints
     };
 
     // Build the router with all routes
@@ -103,8 +102,10 @@ mod tests {
 
         let repositories = RepositoryFactory::new(db);
         let job_queue = Arc::new(JobQueueManager::with_default_config(repositories.clone()));
-        let engine = Arc::new(RatchetEngine::new(config).unwrap());
-        let task_executor = Arc::new(DatabaseTaskExecutor::new(engine.clone(), repositories.clone()));
+        let engine1 = RatchetEngine::new(config.clone()).unwrap();
+        let engine2 = RatchetEngine::new(config).unwrap();
+        let task_executor = Arc::new(DatabaseTaskExecutor::new(engine1, repositories.clone()));
+        let engine = Arc::new(engine2);
 
         create_app(repositories, job_queue, task_executor, engine)
     }

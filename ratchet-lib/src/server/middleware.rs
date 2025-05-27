@@ -1,7 +1,7 @@
 use axum::{
-    extract::Request,
     middleware::Next,
     response::Response,
+    body::Body,
 };
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -10,7 +10,7 @@ use tower_http::{
 use tracing::info;
 
 /// Request logging middleware
-pub async fn logging_middleware(request: Request, next: Next) -> Response {
+pub async fn logging_middleware(request: axum::http::Request<Body>, next: Next<Body>) -> Response {
     let method = request.method().clone();
     let uri = request.uri().clone();
     
@@ -32,6 +32,6 @@ pub fn cors_layer() -> CorsLayer {
 }
 
 /// Create trace layer for request tracing
-pub fn trace_layer() -> TraceLayer {
+pub fn trace_layer() -> TraceLayer<tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>> {
     TraceLayer::new_for_http()
 }
