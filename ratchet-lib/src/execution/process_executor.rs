@@ -63,24 +63,57 @@ impl ProcessTaskExecutor {
     ) -> Result<ExecutionResult, ExecutionError> {
         // Direct implementation to avoid ?Send trait issues
         let task_repo = &self.repositories.task_repo;
+        let execution_repo = &self.repositories.execution_repo;
         
-        // Load task metadata from database
-        let task_entity = task_repo
-            .find_by_id(task_id)
-            .await
-            .map_err(|e| ExecutionError::DatabaseError(e))?
+        // Load task details
+        let task_entity = task_repo.find_by_id(task_id).await?
             .ok_or_else(|| ExecutionError::TaskNotFound(task_id.to_string()))?;
         
-        // For now, return a placeholder result since we removed the actual process execution
-        // TODO: Implement actual task execution via worker processes
-        Ok(ExecutionResult {
-            execution_id: task_id,
-            success: true,
-            output: Some(serde_json::json!({"message": "Process-based execution placeholder"})),
-            error: None,
-            duration_ms: 100,
-            http_requests: None,
-        })
+        // Create execution record
+        let execution = crate::database::entities::Execution::new(task_id, input_data.clone());
+        let created_execution = execution_repo.create(execution).await?;
+        let execution_id = created_execution.id;
+        
+        // Execute task using worker process
+        let result = self.execute_task_in_worker(
+            0, // job_id - using 0 for direct task execution
+            task_id,
+            &task_entity.path,
+            &input_data,
+        ).await;
+        
+        // Update execution record with results
+        match result {
+            Ok(task_result) => {
+                let output_for_db = task_result.output.clone().unwrap_or_else(|| serde_json::json!({}));
+                execution_repo.mark_completed(execution_id, output_for_db).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: task_result.success,
+                    output: task_result.output,
+                    error: task_result.error_message,
+                    duration_ms: task_result.duration_ms as i64,
+                    http_requests: None,
+                })
+            },
+            Err(e) => {
+                execution_repo.mark_failed(
+                    execution_id,
+                    e.to_string(),
+                    None,
+                ).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: false,
+                    output: None,
+                    error: Some(e.to_string()),
+                    duration_ms: 0,
+                    http_requests: None,
+                })
+            },
+        }
     }
     
     /// Send-compatible execute job method for GraphQL resolvers  
@@ -88,31 +121,68 @@ impl ProcessTaskExecutor {
         // Direct implementation to avoid ?Send trait issues
         let job_repo = &self.repositories.job_repo;
         let task_repo = &self.repositories.task_repo;
+        let execution_repo = &self.repositories.execution_repo;
         
-        // Load job details from database
-        let job_entity = job_repo
-            .find_by_id(job_id)
-            .await
-            .map_err(|e| ExecutionError::DatabaseError(e))?
+        // Load job details
+        let job_entity = job_repo.find_by_id(job_id).await?
             .ok_or_else(|| ExecutionError::JobNotFound(job_id))?;
         
-        // Load associated task
-        let _task_entity = task_repo
-            .find_by_id(job_entity.task_id)
-            .await
-            .map_err(|e| ExecutionError::DatabaseError(e))?
+        // Load task details
+        let task_entity = task_repo.find_by_id(job_entity.task_id).await?
             .ok_or_else(|| ExecutionError::TaskNotFound(job_entity.task_id.to_string()))?;
         
-        // For now, return a placeholder result
-        // TODO: Implement actual job execution via worker processes
-        Ok(ExecutionResult {
-            execution_id: job_id,
-            success: true,
-            output: Some(serde_json::json!({"message": "Process-based job execution placeholder"})),
-            error: None,
-            duration_ms: 150,
-            http_requests: None,
-        })
+        // Create execution record for this job
+        let execution = crate::database::entities::Execution::new(job_entity.task_id, job_entity.input_data.clone());
+        let created_execution = execution_repo.create(execution).await?;
+        let execution_id = created_execution.id;
+        
+        // Update job status to processing
+        job_repo.mark_processing(job_id, execution_id).await?;
+        
+        // Execute task using worker process
+        let result = self.execute_task_in_worker(
+            job_id,
+            job_entity.task_id,
+            &task_entity.path,
+            &job_entity.input_data,
+        ).await;
+        
+        // Update both execution and job records with results
+        match result {
+            Ok(task_result) => {
+                let output_for_db = task_result.output.clone().unwrap_or_else(|| serde_json::json!({}));
+                execution_repo.mark_completed(execution_id, output_for_db).await?;
+                
+                job_repo.mark_completed(job_id).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: task_result.success,
+                    output: task_result.output,
+                    error: task_result.error_message,
+                    duration_ms: task_result.duration_ms as i64,
+                    http_requests: None,
+                })
+            },
+            Err(e) => {
+                execution_repo.mark_failed(
+                    execution_id,
+                    e.to_string(),
+                    None,
+                ).await?;
+                
+                job_repo.mark_failed(job_id, e.to_string(), None).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: false,
+                    output: None,
+                    error: Some(e.to_string()),
+                    duration_ms: 0,
+                    http_requests: None,
+                })
+            },
+        }
     }
     
     /// Send-compatible health check method for GraphQL resolvers
@@ -137,15 +207,21 @@ impl TaskExecutor for ProcessTaskExecutor {
         &self,
         task_id: i32,
         input_data: JsonValue,
-        _context: Option<ExecutionContext>,
+        context: Option<ExecutionContext>,
     ) -> Result<ExecutionResult, ExecutionError> {
         let task_repo = &self.repositories.task_repo;
+        let execution_repo = &self.repositories.execution_repo;
         
         // Load task details
         let task_entity = task_repo.find_by_id(task_id).await?
             .ok_or_else(|| ExecutionError::TaskNotFound(task_id.to_string()))?;
         
-        // Execute task using worker process (simplified for now)
+        // Create execution record
+        let execution = crate::database::entities::Execution::new(task_id, input_data.clone());
+        let created_execution = execution_repo.create(execution).await?;
+        let execution_id = created_execution.id;
+        
+        // Execute task using worker process
         let result = self.execute_task_in_worker(
             0, // job_id - using 0 for direct task execution
             task_id,
@@ -153,29 +229,44 @@ impl TaskExecutor for ProcessTaskExecutor {
             &input_data,
         ).await;
         
+        // Update execution record with results
         match result {
-            Ok(task_result) => Ok(ExecutionResult {
-                execution_id: 0, // TODO: Generate proper execution ID
-                success: task_result.success,
-                output: task_result.output,
-                error: task_result.error_message,
-                duration_ms: task_result.duration_ms as i64,
-                http_requests: None, // TODO: Extract from task result
-            }),
-            Err(e) => Ok(ExecutionResult {
-                execution_id: 0,
-                success: false,
-                output: None,
-                error: Some(e.to_string()),
-                duration_ms: 0,
-                http_requests: None,
-            }),
+            Ok(task_result) => {
+                let output_for_db = task_result.output.clone().unwrap_or_else(|| serde_json::json!({}));
+                execution_repo.mark_completed(execution_id, output_for_db).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: task_result.success,
+                    output: task_result.output,
+                    error: task_result.error_message,
+                    duration_ms: task_result.duration_ms as i64,
+                    http_requests: None, // TODO: Extract from task result
+                })
+            },
+            Err(e) => {
+                execution_repo.mark_failed(
+                    execution_id,
+                    e.to_string(),
+                    None,
+                ).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: false,
+                    output: None,
+                    error: Some(e.to_string()),
+                    duration_ms: 0,
+                    http_requests: None,
+                })
+            },
         }
     }
     
     async fn execute_job(&self, job_id: i32) -> Result<ExecutionResult, ExecutionError> {
         let job_repo = &self.repositories.job_repo;
         let task_repo = &self.repositories.task_repo;
+        let execution_repo = &self.repositories.execution_repo;
         
         // Load job details
         let job_entity = job_repo.find_by_id(job_id).await?
@@ -185,6 +276,14 @@ impl TaskExecutor for ProcessTaskExecutor {
         let task_entity = task_repo.find_by_id(job_entity.task_id).await?
             .ok_or_else(|| ExecutionError::TaskNotFound(job_entity.task_id.to_string()))?;
         
+        // Create execution record for this job
+        let execution = crate::database::entities::Execution::new(job_entity.task_id, job_entity.input_data.clone());
+        let created_execution = execution_repo.create(execution).await?;
+        let execution_id = created_execution.id;
+        
+        // Update job status to processing
+        job_repo.mark_processing(job_id, execution_id).await?;
+        
         // Execute task using worker process
         let result = self.execute_task_in_worker(
             job_id,
@@ -193,23 +292,41 @@ impl TaskExecutor for ProcessTaskExecutor {
             &job_entity.input_data,
         ).await;
         
+        // Update both execution and job records with results
         match result {
-            Ok(task_result) => Ok(ExecutionResult {
-                execution_id: job_id,
-                success: task_result.success,
-                output: task_result.output,
-                error: task_result.error_message,
-                duration_ms: task_result.duration_ms as i64,
-                http_requests: None,
-            }),
-            Err(e) => Ok(ExecutionResult {
-                execution_id: job_id,
-                success: false,
-                output: None,
-                error: Some(e.to_string()),
-                duration_ms: 0,
-                http_requests: None,
-            }),
+            Ok(task_result) => {
+                let output_for_db = task_result.output.clone().unwrap_or_else(|| serde_json::json!({}));
+                execution_repo.mark_completed(execution_id, output_for_db).await?;
+                
+                job_repo.mark_completed(job_id).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: task_result.success,
+                    output: task_result.output,
+                    error: task_result.error_message,
+                    duration_ms: task_result.duration_ms as i64,
+                    http_requests: None,
+                })
+            },
+            Err(e) => {
+                execution_repo.mark_failed(
+                    execution_id,
+                    e.to_string(),
+                    None,
+                ).await?;
+                
+                job_repo.mark_failed(job_id, e.to_string(), None).await?;
+                
+                Ok(ExecutionResult {
+                    execution_id,
+                    success: false,
+                    output: None,
+                    error: Some(e.to_string()),
+                    duration_ms: 0,
+                    http_requests: None,
+                })
+            },
         }
     }
     
