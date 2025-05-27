@@ -36,7 +36,7 @@ pub trait TaskScheduler {
     async fn start(&self) -> Result<(), SchedulerError>;
     
     /// Stop the scheduler
-    async fn stop(&self) -> Result<(), SchedulerError>;
+    async fn stop(&mut self) -> Result<(), SchedulerError>;
     
     /// Add a new schedule
     async fn add_schedule(&self, schedule: Schedule) -> Result<(), SchedulerError>;
@@ -61,12 +61,12 @@ pub struct ScheduleManager {
 
 impl ScheduleManager {
     /// Create a new schedule manager
-    pub fn new(
+    pub async fn new(
         repositories: RepositoryFactory,
         job_queue: Arc<dyn JobQueue>,
         poll_interval_seconds: u64,
     ) -> Result<Self, SchedulerError> {
-        let scheduler = JobScheduler::new()?;
+        let scheduler = JobScheduler::new().await?;
         
         Ok(Self {
             repositories,
@@ -77,11 +77,11 @@ impl ScheduleManager {
     }
     
     /// Create with default configuration (poll every 60 seconds)
-    pub fn with_default_config(
+    pub async fn with_default_config(
         repositories: RepositoryFactory,
         job_queue: Arc<dyn JobQueue>,
     ) -> Result<Self, SchedulerError> {
-        Self::new(repositories, job_queue, 60)
+        Self::new(repositories, job_queue, 60).await
     }
     
     /// Load all schedules from database and register them
@@ -90,7 +90,7 @@ impl ScheduleManager {
         
         let schedules = self.repositories.schedule_repo.find_enabled().await?;
         
-        for schedule in schedules {
+        for schedule in &schedules {
             if let Err(e) = self.register_schedule(&schedule).await {
                 error!("Failed to register schedule {}: {}", schedule.id, e);
             }
@@ -104,13 +104,13 @@ impl ScheduleManager {
     async fn register_schedule(&self, schedule: &Schedule) -> Result<(), SchedulerError> {
         let schedule_id = schedule.id;
         let task_id = schedule.task_id;
-        let input_data = schedule.input_data.0.clone();
+        let input_data = schedule.input_data.clone();
         let cron_expr = schedule.cron_expression.clone();
         
         let job_queue = Arc::clone(&self.job_queue);
         let repositories = self.repositories.clone();
         
-        let job = Job::new_async(&cron_expr, move |_uuid, _locked| {
+        let job = Job::new_async(cron_expr.as_str(), move |_uuid, _locked| {
             let job_queue = Arc::clone(&job_queue);
             let repositories = repositories.clone();
             let input_data = input_data.clone();
@@ -197,7 +197,7 @@ impl TaskScheduler for ScheduleManager {
         Ok(())
     }
     
-    async fn stop(&self) -> Result<(), SchedulerError> {
+    async fn stop(&mut self) -> Result<(), SchedulerError> {
         info!("Stopping schedule manager");
         self.scheduler.shutdown().await?;
         info!("Schedule manager stopped");

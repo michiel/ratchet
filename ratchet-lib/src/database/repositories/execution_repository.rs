@@ -3,7 +3,7 @@ use crate::database::{
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, Order};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set, Order, PaginatorTrait};
 use uuid::Uuid;
 
 /// Repository for execution-related database operations
@@ -135,7 +135,7 @@ impl ExecutionRepository {
 
     /// Mark execution as completed with output
     pub async fn mark_completed(&self, id: i32, output: serde_json::Value) -> Result<(), DatabaseError> {
-        let mut active_model = ExecutionActiveModel {
+        let active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(ExecutionStatus::Completed),
             output: Set(Some(sea_orm::prelude::Json::from(output))),
@@ -149,7 +149,7 @@ impl ExecutionRepository {
 
     /// Mark execution as failed with error
     pub async fn mark_failed(&self, id: i32, error: String, details: Option<serde_json::Value>) -> Result<(), DatabaseError> {
-        let mut active_model = ExecutionActiveModel {
+        let active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(ExecutionStatus::Failed),
             error_message: Set(Some(error)),

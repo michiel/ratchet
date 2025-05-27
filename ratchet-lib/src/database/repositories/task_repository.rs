@@ -3,7 +3,7 @@ use crate::database::{
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, PaginatorTrait};
 use uuid::Uuid;
 
 /// Repository for task-related database operations
@@ -92,7 +92,7 @@ impl TaskRepository {
 
     /// Update task validation timestamp
     pub async fn mark_validated(&self, id: i32) -> Result<(), DatabaseError> {
-        let mut active_model = TaskActiveModel {
+        let active_model = TaskActiveModel {
             id: Set(id),
             validated_at: Set(Some(chrono::Utc::now())),
             updated_at: Set(chrono::Utc::now()),
@@ -105,7 +105,7 @@ impl TaskRepository {
 
     /// Enable or disable a task
     pub async fn set_enabled(&self, id: i32, enabled: bool) -> Result<(), DatabaseError> {
-        let mut active_model = TaskActiveModel {
+        let active_model = TaskActiveModel {
             id: Set(id),
             enabled: Set(enabled),
             updated_at: Set(chrono::Utc::now()),

@@ -1,10 +1,9 @@
 use crate::database::{
-    entities::{jobs, Job, JobActiveModel, Jobs, JobStatus, JobPriority},
+    entities::{jobs, Job, JobActiveModel, Jobs, JobStatus},
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, Order};
-use uuid::Uuid;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set, Order, PaginatorTrait};
 
 /// Repository for job-related database operations
 #[derive(Clone)]

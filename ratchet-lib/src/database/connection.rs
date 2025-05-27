@@ -14,14 +14,11 @@ pub struct DatabaseConnection {
 /// Database-related errors
 #[derive(Error, Debug)]
 pub enum DatabaseError {
-    #[error("Connection error: {0}")]
-    ConnectionError(#[from] DbErr),
+    #[error("Database error: {0}")]
+    DbError(#[from] DbErr),
     
     #[error("Migration error: {0}")]
     MigrationError(String),
-    
-    #[error("Query error: {0}")]
-    QueryError(#[from] sea_orm::error::DbErr),
     
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
@@ -78,7 +75,6 @@ impl DatabaseConnection {
     
     /// Check database connectivity
     pub async fn ping(&self) -> Result<(), DatabaseError> {
-        use sea_orm::ConnectionTrait;
         
         debug!("Pinging database");
         
@@ -89,7 +85,7 @@ impl DatabaseConnection {
             }
             Err(e) => {
                 debug!("Database ping failed: {}", e);
-                Err(DatabaseError::ConnectionError(e))
+                Err(DatabaseError::DbError(e))
             }
         }
     }

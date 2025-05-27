@@ -19,6 +19,7 @@ pub trait Repository {
 }
 
 /// Repository factory for creating all repositories with shared connection
+#[derive(Clone)]
 pub struct RepositoryFactory {
     pub task_repo: TaskRepository,
     pub execution_repo: ExecutionRepository,

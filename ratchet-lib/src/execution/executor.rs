@@ -1,15 +1,14 @@
 use crate::database::{
-    entities::{Execution, ExecutionStatus, Job, JobStatus},
-    repositories::RepositoryFactory,
+    entities::Execution,
+    repositories::{RepositoryFactory, Repository},
     DatabaseError,
 };
-use crate::services::{ServiceError, ServiceResult, RatchetEngine};
+use crate::services::{ServiceError, RatchetEngine};
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 use std::time::Instant;
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
-use uuid::Uuid;
 
 /// Task execution errors
 #[derive(Error, Debug)]
@@ -221,7 +220,7 @@ impl TaskExecutor for DatabaseTaskExecutor {
         }
         
         // Create execution record
-        let execution = self.create_execution_record(job.task_id, &job.input_data.0).await?;
+        let execution = self.create_execution_record(job.task_id, &job.input_data).await?;
         
         // Mark job as processing with execution ID
         self.repositories
@@ -234,13 +233,13 @@ impl TaskExecutor for DatabaseTaskExecutor {
             execution_id: execution.id,
             job_id: Some(job_id),
             task_id: job.task_id,
-            input_data: job.input_data.0.clone(),
+            input_data: job.input_data.clone(),
             worker_id: None, // Will be set by worker pool
             started_at: chrono::Utc::now(),
         };
         
         // Execute the task
-        let result = self.execute_task(job.task_id, job.input_data.0.clone(), Some(context)).await?;
+        let result = self.execute_task(job.task_id, job.input_data.clone(), Some(context)).await?;
         
         // Update job status based on result
         if result.success {

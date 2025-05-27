@@ -8,7 +8,7 @@ use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Job queue errors
 #[derive(Error, Debug)]

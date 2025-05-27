@@ -3,8 +3,7 @@ use crate::database::{
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, Order};
-use uuid::Uuid;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, Order, PaginatorTrait};
 
 /// Repository for schedule-related database operations
 #[derive(Clone)]
