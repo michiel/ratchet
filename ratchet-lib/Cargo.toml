@@ -36,6 +36,15 @@ regex = "1.10"
 serde_yaml = "0.9"
 async-trait = "0.1"
 
+# Database dependencies
+sea-orm = { version = "0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-rustls", "chrono", "uuid"] }
+sea-orm-migration = "0.12"
+
+# Job scheduling dependencies
+tokio-cron-scheduler = "0.9"
+cron = "0.12"
+
 # Testing dependencies (only used in #[cfg(test)])
 [dev-dependencies]
 tokio-test = "0.4"
