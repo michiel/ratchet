@@ -107,104 +107,117 @@ pub mod js_executor {
             .map_err(|e| JsExecutionError::InvalidInputSchema(e.to_string()))
     }
 
+    /// Configuration for JavaScript error types
+    #[derive(Debug, Clone)]
+    pub struct JsErrorConfig {
+        pub name: &'static str,
+        pub default_message: &'static str,
+        pub has_status: bool,
+    }
+
+    /// Predefined JavaScript error types with their configurations
+    pub const JS_ERROR_CONFIGS: &[JsErrorConfig] = &[
+        JsErrorConfig {
+            name: "AuthenticationError",
+            default_message: "Authentication failed",
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "AuthorizationError", 
+            default_message: "Authorization failed",
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "NetworkError",
+            default_message: "Network error",
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "HttpError",
+            default_message: "HTTP error",
+            has_status: true,
+        },
+        JsErrorConfig {
+            name: "ValidationError",
+            default_message: "Validation error", 
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "ConfigurationError",
+            default_message: "Configuration error",
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "RateLimitError",
+            default_message: "Rate limit exceeded",
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "ServiceUnavailableError",
+            default_message: "Service unavailable",
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "TimeoutError",
+            default_message: "Timeout error",
+            has_status: false,
+        },
+        JsErrorConfig {
+            name: "DataError",
+            default_message: "Data error",
+            has_status: false,
+        },
+    ];
+
+    /// Generate JavaScript error class definition for a single error type
+    pub fn generate_error_class(error_config: &JsErrorConfig) -> String {
+        if error_config.has_status {
+            // Special case for HttpError which takes status and message
+            format!(r#"
+            // {name}
+            function {name}(status, message) {{
+                this.name = "{name}";
+                this.status = status;
+                this.message = message || "{default_message}";
+                this.stack = (new Error()).stack;
+            }}
+            {name}.prototype = Object.create(Error.prototype);
+            {name}.prototype.constructor = {name};"#,
+                name = error_config.name,
+                default_message = error_config.default_message
+            )
+        } else {
+            // Standard error type with just message
+            format!(r#"
+            // {name}
+            function {name}(message) {{
+                this.name = "{name}";
+                this.message = message || "{default_message}";
+                this.stack = (new Error()).stack;
+            }}
+            {name}.prototype = Object.create(Error.prototype);
+            {name}.prototype.constructor = {name};"#,
+                name = error_config.name,
+                default_message = error_config.default_message
+            )
+        }
+    }
+
+    /// Generate all JavaScript error class definitions
+    pub fn generate_all_error_classes() -> String {
+        JS_ERROR_CONFIGS
+            .iter()
+            .map(generate_error_class)
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
     /// Register custom error types in the JavaScript context
     pub fn register_error_types(context: &mut BoaContext<'_>) -> Result<(), JsExecutionError> {
-        // Define JavaScript error classes
-        let error_classes = r#"
-            // Authentication Error
-            function AuthenticationError(message) {
-                this.name = "AuthenticationError";
-                this.message = message || "Authentication failed";
-                this.stack = (new Error()).stack;
-            }
-            AuthenticationError.prototype = Object.create(Error.prototype);
-            AuthenticationError.prototype.constructor = AuthenticationError;
-            
-            // Authorization Error
-            function AuthorizationError(message) {
-                this.name = "AuthorizationError";
-                this.message = message || "Authorization failed";
-                this.stack = (new Error()).stack;
-            }
-            AuthorizationError.prototype = Object.create(Error.prototype);
-            AuthorizationError.prototype.constructor = AuthorizationError;
-            
-            // Network Error
-            function NetworkError(message) {
-                this.name = "NetworkError";
-                this.message = message || "Network error";
-                this.stack = (new Error()).stack;
-            }
-            NetworkError.prototype = Object.create(Error.prototype);
-            NetworkError.prototype.constructor = NetworkError;
-            
-            // HTTP Error
-            function HttpError(status, message) {
-                this.name = "HttpError";
-                this.status = status;
-                this.message = message || "HTTP error";
-                this.stack = (new Error()).stack;
-            }
-            HttpError.prototype = Object.create(Error.prototype);
-            HttpError.prototype.constructor = HttpError;
-            
-            // Validation Error
-            function ValidationError(message) {
-                this.name = "ValidationError";
-                this.message = message || "Validation error";
-                this.stack = (new Error()).stack;
-            }
-            ValidationError.prototype = Object.create(Error.prototype);
-            ValidationError.prototype.constructor = ValidationError;
-            
-            // Configuration Error
-            function ConfigurationError(message) {
-                this.name = "ConfigurationError";
-                this.message = message || "Configuration error";
-                this.stack = (new Error()).stack;
-            }
-            ConfigurationError.prototype = Object.create(Error.prototype);
-            ConfigurationError.prototype.constructor = ConfigurationError;
-            
-            // Rate Limit Error
-            function RateLimitError(message) {
-                this.name = "RateLimitError";
-                this.message = message || "Rate limit exceeded";
-                this.stack = (new Error()).stack;
-            }
-            RateLimitError.prototype = Object.create(Error.prototype);
-            RateLimitError.prototype.constructor = RateLimitError;
-            
-            // Service Unavailable Error
-            function ServiceUnavailableError(message) {
-                this.name = "ServiceUnavailableError";
-                this.message = message || "Service unavailable";
-                this.stack = (new Error()).stack;
-            }
-            ServiceUnavailableError.prototype = Object.create(Error.prototype);
-            ServiceUnavailableError.prototype.constructor = ServiceUnavailableError;
-            
-            // Timeout Error
-            function TimeoutError(message) {
-                this.name = "TimeoutError";
-                this.message = message || "Timeout error";
-                this.stack = (new Error()).stack;
-            }
-            TimeoutError.prototype = Object.create(Error.prototype);
-            TimeoutError.prototype.constructor = TimeoutError;
-            
-            // Data Error
-            function DataError(message) {
-                this.name = "DataError";
-                this.message = message || "Data error";
-                this.stack = (new Error()).stack;
-            }
-            DataError.prototype = Object.create(Error.prototype);
-            DataError.prototype.constructor = DataError;
-        "#;
+        let error_classes = generate_all_error_classes();
 
         context
-            .eval(Source::from_bytes(error_classes))
+            .eval(Source::from_bytes(&error_classes))
             .map_err(|e| JsExecutionError::CompileError(format!("Failed to register error types: {}", e)))?;
         
         Ok(())
@@ -949,6 +962,101 @@ processInput
                 println!("Skipping test_invalid_schema due to file setup issues");
             }
         });
+    }
+
+    #[test]
+    fn test_generate_error_class_standard() {
+        let error_config = js_executor::JsErrorConfig {
+            name: "TestError",
+            default_message: "Test error message",
+            has_status: false,
+        };
+        
+        let generated = js_executor::generate_error_class(&error_config);
+        
+        assert!(generated.contains("function TestError(message)"));
+        assert!(generated.contains("this.name = \"TestError\""));
+        assert!(generated.contains("message || \"Test error message\""));
+        assert!(generated.contains("TestError.prototype = Object.create(Error.prototype)"));
+        assert!(generated.contains("TestError.prototype.constructor = TestError"));
+    }
+
+    #[test]
+    fn test_generate_error_class_with_status() {
+        let error_config = js_executor::JsErrorConfig {
+            name: "HttpError",
+            default_message: "HTTP error",
+            has_status: true,
+        };
+        
+        let generated = js_executor::generate_error_class(&error_config);
+        
+        assert!(generated.contains("function HttpError(status, message)"));
+        assert!(generated.contains("this.name = \"HttpError\""));
+        assert!(generated.contains("this.status = status"));
+        assert!(generated.contains("message || \"HTTP error\""));
+        assert!(generated.contains("HttpError.prototype = Object.create(Error.prototype)"));
+        assert!(generated.contains("HttpError.prototype.constructor = HttpError"));
+    }
+
+    #[test] 
+    fn test_generate_all_error_classes() {
+        let all_classes = js_executor::generate_all_error_classes();
+        
+        // Check that all expected error types are included
+        assert!(all_classes.contains("function AuthenticationError(message)"));
+        assert!(all_classes.contains("function AuthorizationError(message)"));
+        assert!(all_classes.contains("function NetworkError(message)"));
+        assert!(all_classes.contains("function HttpError(status, message)"));
+        assert!(all_classes.contains("function ValidationError(message)"));
+        assert!(all_classes.contains("function ConfigurationError(message)"));
+        assert!(all_classes.contains("function RateLimitError(message)"));
+        assert!(all_classes.contains("function ServiceUnavailableError(message)"));
+        assert!(all_classes.contains("function TimeoutError(message)"));
+        assert!(all_classes.contains("function DataError(message)"));
+        
+        // Check that prototype setup is included for each
+        assert!(all_classes.contains("AuthenticationError.prototype = Object.create(Error.prototype)"));
+        assert!(all_classes.contains("HttpError.prototype = Object.create(Error.prototype)"));
+    }
+
+    #[test]
+    fn test_js_error_configs_constants() {
+        // Verify the error configs array is properly configured
+        assert_eq!(js_executor::JS_ERROR_CONFIGS.len(), 10);
+        
+        // Find HttpError and verify it has status
+        let http_error = js_executor::JS_ERROR_CONFIGS
+            .iter()
+            .find(|e| e.name == "HttpError")
+            .expect("HttpError should be defined");
+        assert!(http_error.has_status);
+        
+        // Find a standard error and verify it doesn't have status
+        let auth_error = js_executor::JS_ERROR_CONFIGS
+            .iter()
+            .find(|e| e.name == "AuthenticationError")
+            .expect("AuthenticationError should be defined");
+        assert!(!auth_error.has_status);
+    }
+
+    #[test]
+    fn test_register_error_types_integration() {
+        let mut context = BoaContext::default();
+        
+        // Should successfully register all error types
+        let result = js_executor::register_error_types(&mut context);
+        assert!(result.is_ok());
+        
+        // Verify that error types are accessible in the context
+        let test_code = r#"
+            typeof AuthenticationError === 'function' &&
+            typeof HttpError === 'function' &&
+            typeof ValidationError === 'function'
+        "#;
+        
+        let result = context.eval(Source::from_bytes(test_code)).unwrap();
+        assert!(result.as_boolean().unwrap_or(false));
     }
 }
 
