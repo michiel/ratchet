@@ -134,6 +134,21 @@ ratchet-lib/src/
   - `tests.rs`: Comprehensive test suite
   - `mod.rs`: Module exports and public API
 
+#### `registry/` - Task Registry
+- **Purpose**: Task discovery, loading, and version management
+- **Structure**:
+  - `registry.rs`: Core registry implementation with version management
+  - `service.rs`: Registry service for loading from configured sources
+  - `loaders/`: Task loader implementations
+    - `filesystem.rs`: Loads tasks from directories, ZIP files, or collections
+    - `http.rs`: HTTP loader stub for future implementation
+  - `mod.rs`: Module exports and public API
+- **Features**: 
+  - Multi-source task loading (filesystem, HTTP)
+  - Version management with duplicate detection
+  - GraphQL API integration
+  - Lazy loading with caching
+
 ## Process Execution IPC Model
 
 ### Overview
@@ -462,6 +477,113 @@ Ratchet uses SQLite with Sea-ORM for persistent storage of tasks, executions, jo
                             │ updated_at      │
                             └─────────────────┘
 ```
+
+## Task Registry Architecture
+
+### Overview
+
+The Task Registry provides a centralized system for discovering, loading, and managing tasks from multiple sources. It supports filesystem and HTTP sources (HTTP is currently stubbed), with automatic version management and duplicate detection.
+
+### Architecture Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Task Registry                            │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │   TaskRegistry  │  │ RegistryService │  │  Task Loaders   │  │
+│  │                 │  │                 │  │                 │  │
+│  │ - Version Map   │  │ - Load Sources  │  │ - Filesystem    │  │
+│  │ - Task Storage  │  │ - Initialize    │  │ - HTTP (stub)   │  │
+│  │ - Dedup Logic   │  │ - Coordinate    │  │ - Future: Git   │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Task Sources                               │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │  Directory   │  │   ZIP File   │  │  Collection  │         │
+│  │              │  │              │  │              │         │
+│  │ metadata.json│  │ task.zip     │  │ ├── task1/  │         │
+│  │ input.schema │  │ └── task/    │  │ ├── task2.zip│        │
+│  │ output.schema│  │     ├── ...  │  │ └── task3/  │         │
+│  │ main.js      │  │              │  │              │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Registry Data Model
+
+```rust
+pub struct TaskRegistry {
+    // Task ID -> Version -> Task
+    tasks: Arc<RwLock<HashMap<Uuid, HashMap<String, Arc<Task>>>>>,
+    sources: Vec<TaskSource>,
+}
+
+pub enum TaskSource {
+    Filesystem { path: PathBuf },
+    Http { url: String },  // Future implementation
+}
+```
+
+### Task Loading Process
+
+1. **Source Configuration**: Registry sources defined in YAML config
+2. **Source Parsing**: URIs parsed into TaskSource enum variants
+3. **Task Discovery**: Loaders scan sources for task directories/ZIPs
+4. **Version Management**: Tasks indexed by ID and version
+5. **Duplicate Detection**: Warns on duplicate ID/version combinations
+6. **GraphQL Exposure**: Registry contents queryable via GraphQL API
+
+### Configuration
+
+```yaml
+registry:
+  sources:
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks"
+      config:
+        watch: true  # Future: filesystem watching
+    - name: "remote-registry"
+      uri: "https://registry.example.com/tasks"  # Future
+      config:
+        auth_token: "${REGISTRY_TOKEN}"
+```
+
+### GraphQL API
+
+The registry exposes three main queries:
+
+```graphql
+type Query {
+  # List all tasks with their latest versions
+  registryTasks: RegistryTaskListResponse!
+  
+  # Get a specific task by ID and optional version
+  registryTask(id: ID!, version: String): RegistryTask
+  
+  # List all versions of a specific task
+  registryTaskVersions(id: ID!): [String!]!
+}
+
+type RegistryTask {
+  id: ID!
+  version: String!
+  label: String!
+  description: String!
+  availableVersions: [String!]!
+}
+```
+
+### Integration Points
+
+1. **Server Startup**: Registry initialized from config during server boot
+2. **GraphQL Context**: Registry passed to GraphQL resolvers
+3. **Task Execution**: Future integration for executing registry tasks
+4. **Hot Reload**: Future support for dynamic task updates
 
 ## Server Architecture
 

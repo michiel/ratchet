@@ -208,7 +208,17 @@
   - [ ] Add support for streaming data processing
   - [ ] Create task composition and workflow management
 
-### 25. CLI Serve Command
+### 25. Task Registry System
+- [x] **Task Discovery & Management** ✅ **COMPLETED**
+  - [x] Create centralized task registry with version management
+  - [x] Implement filesystem loader for directories, ZIPs, and collections
+  - [x] Add HTTP loader stub for future remote registry support
+  - [x] Integrate registry with GraphQL API (3 new queries)
+  - [x] Add duplicate version detection with warning logs
+  
+  **Summary**: Implemented complete task registry system enabling centralized task discovery and management. Created filesystem loader supporting individual task directories, ZIP files, and collections containing both. Added version management with duplicate detection. Exposed registry through GraphQL with queries for listing tasks, getting specific versions, and viewing available versions. Integrated with server startup for automatic task loading from configured sources.
+
+### 26. CLI Serve Command
 - [x] **CLI Server Integration** ✅ **COMPLETED**
   - [x] Add `ratchet serve` command to CLI
   - [x] Support default configuration and custom config files
@@ -218,7 +228,7 @@
   
   **Summary**: Implemented complete CLI serve command enabling users to start the Ratchet server with `ratchet serve` or `ratchet serve --config=path/to/config.yaml`. Added full integration with database migrations, worker processes, GraphQL API, and graceful shutdown. Created CLI-SERVE.md documentation and example-config.yaml.
 
-### 26. Monitoring & Observability
+### 27. Monitoring & Observability
 - [ ] **Production Readiness**
   - [ ] Add metrics collection and reporting
   - [ ] Implement distributed tracing
@@ -307,7 +317,7 @@
 
 ## Current Status: Server Implementation Complete! 🎉
 
-**Major Milestone Achieved**: The Ratchet server is now **fully functional** with complete database persistence, GraphQL API, and CLI serve command.
+**Major Milestone Achieved**: The Ratchet server is now **fully functional** with complete database persistence, GraphQL API, task registry, and CLI serve command.
 
 ### ✅ What's Been Accomplished:
 - **Complete GraphQL API** with async-graphql v6.0 and axum v0.6
@@ -320,6 +330,7 @@
 - **Complete Database Layer** with Sea-ORM and SQLite persistence
 - **CLI Serve Command** enabling easy server deployment
 - **Configuration Management** with YAML files and environment overrides
+- **Task Registry System** with centralized task discovery and version management
 
 ### 🚀 Ready for Production:
 The server is now **production-ready** with persistent storage, comprehensive API, and easy deployment via CLI command.
