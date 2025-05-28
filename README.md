@@ -9,7 +9,10 @@ Ratchet is a JavaScript task execution framework written in Rust. It allows you 
 - Support for asynchronous operations using Tokio runtime
 - HTTP fetch API for making web requests from JavaScript
 - JSON schema validation for inputs and outputs
+- **Task Registry & Server**: GraphQL API server for task management and execution
+- **File System Watcher**: Automatic task reloading when files change (configurable)
 - **Recording functionality**: Capture HTTP requests in HAR format and execution logs
+- **Replay functionality**: Re-execute tasks with recorded inputs for regression testing
 - Comprehensive tracing and debugging support
 - Task validation and testing framework
 
@@ -61,6 +64,8 @@ ratchet run-once --from-fs my-task/ --input-json='{"num1": 5, "num2": 10}'
 - **`run-once`**: Execute a single task
 - **`validate`**: Validate task structure and syntax
 - **`test`**: Run task tests
+- **`serve`**: Start the GraphQL API server with task registry
+- **`replay`**: Re-execute task using recorded inputs
 
 #### Command Options
 
@@ -68,6 +73,103 @@ ratchet run-once --from-fs my-task/ --input-json='{"num1": 5, "num2": 10}'
 - `--input-json <JSON>`: JSON input data for the task
 - `--log-level <LEVEL>`: Set logging level (trace, debug, info, warn, error)
 - `--record <DIR>`: Record execution with HTTP calls and logs (see Recording section)
+- `--config <PATH>`: Path to YAML configuration file (for serve command)
+
+### Server Mode
+
+Ratchet can run as a GraphQL API server for managing and executing tasks:
+
+```bash
+# Start server with configuration
+ratchet serve --config=config.yaml
+
+# Start server with default settings
+ratchet serve
+```
+
+The server provides:
+- **GraphQL API** at `http://localhost:8080/graphql`
+- **GraphQL Playground** at `http://localhost:8080/playground`
+- **Health check** at `http://localhost:8080/health`
+- **Task registry** with automatic loading from configured sources
+- **File system watching** for automatic task reloading (when enabled)
+
+#### Server Configuration
+
+Example `config.yaml`:
+
+```yaml
+# Server configuration
+server:
+  bind_address: "127.0.0.1"
+  port: 8080
+  database:
+    url: "sqlite::memory:"
+    max_connections: 5
+
+# Task registry configuration
+registry:
+  sources:
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks"
+      config:
+        watch: true  # Enable automatic file watching
+
+# Execution configuration
+execution:
+  max_execution_duration: 300
+  validate_schemas: true
+
+# HTTP client configuration
+http:
+  timeout: 30
+  verify_ssl: true
+```
+
+#### File System Watcher
+
+When `watch: true` is configured for filesystem sources, Ratchet automatically:
+- **Monitors task directories** for file changes
+- **Reloads tasks** when `metadata.json`, `main.js`, or schema files change
+- **Removes tasks** when directories are deleted
+- **Synchronizes changes** with the database
+- **Provides real-time updates** via the GraphQL API
+
+The watcher supports:
+- **Cross-platform compatibility** (Linux inotify, macOS FSEvents, Windows ReadDirectoryChangesW)
+- **Debouncing** to handle rapid file changes efficiently
+- **Error handling** that doesn't crash the server
+- **Configurable ignore patterns** for temporary files
+
+#### GraphQL API
+
+Example queries:
+
+```graphql
+# List all available tasks
+query {
+  tasks {
+    items {
+      uuid
+      label
+      description
+      version
+    }
+  }
+}
+
+# Execute a task
+mutation {
+  executeTaskDirect(
+    taskUuid: "550e8400-e29b-41d4-a716-446655440000"
+    input: "{\"num1\": 5, \"num2\": 10}"
+  ) {
+    success
+    output
+    error
+  }
+}
+```
 
 ### Example JavaScript Task
 

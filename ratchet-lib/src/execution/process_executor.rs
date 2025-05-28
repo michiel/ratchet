@@ -681,7 +681,7 @@ mod tests {
         let manager_guard = worker_manager.read().await;
         
         // Should have worker stats (even if empty)
-        let stats = manager_guard.get_worker_stats();
+        let stats = manager_guard.get_worker_stats().await;
         assert!(stats.len() == 0); // No workers started yet
         
         drop(manager_guard);

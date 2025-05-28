@@ -65,6 +65,12 @@ server:
     url: "sqlite:ratchet.db"  # or "sqlite::memory:" for in-memory
     max_connections: 10
     connection_timeout: 30
+
+# Task registry configuration (optional)
+registry:
+  sources:
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks"  # Load tasks from local directory
 ```
 
 ## Environment Variables
@@ -91,6 +97,12 @@ server:
 - Multiple worker processes for parallel execution
 - JavaScript task execution with Boa engine
 - HTTP request recording and playback
+
+### Task Registry
+- Automatic task discovery from configured sources
+- Support for filesystem sources (directories, ZIP files, collections)
+- Version management with duplicate detection
+- GraphQL queries for browsing available tasks
 
 ### Database Integration
 - SQLite database with automatic migrations
@@ -123,4 +135,49 @@ The server will automatically:
 2. Connect to database and run migrations
 3. Start worker processes for task execution
 4. Launch the GraphQL API server
-5. Provide graceful shutdown on SIGTERM/SIGINT
+5. Load tasks from registry sources (if configured)
+6. Provide graceful shutdown on SIGTERM/SIGINT
+
+## GraphQL Examples
+
+### Query Registry Tasks
+```graphql
+query ListRegistryTasks {
+  registryTasks {
+    tasks {
+      id
+      version
+      label
+      description
+      availableVersions
+    }
+    total
+  }
+}
+```
+
+### Get Specific Task Version
+```graphql
+query GetTask($id: ID!, $version: String) {
+  registryTask(id: $id, version: $version) {
+    id
+    version
+    label
+    description
+    availableVersions
+  }
+}
+```
+
+### Execute a Task
+```graphql
+mutation ExecuteTask {
+  executeTask(input: {
+    taskId: 1,
+    inputData: "{\"num1\": 5, \"num2\": 10}"
+  }) {
+    output
+    executionTimeMs
+  }
+}
+```

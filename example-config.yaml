@@ -38,3 +38,10 @@ server:
     max_connections: 5
     connection_timeout: 30  # seconds
   auth: null  # Authentication disabled for development
+
+registry:
+  sources:
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks"
+      config:
+        watch: true

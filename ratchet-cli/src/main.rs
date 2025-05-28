@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ratchet_lib::task::Task;
 use ratchet_lib::execution::ipc::{CoordinatorMessage, TaskExecutionResult};
+use ratchet_lib::registry::{TaskSource, DefaultRegistryService, RegistryService};
+use ratchet_lib::services::TaskSyncService;
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -201,8 +203,73 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     info!("Starting worker processes");
     task_executor.start().await.context("Failed to start worker processes")?;
     
+    // Initialize registry if configured
+    let registry = if let Some(registry_config) = &config.registry {
+        info!("Initializing task registry");
+        
+        // Convert config sources to TaskSource
+        let mut sources = Vec::new();
+        let mut valid_configs = Vec::new();
+        for source_config in &registry_config.sources {
+            match TaskSource::from_config(source_config) {
+                Ok(source) => {
+                    info!("Added registry source: {} ({})", source_config.name, source_config.uri);
+                    sources.push(source);
+                    valid_configs.push(source_config.clone());
+                },
+                Err(e) => {
+                    error!("Failed to parse registry source {}: {}", source_config.name, e);
+                }
+            }
+        }
+        
+        // Create registry service with configs
+        let mut registry_service = DefaultRegistryService::new_with_configs(sources, valid_configs);
+        
+        // Get the registry reference first
+        let registry = registry_service.registry().await;
+        
+        // Create sync service for auto-registration
+        let sync_service = Arc::new(TaskSyncService::new(
+            repositories.task_repo.clone(),
+            registry.clone(),
+        ));
+        
+        // Set the sync service on the existing registry service
+        registry_service = registry_service.with_sync_service(sync_service.clone());
+        
+        // Load all sources (this will auto-sync to database)
+        if let Err(e) = registry_service.load_all_sources().await {
+            error!("Failed to load registry sources: {}", e);
+        }
+        
+        // Start watching filesystem sources if configured
+        if let Err(e) = registry_service.start_watching().await {
+            warn!("Failed to start filesystem watcher: {}", e);
+            // Continue anyway - watching is optional
+        }
+        
+        // Return both registry and sync service
+        Some((registry, Some(sync_service)))
+    } else {
+        info!("No registry configuration found");
+        None
+    };
+    
+    // Extract registry and sync service
+    let (registry, sync_service) = match registry {
+        Some((reg, sync)) => (Some(reg), sync),
+        None => (None, None),
+    };
+    
     // Create the application
-    let app = create_app(repositories, job_queue, task_executor.clone());
+    let app = create_app(
+        repositories,
+        job_queue,
+        task_executor.clone(),
+        registry,
+        sync_service,
+    );
     
     // Create server address
     let addr = format!("{}:{}", server_config.bind_address, server_config.port);

@@ -64,3 +64,40 @@ pub enum JsExecutionError {
     #[error("Invalid output format: {0}")]
     InvalidOutputFormat(String),
 }
+
+/// General errors that can occur in Ratchet
+#[derive(Error, Debug)]
+pub enum RatchetError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Task not found: {0}")]
+    TaskNotFound(String),
+
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
+
+    #[error("JavaScript execution error: {0}")]
+    JsExecution(#[from] JsExecutionError),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+
+    #[error("Validation error: {0}")]
+    Validation(String),
+
+    #[error("Watcher error: {0}")]
+    WatcherError(String),
+
+    #[error("Load error: {0}")]
+    LoadError(String),
+
+    #[error("Other error: {0}")]
+    Other(String),
+}
+
+/// Result type for Ratchet operations
+pub type Result<T> = std::result::Result<T, RatchetError>;

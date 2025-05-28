@@ -114,13 +114,13 @@ async fn test_worker_process_manager_lifecycle() {
     let mut manager = WorkerProcessManager::new(config);
     
     // Test manager creation
-    assert_eq!(manager.get_worker_stats().len(), 0);
+    assert_eq!(manager.get_worker_stats().await.len(), 0);
     
     // Test starting workers (may fail if ratchet-cli binary not available, but shouldn't panic)
     let start_result = manager.start().await;
     if start_result.is_ok() {
         // If workers started successfully, test stats
-        let stats = manager.get_worker_stats();
+        let stats = manager.get_worker_stats().await;
         assert!(stats.len() > 0);
         
         // Test health checks
@@ -132,7 +132,7 @@ async fn test_worker_process_manager_lifecycle() {
         assert!(stop_result.is_ok());
         
         // After stopping, should have no workers
-        assert_eq!(manager.get_worker_stats().len(), 0);
+        assert_eq!(manager.get_worker_stats().await.len(), 0);
     }
     // If start failed (e.g., binary not found), that's okay for this test
 }
@@ -382,7 +382,7 @@ async fn test_worker_config_customization() {
     // Verify configuration is applied
     // Note: We can't directly access the config from the manager,
     // but we can test that it doesn't panic and basic operations work
-    let stats = manager.get_worker_stats();
+    let stats = manager.get_worker_stats().await;
     assert_eq!(stats.len(), 0); // No workers started yet
 }
 

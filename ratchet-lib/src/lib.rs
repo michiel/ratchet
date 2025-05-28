@@ -8,6 +8,7 @@ pub mod http;
 pub mod js_executor;
 pub mod js_task;
 pub mod recording;
+pub mod registry;
 pub mod server;
 pub mod services;
 pub mod task;
