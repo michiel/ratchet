@@ -149,6 +149,7 @@ ratchet-lib/src/
 - **Structure**:
   - `registry.rs`: Core registry implementation with version management
   - `service.rs`: Registry service for loading from configured sources
+  - `watcher.rs`: File system watcher for automatic task reloading
   - `loaders/`: Task loader implementations
     - `filesystem.rs`: Loads tasks from directories, ZIP files, or collections
     - `http.rs`: HTTP loader stub for future implementation
@@ -156,6 +157,8 @@ ratchet-lib/src/
 - **Features**: 
   - Multi-source task loading (filesystem, HTTP)
   - Version management with duplicate detection
+  - File system watching with automatic task reloading
+  - Cross-platform file monitoring (inotify, FSEvents, ReadDirectoryChangesW)
   - GraphQL API integration
   - Lazy loading with caching
 
@@ -556,7 +559,7 @@ registry:
     - name: "local-tasks"
       uri: "file://./sample/js-tasks"
       config:
-        watch: true  # Future: filesystem watching
+        watch: true  # Enable filesystem watching
     - name: "remote-registry"
       uri: "https://registry.example.com/tasks"  # Future
       config:
@@ -636,6 +639,240 @@ type UnifiedTask {
                             ↓
                       UnifiedTask View
    ```
+
+## File System Watcher Architecture
+
+### Overview
+
+The File System Watcher provides automatic task reloading for filesystem-based registry sources. When enabled via `watch: true` configuration, it monitors task directories for changes and automatically updates the registry and database in real-time.
+
+### Architecture Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    File System Watcher                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │ RegistryWatcher │  │  EventProcessor │  │   Debouncer     │  │
+│  │                 │  │                 │  │                 │  │
+│  │ - notify-rs     │  │ - Event Queue   │  │ - 500ms Window  │  │
+│  │ - Path Tracking │  │ - Batch Changes │  │ - Ignore Temp   │  │
+│  │ - IPC Transport │  │ - Reload Tasks  │  │ - Smart Batching│  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Platform Support                           │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │    Linux     │  │    macOS     │  │   Windows    │         │
+│  │              │  │              │  │              │         │
+│  │   inotify    │  │  FSEvents    │  │ReadDirectory │         │
+│  │              │  │              │  │ ChangesW     │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Implementation
+
+#### Core Components
+
+```rust
+pub struct RegistryWatcher {
+    watcher: Option<RecommendedWatcher>,        // notify-rs watcher
+    registry: Arc<TaskRegistry>,               // Registry to update
+    sync_service: Option<Arc<TaskSyncService>>, // Database sync
+    watch_paths: Vec<(PathBuf, bool)>,         // Watched paths
+    event_tx: mpsc::UnboundedSender<WatchEvent>, // Event channel
+    config: WatcherConfig,                     // Configuration
+    processor_handle: Option<tokio::task::JoinHandle<()>>, // Event processor
+}
+
+pub enum WatchEvent {
+    TaskAdded(PathBuf),      // New task directory created
+    TaskModified(PathBuf),   // Task files changed
+    TaskRemoved(PathBuf),    // Task directory deleted
+    BulkChange(Vec<PathBuf>), // Multiple rapid changes
+}
+```
+
+#### Configuration
+
+```rust
+pub struct WatcherConfig {
+    pub enabled: bool,                    // Enable/disable watching
+    pub debounce_ms: u64,                 // Debounce period (default: 500ms)
+    pub ignore_patterns: Vec<String>,     // Files to ignore (*.tmp, .git/*)
+    pub max_concurrent_reloads: usize,    // Concurrency limit (default: 5)
+    pub retry_on_error: bool,             // Retry failed reloads
+    pub retry_delay_ms: u64,              // Retry delay (default: 1000ms)
+}
+```
+
+### Event Processing Flow
+
+#### Change Detection
+
+1. **Platform Event**: OS filesystem API detects file change
+2. **Event Mapping**: notify-rs converts to cross-platform Event
+3. **Event Classification**: Categorize as Add/Modify/Remove based on:
+   - `metadata.json` presence for task detection
+   - File paths to identify task directories
+   - Event type (Create/Modify/Delete)
+
+#### Debouncing Strategy
+
+```
+Rapid File Changes    Debounced Events       Registry Updates
+      │                     │                     │
+  t0: metadata.json         │                     │
+  t1: main.js              │                     │
+  t2: input.schema         │                     │
+      │                    │                     │
+  t0+500ms: ──────────────►│ TaskModified ──────►│ Single Reload
+```
+
+#### Processing Pipeline
+
+1. **Event Collection**: Buffer events for debounce period
+2. **Event Deduplication**: Merge rapid changes to same task
+3. **Concurrent Processing**: Process multiple tasks in parallel
+4. **Task Reloading**: 
+   - Load task from filesystem
+   - Validate structure and schemas
+   - Update registry
+   - Sync to database
+5. **Error Handling**: Retry on failures, graceful degradation
+
+### Integration Points
+
+#### Server Startup
+
+```rust
+// In serve_command()
+let mut registry_service = DefaultRegistryService::new_with_configs(sources, configs);
+
+// Load initial sources
+registry_service.load_all_sources().await?;
+
+// Start file system watching
+registry_service.start_watching().await?;
+```
+
+#### Registry Service Integration
+
+```rust
+impl DefaultRegistryService {
+    pub async fn start_watching(&mut self) -> Result<()> {
+        // Check for filesystem sources with watch: true
+        let watch_paths = self.collect_watch_paths();
+        
+        if !watch_paths.is_empty() {
+            let mut watcher = RegistryWatcher::new(
+                self.registry.clone(),
+                self.sync_service.clone(),
+                WatcherConfig::default(),
+            );
+            
+            for (path, recursive) in watch_paths {
+                watcher.add_watch_path(path, recursive);
+            }
+            
+            watcher.start().await?;
+            self.watcher = Some(Arc::new(RwLock::new(watcher)));
+        }
+        
+        Ok(())
+    }
+}
+```
+
+### Error Handling and Recovery
+
+#### Failure Modes
+
+1. **Watcher Initialization Failure**: Log warning, continue without watching
+2. **Event Processing Error**: Retry with exponential backoff
+3. **Task Load Failure**: Keep existing version, log error
+4. **Database Sync Failure**: Retry, continue with registry update
+
+#### Graceful Degradation
+
+```rust
+// Watcher failures don't crash the server
+if let Err(e) = registry_service.start_watching().await {
+    warn!("Failed to start filesystem watcher: {}", e);
+    // Continue anyway - watching is optional
+}
+```
+
+### Performance Characteristics
+
+#### Resource Usage
+
+- **Memory**: ~1-5MB per watched directory tree
+- **CPU**: Near 0% idle, spikes during events
+- **I/O**: Only triggered by actual file changes
+- **Concurrency**: Limited concurrent reloads prevent resource exhaustion
+
+#### Optimization Strategies
+
+1. **Debouncing**: Prevents reload storms during rapid changes
+2. **Concurrency Limits**: Controls resource usage under load
+3. **Smart Batching**: Groups related changes together
+4. **Ignore Patterns**: Filters out irrelevant files (`.tmp`, `.git/*`)
+
+### Security Considerations
+
+#### Path Validation
+
+- All watched paths must be within configured source directories
+- No symbolic link following to prevent directory traversal
+- Validation of file permissions before reloading
+
+#### Resource Protection
+
+- Maximum concurrent reloads prevent DoS
+- File size limits for task content
+- Timeout protection for reload operations
+
+### Platform-Specific Behavior
+
+#### Linux (inotify)
+
+- **Limitation**: 8192 watches per user by default
+- **Mitigation**: Monitor parent directories for large task collections
+- **Performance**: Excellent performance for typical use cases
+
+#### macOS (FSEvents)
+
+- **Behavior**: Event coalescing may batch rapid changes
+- **Advantage**: Lower resource usage for high-frequency changes
+- **Consideration**: Debouncing handles coalesced events well
+
+#### Windows (ReadDirectoryChangesW)
+
+- **Behavior**: Buffer-based event delivery
+- **Consideration**: Large buffers prevent event loss
+- **Performance**: Good performance with proper buffer sizing
+
+### Monitoring and Observability
+
+#### Metrics
+
+- File system events per second
+- Task reload success/failure rates
+- Debouncing effectiveness (events collapsed)
+- Average reload time per task
+
+#### Logging
+
+```rust
+info!("File system watcher started for {} paths", num_paths);
+debug!("Task modified: {:?}", task_path);
+warn!("Failed to reload task at {:?}: {}", path, error);
+```
 
 ## Server Architecture
 
