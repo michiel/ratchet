@@ -221,8 +221,10 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
             }
         }
         
-        // Create registry service with database sync
-        let registry_service = DefaultRegistryService::new(sources.clone());
+        // Create registry service
+        let mut registry_service = DefaultRegistryService::new(sources);
+        
+        // Get the registry reference first
         let registry = registry_service.registry().await;
         
         // Create sync service for auto-registration
@@ -231,19 +233,16 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
             registry.clone(),
         ));
         
-        // Create a new registry service with sync enabled
-        let registry_service = DefaultRegistryService::new(sources)
-            .with_sync_service(sync_service.clone());
+        // Set the sync service on the existing registry service
+        registry_service = registry_service.with_sync_service(sync_service.clone());
         
         // Load all sources (this will auto-sync to database)
         if let Err(e) = registry_service.load_all_sources().await {
             error!("Failed to load registry sources: {}", e);
         }
         
-        let final_registry = registry_service.registry().await;
-        
         // Return both registry and sync service
-        Some((final_registry, Some(sync_service)))
+        Some((registry, Some(sync_service)))
     } else {
         info!("No registry configuration found");
         None
