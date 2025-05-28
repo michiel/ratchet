@@ -9,6 +9,7 @@ use tower::ServiceBuilder;
 use crate::database::repositories::RepositoryFactory;
 use crate::execution::{JobQueueManager, ProcessTaskExecutor};
 use crate::graphql::{RatchetSchema, create_schema};
+use crate::registry::TaskRegistry;
 
 use super::{
     handlers::{graphql_handler, graphql_playground, health_handler, version_handler},
@@ -22,6 +23,7 @@ pub struct ServerState {
     pub repositories: RepositoryFactory,
     pub job_queue: Arc<JobQueueManager>,
     pub task_executor: Arc<ProcessTaskExecutor>, // ✅ Send/Sync compliant
+    pub registry: Option<Arc<TaskRegistry>>,
 }
 
 /// Create the main Axum application with all routes and middleware
@@ -29,12 +31,14 @@ pub fn create_app(
     repositories: RepositoryFactory,
     job_queue: Arc<JobQueueManager>,
     task_executor: Arc<ProcessTaskExecutor>,
+    registry: Option<Arc<TaskRegistry>>,
 ) -> Router {
     // Create GraphQL schema with process-based executor
     let schema = create_schema(
         repositories.clone(),
         job_queue.clone(),
         task_executor.clone(),
+        registry.clone(),
     );
 
     // Create server state
@@ -43,6 +47,7 @@ pub fn create_app(
         repositories,
         job_queue,
         task_executor,
+        registry,
     };
 
     // Build the router with all routes
@@ -100,7 +105,7 @@ mod tests {
         let job_queue = Arc::new(JobQueueManager::with_default_config(repositories.clone()));
         let task_executor = Arc::new(ProcessTaskExecutor::new(repositories.clone(), config).await.unwrap());
 
-        create_app(repositories, job_queue, task_executor)
+        create_app(repositories, job_queue, task_executor, None)
     }
 
     #[tokio::test]

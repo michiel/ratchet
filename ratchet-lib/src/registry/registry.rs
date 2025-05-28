@@ -7,6 +7,7 @@ use tracing::{warn, info};
 
 use crate::task::Task;
 use crate::errors::Result;
+use crate::config::RegistrySourceConfig;
 
 #[derive(Debug, Clone)]
 pub enum TaskSource {
@@ -101,5 +102,22 @@ impl TaskRegistry {
 
     pub fn sources(&self) -> &[TaskSource] {
         &self.sources
+    }
+}
+
+impl TaskSource {
+    /// Create a TaskSource from a RegistrySourceConfig
+    pub fn from_config(config: &RegistrySourceConfig) -> Result<Self> {
+        if config.uri.starts_with("file://") {
+            let path_str = config.uri.strip_prefix("file://").unwrap();
+            let path = PathBuf::from(path_str);
+            Ok(TaskSource::Filesystem { path })
+        } else if config.uri.starts_with("http://") || config.uri.starts_with("https://") {
+            Ok(TaskSource::Http { url: config.uri.clone() })
+        } else {
+            Err(crate::errors::RatchetError::Configuration(
+                format!("Unsupported registry source URI: {}", config.uri)
+            ))
+        }
     }
 }

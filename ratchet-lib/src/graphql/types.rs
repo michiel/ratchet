@@ -222,3 +222,20 @@ pub struct JobListResponse {
     pub page: u64,
     pub limit: u64,
 }
+
+/// Registry task representation with version information
+#[derive(SimpleObject)]
+pub struct RegistryTask {
+    pub id: Uuid,
+    pub version: String,
+    pub label: String,
+    pub description: String,
+    pub available_versions: Vec<String>,
+}
+
+/// Registry task list response
+#[derive(SimpleObject)]
+pub struct RegistryTaskListResponse {
+    pub tasks: Vec<RegistryTask>,
+    pub total: u64,
+}

@@ -41,7 +41,7 @@ server:
 
 registry:
   sources:
-  - name: "local fs"
-    uri: "file://./sample/js-tasks"
-    config:
-      watch: true
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks"
+      config:
+        watch: true

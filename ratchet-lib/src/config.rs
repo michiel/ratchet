@@ -36,6 +36,9 @@ pub struct RatchetConfig {
     
     /// Server configuration (optional, for future server mode)
     pub server: Option<ServerConfig>,
+    
+    /// Registry configuration
+    pub registry: Option<RegistryConfig>,
 }
 
 /// Task execution configuration
@@ -181,6 +184,7 @@ impl Default for RatchetConfig {
             cache: CacheConfig::default(),
             logging: LoggingConfig::default(),
             server: None,
+            registry: None,
         }
     }
 }
@@ -407,4 +411,24 @@ mod tests {
         assert_eq!(vars.result_var, "__http_result");
         assert_eq!(vars.temp_result_var, "__temp_result");
     }
+}
+
+/// Registry configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryConfig {
+    /// List of registry sources
+    pub sources: Vec<RegistrySourceConfig>,
+}
+
+/// Registry source configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistrySourceConfig {
+    /// Source name for identification
+    pub name: String,
+    
+    /// Source URI (e.g., "file://./tasks" or "https://registry.example.com")
+    pub uri: String,
+    
+    /// Additional source-specific configuration
+    pub config: Option<serde_json::Value>,
 }

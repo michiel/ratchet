@@ -7,6 +7,7 @@ use crate::execution::{
     job_queue::JobQueueManager, 
     ProcessTaskExecutor,
 };
+use crate::registry::TaskRegistry;
 use super::types::*;
 
 /// GraphQL context containing services and repositories with Send+Sync compliance
@@ -14,6 +15,7 @@ pub struct GraphQLContext {
     pub repositories: RepositoryFactory,
     pub job_queue: Arc<JobQueueManager>,
     pub task_executor: Arc<ProcessTaskExecutor>, // ✅ Send/Sync compliant via process separation
+    pub registry: Option<Arc<TaskRegistry>>,
 }
 
 /// Root Query resolver
@@ -264,6 +266,83 @@ impl Query {
             scheduler: executor_healthy, // Use executor health for scheduler
             message,
         })
+    }
+
+    /// Get all tasks from the registry
+    async fn registry_tasks(&self, ctx: &Context<'_>) -> Result<RegistryTaskListResponse> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        let registry = context.registry.as_ref()
+            .ok_or_else(|| Error::new("Registry not configured"))?;
+        
+        let tasks = registry.list_tasks().await
+            .map_err(|e| Error::new(format!("Registry error: {}", e)))?;
+        
+        let mut registry_tasks = Vec::new();
+        for task in tasks {
+            let versions = registry.list_versions(task.metadata.uuid).await
+                .map_err(|e| Error::new(format!("Registry error: {}", e)))?;
+            
+            registry_tasks.push(RegistryTask {
+                id: task.metadata.uuid,
+                version: task.metadata.version.clone(),
+                label: task.metadata.label.clone(),
+                description: task.metadata.description.clone(),
+                available_versions: versions,
+            });
+        }
+        
+        let total = registry_tasks.len() as u64;
+        
+        Ok(RegistryTaskListResponse {
+            tasks: registry_tasks,
+            total,
+        })
+    }
+
+    /// Get a specific task from the registry
+    async fn registry_task(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+        version: Option<String>,
+    ) -> Result<Option<RegistryTask>> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        let registry = context.registry.as_ref()
+            .ok_or_else(|| Error::new("Registry not configured"))?;
+        
+        if let Some(task) = registry.get_task(id, version.as_deref()).await
+            .map_err(|e| Error::new(format!("Registry error: {}", e)))? {
+            
+            let versions = registry.list_versions(id).await
+                .map_err(|e| Error::new(format!("Registry error: {}", e)))?;
+            
+            Ok(Some(RegistryTask {
+                id: task.metadata.uuid,
+                version: task.metadata.version.clone(),
+                label: task.metadata.label.clone(),
+                description: task.metadata.description.clone(),
+                available_versions: versions,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Get all available versions of a task from the registry
+    async fn registry_task_versions(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+    ) -> Result<Vec<String>> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        let registry = context.registry.as_ref()
+            .ok_or_else(|| Error::new("Registry not configured"))?;
+        
+        registry.list_versions(id).await
+            .map_err(|e| Error::new(format!("Registry error: {}", e)))
     }
 }
 

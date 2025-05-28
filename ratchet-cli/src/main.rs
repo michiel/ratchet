@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ratchet_lib::task::Task;
 use ratchet_lib::execution::ipc::{CoordinatorMessage, TaskExecutionResult};
+use ratchet_lib::registry::{TaskSource, DefaultRegistryService, RegistryService};
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -201,8 +202,41 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     info!("Starting worker processes");
     task_executor.start().await.context("Failed to start worker processes")?;
     
+    // Initialize registry if configured
+    let registry = if let Some(registry_config) = &config.registry {
+        info!("Initializing task registry");
+        
+        // Convert config sources to TaskSource
+        let mut sources = Vec::new();
+        for source_config in &registry_config.sources {
+            match TaskSource::from_config(source_config) {
+                Ok(source) => {
+                    info!("Added registry source: {} ({})", source_config.name, source_config.uri);
+                    sources.push(source);
+                },
+                Err(e) => {
+                    error!("Failed to parse registry source {}: {}", source_config.name, e);
+                }
+            }
+        }
+        
+        // Create registry service
+        let registry_service = DefaultRegistryService::new(sources);
+        
+        // Load all sources
+        if let Err(e) = registry_service.load_all_sources().await {
+            error!("Failed to load registry sources: {}", e);
+        }
+        
+        // Get the registry
+        Some(registry_service.registry().await)
+    } else {
+        info!("No registry configuration found");
+        None
+    };
+    
     // Create the application
-    let app = create_app(repositories, job_queue, task_executor.clone());
+    let app = create_app(repositories, job_queue, task_executor.clone(), registry);
     
     // Create server address
     let addr = format!("{}:{}", server_config.bind_address, server_config.port);
