@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use ratchet_lib::task::Task;
 use ratchet_lib::execution::ipc::{CoordinatorMessage, TaskExecutionResult};
 use ratchet_lib::registry::{TaskSource, DefaultRegistryService, RegistryService};
+use ratchet_lib::services::TaskSyncService;
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -220,23 +221,48 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
             }
         }
         
-        // Create registry service
-        let registry_service = DefaultRegistryService::new(sources);
+        // Create registry service with database sync
+        let registry_service = DefaultRegistryService::new(sources.clone());
+        let registry = registry_service.registry().await;
         
-        // Load all sources
+        // Create sync service for auto-registration
+        let sync_service = Arc::new(TaskSyncService::new(
+            repositories.task_repo.clone(),
+            registry.clone(),
+        ));
+        
+        // Create a new registry service with sync enabled
+        let registry_service = DefaultRegistryService::new(sources)
+            .with_sync_service(sync_service.clone());
+        
+        // Load all sources (this will auto-sync to database)
         if let Err(e) = registry_service.load_all_sources().await {
             error!("Failed to load registry sources: {}", e);
         }
         
-        // Get the registry
-        Some(registry_service.registry().await)
+        let final_registry = registry_service.registry().await;
+        
+        // Return both registry and sync service
+        Some((final_registry, Some(sync_service)))
     } else {
         info!("No registry configuration found");
         None
     };
     
+    // Extract registry and sync service
+    let (registry, sync_service) = match registry {
+        Some((reg, sync)) => (Some(reg), sync),
+        None => (None, None),
+    };
+    
     // Create the application
-    let app = create_app(repositories, job_queue, task_executor.clone(), registry);
+    let app = create_app(
+        repositories,
+        job_queue,
+        task_executor.clone(),
+        registry,
+        sync_service,
+    );
     
     // Create server address
     let addr = format!("{}:{}", server_config.bind_address, server_config.port);

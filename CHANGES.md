@@ -7,10 +7,12 @@ Major server implementation with GraphQL API and task registry.
 ### Features
 
 - Complete GraphQL API server with async-graphql
-- Task Registry system for centralized task discovery
+- Unified Task Registry system for centralized task management
   - Filesystem loader supporting directories, ZIP files, and collections
   - Version management with duplicate detection
-  - GraphQL queries for browsing available tasks
+  - Automatic synchronization between registry and database
+  - Single GraphQL interface combining registry and database views
+  - Reference-based storage eliminating data duplication
 - Process separation architecture for thread-safe JavaScript execution
 - Job queue system with priority and retry logic
 - CLI `serve` command for easy server deployment

@@ -8,6 +8,7 @@ use crate::execution::{
     ProcessTaskExecutor,
 };
 use crate::registry::TaskRegistry;
+use crate::services::TaskSyncService;
 use super::types::*;
 
 /// GraphQL context containing services and repositories with Send+Sync compliance
@@ -16,6 +17,7 @@ pub struct GraphQLContext {
     pub job_queue: Arc<JobQueueManager>,
     pub task_executor: Arc<ProcessTaskExecutor>, // ✅ Send/Sync compliant via process separation
     pub registry: Option<Arc<TaskRegistry>>,
+    pub task_sync_service: Option<Arc<TaskSyncService>>,
 }
 
 /// Root Query resolver
@@ -23,63 +25,102 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    /// Get all tasks with optional pagination
+    /// Get all tasks from unified view (registry + database)
     async fn tasks(
         &self,
         ctx: &Context<'_>,
         pagination: Option<PaginationInput>,
-    ) -> Result<TaskListResponse> {
+    ) -> Result<UnifiedTaskListResponse> {
         let context = ctx.data::<GraphQLContext>()?;
-        let page = pagination.as_ref().and_then(|p| p.page).unwrap_or(1);
-        let limit = pagination.as_ref().and_then(|p| p.limit).unwrap_or(10);
         
-        // Get tasks from repository
-        let db_tasks = context.repositories.task_repo.find_all().await
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-        
-        let total = db_tasks.len() as u64;
-        
-        // Convert database tasks to GraphQL tasks
-        let tasks = db_tasks.into_iter().map(|task| Task {
-            id: task.id,
-            uuid: task.uuid,
-            name: task.name,
-            description: task.description,
-            version: task.version,
-            path: task.path,
-            enabled: task.enabled,
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            validated_at: task.validated_at,
-        }).collect();
-        
-        Ok(TaskListResponse {
-            tasks,
-            total,
-            page,
-            limit,
-        })
+        // Use sync service if available, otherwise fall back to database
+        if let Some(sync_service) = &context.task_sync_service {
+            let unified_tasks = sync_service.list_all_tasks().await
+                .map_err(|e| Error::new(format!("Failed to list tasks: {}", e)))?;
+            
+            let total = unified_tasks.len() as u64;
+            
+            // Apply pagination if requested
+            let tasks = if let Some(pagination) = pagination {
+                let page = pagination.page.unwrap_or(1);
+                let limit = pagination.limit.unwrap_or(10);
+                let start = ((page - 1) * limit) as usize;
+                let end = (start + limit as usize).min(unified_tasks.len());
+                
+                unified_tasks[start..end]
+                    .iter()
+                    .cloned()
+                    .map(UnifiedTask::from)
+                    .collect()
+            } else {
+                unified_tasks.into_iter()
+                    .map(UnifiedTask::from)
+                    .collect()
+            };
+            
+            Ok(UnifiedTaskListResponse { tasks, total })
+        } else {
+            // Fallback to database-only view
+            let db_tasks = context.repositories.task_repo.find_all().await
+                .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+            
+            let total = db_tasks.len() as u64;
+            
+            // Convert database tasks to unified view
+            let tasks = db_tasks.into_iter().map(|task| UnifiedTask {
+                id: Some(task.id),
+                uuid: task.uuid,
+                version: task.version.clone(),
+                label: task.name,
+                description: task.description.unwrap_or_default(),
+                available_versions: vec![task.version],
+                registry_source: false,
+                enabled: task.enabled,
+                created_at: Some(task.created_at),
+                updated_at: Some(task.updated_at),
+                validated_at: task.validated_at,
+                in_sync: true,
+            }).collect();
+            
+            Ok(UnifiedTaskListResponse { tasks, total })
+        }
     }
     
-    /// Get a specific task by ID
-    async fn task(&self, ctx: &Context<'_>, id: i32) -> Result<Option<Task>> {
+    /// Get a specific task by UUID and optional version
+    async fn task(
+        &self,
+        ctx: &Context<'_>,
+        uuid: Uuid,
+        version: Option<String>,
+    ) -> Result<Option<UnifiedTask>> {
         let context = ctx.data::<GraphQLContext>()?;
         
-        let db_task = context.repositories.task_repo.find_by_id(id).await
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-        
-        Ok(db_task.map(|task| Task {
-            id: task.id,
-            uuid: task.uuid,
-            name: task.name,
-            description: task.description,
-            version: task.version,
-            path: task.path,
-            enabled: task.enabled,
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            validated_at: task.validated_at,
-        }))
+        if let Some(sync_service) = &context.task_sync_service {
+            // Use unified view
+            let task = sync_service.get_task(uuid, version.as_deref()).await
+                .map_err(|e| Error::new(format!("Failed to get task: {}", e)))?;
+            
+            Ok(task.map(UnifiedTask::from))
+        } else {
+            // Fallback to database
+            let db_task = context.repositories.task_repo.find_by_uuid(uuid).await
+                .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+            
+            Ok(db_task.map(|task| UnifiedTask {
+                id: Some(task.id),
+                uuid: task.uuid,
+                version: task.version.clone(),
+                label: task.name,
+                description: task.description.unwrap_or_default(),
+                available_versions: vec![task.version],
+                registry_source: false,
+                enabled: task.enabled,
+                created_at: Some(task.created_at),
+                updated_at: Some(task.updated_at),
+                validated_at: task.validated_at,
+                in_sync: true,
+            }))
+        }
     }
     
     /// Get task by UUID
@@ -268,6 +309,7 @@ impl Query {
         })
     }
 
+    /* DEPRECATED: Use the unified 'tasks' query instead
     /// Get all tasks from the registry
     async fn registry_tasks(&self, ctx: &Context<'_>) -> Result<RegistryTaskListResponse> {
         let context = ctx.data::<GraphQLContext>()?;
@@ -344,6 +386,7 @@ impl Query {
         registry.list_versions(id).await
             .map_err(|e| Error::new(format!("Registry error: {}", e)))
     }
+    */
 }
 
 /// Root Mutation resolver

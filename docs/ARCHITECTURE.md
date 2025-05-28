@@ -111,6 +111,16 @@ ratchet-lib/src/
 
 ### Supporting Modules
 
+#### `services/` - Service Layer
+- **Purpose**: Business logic and cross-cutting concerns
+- **Structure**:
+  - `task_sync_service.rs`: Synchronizes registry and database tasks
+  - Main service traits and implementations
+- **Features**: 
+  - Automatic task synchronization
+  - Unified task view combining registry and database
+  - Service provider pattern for dependency injection
+
 #### `validation/` - Schema Validation
 - **Purpose**: JSON schema validation for task inputs/outputs
 - **Structure**: 
@@ -553,37 +563,79 @@ registry:
         auth_token: "${REGISTRY_TOKEN}"
 ```
 
+### Unified Task System
+
+The registry and database work together through the TaskSyncService:
+
+1. **Registry**: Authoritative source for task definitions (code, schemas)
+2. **Database**: Stores task metadata and execution history
+3. **TaskSyncService**: Automatically synchronizes registry tasks to database
+4. **UnifiedTask**: Combined view presenting both registry and database information
+
 ### GraphQL API
 
-The registry exposes three main queries:
+The unified task system exposes a single, consistent interface:
 
 ```graphql
 type Query {
-  # List all tasks with their latest versions
-  registryTasks: RegistryTaskListResponse!
+  # List all tasks from unified registry/database view
+  tasks(pagination: PaginationInput): UnifiedTaskListResponse!
   
-  # Get a specific task by ID and optional version
-  registryTask(id: ID!, version: String): RegistryTask
-  
-  # List all versions of a specific task
-  registryTaskVersions(id: ID!): [String!]!
+  # Get a specific task by UUID and optional version
+  task(uuid: ID!, version: String): UnifiedTask
 }
 
-type RegistryTask {
-  id: ID!
+type UnifiedTask {
+  # Database ID (if task exists in database)
+  id: Int
+  # Task UUID from registry
+  uuid: ID!
+  # Current version
   version: String!
+  # Task label/name
   label: String!
+  # Task description
   description: String!
+  # All available versions in registry
   availableVersions: [String!]!
+  # Whether task is from registry
+  registrySource: Boolean!
+  # Whether task is enabled for execution
+  enabled: Boolean!
+  # Database timestamps
+  createdAt: DateTime
+  updatedAt: DateTime
+  validatedAt: DateTime
+  # Sync status between registry and database
+  inSync: Boolean!
 }
 ```
 
 ### Integration Points
 
-1. **Server Startup**: Registry initialized from config during server boot
-2. **GraphQL Context**: Registry passed to GraphQL resolvers
-3. **Task Execution**: Future integration for executing registry tasks
-4. **Hot Reload**: Future support for dynamic task updates
+1. **Server Startup**: 
+   - Registry initialized from config during server boot
+   - TaskSyncService created to bridge registry and database
+   - All registry tasks automatically synced to database
+
+2. **GraphQL Context**: 
+   - TaskSyncService passed to GraphQL resolvers
+   - Unified queries use sync service for consistent view
+   - Fallback to database-only mode if registry unavailable
+
+3. **Task Execution**: 
+   - Executions reference tasks by database ID
+   - Task content loaded from registry at execution time
+   - Execution history stored in database
+
+4. **Data Flow**:
+   ```
+   Registry (Source) → TaskSyncService → Database (Reference)
+                            ↓
+                      GraphQL API
+                            ↓
+                      UnifiedTask View
+   ```
 
 ## Server Architecture
 

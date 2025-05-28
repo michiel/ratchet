@@ -4,6 +4,7 @@ use tracing::{info, error};
 
 use crate::errors::Result;
 use crate::registry::{TaskRegistry, TaskSource, loaders::{TaskLoader, filesystem::FilesystemTaskLoader, http::HttpTaskLoader}};
+use crate::services::TaskSyncService;
 
 #[async_trait]
 pub trait RegistryService: Send + Sync {
@@ -15,6 +16,7 @@ pub struct DefaultRegistryService {
     registry: Arc<TaskRegistry>,
     filesystem_loader: FilesystemTaskLoader,
     http_loader: HttpTaskLoader,
+    sync_service: Option<Arc<TaskSyncService>>,
 }
 
 impl DefaultRegistryService {
@@ -23,7 +25,13 @@ impl DefaultRegistryService {
             registry: Arc::new(TaskRegistry::with_sources(sources)),
             filesystem_loader: FilesystemTaskLoader::new(),
             http_loader: HttpTaskLoader::new(),
+            sync_service: None,
         }
+    }
+    
+    pub fn with_sync_service(mut self, sync_service: Arc<TaskSyncService>) -> Self {
+        self.sync_service = Some(sync_service);
+        self
     }
 
     async fn load_source(&self, source: &TaskSource) -> Result<()> {
@@ -35,8 +43,15 @@ impl DefaultRegistryService {
         };
 
         for task in tasks {
-            if let Err(e) = self.registry.add_task(task).await {
+            if let Err(e) = self.registry.add_task(task.clone()).await {
                 error!("Failed to add task to registry: {}", e);
+            } else {
+                // Auto-sync to database if sync service is available
+                if let Some(sync_service) = &self.sync_service {
+                    if let Err(e) = sync_service.sync_task_to_db(&task).await {
+                        error!("Failed to sync task to database: {}", e);
+                    }
+                }
             }
         }
 

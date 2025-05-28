@@ -7,6 +7,9 @@ use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use thiserror::Error;
 
+pub mod task_sync_service;
+pub use task_sync_service::{TaskSyncService, UnifiedTask};
+
 /// Service layer errors
 #[derive(Error, Debug)]
 pub enum ServiceError {

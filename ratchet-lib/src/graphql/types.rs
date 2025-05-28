@@ -223,19 +223,57 @@ pub struct JobListResponse {
     pub limit: u64,
 }
 
-/// Registry task representation with version information
+/// Unified task representation combining registry and database information
 #[derive(SimpleObject)]
-pub struct RegistryTask {
-    pub id: Uuid,
+pub struct UnifiedTask {
+    /// Database ID (if task exists in database)
+    pub id: Option<i32>,
+    /// Task UUID
+    pub uuid: Uuid,
+    /// Current version
     pub version: String,
+    /// Task label/name
     pub label: String,
+    /// Task description
     pub description: String,
+    /// All available versions in registry
     pub available_versions: Vec<String>,
+    /// Whether task is from registry
+    pub registry_source: bool,
+    /// Whether task is enabled for execution
+    pub enabled: bool,
+    /// When task was first created (in database)
+    pub created_at: Option<DateTime<Utc>>,
+    /// When task was last updated (in database)
+    pub updated_at: Option<DateTime<Utc>>,
+    /// When task was last validated
+    pub validated_at: Option<DateTime<Utc>>,
+    /// Whether task is synced between registry and database
+    pub in_sync: bool,
 }
 
-/// Registry task list response
+/// Unified task list response
 #[derive(SimpleObject)]
-pub struct RegistryTaskListResponse {
-    pub tasks: Vec<RegistryTask>,
+pub struct UnifiedTaskListResponse {
+    pub tasks: Vec<UnifiedTask>,
     pub total: u64,
+}
+
+impl From<crate::services::UnifiedTask> for UnifiedTask {
+    fn from(task: crate::services::UnifiedTask) -> Self {
+        Self {
+            id: task.id,
+            uuid: task.uuid,
+            version: task.version,
+            label: task.label,
+            description: task.description,
+            available_versions: task.available_versions,
+            registry_source: task.registry_source,
+            enabled: task.enabled,
+            created_at: task.created_at,
+            updated_at: task.updated_at,
+            validated_at: task.validated_at,
+            in_sync: task.in_sync,
+        }
+    }
 }

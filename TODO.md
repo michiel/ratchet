@@ -215,8 +215,15 @@
   - [x] Add HTTP loader stub for future remote registry support
   - [x] Integrate registry with GraphQL API (3 new queries)
   - [x] Add duplicate version detection with warning logs
+  - [x] **Registry-Database Unification** ✅ **COMPLETED**
+    - [x] Unified Model: Registry as source, database stores execution history
+    - [x] Auto-Registration: Tasks in registry auto-create/update database records
+    - [x] Single Query Interface: Unified GraphQL queries for consistent view
+    - [x] Reference-Based Storage: Database stores task references instead of full data
   
   **Summary**: Implemented complete task registry system enabling centralized task discovery and management. Created filesystem loader supporting individual task directories, ZIP files, and collections containing both. Added version management with duplicate detection. Exposed registry through GraphQL with queries for listing tasks, getting specific versions, and viewing available versions. Integrated with server startup for automatic task loading from configured sources.
+  
+  **Unification Update**: Eliminated functional overlap between registry and database. Created TaskSyncService for automatic synchronization. Replaced separate GraphQL queries with unified interface returning combined registry/database view. Database now stores only task references while registry holds actual task content, eliminating data duplication.
 
 ### 26. CLI Serve Command
 - [x] **CLI Server Integration** ✅ **COMPLETED**
@@ -330,7 +337,7 @@
 - **Complete Database Layer** with Sea-ORM and SQLite persistence
 - **CLI Serve Command** enabling easy server deployment
 - **Configuration Management** with YAML files and environment overrides
-- **Task Registry System** with centralized task discovery and version management
+- **Unified Task Registry** with automatic database synchronization and single GraphQL interface
 
 ### 🚀 Ready for Production:
 The server is now **production-ready** with persistent storage, comprehensive API, and easy deployment via CLI command.
