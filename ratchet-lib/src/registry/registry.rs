@@ -100,6 +100,17 @@ impl TaskRegistry {
         }
     }
 
+    pub async fn remove_task(&self, id: &Uuid) -> Result<()> {
+        let mut tasks = self.tasks.write().await;
+        if tasks.remove(id).is_some() {
+            info!("Removed task {} from registry", id);
+            Ok(())
+        } else {
+            warn!("Task {} not found in registry", id);
+            Ok(())
+        }
+    }
+    
     pub fn sources(&self) -> &[TaskSource] {
         &self.sources
     }

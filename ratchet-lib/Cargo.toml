@@ -36,6 +36,7 @@ regex = "1.10"
 serde_yaml = "0.9"
 async-trait = "0.1"
 num_cpus = "1.16"
+notify = { version = "6.1", features = ["serde"] }
 
 # Database dependencies
 sea-orm = { version = "0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }

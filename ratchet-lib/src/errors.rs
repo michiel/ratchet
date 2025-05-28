@@ -89,6 +89,12 @@ pub enum RatchetError {
     #[error("Validation error: {0}")]
     Validation(String),
 
+    #[error("Watcher error: {0}")]
+    WatcherError(String),
+
+    #[error("Load error: {0}")]
+    LoadError(String),
+
     #[error("Other error: {0}")]
     Other(String),
 }

@@ -209,11 +209,13 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
         
         // Convert config sources to TaskSource
         let mut sources = Vec::new();
+        let mut valid_configs = Vec::new();
         for source_config in &registry_config.sources {
             match TaskSource::from_config(source_config) {
                 Ok(source) => {
                     info!("Added registry source: {} ({})", source_config.name, source_config.uri);
                     sources.push(source);
+                    valid_configs.push(source_config.clone());
                 },
                 Err(e) => {
                     error!("Failed to parse registry source {}: {}", source_config.name, e);
@@ -221,8 +223,8 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
             }
         }
         
-        // Create registry service
-        let mut registry_service = DefaultRegistryService::new(sources);
+        // Create registry service with configs
+        let mut registry_service = DefaultRegistryService::new_with_configs(sources, valid_configs);
         
         // Get the registry reference first
         let registry = registry_service.registry().await;
@@ -239,6 +241,12 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
         // Load all sources (this will auto-sync to database)
         if let Err(e) = registry_service.load_all_sources().await {
             error!("Failed to load registry sources: {}", e);
+        }
+        
+        // Start watching filesystem sources if configured
+        if let Err(e) = registry_service.start_watching().await {
+            warn!("Failed to start filesystem watcher: {}", e);
+            // Continue anyway - watching is optional
         }
         
         // Return both registry and sync service
