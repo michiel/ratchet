@@ -1,0 +1,902 @@
+openapi: 3.0.3
+info:
+  title: Ratchet REST API
+  description: |
+    The Ratchet REST API provides programmatic access to manage tasks and their executions.
+    
+    ## Key Features
+    - **Tasks**: Registry-based task definitions with input/output schemas
+    - **Executions**: Create, monitor, and manage task executions
+    - **Refine.dev Compatible**: Full support for Refine.dev pagination, sorting, and filtering conventions
+    - **Comprehensive Error Handling**: Consistent error responses with detailed messages
+    
+    ## Authentication
+    Currently, the API does not require authentication. This may change in future versions.
+    
+    ## Pagination
+    The API uses Refine.dev compatible pagination with `_start` and `_end` parameters.
+    Responses include `x-total-count` and `content-range` headers.
+    
+    ## Error Handling
+    All errors follow the Refine.dev error format with `statusCode` and `message` fields.
+  version: 1.0.0
+  contact:
+    name: Ratchet API Support
+    url: https://github.com/yourusername/ratchet
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+  - url: https://api.ratchet.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: Tasks
+    description: Task management operations
+  - name: Executions
+    description: Task execution management
+
+paths:
+  /tasks:
+    get:
+      tags:
+        - Tasks
+      summary: List all tasks
+      description: |
+        Retrieve a paginated list of tasks with optional filtering and sorting.
+        Tasks are managed through the registry system and include both database and registry sources.
+      operationId: listTasks
+      parameters:
+        - $ref: '#/components/parameters/PaginationStart'
+        - $ref: '#/components/parameters/PaginationEnd'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - name: uuid
+          in: query
+          description: Filter by UUID (partial match supported)
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: label
+          in: query
+          description: Filter by exact label match
+          schema:
+            type: string
+            example: "weather-api"
+        - name: label_like
+          in: query
+          description: Filter by label containing substring (case-insensitive)
+          schema:
+            type: string
+            example: "weather"
+        - name: version
+          in: query
+          description: Filter by exact version
+          schema:
+            type: string
+            example: "1.0.0"
+        - name: enabled
+          in: query
+          description: Filter by enabled status
+          schema:
+            type: boolean
+            example: true
+        - name: registrySource
+          in: query
+          description: Filter by registry source status
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: Successfully retrieved tasks
+          headers:
+            x-total-count:
+              description: Total number of tasks matching the query
+              schema:
+                type: integer
+                example: 42
+            content-range:
+              description: Range of items returned
+              schema:
+                type: string
+                example: "tasks 0-9/42"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskResponse'
+              example:
+                data:
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
+                    uuid: "550e8400-e29b-41d4-a716-446655440000"
+                    version: "1.0.0"
+                    label: "weather-api"
+                    description: "Fetch weather data from OpenWeatherMap API"
+                    enabled: true
+                    registrySource: true
+                    availableVersions: ["1.0.0", "1.1.0"]
+                    createdAt: "2024-01-15T10:30:00Z"
+                    updatedAt: "2024-01-15T10:30:00Z"
+                    validatedAt: "2024-01-15T10:30:00Z"
+                    inSync: true
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Tasks
+      summary: Create a new task
+      description: |
+        Currently not supported. Tasks are managed through the registry system.
+        Use the file system or registry sources to add tasks.
+      operationId: createTask
+      responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /tasks/{id}:
+    get:
+      tags:
+        - Tasks
+      summary: Get a specific task
+      description: |
+        Retrieve detailed information about a specific task, including its input and output schemas.
+      operationId: getTask
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Successfully retrieved task
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TaskDetailResponse'
+              example:
+                data:
+                  id: "550e8400-e29b-41d4-a716-446655440000"
+                  uuid: "550e8400-e29b-41d4-a716-446655440000"
+                  version: "1.0.0"
+                  label: "weather-api"
+                  description: "Fetch weather data from OpenWeatherMap API"
+                  enabled: true
+                  registrySource: true
+                  availableVersions: ["1.0.0", "1.1.0"]
+                  createdAt: "2024-01-15T10:30:00Z"
+                  updatedAt: "2024-01-15T10:30:00Z"
+                  validatedAt: "2024-01-15T10:30:00Z"
+                  inSync: true
+                  inputSchema:
+                    type: object
+                    properties:
+                      city:
+                        type: string
+                        description: "City name"
+                      apiKey:
+                        type: string
+                        description: "OpenWeatherMap API key"
+                    required: ["city", "apiKey"]
+                  outputSchema:
+                    type: object
+                    properties:
+                      temperature:
+                        type: number
+                      description:
+                        type: string
+                      humidity:
+                        type: number
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags:
+        - Tasks
+      summary: Update a task
+      description: |
+        Limited updates are supported. Currently, enabling/disabling tasks is not implemented.
+        Tasks are primarily managed through the registry system.
+      operationId: updateTask
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdateRequest'
+            example:
+              enabled: false
+      responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    delete:
+      tags:
+        - Tasks
+      summary: Delete a task
+      description: |
+        Currently not supported. Tasks are managed through the registry system.
+        Remove tasks from the source registry to delete them.
+      operationId: deleteTask
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /executions:
+    get:
+      tags:
+        - Executions
+      summary: List all executions
+      description: |
+        Retrieve a paginated list of task executions with optional filtering and sorting.
+        Supports filtering by status, task, dates, and more.
+      operationId: listExecutions
+      parameters:
+        - $ref: '#/components/parameters/PaginationStart'
+        - $ref: '#/components/parameters/PaginationEnd'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - name: task_id
+          in: query
+          description: Filter by task ID
+          schema:
+            type: string
+            example: "1"
+        - name: status
+          in: query
+          description: Filter by execution status
+          schema:
+            $ref: '#/components/schemas/ExecutionStatus'
+        - name: queued_after
+          in: query
+          description: Filter executions queued after this date
+          schema:
+            type: string
+            format: date-time
+        - name: queued_before
+          in: query
+          description: Filter executions queued before this date
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Successfully retrieved executions
+          headers:
+            x-total-count:
+              description: Total number of executions matching the query
+              schema:
+                type: integer
+                example: 150
+            content-range:
+              description: Range of items returned
+              schema:
+                type: string
+                example: "executions 0-9/150"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Executions
+      summary: Create a new execution
+      description: |
+        Create a new task execution with the specified input data.
+        The execution will be queued for processing.
+      operationId: createExecution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionCreateRequest'
+            example:
+              task_id: "1"
+              input:
+                city: "London"
+                apiKey: "your-api-key"
+              options:
+                enable_recording: true
+                priority: 5
+                timeout_seconds: 30
+      responses:
+        '201':
+          description: Successfully created execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExecutionDetailResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /executions/{id}:
+    get:
+      tags:
+        - Executions
+      summary: Get a specific execution
+      description: |
+        Retrieve detailed information about a specific execution,
+        including metadata about retry and cancellation capabilities.
+      operationId: getExecution
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '200':
+          description: Successfully retrieved execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExecutionDetailResponse'
+              example:
+                data:
+                  id: "123"
+                  uuid: "650e8400-e29b-41d4-a716-446655440000"
+                  task_id: "1"
+                  input:
+                    city: "London"
+                    apiKey: "your-api-key"
+                  output:
+                    temperature: 15.5
+                    description: "Cloudy"
+                    humidity: 72
+                  status: "completed"
+                  error_message: null
+                  error_details: null
+                  queued_at: "2024-01-15T10:30:00Z"
+                  started_at: "2024-01-15T10:30:05Z"
+                  completed_at: "2024-01-15T10:30:08Z"
+                  duration_ms: 3000
+                  http_requests: []
+                  recording_path: null
+                  metadata:
+                    can_retry: false
+                    can_cancel: false
+                    progress: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags:
+        - Executions
+      summary: Update an execution
+      description: |
+        Update an execution's status or output. Limited to specific status transitions:
+        - Pending/Running → Cancelled
+        - Running → Completed (with output)
+        - Running → Failed (with error details)
+      operationId: updateExecution
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionUpdateRequest'
+            examples:
+              cancel:
+                summary: Cancel a running execution
+                value:
+                  status: "cancelled"
+              complete:
+                summary: Manually complete an execution
+                value:
+                  status: "completed"
+                  output:
+                    result: "success"
+                    data: {}
+              fail:
+                summary: Mark execution as failed
+                value:
+                  status: "failed"
+                  error_message: "API request timeout"
+                  error_details:
+                    code: "TIMEOUT"
+                    duration: 30000
+      responses:
+        '200':
+          description: Successfully updated execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExecutionDetailResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Executions
+      summary: Delete an execution
+      description: |
+        Delete an execution record. Cannot delete running executions.
+      operationId: deleteExecution
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '204':
+          description: Successfully deleted execution
+        '400':
+          description: Cannot delete running execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /executions/{id}/retry:
+    post:
+      tags:
+        - Executions
+      summary: Retry a failed execution
+      description: |
+        Create a new execution with the same input as a failed or cancelled execution.
+        Only failed or cancelled executions can be retried.
+      operationId: retryExecution
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '201':
+          description: Successfully created retry execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExecutionDetailResponse'
+        '400':
+          description: Can only retry failed or cancelled executions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /executions/{id}/cancel:
+    post:
+      tags:
+        - Executions
+      summary: Cancel a pending or running execution
+      description: |
+        Cancel an execution that is either pending or currently running.
+        Sets the status to cancelled and records completion time.
+      operationId: cancelExecution
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '200':
+          description: Successfully cancelled execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExecutionDetailResponse'
+        '400':
+          description: Can only cancel pending or running executions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    PaginationStart:
+      name: _start
+      in: query
+      description: Starting index for pagination (0-based)
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+        example: 0
+
+    PaginationEnd:
+      name: _end
+      in: query
+      description: Ending index for pagination (exclusive)
+      schema:
+        type: integer
+        minimum: 1
+        example: 10
+
+    Sort:
+      name: _sort
+      in: query
+      description: Field to sort by
+      schema:
+        type: string
+        example: "createdAt"
+
+    Order:
+      name: _order
+      in: query
+      description: Sort order
+      schema:
+        type: string
+        enum: [ASC, DESC, asc, desc]
+        default: ASC
+        example: DESC
+
+    TaskId:
+      name: id
+      in: path
+      required: true
+      description: Task UUID
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ExecutionId:
+      name: id
+      in: path
+      required: true
+      description: Execution ID
+      schema:
+        type: string
+        example: "123"
+
+  schemas:
+    ExecutionStatus:
+      type: string
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - cancelled
+      description: |
+        Execution status values:
+        - `pending`: Execution is queued and waiting to start
+        - `running`: Execution is currently being processed
+        - `completed`: Execution finished successfully
+        - `failed`: Execution failed with an error
+        - `cancelled`: Execution was cancelled
+
+    TaskResponse:
+      type: object
+      required:
+        - id
+        - uuid
+        - version
+        - label
+        - description
+        - enabled
+        - registrySource
+        - availableVersions
+        - inSync
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Task ID (same as UUID)
+        uuid:
+          type: string
+          format: uuid
+          description: Unique identifier for the task
+        version:
+          type: string
+          description: Task version
+          example: "1.0.0"
+        label:
+          type: string
+          description: Human-readable task label
+          example: "weather-api"
+        description:
+          type: string
+          description: Task description
+          example: "Fetch weather data from OpenWeatherMap API"
+        enabled:
+          type: boolean
+          description: Whether the task is enabled
+        registrySource:
+          type: boolean
+          description: Whether the task comes from a registry
+        availableVersions:
+          type: array
+          items:
+            type: string
+          description: List of available versions for this task
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Task creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Task last update timestamp
+        validatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Task validation timestamp
+        inSync:
+          type: boolean
+          description: Whether the task is synchronized with its source
+
+    TaskDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          properties:
+            inputSchema:
+              type: object
+              nullable: true
+              description: JSON Schema for task input validation
+            outputSchema:
+              type: object
+              nullable: true
+              description: JSON Schema for task output validation
+
+    TaskUpdateRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: Enable or disable the task
+
+    ExecutionResponse:
+      type: object
+      required:
+        - id
+        - uuid
+        - task_id
+        - input
+        - status
+        - queued_at
+      properties:
+        id:
+          type: string
+          description: Execution ID
+        uuid:
+          type: string
+          format: uuid
+          description: Execution UUID
+        task_id:
+          type: string
+          description: Associated task ID
+        input:
+          type: object
+          description: Input data provided to the task
+        output:
+          type: object
+          nullable: true
+          description: Output data from the task (if completed)
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        error_message:
+          type: string
+          nullable: true
+          description: Error message if execution failed
+        error_details:
+          type: object
+          nullable: true
+          description: Detailed error information
+        queued_at:
+          type: string
+          format: date-time
+          description: When the execution was queued
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the execution started
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the execution completed
+        duration_ms:
+          type: integer
+          nullable: true
+          description: Execution duration in milliseconds
+        http_requests:
+          type: array
+          nullable: true
+          items:
+            type: object
+          description: HTTP requests made during execution
+        recording_path:
+          type: string
+          nullable: true
+          description: Path to execution recording
+
+    ExecutionDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionResponse'
+        - type: object
+          required:
+            - metadata
+          properties:
+            metadata:
+              $ref: '#/components/schemas/ExecutionMetadata'
+
+    ExecutionMetadata:
+      type: object
+      required:
+        - can_retry
+        - can_cancel
+      properties:
+        can_retry:
+          type: boolean
+          description: Whether this execution can be retried
+        can_cancel:
+          type: boolean
+          description: Whether this execution can be cancelled
+        progress:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Execution progress (0.0 to 1.0)
+
+    ExecutionCreateRequest:
+      type: object
+      required:
+        - task_id
+        - input
+      properties:
+        task_id:
+          type: string
+          description: ID of the task to execute
+        input:
+          type: object
+          description: Input data for the task
+        options:
+          $ref: '#/components/schemas/ExecutionOptions'
+
+    ExecutionUpdateRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        output:
+          type: object
+          description: Output data (for manual completion)
+        error_message:
+          type: string
+          description: Error message (for manual failure)
+        error_details:
+          type: object
+          description: Error details (for manual failure)
+
+    ExecutionOptions:
+      type: object
+      properties:
+        enable_recording:
+          type: boolean
+          description: Whether to enable execution recording
+        priority:
+          type: integer
+          description: Execution priority (higher values = higher priority)
+        timeout_seconds:
+          type: integer
+          description: Execution timeout in seconds
+
+    ApiError:
+      type: object
+      required:
+        - message
+        - statusCode
+      properties:
+        message:
+          type: string
+          description: Error message
+        statusCode:
+          type: integer
+          description: HTTP status code
+        errors:
+          type: array
+          items:
+            type: string
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            message: "Invalid task ID format"
+            statusCode: 400
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            message: "Task not found"
+            statusCode: 404
+
+    MethodNotAllowed:
+      description: Method not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            message: "Tasks are managed through the registry system"
+            statusCode: 405
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            message: "Database connection failed"
+            statusCode: 500
+
+  securitySchemes:
+    # Placeholder for future authentication
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
