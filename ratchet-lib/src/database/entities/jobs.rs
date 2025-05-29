@@ -1,5 +1,6 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 /// Job priority enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
@@ -152,6 +153,36 @@ impl JobPriority {
             JobPriority::Normal => 2,
             JobPriority::High => 3,
             JobPriority::Urgent => 4,
+        }
+    }
+}
+
+impl FromStr for JobPriority {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "low" => Ok(JobPriority::Low),
+            "normal" => Ok(JobPriority::Normal),
+            "high" => Ok(JobPriority::High),
+            "urgent" => Ok(JobPriority::Urgent),
+            _ => Err(format!("Invalid priority: {}", s)),
+        }
+    }
+}
+
+impl FromStr for JobStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "queued" => Ok(JobStatus::Queued),
+            "processing" => Ok(JobStatus::Processing),
+            "completed" => Ok(JobStatus::Completed),
+            "failed" => Ok(JobStatus::Failed),
+            "cancelled" => Ok(JobStatus::Cancelled),
+            "retrying" => Ok(JobStatus::Retrying),
+            _ => Err(format!("Invalid status: {}", s)),
         }
     }
 }

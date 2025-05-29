@@ -9,12 +9,17 @@ Ratchet is a JavaScript task execution framework written in Rust. It allows you 
 - Support for asynchronous operations using Tokio runtime
 - HTTP fetch API for making web requests from JavaScript
 - JSON schema validation for inputs and outputs
-- **Task Registry & Server**: GraphQL API server for task management and execution
+- **REST API**: Refine.dev compatible REST API for web applications and integrations
+- **GraphQL API**: Comprehensive GraphQL server for task management and execution
+- **Health Monitoring**: Built-in health endpoints for monitoring and load balancers
 - **File System Watcher**: Automatic task reloading when files change (configurable)
 - **Recording functionality**: Capture HTTP requests in HAR format and execution logs
 - **Replay functionality**: Re-execute tasks with recorded inputs for regression testing
+- **Job Queue Management**: Priority-based job execution with comprehensive scheduling
+- **Worker Pool Monitoring**: Real-time worker status and performance metrics
 - Comprehensive tracing and debugging support
 - Task validation and testing framework
+- **Comprehensive Testing**: Full integration test coverage for REST API endpoints
 
 ## Project Structure
 
@@ -170,6 +175,42 @@ mutation {
   }
 }
 ```
+
+#### REST API
+
+The REST API provides a Refine.dev compatible interface for web applications:
+
+**Base URL**: `http://localhost:8080/api/v1`
+
+**Key Endpoints**:
+- `GET /health` - Health check for monitoring
+- `GET /tasks` - List tasks with pagination and filtering
+- `GET /jobs` - Job queue management
+- `GET /schedules` - Cron-based scheduling
+- `GET /workers` - Worker pool monitoring
+- `GET /executions` - Execution history and management
+
+**Example Usage**:
+```bash
+# Health check
+curl http://localhost:8080/api/v1/health
+
+# List tasks with pagination
+curl "http://localhost:8080/api/v1/tasks?_start=0&_end=10&_sort=label&_order=asc"
+
+# Get job queue statistics
+curl http://localhost:8080/api/v1/jobs/stats
+
+# List workers
+curl http://localhost:8080/api/v1/workers
+```
+
+**Features**:
+- **Refine.dev Compatible**: Full support for pagination (`_start`, `_end`), sorting (`_sort`, `_order`), and filtering
+- **Comprehensive Testing**: All endpoints covered by integration tests
+- **Query Parameter Validation**: Prevents common errors with malformed requests
+- **CORS Support**: Ready for web application integration
+- **OpenAPI Documentation**: Complete API specification available
 
 ### Example JavaScript Task
 
