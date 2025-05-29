@@ -279,6 +279,7 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     info!("🚀 Ratchet server starting on http://{}", addr);
     info!("📊 GraphQL playground available at http://{}/playground", addr);
     info!("🏥 Health check available at http://{}/health", addr);
+    info!("📖 REST API documentation available at http://{}/api-docs", addr);
     
     // Create shutdown signal
     let shutdown_signal = async {

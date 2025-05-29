@@ -5,6 +5,7 @@ use axum::{
 };
 use std::sync::Arc;
 use tower::ServiceBuilder;
+use tower_http::services::ServeDir;
 
 use crate::database::repositories::RepositoryFactory;
 use crate::execution::{JobQueueManager, ProcessTaskExecutor};
@@ -74,6 +75,9 @@ pub fn create_app(
         // API routes
         .route("/health", get(health_handler))
         .route("/version", get(version_handler))
+        .route("/api-docs", get(|| async { 
+            axum::response::Redirect::permanent("/docs/openapi-viewer.html") 
+        }))
         
         // Root route
         .route("/", get(|| async { "Ratchet API Server" }))
@@ -83,6 +87,9 @@ pub fn create_app(
         
         // Nest REST API under /api/v1
         .nest("/api/v1", rest_api)
+        
+        // Serve static documentation files
+        .nest_service("/docs", ServeDir::new("docs"))
         
         // Add middleware stack
         .layer(

@@ -52,7 +52,7 @@ async-graphql = { version = "6.0", features = ["uuid", "chrono", "dataloader"] }
 async-graphql-axum = "6.0"
 axum = "0.6"
 tower = "0.4"
-tower-http = { version = "0.4", features = ["trace", "cors"] }
+tower-http = { version = "0.4", features = ["trace", "cors", "fs"] }
 futures = "0.3"
 
 # Testing dependencies (only used in #[cfg(test)])
