@@ -7,6 +7,14 @@ Major server implementation with GraphQL API and task registry.
 ### Features
 
 - Complete GraphQL API server with async-graphql
+- **Refine.dev Compatible REST API** with comprehensive resource management
+  - Full CRUD operations for Tasks, Jobs, Schedules, Executions, and Workers
+  - Health monitoring endpoint for load balancers and monitoring systems
+  - Pagination support with `_start`, `_end` parameters
+  - Sorting and filtering with query parameter validation
+  - CORS support for web application integration
+  - OpenAPI 3.0.3 specification with complete documentation
+  - Comprehensive integration test coverage (5 test suites)
 - Unified Task Registry system for centralized task management
   - Filesystem loader supporting directories, ZIP files, and collections
   - Version management with duplicate detection
@@ -31,6 +39,15 @@ Major server implementation with GraphQL API and task registry.
 - Refactored into modular architecture with clear separation of concerns
 - Added comprehensive configuration system with YAML and environment support
 - Implemented service layer abstraction for better testability
+
+### Bug Fixes
+
+- **Fixed REST API query parameter deserialization** - Resolved 400 errors for pagination parameters like `?_start=0&_end=10`
+  - Replaced problematic nested serde flatten directives with direct field mapping
+  - Added proper query parameter validation to prevent malformed requests
+  - Maintained backward compatibility through helper accessor methods
+- **Resolved compilation warnings** - Prefixed unused fields and variables with underscores
+- **Enhanced error handling** - Improved REST API error responses with detailed validation messages
 
 ## 0.1.0 (2025-05-23)
 

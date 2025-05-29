@@ -10,8 +10,10 @@ info:
     - **Jobs**: Queue management for task execution with priorities and scheduling
     - **Schedules**: Cron-based scheduling for automated task execution
     - **Workers**: Monitor worker pool status and performance
+    - **Health Monitoring**: System health checks for monitoring and load balancers
     - **Refine.dev Compatible**: Full support for Refine.dev pagination, sorting, and filtering conventions
     - **Comprehensive Error Handling**: Consistent error responses with detailed messages
+    - **Comprehensive Testing**: Fully tested REST API with integration test coverage
     
     ## Authentication
     Currently, the API does not require authentication. This may change in future versions.
@@ -19,9 +21,11 @@ info:
     ## Pagination
     The API uses Refine.dev compatible pagination with `_start` and `_end` parameters.
     Responses include `x-total-count` and `content-range` headers.
+    Query parameters are fully validated and support nested filtering.
     
     ## Error Handling
     All errors follow the Refine.dev error format with `statusCode` and `message` fields.
+    Query parameter validation prevents common errors like malformed pagination.
   version: 1.0.0
   contact:
     name: Ratchet API Support
@@ -47,8 +51,32 @@ tags:
     description: Cron-based task scheduling and automation
   - name: Workers
     description: Worker pool monitoring and statistics
+  - name: Health
+    description: System health and monitoring endpoints
 
 paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: |
+        Returns the health status of the API service. Used for monitoring and load balancer health checks.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+        '500':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /tasks:
     get:
       tags:
