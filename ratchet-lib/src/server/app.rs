@@ -10,6 +10,7 @@ use crate::database::repositories::RepositoryFactory;
 use crate::execution::{JobQueueManager, ProcessTaskExecutor};
 use crate::graphql::{RatchetSchema, create_schema};
 use crate::registry::TaskRegistry;
+use crate::rest::create_rest_app;
 use crate::services::TaskSyncService;
 
 use super::{
@@ -46,6 +47,15 @@ pub fn create_app(
     );
 
     // Create server state
+    // Create REST API first, before moving values into ServerState
+    let rest_api = create_rest_app(
+        repositories.clone(),
+        job_queue.clone(),
+        task_executor.clone(),
+        registry.clone(),
+        task_sync_service.clone(),
+    );
+
     let state = ServerState {
         schema,
         repositories,
@@ -68,8 +78,11 @@ pub fn create_app(
         // Root route
         .route("/", get(|| async { "Ratchet API Server" }))
         
-        // Add state
+        // Add state for GraphQL routes
         .with_state(state)
+        
+        // Nest REST API under /api/v1
+        .nest("/api/v1", rest_api)
         
         // Add middleware stack
         .layer(

@@ -37,4 +37,24 @@ impl RepositoryFactory {
             job_repo: JobRepository::new(db),
         }
     }
+    
+    /// Get the execution repository
+    pub fn execution_repository(&self) -> ExecutionRepository {
+        self.execution_repo.clone()
+    }
+    
+    /// Get the task repository
+    pub fn task_repository(&self) -> TaskRepository {
+        self.task_repo.clone()
+    }
+    
+    /// Get the schedule repository
+    pub fn schedule_repository(&self) -> ScheduleRepository {
+        self.schedule_repo.clone()
+    }
+    
+    /// Get the job repository
+    pub fn job_repository(&self) -> JobRepository {
+        self.job_repo.clone()
+    }
 }
