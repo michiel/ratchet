@@ -43,8 +43,9 @@ pub async fn list_schedules(
     let mut schedules_query = Schedules::find();
 
     // Apply filters
-    if !query.filter.filters.is_empty() {
-        let filters_value = serde_json::to_value(&query.filter.filters).unwrap_or_default();
+    let filter = query.filter();
+    if !filter.filters.is_empty() {
+        let filters_value = serde_json::to_value(&filter.filters).unwrap_or_default();
         if let Ok(schedule_filters) = serde_json::from_value::<ScheduleFilters>(filters_value) {
             if let Some(task_id) = schedule_filters.task_id {
                 schedules_query = schedules_query.filter(schedules::Column::TaskId.eq(task_id));
@@ -59,7 +60,8 @@ pub async fn list_schedules(
     }
 
     // Apply sorting
-    if let Some(sort_field) = query.sort.sort_field() {
+    let sort = query.sort();
+    if let Some(sort_field) = sort.sort_field() {
         let column = match sort_field {
             "id" => schedules::Column::Id,
             "name" => schedules::Column::Name,
@@ -72,7 +74,7 @@ pub async fn list_schedules(
             _ => schedules::Column::Id,
         };
 
-        if matches!(query.sort.sort_direction(), crate::rest::models::common::SortDirection::Desc) {
+        if matches!(sort.sort_direction(), crate::rest::models::common::SortDirection::Desc) {
             schedules_query = schedules_query.order_by_desc(column);
         } else {
             schedules_query = schedules_query.order_by_asc(column);
@@ -88,8 +90,8 @@ pub async fn list_schedules(
 
     // Apply pagination
     let paginated_query = schedules_query
-        .offset(query.pagination.offset())
-        .limit(query.pagination.limit());
+        .offset(query.pagination().offset())
+        .limit(query.pagination().limit());
 
     let schedules = paginated_query
         .all(db)
@@ -99,7 +101,7 @@ pub async fn list_schedules(
     let schedule_responses: Vec<ScheduleResponse> = schedules.into_iter().map(Into::into).collect();
 
     Ok(Json(ApiResponse { data: schedule_responses })
-        .with_pagination_headers(total, query.pagination.offset(), query.pagination.limit(), "schedules"))
+        .with_pagination_headers(total, query.pagination().offset(), query.pagination().limit(), "schedules"))
 }
 
 pub async fn get_schedule(

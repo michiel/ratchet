@@ -26,7 +26,7 @@ where
             .map_err(|err| RestError::BadRequest(format!("Invalid query parameters: {}", err)))?;
         
         // Validate pagination parameters
-        if let (Some(start), Some(end)) = (query.pagination.start, query.pagination.end) {
+        if let (Some(start), Some(end)) = (query.start, query.end) {
             if start >= end {
                 return Err(RestError::BadRequest(
                     "Invalid pagination: _start must be less than _end".to_string(),

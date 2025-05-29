@@ -39,15 +39,16 @@ pub async fn list_tasks(
         .map_err(|e| RestError::InternalError(format!("Failed to list tasks: {}", e)))?;
 
     // Parse filters from query
+    let filter = query.filter();
     let filters = TaskFilters {
-        uuid: query.filter.get_filter("uuid").cloned(),
-        label: query.filter.get_filter("label").cloned(),
-        version: query.filter.get_filter("version").cloned(),
-        enabled: query.filter.get_filter("enabled")
+        uuid: filter.get_filter("uuid").cloned(),
+        label: filter.get_filter("label").cloned(),
+        version: filter.get_filter("version").cloned(),
+        enabled: filter.get_filter("enabled")
             .and_then(|s| s.parse().ok()),
-        registry_source: query.filter.get_filter("registrySource")
+        registry_source: filter.get_filter("registrySource")
             .and_then(|s| s.parse().ok()),
-        label_like: query.filter.get_like_filter("label").cloned(),
+        label_like: filter.get_like_filter("label").cloned(),
     };
 
     // Apply filters
@@ -66,35 +67,36 @@ pub async fn list_tasks(
 
     // Apply sorting
     let mut sorted_tasks = filtered_tasks;
-    if let Some(sort_field) = query.sort.sort_field() {
+    let sort = query.sort();
+    if let Some(sort_field) = sort.sort_field() {
         match sort_field {
             "label" => {
-                sorted_tasks.sort_by(|a, b| match query.sort.sort_direction() {
+                sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.label.cmp(&b.label),
                     crate::rest::models::common::SortDirection::Desc => b.label.cmp(&a.label),
                 });
             },
             "version" => {
-                sorted_tasks.sort_by(|a, b| match query.sort.sort_direction() {
+                sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.version.cmp(&b.version),
                     crate::rest::models::common::SortDirection::Desc => b.version.cmp(&a.version),
                 });
             },
             "createdAt" => {
-                sorted_tasks.sort_by(|a, b| match query.sort.sort_direction() {
+                sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.created_at.cmp(&b.created_at),
                     crate::rest::models::common::SortDirection::Desc => b.created_at.cmp(&a.created_at),
                 });
             },
             "updatedAt" => {
-                sorted_tasks.sort_by(|a, b| match query.sort.sort_direction() {
+                sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.updated_at.cmp(&b.updated_at),
                     crate::rest::models::common::SortDirection::Desc => b.updated_at.cmp(&a.updated_at),
                 });
             },
             _ => {
                 // Default sort by UUID
-                sorted_tasks.sort_by(|a, b| match query.sort.sort_direction() {
+                sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.uuid.cmp(&b.uuid),
                     crate::rest::models::common::SortDirection::Desc => b.uuid.cmp(&a.uuid),
                 });
@@ -103,8 +105,9 @@ pub async fn list_tasks(
     }
 
     // Apply pagination
-    let offset = query.pagination.offset();
-    let limit = query.pagination.limit();
+    let pagination = query.pagination();
+    let offset = pagination.offset();
+    let limit = pagination.limit();
     let paginated_tasks: Vec<TaskResponse> = sorted_tasks
         .into_iter()
         .skip(offset as usize)

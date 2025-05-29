@@ -50,13 +50,15 @@ pub async fn list_executions(
     State(ctx): State<ExecutionsContext>,
     ListQueryExtractor(query): ListQueryExtractor,
 ) -> Result<impl IntoResponse, RestError> {
-    let _offset = query.pagination.offset();
-    let limit = query.pagination.limit();
+    let pagination = query.pagination();
+    let _offset = pagination.offset();
+    let limit = pagination.limit();
     
     // TODO: Apply filters and sorting - implement proper ExecutionFilters parsing from query.filter
     // For now, skip filtering and sorting to get basic functionality working
-    let _sort_column = query.sort.sort_field().unwrap_or("queued_at");
-    let _sort_direction = query.sort.sort_direction();
+    let sort = query.sort();
+    let _sort_column = sort.sort_field().unwrap_or("queued_at");
+    let _sort_direction = sort.sort_direction();
     
     // For now, use simple recent query - TODO: implement proper filtering and sorting
     let total = ctx.repository.count().await

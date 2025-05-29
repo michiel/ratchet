@@ -59,3 +59,4 @@ futures = "0.3"
 [dev-dependencies]
 tokio-test = "0.4"
 axum-test = "13.0"
+http-body-util = "0.1"

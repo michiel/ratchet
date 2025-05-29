@@ -42,8 +42,8 @@ pub async fn list_jobs(
     let mut jobs_query = Jobs::find();
 
     // Apply filters
-    if !query.filter.filters.is_empty() {
-        let filters_value = serde_json::to_value(&query.filter.filters).unwrap_or_default();
+    if !query.filters.is_empty() {
+        let filters_value = serde_json::to_value(&query.filters).unwrap_or_default();
         if let Ok(job_filters) = serde_json::from_value::<JobFilters>(filters_value) {
             if let Some(status) = job_filters.status {
                 if let Ok(status) = status.parse::<JobStatus>() {
@@ -65,7 +65,8 @@ pub async fn list_jobs(
     }
 
     // Apply sorting
-    if let Some(sort_field) = query.sort.sort_field() {
+    let sort_query = query.sort();
+    if let Some(sort_field) = sort_query.sort_field() {
         let column = match sort_field {
             "id" => jobs::Column::Id,
             "priority" => jobs::Column::Priority,
@@ -77,7 +78,7 @@ pub async fn list_jobs(
             _ => jobs::Column::Id,
         };
 
-        if matches!(query.sort.sort_direction(), crate::rest::models::common::SortDirection::Desc) {
+        if matches!(sort_query.sort_direction(), crate::rest::models::common::SortDirection::Desc) {
             jobs_query = jobs_query.order_by_desc(column);
         } else {
             jobs_query = jobs_query.order_by_asc(column);
@@ -92,9 +93,10 @@ pub async fn list_jobs(
         .map_err(|e| RestError::DatabaseError(e.to_string()))?;
 
     // Apply pagination
+    let pagination = query.pagination();
     let paginated_query = jobs_query
-        .offset(query.pagination.offset())
-        .limit(query.pagination.limit());
+        .offset(pagination.offset())
+        .limit(pagination.limit());
 
     let jobs = paginated_query
         .all(db)
@@ -104,7 +106,7 @@ pub async fn list_jobs(
     let job_responses: Vec<JobResponse> = jobs.into_iter().map(Into::into).collect();
 
     Ok(Json(ApiResponse { data: job_responses })
-        .with_pagination_headers(total, query.pagination.offset(), query.pagination.limit(), "jobs"))
+        .with_pagination_headers(total, pagination.offset(), pagination.limit(), "jobs"))
 }
 
 pub async fn get_job(

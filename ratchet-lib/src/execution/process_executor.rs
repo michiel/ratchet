@@ -20,7 +20,7 @@ use crate::{
 pub struct ProcessTaskExecutor {
     worker_manager: Arc<RwLock<WorkerProcessManager>>,
     repositories: RepositoryFactory,
-    config: RatchetConfig,
+    _config: RatchetConfig,
 }
 
 impl ProcessTaskExecutor {
@@ -34,7 +34,7 @@ impl ProcessTaskExecutor {
         Ok(Self {
             worker_manager,
             repositories,
-            config,
+            _config: config,
         })
     }
     
@@ -198,6 +198,39 @@ impl ProcessTaskExecutor {
         }
         
         Ok(())
+    }
+    
+    /// Create a test instance with minimal configuration
+    #[cfg(test)]
+    pub fn new_test() -> Self {
+        use crate::database::connection::DatabaseConnection;
+        
+        // Create minimal repositories with in-memory database
+        let db_config = crate::config::DatabaseConfig {
+            url: "sqlite::memory:".to_string(),
+            max_connections: 1,
+            connection_timeout: std::time::Duration::from_secs(5),
+        };
+        
+        let db_connection = futures::executor::block_on(async {
+            DatabaseConnection::new(db_config).await.unwrap()
+        });
+        let repositories = RepositoryFactory::new(db_connection);
+        
+        // Create minimal config from example file
+        let config = RatchetConfig::from_file("example-config.yaml")
+            .unwrap_or_else(|_| RatchetConfig::default());
+        
+        let worker_config = crate::execution::worker_process::WorkerConfig::default();
+        let worker_manager = Arc::new(RwLock::new(
+            WorkerProcessManager::new(worker_config)
+        ));
+        
+        Self {
+            worker_manager,
+            repositories,
+            _config: config,
+        }
     }
 }
 

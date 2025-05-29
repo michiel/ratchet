@@ -132,12 +132,43 @@ impl FilterQuery {
 /// Combined query parameters for list endpoints
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
+    // Pagination parameters
+    #[serde(rename = "_start")]
+    pub start: Option<u64>,
+    #[serde(rename = "_end")]
+    pub end: Option<u64>,
+    
+    // Sort parameters  
+    #[serde(rename = "_sort")]
+    pub sort: Option<String>,
+    #[serde(rename = "_order")]
+    pub order: Option<String>,
+    
+    // All other parameters as filters
     #[serde(flatten)]
-    pub pagination: PaginationQuery,
-    #[serde(flatten)]
-    pub sort: SortQuery,
-    #[serde(flatten)]
-    pub filter: FilterQuery,
+    pub filters: HashMap<String, String>,
+}
+
+impl ListQuery {
+    pub fn pagination(&self) -> PaginationQuery {
+        PaginationQuery {
+            start: self.start,
+            end: self.end,
+        }
+    }
+    
+    pub fn sort(&self) -> SortQuery {
+        SortQuery {
+            sort: self.sort.clone(),
+            order: self.order.clone(),
+        }
+    }
+    
+    pub fn filter(&self) -> FilterQuery {
+        FilterQuery {
+            filters: self.filters.clone(),
+        }
+    }
 }
 
 /// Standard list response metadata
@@ -147,3 +178,4 @@ pub struct ListMeta {
     pub offset: u64,
     pub limit: u64,
 }
+

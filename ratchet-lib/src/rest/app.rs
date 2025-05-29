@@ -1,5 +1,5 @@
 use axum::{
-    routing::{get, post, patch, delete},
+    routing::{get, post},
     Router,
 };
 use std::sync::Arc;
@@ -36,7 +36,7 @@ pub struct RestApiState {
 pub fn create_rest_app(
     repositories: RepositoryFactory,
     job_queue: Arc<JobQueueManager>,
-    task_executor: Arc<ProcessTaskExecutor>,
+    _task_executor: Arc<ProcessTaskExecutor>,
     registry: Option<Arc<TaskRegistry>>,
     sync_service: Option<Arc<TaskSyncService>>,
 ) -> Router {
@@ -57,40 +57,50 @@ pub fn create_rest_app(
     
     let workers_context = WorkersContext {};
 
-    Router::new()
-        // Tasks endpoints
+    let tasks_router = Router::new()
         .route("/tasks", get(list_tasks).post(create_task))
         .route("/tasks/:id", get(get_task).patch(update_task).delete(delete_task))
-        .with_state(tasks_context.clone())
+        .with_state(tasks_context.clone());
         
-        // Executions endpoints
+    let executions_router = Router::new()
         .route("/executions", get(list_executions).post(create_execution))
         .route("/executions/:id", get(get_execution).patch(update_execution).delete(delete_execution))
         .route("/executions/:id/retry", post(retry_execution))
         .route("/executions/:id/cancel", post(cancel_execution))
-        .with_state(executions_context.clone())
+        .with_state(executions_context.clone());
         
-        // Jobs endpoints
+    let jobs_router = Router::new()
         .route("/jobs", get(list_jobs).post(create_job))
         .route("/jobs/stats", get(get_queue_stats))
         .route("/jobs/:id", get(get_job).patch(update_job).delete(delete_job))
         .route("/jobs/:id/cancel", post(cancel_job))
         .route("/jobs/:id/retry", post(retry_job))
-        .with_state(jobs_context.clone())
+        .with_state(jobs_context.clone());
         
-        // Schedules endpoints
+    let schedules_router = Router::new()
         .route("/schedules", get(list_schedules).post(create_schedule))
         .route("/schedules/:id", get(get_schedule).patch(update_schedule).delete(delete_schedule))
         .route("/schedules/:id/enable", post(enable_schedule))
         .route("/schedules/:id/disable", post(disable_schedule))
         .route("/schedules/:id/trigger", post(trigger_schedule))
-        .with_state(schedules_context.clone())
+        .with_state(schedules_context.clone());
         
-        // Workers endpoints (read-only)
+    let workers_router = Router::new()
         .route("/workers", get(list_workers))
         .route("/workers/stats", get(get_worker_pool_stats))
         .route("/workers/:id", get(get_worker))
-        .with_state(workers_context.clone())
+        .with_state(workers_context.clone());
+
+    Router::new()
+        // Health check endpoint
+        .route("/health", get(health_check))
+        
+        // Merge all sub-routers
+        .merge(tasks_router)
+        .merge(executions_router)
+        .merge(jobs_router)
+        .merge(schedules_router)
+        .merge(workers_router)
         
         // Add middleware
         .layer(cors_layer())
