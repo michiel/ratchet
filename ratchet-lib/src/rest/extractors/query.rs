@@ -3,7 +3,6 @@ use axum::{
     extract::{FromRequestParts, Query},
     http::request::Parts,
 };
-use serde::de::DeserializeOwned;
 
 use crate::rest::{
     middleware::RestError,

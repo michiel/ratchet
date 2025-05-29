@@ -3,7 +3,6 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde_json::json;
 use thiserror::Error;
 
 use crate::rest::models::common::ApiError;

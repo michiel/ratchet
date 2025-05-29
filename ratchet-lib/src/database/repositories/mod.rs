@@ -25,6 +25,7 @@ pub struct RepositoryFactory {
     pub execution_repo: ExecutionRepository,
     pub schedule_repo: ScheduleRepository,
     pub job_repo: JobRepository,
+    db: crate::database::DatabaseConnection,
 }
 
 impl RepositoryFactory {
@@ -34,8 +35,14 @@ impl RepositoryFactory {
             task_repo: TaskRepository::new(db.clone()),
             execution_repo: ExecutionRepository::new(db.clone()),
             schedule_repo: ScheduleRepository::new(db.clone()),
-            job_repo: JobRepository::new(db),
+            job_repo: JobRepository::new(db.clone()),
+            db,
         }
+    }
+    
+    /// Get the database connection
+    pub fn database(&self) -> &crate::database::DatabaseConnection {
+        &self.db
     }
     
     /// Get the execution repository

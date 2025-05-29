@@ -6,7 +6,6 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use sea_orm::prelude::*;
 
 use crate::{
     database::{
@@ -24,7 +23,7 @@ use crate::{
             common::ApiResponse,
             executions::{
                 ExecutionResponse, ExecutionDetailResponse, ExecutionCreateRequest, 
-                ExecutionUpdateRequest, ExecutionFilters
+                ExecutionUpdateRequest
             },
         },
     },

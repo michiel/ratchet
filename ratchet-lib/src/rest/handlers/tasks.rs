@@ -1,6 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{Path, State},
     response::IntoResponse,
     Json,
 };
@@ -11,7 +10,7 @@ use crate::{
     rest::{
         middleware::{RestError, WithPaginationHeaders},
         models::{
-            common::{ApiResponse, ListQuery, ApiError},
+            common::{ApiResponse, ApiError},
             tasks::{TaskResponse, TaskDetailResponse, TaskUpdateRequest, TaskFilters},
         },
         extractors::ListQueryExtractor,

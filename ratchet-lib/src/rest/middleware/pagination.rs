@@ -1,5 +1,4 @@
 use axum::{
-    http::HeaderMap,
     response::{IntoResponse, Response},
     Json,
 };
