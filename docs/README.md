@@ -49,6 +49,14 @@ Comprehensive plan for implementing visual-editor-ready DAG workflows with:
 - Visual layout support for future editor
 - State management and resumability
 
+### [Task & Workflow Marketplace Plan](plans/TASK_MARKETPLACE_PLAN.md)
+Complete ecosystem design for bundling, distributing, and monetizing tasks:
+- Bundle packaging format with dependencies
+- Public and private registries
+- Marketplace with discovery, ratings, and payments
+- Enterprise features and compliance
+- Security model with code signing
+
 ### [Execution Module Restructure Plan](plans/EXECUTION_RESTRUCTURE_PLAN.md)
 Future improvement plan for the execution module architecture (not yet implemented).
 
