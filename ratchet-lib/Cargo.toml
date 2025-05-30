@@ -54,6 +54,9 @@ axum = "0.6"
 tower = "0.4"
 tower-http = { version = "0.4", features = ["trace", "cors", "fs"] }
 futures = "0.3"
+# validator = { version = "0.16", features = ["derive"] }
+# nix = { version = "0.27", features = ["signal", "process"] }
+# mockall = "0.11"
 
 # Testing dependencies (only used in #[cfg(test)])
 [dev-dependencies]

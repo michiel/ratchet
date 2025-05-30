@@ -7,7 +7,13 @@ use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use thiserror::Error;
 
+pub mod base;
 pub mod task_sync_service;
+
+pub use base::{
+    Service, ServiceHealth, HealthStatus, ServiceMetrics, 
+    ServiceRegistry, ServiceBuilder, RegistryError
+};
 pub use task_sync_service::{TaskSyncService, UnifiedTask};
 
 /// Service layer errors

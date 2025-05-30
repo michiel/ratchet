@@ -86,7 +86,7 @@ pub async fn list_schedules(
         .clone()
         .count(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // Apply pagination
     let paginated_query = schedules_query
@@ -96,7 +96,7 @@ pub async fn list_schedules(
     let schedules = paginated_query
         .all(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     let schedule_responses: Vec<ScheduleResponse> = schedules.into_iter().map(Into::into).collect();
 
@@ -113,14 +113,14 @@ pub async fn get_schedule(
     let schedule = Schedules::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
     // Get task name
     let task = Tasks::find_by_id(schedule.task_id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // Calculate if schedule is exhausted
     let is_exhausted = if let Some(max_executions) = schedule.max_executions {
@@ -168,7 +168,7 @@ pub async fn create_schedule(
     let _task = Tasks::find_by_id(payload.task_id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::BadRequest("Task not found".to_string()))?;
 
     // Validate cron expression
@@ -200,7 +200,7 @@ pub async fn create_schedule(
     let created_schedule = active_schedule
         .insert(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // Calculate next run time
     let next_run = created_schedule.calculate_next_run()
@@ -211,13 +211,13 @@ pub async fn create_schedule(
     schedule_repo
         .update_next_run(created_schedule.id, Some(next_run))
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     // Get updated schedule
     let updated_schedule = schedule_repo
         .find_by_id(created_schedule.id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
     Ok((StatusCode::CREATED, Json(ScheduleResponse::from(updated_schedule))))
@@ -234,7 +234,7 @@ pub async fn update_schedule(
     let schedule = Schedules::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
     let mut active_schedule: schedules::ActiveModel = schedule.into();
@@ -269,7 +269,7 @@ pub async fn update_schedule(
     let updated_schedule = active_schedule
         .update(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // If cron expression changed, recalculate next run time
     let final_schedule = if cron_changed {
@@ -279,12 +279,12 @@ pub async fn update_schedule(
         schedule_repo
             .update_next_run(id, next_run)
             .await
-            .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+            .map_err(|e| RestError::InternalError(e.to_string()))?;
         
         schedule_repo
             .find_by_id(id)
             .await
-            .map_err(|e| RestError::DatabaseError(e.to_string()))?
+            .map_err(|e| RestError::InternalError(e.to_string()))?
             .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?
     } else {
         updated_schedule
@@ -303,13 +303,13 @@ pub async fn delete_schedule(
     let _schedule = Schedules::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
     schedule_repo
         .delete(id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -323,12 +323,12 @@ pub async fn enable_schedule(
     schedule_repo
         .set_enabled(id, true)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     let updated_schedule = schedule_repo
         .find_by_id(id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
     Ok(Json(ScheduleResponse::from(updated_schedule)))
@@ -343,12 +343,12 @@ pub async fn disable_schedule(
     schedule_repo
         .set_enabled(id, false)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     let updated_schedule = schedule_repo
         .find_by_id(id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
     Ok(Json(ScheduleResponse::from(updated_schedule)))
@@ -365,7 +365,7 @@ pub async fn trigger_schedule(
     let schedule = Schedules::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
     if !schedule.enabled {
@@ -395,13 +395,13 @@ pub async fn trigger_schedule(
     let created_job = job_repo
         .create(new_job)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // Update schedule execution info
     schedule_repo
         .record_execution(id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     Ok((StatusCode::CREATED, Json(serde_json::json!({
         "message": "Schedule triggered successfully",

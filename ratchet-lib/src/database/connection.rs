@@ -25,6 +25,9 @@ pub enum DatabaseError {
     
     #[error("Configuration error: {0}")]
     ConfigError(String),
+    
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] crate::database::filters::validation::ValidationError),
 }
 
 impl DatabaseConnection {

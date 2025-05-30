@@ -8,6 +8,12 @@ pub mod process_executor;
 pub mod executor;
 pub mod job_queue;
 
+// New improvement modules
+// pub mod graceful_shutdown;
+pub mod retry;
+pub mod load_balancer;
+pub mod task_cache;
+
 // Process-based architecture exports (Send/Sync compliant)
 pub use ipc::{WorkerMessage, CoordinatorMessage, StdioTransport};
 pub use worker_process::{WorkerProcess, WorkerProcessManager, WorkerProcessStatus};

@@ -1,5 +1,12 @@
 use thiserror::Error;
 
+pub mod unified;
+
+pub use unified::{
+    ErrorContext, ErrorSeverity, RetryInfo, BackoffStrategy,
+    RatchetErrorExt, ContextualError, TransientError, PermanentError, SecurityError,
+};
+
 /// JavaScript error types that can be thrown from JS code
 #[derive(Error, Debug, Clone)]
 pub enum JsErrorType {

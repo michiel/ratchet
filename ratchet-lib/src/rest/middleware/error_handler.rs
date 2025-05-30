@@ -6,6 +6,8 @@ use axum::{
 use thiserror::Error;
 
 use crate::rest::models::common::ApiError;
+use crate::database::{SafeDatabaseError, ErrorCode};
+use super::RequestId;
 
 /// REST API specific error type
 #[derive(Error, Debug)]
@@ -22,11 +24,20 @@ pub enum RestError {
     #[error("Method not allowed: {0}")]
     MethodNotAllowed(String),
     
-    #[error("Database error: {0}")]
-    Database(#[from] sea_orm::DbErr),
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
+    
+    #[error("Conflict: {0}")]
+    Conflict(String),
+    
+    #[error("Request timeout: {0}")]
+    Timeout(String),
+    
+    #[error("Safe database error")]
+    SafeDatabase(#[from] SafeDatabaseError),
     
     #[error("Database error: {0}")]
-    DatabaseError(String),
+    Database(#[from] sea_orm::DbErr),
     
     #[error("Task error: {0}")]
     Task(#[from] crate::task::TaskError),
@@ -54,14 +65,64 @@ impl IntoResponse for RestError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ApiError::internal_error(msg),
             ),
-            RestError::Database(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ApiError::internal_error(format!("Database error: {}", err)),
+            RestError::ServiceUnavailable(msg) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                ApiError::service_unavailable(msg),
             ),
-            RestError::DatabaseError(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ApiError::internal_error(msg),
+            RestError::Conflict(msg) => (
+                StatusCode::CONFLICT,
+                ApiError::conflict(msg),
             ),
+            RestError::Timeout(msg) => (
+                StatusCode::REQUEST_TIMEOUT,
+                ApiError::timeout(msg),
+            ),
+            RestError::SafeDatabase(safe_err) => {
+                let status_code = match safe_err.code {
+                    ErrorCode::NotFound => StatusCode::NOT_FOUND,
+                    ErrorCode::Conflict => StatusCode::CONFLICT,
+                    ErrorCode::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+                    ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+                    ErrorCode::ValidationError => StatusCode::BAD_REQUEST,
+                    ErrorCode::Timeout => StatusCode::REQUEST_TIMEOUT,
+                };
+
+                let api_error = ApiError {
+                    error: safe_err.message.clone(),
+                    error_code: Some(format!("{:?}", safe_err.code)),
+                    request_id: Some(safe_err.request_id.clone()),
+                    timestamp: safe_err.timestamp,
+                    path: None, // Will be set by the calling handler if needed
+                    #[cfg(debug_assertions)]
+                    debug_info: safe_err.debug_info,
+                };
+
+                (status_code, api_error)
+            },
+            RestError::Database(err) => {
+                // Convert raw database errors to safe errors
+                let safe_err = SafeDatabaseError::from(err);
+                let status_code = match safe_err.code {
+                    ErrorCode::NotFound => StatusCode::NOT_FOUND,
+                    ErrorCode::Conflict => StatusCode::CONFLICT,
+                    ErrorCode::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+                    ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+                    ErrorCode::ValidationError => StatusCode::BAD_REQUEST,
+                    ErrorCode::Timeout => StatusCode::REQUEST_TIMEOUT,
+                };
+
+                let api_error = ApiError {
+                    error: safe_err.message.clone(),
+                    error_code: Some(format!("{:?}", safe_err.code)),
+                    request_id: Some(safe_err.request_id.clone()),
+                    timestamp: safe_err.timestamp,
+                    path: None, // Will be set by the calling handler if needed
+                    #[cfg(debug_assertions)]
+                    debug_info: safe_err.debug_info,
+                };
+
+                (status_code, api_error)
+            },
             RestError::Task(err) => (
                 StatusCode::BAD_REQUEST,
                 ApiError::bad_request(format!("Task error: {}", err)),

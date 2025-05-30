@@ -1,10 +1,29 @@
 use crate::database::{
     entities::{tasks, Task, TaskActiveModel, Tasks},
-    DatabaseConnection, DatabaseError,
+    DatabaseConnection, DatabaseError, SafeFilterBuilder, validation,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, PaginatorTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set, PaginatorTrait, QueryOrder};
 use uuid::Uuid;
+use serde::{Deserialize, Serialize};
+
+/// Filter criteria for task queries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskFilters {
+    pub name: Option<String>,
+    pub enabled: Option<bool>,
+    pub has_validation: Option<bool>,
+    pub version: Option<String>,
+}
+
+/// Pagination parameters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pagination {
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
+    pub order_by: Option<String>,
+    pub order_desc: Option<bool>,
+}
 
 /// Repository for task-related database operations
 #[derive(Clone)]
@@ -179,6 +198,126 @@ impl TaskRepository {
         Ok(count > 0)
     }
     
+    /// Find tasks with safe filtering and pagination
+    pub async fn find_with_filters(
+        &self,
+        filters: TaskFilters,
+        pagination: Pagination,
+    ) -> Result<Vec<Task>, DatabaseError> {
+        // Validate filter inputs
+        if let Some(ref name) = filters.name {
+            validation::validate_query_input(name)?;
+        }
+        if let Some(ref version) = filters.version {
+            validation::validate_query_input(version)?;
+        }
+
+        let mut query = Tasks::find();
+        let mut filter_builder = SafeFilterBuilder::<tasks::Entity>::new();
+
+        // Apply filters safely
+        if let Some(name) = filters.name {
+            filter_builder.add_like_filter(tasks::Column::Name, &name);
+        }
+        
+        filter_builder.add_optional_filter(tasks::Column::Enabled, filters.enabled);
+        
+        if let Some(version) = filters.version {
+            filter_builder.add_exact_filter(tasks::Column::Version, version);
+        }
+
+        if let Some(has_validation) = filters.has_validation {
+            if has_validation {
+                filter_builder.add_condition(tasks::Column::ValidatedAt.is_not_null());
+            } else {
+                filter_builder.add_condition(tasks::Column::ValidatedAt.is_null());
+            }
+        }
+
+        query = query.filter(filter_builder.build());
+
+        // Apply ordering
+        if let Some(order_by) = pagination.order_by {
+            match order_by.as_str() {
+                "name" => {
+                    query = if pagination.order_desc.unwrap_or(false) {
+                        query.order_by_desc(tasks::Column::Name)
+                    } else {
+                        query.order_by_asc(tasks::Column::Name)
+                    };
+                }
+                "created_at" => {
+                    query = if pagination.order_desc.unwrap_or(false) {
+                        query.order_by_desc(tasks::Column::CreatedAt)
+                    } else {
+                        query.order_by_asc(tasks::Column::CreatedAt)
+                    };
+                }
+                "updated_at" => {
+                    query = if pagination.order_desc.unwrap_or(false) {
+                        query.order_by_desc(tasks::Column::UpdatedAt)
+                    } else {
+                        query.order_by_asc(tasks::Column::UpdatedAt)
+                    };
+                }
+                _ => {
+                    // Default to ID ordering for unknown fields
+                    query = query.order_by_asc(tasks::Column::Id);
+                }
+            }
+        } else {
+            query = query.order_by_asc(tasks::Column::Id);
+        }
+
+        // Apply pagination
+        if let Some(limit) = pagination.limit {
+            query = query.limit(limit);
+        }
+        if let Some(offset) = pagination.offset {
+            query = query.offset(offset);
+        }
+
+        let tasks = query.all(self.db.get_connection()).await?;
+        Ok(tasks)
+    }
+
+    /// Count tasks with safe filtering
+    pub async fn count_with_filters(&self, filters: TaskFilters) -> Result<u64, DatabaseError> {
+        // Validate filter inputs
+        if let Some(ref name) = filters.name {
+            validation::validate_query_input(name)?;
+        }
+        if let Some(ref version) = filters.version {
+            validation::validate_query_input(version)?;
+        }
+
+        let mut query = Tasks::find();
+        let mut filter_builder = SafeFilterBuilder::<tasks::Entity>::new();
+
+        // Apply same filters as find_with_filters
+        if let Some(name) = filters.name {
+            filter_builder.add_like_filter(tasks::Column::Name, &name);
+        }
+        
+        filter_builder.add_optional_filter(tasks::Column::Enabled, filters.enabled);
+        
+        if let Some(version) = filters.version {
+            filter_builder.add_exact_filter(tasks::Column::Version, version);
+        }
+
+        if let Some(has_validation) = filters.has_validation {
+            if has_validation {
+                filter_builder.add_condition(tasks::Column::ValidatedAt.is_not_null());
+            } else {
+                filter_builder.add_condition(tasks::Column::ValidatedAt.is_null());
+            }
+        }
+
+        query = query.filter(filter_builder.build());
+        let count = query.count(self.db.get_connection()).await?;
+        Ok(count)
+    }
+
     /// Send-compatible health check method for GraphQL resolvers
     pub async fn health_check_send(&self) -> Result<(), DatabaseError> {
         // Direct implementation to avoid ?Send trait issues

@@ -1,9 +1,17 @@
 use axum::{
     routing::{get, post},
     Router,
+    middleware,
 };
 use std::sync::Arc;
-use tower_http::trace::TraceLayer;
+use std::time::Duration;
+use tower::ServiceBuilder;
+use tower_http::{
+    trace::TraceLayer,
+    // timeout::TimeoutLayer,
+    // limit::RequestBodyLimitLayer,
+    // compression::CompressionLayer,
+};
 
 use crate::{
     database::repositories::RepositoryFactory,
@@ -18,7 +26,7 @@ use crate::{
             schedules::{SchedulesContext, list_schedules, get_schedule, create_schedule, update_schedule, delete_schedule, enable_schedule, disable_schedule, trigger_schedule},
             workers::{WorkersContext, list_workers, get_worker, get_worker_pool_stats},
         },
-        middleware::cors_layer,
+        middleware::{cors_layer, request_id_middleware, rate_limit_middleware_with_state, RateLimitConfig, create_rate_limit_layer},
     },
 };
 
@@ -39,6 +47,18 @@ pub fn create_rest_app(
     _task_executor: Arc<ProcessTaskExecutor>,
     registry: Option<Arc<TaskRegistry>>,
     sync_service: Option<Arc<TaskSyncService>>,
+) -> Router {
+    create_rest_app_with_rate_limit(repositories, job_queue, _task_executor, registry, sync_service, None)
+}
+
+/// Create the REST API application with optional rate limiting
+pub fn create_rest_app_with_rate_limit(
+    repositories: RepositoryFactory,
+    job_queue: Arc<JobQueueManager>,
+    _task_executor: Arc<ProcessTaskExecutor>,
+    registry: Option<Arc<TaskRegistry>>,
+    sync_service: Option<Arc<TaskSyncService>>,
+    rate_limit_config: Option<RateLimitConfig>,
 ) -> Router {
     let tasks_context = TasksContext {
         sync_service: sync_service.clone(),
@@ -91,7 +111,7 @@ pub fn create_rest_app(
         .route("/workers/:id", get(get_worker))
         .with_state(workers_context.clone());
 
-    Router::new()
+    let mut app = Router::new()
         // Health check endpoint
         .route("/health", get(health_check))
         
@@ -102,9 +122,20 @@ pub fn create_rest_app(
         .merge(schedules_router)
         .merge(workers_router)
         
-        // Add middleware
-        .layer(cors_layer())
+        // Add middleware in correct order (inner to outer)
+        .layer(middleware::from_fn(request_id_middleware));
+        
+    // Add rate limiting if configured
+    if let Some(config) = rate_limit_config {
+        let rate_limiter = create_rate_limit_layer(config);
+        app = app.layer(middleware::from_fn(move |headers, connect_info, request, next| {
+            rate_limit_middleware_with_state(rate_limiter.clone(), headers, connect_info, request, next)
+        }));
+    }
+        
+    app
         .layer(TraceLayer::new_for_http())
+        .layer(cors_layer())
 }
 
 /// Health check endpoint for the REST API

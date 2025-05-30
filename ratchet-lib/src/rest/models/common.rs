@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use axum::http::StatusCode;
+use chrono::{DateTime, Utc};
 
 /// Standard API response wrapper for Refine.dev compatibility
 #[derive(Debug, Serialize)]
@@ -17,41 +18,79 @@ impl<T> ApiResponse<T> {
 /// Standard API error response for Refine.dev compatibility
 #[derive(Debug, Serialize)]
 pub struct ApiError {
-    pub message: String,
-    #[serde(rename = "statusCode")]
-    pub status_code: u16,
+    pub error: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub errors: Option<Vec<String>>,
+    pub error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    pub timestamp: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[cfg(debug_assertions)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug_info: Option<String>,
 }
 
 impl ApiError {
-    pub fn new(status_code: StatusCode, message: impl Into<String>) -> Self {
+    pub fn new(error: impl Into<String>) -> Self {
         Self {
-            message: message.into(),
-            status_code: status_code.as_u16(),
-            errors: None,
+            error: error.into(),
+            error_code: None,
+            request_id: None,
+            timestamp: Utc::now(),
+            path: None,
+            #[cfg(debug_assertions)]
+            debug_info: None,
         }
     }
 
-    pub fn with_errors(mut self, errors: Vec<String>) -> Self {
-        self.errors = Some(errors);
+    pub fn with_code(mut self, code: impl Into<String>) -> Self {
+        self.error_code = Some(code.into());
+        self
+    }
+
+    pub fn with_request_id(mut self, request_id: impl Into<String>) -> Self {
+        self.request_id = Some(request_id.into());
+        self
+    }
+
+    pub fn with_path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn with_debug_info(mut self, debug_info: impl Into<String>) -> Self {
+        self.debug_info = Some(debug_info.into());
         self
     }
 
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::NOT_FOUND, message)
+        Self::new(message).with_code("NOT_FOUND")
     }
 
     pub fn bad_request(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::BAD_REQUEST, message)
+        Self::new(message).with_code("BAD_REQUEST")
     }
 
     pub fn internal_error(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
+        Self::new(message).with_code("INTERNAL_ERROR")
     }
 
     pub fn method_not_allowed(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::METHOD_NOT_ALLOWED, message)
+        Self::new(message).with_code("METHOD_NOT_ALLOWED")
+    }
+
+    pub fn service_unavailable(message: impl Into<String>) -> Self {
+        Self::new(message).with_code("SERVICE_UNAVAILABLE")
+    }
+
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(message).with_code("CONFLICT")
+    }
+
+    pub fn timeout(message: impl Into<String>) -> Self {
+        Self::new(message).with_code("TIMEOUT")
     }
 }
 

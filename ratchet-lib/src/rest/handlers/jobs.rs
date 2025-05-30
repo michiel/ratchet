@@ -90,7 +90,7 @@ pub async fn list_jobs(
         .clone()
         .count(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // Apply pagination
     let pagination = query.pagination();
@@ -101,7 +101,7 @@ pub async fn list_jobs(
     let jobs = paginated_query
         .all(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     let job_responses: Vec<JobResponse> = jobs.into_iter().map(Into::into).collect();
 
@@ -118,14 +118,14 @@ pub async fn get_job(
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Job not found".to_string()))?;
 
     // Get task name
     let task = Tasks::find_by_id(job.task_id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // Calculate queue position if job is queued
     let queue_position = if job.status == JobStatus::Queued {
@@ -135,7 +135,7 @@ pub async fn get_job(
             .filter(jobs::Column::QueuedAt.lt(job.queued_at))
             .count(db)
             .await
-            .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+            .map_err(|e| RestError::InternalError(e.to_string()))?;
         Some((position + 1) as i32)
     } else {
         None
@@ -178,7 +178,7 @@ pub async fn create_job(
     let _task = Tasks::find_by_id(payload.task_id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::BadRequest("Task not found".to_string()))?;
 
     // Create job
@@ -204,7 +204,7 @@ pub async fn create_job(
     let created_job = active_job
         .insert(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     Ok((StatusCode::CREATED, Json(JobResponse::from(created_job))))
 }
@@ -219,7 +219,7 @@ pub async fn update_job(
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Job not found".to_string()))?;
 
     // Only allow updates to queued jobs
@@ -247,7 +247,7 @@ pub async fn update_job(
     let updated_job = active_job
         .update(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     Ok(Json(JobResponse::from(updated_job)))
 }
@@ -262,7 +262,7 @@ pub async fn delete_job(
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Job not found".to_string()))?;
 
     // Only allow deletion of queued or completed/failed/cancelled jobs
@@ -275,7 +275,7 @@ pub async fn delete_job(
     job_repo
         .delete(id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -290,7 +290,7 @@ pub async fn cancel_job(
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Job not found".to_string()))?;
 
     // Only allow cancellation of queued or retrying jobs
@@ -303,12 +303,12 @@ pub async fn cancel_job(
     job_repo
         .update_status(id, JobStatus::Cancelled)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     let updated_job = Jobs::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Job not found".to_string()))?;
 
     Ok(Json(JobResponse::from(updated_job)))
@@ -323,7 +323,7 @@ pub async fn retry_job(
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Job not found".to_string()))?;
 
     // Only allow retry of failed or cancelled jobs
@@ -344,7 +344,7 @@ pub async fn retry_job(
     let updated_job = active_job
         .update(db)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     Ok(Json(JobResponse::from(updated_job)))
 }
@@ -357,7 +357,7 @@ pub async fn get_queue_stats(
     let stats = job_repo
         .get_queue_stats()
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     let response = JobQueueStats {
         total: stats.total,

@@ -62,11 +62,11 @@ pub async fn list_executions(
     
     // For now, use simple recent query - TODO: implement proper filtering and sorting
     let total = ctx.repository.count().await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     let executions = ctx.repository.find_recent(limit)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     let response_data: Vec<ExecutionResponse> = executions
         .into_iter()
@@ -89,7 +89,7 @@ pub async fn get_execution(
     let execution = ctx.repository
         .find_by_id(execution_id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound(format!("Execution {} not found", id)))?;
     
     let response_data = ExecutionDetailResponse::from(execution);
@@ -112,7 +112,7 @@ pub async fn create_execution(
     let created_execution = ctx.repository
         .create(execution)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     // Queue the execution for processing
     // Note: This would typically integrate with the job queue system
@@ -136,7 +136,7 @@ pub async fn update_execution(
     let mut execution = ctx.repository
         .find_by_id(execution_id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound(format!("Execution {} not found", id)))?;
     
     // Update fields that are allowed to be modified
@@ -200,7 +200,7 @@ pub async fn update_execution(
     let updated_execution = ctx.repository
         .update(execution)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     let response_data = ExecutionDetailResponse::from(updated_execution);
     let response = ApiResponse { data: response_data };
@@ -220,7 +220,7 @@ pub async fn delete_execution(
     let execution = ctx.repository
         .find_by_id(execution_id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound(format!("Execution {} not found", id)))?;
     
     // Don't allow deletion of running executions
@@ -231,7 +231,7 @@ pub async fn delete_execution(
     ctx.repository
         .delete(execution_id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     Ok(StatusCode::NO_CONTENT)
 }
@@ -247,7 +247,7 @@ pub async fn retry_execution(
     let execution = ctx.repository
         .find_by_id(execution_id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound(format!("Execution {} not found", id)))?;
     
     // Only allow retry of failed or cancelled executions
@@ -261,7 +261,7 @@ pub async fn retry_execution(
     let created_execution = ctx.repository
         .create(new_execution)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     // Queue the new execution for processing
     // Note: This would typically integrate with the job queue system
@@ -283,7 +283,7 @@ pub async fn cancel_execution(
     let mut execution = ctx.repository
         .find_by_id(execution_id)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?
+        .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound(format!("Execution {} not found", id)))?;
     
     // Only allow cancellation of pending or running executions
@@ -304,7 +304,7 @@ pub async fn cancel_execution(
     let updated_execution = ctx.repository
         .update(execution)
         .await
-        .map_err(|e| RestError::DatabaseError(e.to_string()))?;
+        .map_err(|e| RestError::InternalError(e.to_string()))?;
     
     // TODO: Signal the job queue to cancel the execution if it's running
     

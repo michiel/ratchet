@@ -17,6 +17,9 @@ pub mod test;
 pub mod types;
 pub mod validation;
 
+// #[cfg(test)]
+// pub mod testing;
+
 // Re-export commonly used types and functions for convenience
 pub use config::{RatchetConfig, ConfigError};
 pub use errors::{JsErrorType, JsExecutionError};
@@ -27,18 +30,4 @@ pub use server::{create_app, ServerState};
 pub use services::{RatchetEngine, ServiceProvider, ServiceError, ServiceResult};
 pub use validation::{validate_json, parse_schema};
 
-/// Legacy addition function (kept for compatibility)
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Legacy function removed as part of code cleanup
