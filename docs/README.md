@@ -42,6 +42,13 @@ Platform-specific deployment guide covering:
 
 ## Planning Documents
 
+### [DAG Workflow Engine Plan](plans/DAG_WORKFLOW_PLAN.md)
+Comprehensive plan for implementing visual-editor-ready DAG workflows with:
+- Branching logic and conditional execution
+- Parallel task execution
+- Visual layout support for future editor
+- State management and resumability
+
 ### [Execution Module Restructure Plan](plans/EXECUTION_RESTRUCTURE_PLAN.md)
 Future improvement plan for the execution module architecture (not yet implemented).
 
