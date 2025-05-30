@@ -16,7 +16,10 @@ info:
     - **Comprehensive Testing**: Fully tested REST API with integration test coverage
     
     ## Authentication
-    Currently, the API does not require authentication. This may change in future versions.
+    **IMPORTANT**: Currently, the API does not require authentication and all endpoints are publicly accessible. 
+    JWT authentication is planned for future versions but not yet implemented.
+    
+    Rate limiting can identify clients by Bearer tokens for quota purposes, but tokens are not validated for authentication.
     
     ## Pagination
     The API uses Refine.dev compatible pagination with `_start` and `_end` parameters.
@@ -1942,8 +1945,14 @@ components:
             statusCode: 500
 
   securitySchemes:
-    # Placeholder for future authentication
+    # PLANNED FEATURE: JWT authentication not yet implemented
+    # Currently included for rate limiting client identification only
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        **NOT YET IMPLEMENTED**: This is a placeholder for future JWT authentication.
+        
+        Currently, Bearer tokens are only used for rate limiting client identification.
+        All endpoints are publicly accessible without authentication.

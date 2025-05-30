@@ -43,10 +43,10 @@ server:
     max_connections: 10         # Maximum database connection pool size
     connection_timeout: 30      # Connection timeout in seconds
   
-  # Authentication configuration (optional)
-  auth:
-    jwt_secret: "your-secret-key-change-in-production"  # JWT signing secret
-    token_expiration: 3600  # Token expiration time in seconds (1 hour)
+  # Authentication configuration (FUTURE FEATURE - Not yet implemented)
+  # auth:
+  #   jwt_secret: "your-secret-key-change-in-production"  # JWT signing secret
+  #   token_expiration: 3600  # Token expiration time in seconds (1 hour)
   
   # Rate limiting configuration for REST API (optional)
   rate_limit:
@@ -112,11 +112,11 @@ development:
 # RATCHET_MAX_EXECUTION_SECONDS=600
 # RATCHET_DATABASE_URL=postgresql://user:pass@localhost/ratchet
 # RATCHET_SERVER_PORT=3000
-# RATCHET_JWT_SECRET=production-secret-key
+# RATCHET_JWT_SECRET=production-secret-key  # (Future feature)
 # RATCHET_RATE_LIMIT_REQUESTS_PER_MINUTE=120
 
 # Security considerations:
-# - Change jwt_secret in production
+# - JWT authentication is not yet implemented (planned for future release)
 # - Use strong database passwords
 # - Enable SSL/TLS in production (verify_ssl: true)
 # - Configure appropriate rate limits
