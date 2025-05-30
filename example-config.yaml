@@ -1,47 +1,124 @@
 # Example Ratchet Server Configuration
+# This configuration file demonstrates all available options for the Ratchet task execution platform
 
 # Task execution configuration
 execution:
-  max_execution_duration: 300  # 5 minutes in seconds
-  validate_schemas: true
+  max_execution_duration: 300  # Maximum execution time in seconds (5 minutes)
+  validate_schemas: true       # Enable JSON schema validation
+  
+  # JavaScript variable names used for HTTP fetch operations
   fetch_variables:
-    url_var: "__fetch_url"
-    params_var: "__fetch_params"
-    body_var: "__fetch_body"
-    result_var: "__http_result"
-    temp_result_var: "__temp_result"
+    url_var: "__fetch_url"           # Variable name for fetch URL
+    params_var: "__fetch_params"     # Variable name for fetch parameters  
+    body_var: "__fetch_body"         # Variable name for fetch body
+    result_var: "__http_result"      # Variable name for HTTP result
+    temp_result_var: "__temp_result" # Variable name for temporary result
 
 # HTTP client configuration
 http:
-  timeout: 30  # seconds
-  max_redirects: 10
-  user_agent: "Ratchet/1.0"
-  verify_ssl: true
+  timeout: 30              # Request timeout in seconds
+  max_redirects: 10        # Maximum number of redirects to follow
+  user_agent: "Ratchet/1.0" # User agent string for HTTP requests
+  verify_ssl: true         # Whether to verify SSL certificates
 
 # Caching configuration
 cache:
-  task_content_cache_size: 100
-  enabled: true
+  task_content_cache_size: 100  # LRU cache size for task content
+  enabled: true                 # Enable/disable caching
 
-# Logging configuration
+# Logging configuration  
 logging:
-  level: "info"
-  log_to_file: false
-  log_file_path: null
+  level: "info"           # Log level: trace, debug, info, warn, error
+  log_to_file: false      # Whether to write logs to file
+  log_file_path: null     # Log file path (if log_to_file is true)
 
-# Server configuration
+# Server configuration for REST API and GraphQL
 server:
-  bind_address: "127.0.0.1"
-  port: 8080
+  bind_address: "127.0.0.1"  # Server bind address
+  port: 8080                 # Server port
+  
+  # Database configuration
   database:
-    url: "sqlite::memory:"
-    max_connections: 5
-    connection_timeout: 30  # seconds
-  auth: null  # Authentication disabled for development
+    url: "sqlite://ratchet.db"  # Database URL (SQLite file path)
+    max_connections: 10         # Maximum database connection pool size
+    connection_timeout: 30      # Connection timeout in seconds
+  
+  # Authentication configuration (optional)
+  auth:
+    jwt_secret: "your-secret-key-change-in-production"  # JWT signing secret
+    token_expiration: 3600  # Token expiration time in seconds (1 hour)
+  
+  # Rate limiting configuration for REST API (optional)
+  rate_limit:
+    requests_per_minute: 60      # Maximum requests per minute per client
+    burst_size: 10               # Burst allowance for sudden traffic spikes
+    window_size: 60              # Rate limit window size in seconds
+    cleanup_interval: 300        # Cleanup interval for rate limit data in seconds
+    
+    # Predefined rate limit profiles:
+    # "default" - 60 req/min, burst 10
+    # "permissive" - 1000 req/min, burst 100  
+    # "strict" - 30 req/min, burst 5
+    profile: "default"
 
+  # Job queue configuration
+  job_queue:
+    max_dequeue_batch_size: 10   # Maximum jobs to dequeue at once
+    max_queue_size: 1000         # Maximum queue size (0 = unlimited)
+    default_retry_delay: 60      # Default retry delay in seconds
+    default_max_retries: 3       # Default maximum retry attempts
+
+  # Worker process configuration  
+  workers:
+    worker_count: 4                        # Number of worker processes
+    restart_on_crash: true                 # Restart workers on crash
+    max_restart_attempts: 5                # Maximum restart attempts
+    restart_delay_seconds: 10              # Delay between restart attempts
+    health_check_interval_seconds: 30      # Health check interval
+
+# Task registry configuration
 registry:
   sources:
-    - name: "local-tasks"
-      uri: "file://./sample/js-tasks"
+    - name: "local-tasks"            # Source identifier
+      uri: "file://./sample/js-tasks" # Local filesystem path
       config:
-        watch: true
+        watch: true                  # Enable file watching for changes
+        debounce_ms: 1000           # Debounce delay for file changes
+        ignore_patterns:             # Patterns to ignore
+          - "*.tmp"
+          - "node_modules/**"
+          - ".git/**"
+    
+    # Example remote registry source
+    # - name: "company-tasks"
+    #   uri: "https://tasks.company.com/registry"
+    #   config:
+    #     auth_token: "your-auth-token"
+    #     sync_interval: 300  # Sync every 5 minutes
+
+# Development and testing overrides
+development:
+  # Enable more verbose logging in development
+  enable_debug_endpoints: true    # Enable /debug/* endpoints
+  mock_external_services: false   # Mock external HTTP calls
+  validate_on_startup: true       # Validate all tasks on startup
+  
+# Environment variable overrides (examples)
+# These can be set as environment variables to override config values:
+#
+# RATCHET_HTTP_TIMEOUT=60
+# RATCHET_CACHE_SIZE=200  
+# RATCHET_LOG_LEVEL=debug
+# RATCHET_MAX_EXECUTION_SECONDS=600
+# RATCHET_DATABASE_URL=postgresql://user:pass@localhost/ratchet
+# RATCHET_SERVER_PORT=3000
+# RATCHET_JWT_SECRET=production-secret-key
+# RATCHET_RATE_LIMIT_REQUESTS_PER_MINUTE=120
+
+# Security considerations:
+# - Change jwt_secret in production
+# - Use strong database passwords
+# - Enable SSL/TLS in production (verify_ssl: true)
+# - Configure appropriate rate limits
+# - Restrict server bind_address in production (not 0.0.0.0)
+# - Use environment variables for sensitive values
