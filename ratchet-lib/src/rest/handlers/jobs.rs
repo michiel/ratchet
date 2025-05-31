@@ -186,6 +186,8 @@ pub async fn create_job(
     let new_job = jobs::Model::new(payload.task_id, payload.input_data.clone(), priority);
 
     let mut active_job: jobs::ActiveModel = new_job.into();
+    // Unset the ID to let the database auto-generate it
+    active_job.id = ActiveValue::NotSet;
 
     // Set optional fields
     if let Some(process_at) = payload.process_at {
