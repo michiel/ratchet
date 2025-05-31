@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
+use crate::logging::{LogEvent, LogLevel, LogContext, ErrorInfo, ErrorSuggestions, error_info::RelatedError};
 
 /// Error context for structured error handling
 #[derive(Debug, Clone, Serialize, Deserialize)]
