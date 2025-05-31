@@ -174,37 +174,38 @@ The Process Execution IPC (Inter-Process Communication) Model is a core architec
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Coordinator Process                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   GraphQL API   │  │   Job Queue     │  │   Database      │  │
-│  │   (Send/Sync)   │  │   Manager       │  │   Repositories  │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │   GraphQL API   │  │   Job Queue     │  │   Database      ││
+│  │   (Send/Sync)   │  │   Manager       │  │   Repositories  ││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
 │                              │                                  │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │            ProcessTaskExecutor                              │  │
-│  │  ┌─────────────────────────────────────────────────────────┐│  │
-│  │  │          WorkerProcessManager                           ││  │
-│  │  │                                                         ││  │
-│  │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ ││  │
-│  │  │  │ WorkerProcess│  │ WorkerProcess│  │ WorkerProcess│ ││  │
-│  │  │  │     #1       │  │     #2       │  │     #3       │ ││  │
-│  │  │  └──────────────┘  └──────────────┘  └──────────────┘ ││  │
-│  │  └─────────────────────────────────────────────────────────┘│  │
-│  └─────────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │            ProcessTaskExecutor                           │  │
+│  │  ┌───────────────────────────────────────────────────┐   │  │
+│  │  │          WorkerProcessManager                    │   │  │
+│  │  │                                                  │   │  │
+│  │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────┐   │  │
+│  │  │  │ WorkerProcess│  │ WorkerProcess│  │ Worker-  │   │  │
+│  │  │  │     #1       │  │     #2       │  │ Process  │   │  │
+│  │  │  │              │  │              │  │   #3     │   │  │
+│  │  │  └──────────────┘  └──────────────┘  └──────────┘   │  │
+│  │  └───────────────────────────────────────────────────┘   │  │
+│  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               │ IPC Messages
                               │ (STDIN/STDOUT)
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Worker Process #1                          │
+│                     Worker Process #1                           │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                    Worker                                   │  │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │  │
-│  │  │  RatchetEngine  │  │  Task Cache     │  │ IPC Transport││  │
-│  │  │  (Boa Engine)   │  │                 │  │ (Stdio)     ││  │
-│  │  │  [NOT Send/Sync]│  │                 │  │             ││  │
-│  │  └─────────────────┘  └─────────────────┘  └─────────────┘ │  │
-│  └─────────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    Worker                                 │  │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────┐ │  │
+│  │  │  RatchetEngine  │  │  Task Cache     │  │ IPC      │ │  │
+│  │  │  (Boa Engine)   │  │                 │  │ Transport│ │  │
+│  │  │  [NOT Send/Sync]│  │                 │  │ (Stdio)  │ │  │
+│  │  └─────────────────┘  └─────────────────┘  └──────────┘ │  │
+│  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -338,14 +339,14 @@ pub struct StdioTransport {
 Coordinator                           Worker Process
      │                                      │
      │ 1. ExecuteTask{correlation_id}      │
-     ├─────────────────────────────────────►│
+     ├────────────────────────────────────►│
      │                                      │ 2. Load task from filesystem
      │                                      │ 3. Validate input schema
      │                                      │ 4. Execute in Boa engine
      │                                      │ 5. Validate output schema
      │                                      │
-     │ 6. TaskExecutionResponse            │
-     ◄─────────────────────────────────────┤
+     │ 6. TaskExecutionResponse             │
+     ◄──────────────────────────────────────┤
      │                                      │
      │ 7. Update job status in database     │
      │                                      │
@@ -463,32 +464,32 @@ Ratchet uses SQLite with Sea-ORM for persistent storage of tasks, executions, jo
 ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
 │      Tasks      │       │   Executions    │       │      Jobs       │
 ├─────────────────┤       ├─────────────────┤       ├─────────────────┤
-│ id (PK)         │◄──────┤│ id (PK)         │       │ id (PK)         │
-│ uuid            │   1:N ││ uuid            │   N:1 │ uuid            │
-│ name            │       ││ task_id (FK)    │──────►│ task_id (FK)    │
-│ description     │       ││ job_id (FK)     │◄──────┤│ priority        │
-│ input_schema    │       ││ status          │   1:N ││ status          │
-│ output_schema   │       ││ started_at      │       ││ created_at      │
-│ content         │       ││ completed_at    │       ││ scheduled_for   │
-│ created_at      │       ││ error_message   │       ││ retry_count     │
-│ updated_at      │       ││ input_data      │       ││ max_retries     │
-└─────────────────┘       ││ output_data     │       ││ metadata        │
-                          ││ execution_time  │       └─────────────────┘
-                          │└─────────────────┘                │
-                          │                                    │
-                          │ ┌─────────────────┐               │
-                          │ │   Schedules     │               │
-                          │ ├─────────────────┤               │
-                          │ │ id (PK)         │               │
-                          │ │ uuid            │               │
-                          │ │ task_id (FK)    │               │
-                          │ │ cron_expression │               │
-                          └►│ last_run        │◄──────────────┘
-                            │ next_run        │
-                            │ is_active       │
-                            │ created_at      │
-                            │ updated_at      │
-                            └─────────────────┘
+│ id (PK)         │◄──────┤ id (PK)         │       │ id (PK)         │
+│ uuid            │   1:N │ uuid            │   N:1 │ uuid            │
+│ name            │       │ task_id (FK)    │──────►│ task_id (FK)    │
+│ description     │       │ job_id (FK)     │◄──────┤ priority        │
+│ input_schema    │       │ status          │   1:N │ status          │
+│ output_schema   │       │ started_at      │       │ created_at      │
+│ content         │       │ completed_at    │       │ scheduled_for   │
+│ created_at      │       │ error_message   │       │ retry_count     │
+│ updated_at      │       │ input_data      │       │ max_retries     │
+└─────────────────┘       │ output_data     │       │ metadata        │
+                          │ execution_time  │       └─────────────────┘
+                          └─────────────────┘                │
+                                                              │
+                          ┌─────────────────┐                │
+                          │   Schedules     │                │
+                          ├─────────────────┤                │
+                          │ id (PK)         │                │
+                          │ uuid            │                │
+                          │ task_id (FK)    │◄───────────────┘
+                          │ cron_expression │
+                          │ last_run        │
+                          │ next_run        │
+                          │ is_active       │
+                          │ created_at      │
+                          │ updated_at      │
+                          └─────────────────┘
 ```
 
 ## Task Registry Architecture
@@ -503,13 +504,13 @@ The Task Registry provides a centralized system for discovering, loading, and ma
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Task Registry                            │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   TaskRegistry  │  │ RegistryService │  │  Task Loaders   │  │
-│  │                 │  │                 │  │                 │  │
-│  │ - Version Map   │  │ - Load Sources  │  │ - Filesystem    │  │
-│  │ - Task Storage  │  │ - Initialize    │  │ - HTTP (stub)   │  │
-│  │ - Dedup Logic   │  │ - Coordinate    │  │ - Future: Git   │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │   TaskRegistry  │  │ RegistryService │  │  Task Loaders   ││
+│  │                 │  │                 │  │                 ││
+│  │ - Version Map   │  │ - Load Sources  │  │ - Filesystem    ││
+│  │ - Task Storage  │  │ - Initialize    │  │ - HTTP (stub)   ││
+│  │ - Dedup Logic   │  │ - Coordinate    │  │ - Future: Git   ││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
                             │
                             ▼
@@ -520,7 +521,7 @@ The Task Registry provides a centralized system for discovering, loading, and ma
 │  │  Directory   │  │   ZIP File   │  │  Collection  │         │
 │  │              │  │              │  │              │         │
 │  │ metadata.json│  │ task.zip     │  │ ├── task1/  │         │
-│  │ input.schema │  │ └── task/    │  │ ├── task2.zip│        │
+│  │ input.schema │  │ └── task/    │  │ ├── task2.zip│         │
 │  │ output.schema│  │     ├── ...  │  │ └── task3/  │         │
 │  │ main.js      │  │              │  │              │         │
 │  └──────────────┘  └──────────────┘  └──────────────┘         │
@@ -634,9 +635,9 @@ type UnifiedTask {
 4. **Data Flow**:
    ```
    Registry (Source) → TaskSyncService → Database (Reference)
-                            ↓
-                      GraphQL API
-                            ↓
+                             ↓
+                       GraphQL API
+                             ↓
                       UnifiedTask View
    ```
 
@@ -650,20 +651,20 @@ The File System Watcher provides automatic task reloading for filesystem-based r
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    File System Watcher                         │
+│                    File System Watcher                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │ RegistryWatcher │  │  EventProcessor │  │   Debouncer     │  │
-│  │                 │  │                 │  │                 │  │
-│  │ - notify-rs     │  │ - Event Queue   │  │ - 500ms Window  │  │
-│  │ - Path Tracking │  │ - Batch Changes │  │ - Ignore Temp   │  │
-│  │ - IPC Transport │  │ - Reload Tasks  │  │ - Smart Batching│  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │ RegistryWatcher │  │  EventProcessor │  │   Debouncer     ││
+│  │                 │  │                 │  │                 ││
+│  │ - notify-rs     │  │ - Event Queue   │  │ - 500ms Window  ││
+│  │ - Path Tracking │  │ - Batch Changes │  │ - Ignore Temp   ││
+│  │ - IPC Transport │  │ - Reload Tasks  │  │ - Smart Batching││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Platform Support                           │
+│                     Platform Support                            │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
 │  │    Linux     │  │    macOS     │  │   Windows    │         │
@@ -727,10 +728,10 @@ pub struct WatcherConfig {
 Rapid File Changes    Debounced Events       Registry Updates
       │                     │                     │
   t0: metadata.json         │                     │
-  t1: main.js              │                     │
-  t2: input.schema         │                     │
-      │                    │                     │
-  t0+500ms: ──────────────►│ TaskModified ──────►│ Single Reload
+  t1: main.js               │                     │
+  t2: input.schema          │                     │
+      │                     │                     │
+  t0+500ms: ───────────────►│ TaskModified ──────►│ Single Reload
 ```
 
 #### Processing Pipeline
