@@ -111,47 +111,64 @@ enum GenerateCommands {
 
 /// Load configuration from file or use defaults
 fn load_config(config_path: Option<&PathBuf>) -> Result<ratchet_lib::config::RatchetConfig> {
-    use ratchet_lib::config::{RatchetConfig, ServerConfig, DatabaseConfig};
+    use ratchet_lib::config::{RatchetConfig, ServerConfig};
     use std::time::Duration;
     
     let mut config = match config_path {
         Some(path) => {
-            info!("Loading configuration from: {:?}", path);
-            RatchetConfig::from_file(path)
-                .context(format!("Failed to load configuration from {:?}", path))?
+            if path.exists() {
+                info!("Loading configuration from: {:?}", path);
+                RatchetConfig::from_file(path)
+                    .context(format!("Failed to load configuration from {:?}", path))?
+            } else {
+                warn!("Configuration file not found: {:?}. Using defaults.", path);
+                RatchetConfig::default()
+            }
         }
         None => {
-            info!("Using default configuration with environment overrides");
-            RatchetConfig::from_env()
-                .context("Failed to load configuration from environment")?
+            info!("No configuration file specified. Using default configuration with environment overrides");
+            RatchetConfig::default()
         }
     };
+    
+    // Always apply environment overrides
+    config.apply_env_overrides()
+        .context("Failed to apply environment overrides")?;
     
     // Ensure server configuration exists for serve command
     if config.server.is_none() {
         info!("No server configuration found, using defaults");
-        config.server = Some(ServerConfig {
-            bind_address: std::env::var("RATCHET_SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
-            port: std::env::var("RATCHET_SERVER_PORT")
-                .unwrap_or_else(|_| "8080".to_string())
-                .parse()
-                .unwrap_or(8080),
-            database: DatabaseConfig {
-                url: std::env::var("RATCHET_DATABASE_URL").unwrap_or_else(|_| "sqlite::memory:".to_string()),
-                max_connections: std::env::var("RATCHET_DATABASE_MAX_CONNECTIONS")
-                    .unwrap_or_else(|_| "10".to_string())
-                    .parse()
-                    .unwrap_or(10),
-                connection_timeout: Duration::from_secs(
-                    std::env::var("RATCHET_DATABASE_TIMEOUT")
-                        .unwrap_or_else(|_| "30".to_string())
-                        .parse()
-                        .unwrap_or(30)
-                ),
-            },
-            auth: None,
-        });
+        let mut server_config = ServerConfig::default();
+        
+        // Apply environment overrides for server config
+        if let Ok(host) = std::env::var("RATCHET_SERVER_HOST") {
+            server_config.bind_address = host;
+        }
+        if let Ok(port) = std::env::var("RATCHET_SERVER_PORT") {
+            if let Ok(port_num) = port.parse::<u16>() {
+                server_config.port = port_num;
+            }
+        }
+        if let Ok(db_url) = std::env::var("RATCHET_DATABASE_URL") {
+            server_config.database.url = db_url;
+        }
+        if let Ok(max_conn) = std::env::var("RATCHET_DATABASE_MAX_CONNECTIONS") {
+            if let Ok(max_conn_num) = max_conn.parse::<u32>() {
+                server_config.database.max_connections = max_conn_num;
+            }
+        }
+        if let Ok(timeout) = std::env::var("RATCHET_DATABASE_TIMEOUT") {
+            if let Ok(timeout_secs) = timeout.parse::<u64>() {
+                server_config.database.connection_timeout = Duration::from_secs(timeout_secs);
+            }
+        }
+        
+        config.server = Some(server_config);
     }
+    
+    // Validate the final configuration
+    config.validate()
+        .context("Configuration validation failed")?;
     
     Ok(config)
 }

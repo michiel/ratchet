@@ -224,7 +224,21 @@ curl http://localhost:8080/api/v1/workers
 
 ## 🔐 Configuration
 
-### Server Configuration (example-config.yaml)
+Ratchet can run without any configuration file, using sensible defaults. Configuration can be provided through:
+1. **No config**: Uses all defaults (binds to 127.0.0.1:8080, SQLite in-memory database)
+2. **Config file**: YAML file with partial or complete configuration
+3. **Environment variables**: Override any setting
+4. **Mix of all above**: Config file + environment overrides
+
+### Minimal Configuration
+
+```yaml
+# Minimal config - everything else uses defaults
+logging:
+  level: debug
+```
+
+### Full Configuration Example (example-config.yaml)
 
 ```yaml
 # Server settings
@@ -234,7 +248,7 @@ server:
   
   # Database configuration
   database:
-    url: "sqlite://ratchet.db"
+    url: "sqlite://ratchet.db"  # Or sqlite::memory: for in-memory
     max_connections: 10
     connection_timeout: 30
   
