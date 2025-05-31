@@ -40,6 +40,27 @@ Major server implementation with GraphQL API and task registry.
 - Added comprehensive configuration system with YAML and environment support
 - Implemented service layer abstraction for better testability
 
+### Improvements
+
+- **Configuration System Enhancements**
+  - Made all configuration fields optional with sensible defaults
+  - Added support for partial configuration files
+  - Improved empty configuration handling
+
+### Infrastructure
+
+- **CI/CD Improvements**
+  - Added manual build workflow for on-demand builds via GitHub Actions
+  - Support for configurable build profiles (debug/release)
+  - Multi-platform build matrix (Linux x86_64/aarch64, Windows, macOS)
+  - Automated artifact upload for all platforms
+
+- **Static Build Support**
+  - Replaced OpenSSL with rustls for pure Rust TLS implementation
+  - SQLite bundled by default (no external dependencies)
+  - Documented static build process for all platforms
+  - Prepared for musl-based static Linux builds
+
 ### Bug Fixes
 
 - **Fixed REST API query parameter deserialization** - Resolved 400 errors for pagination parameters like `?_start=0&_end=10`
