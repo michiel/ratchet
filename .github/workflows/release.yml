@@ -1,6 +1,16 @@
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
 
 jobs:
   release:

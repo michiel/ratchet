@@ -1,22 +1,7 @@
 name: Manual Build
-
 on:
   workflow_dispatch:
     inputs:
-      rust_version:
-        description: 'Rust toolchain version'
-        required: false
-        default: 'stable'
-        type: choice
-        options:
-          - stable
-          - beta
-          - nightly
-      target:
-        description: 'Build target'
-        required: false
-        default: 'x86_64-unknown-linux-gnu'
-        type: string
       profile:
         description: 'Build profile'
         required: false
@@ -27,63 +12,44 @@ on:
           - release
 
 jobs:
-  build:
-    name: Build ${{ inputs.target }} (${{ inputs.profile }})
-    runs-on: ubuntu-latest
-    
+  release:
+    name: Ad-hoc build - ${{ matrix.platform.os-name }}
+    strategy:
+      matrix:
+        platform:
+
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+
+          - os-name: Linux-aarch64
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+
+          - os-name: macOS-x86_64
+            runs-on: macOS-latest
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.platform.runs-on }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ inputs.rust_version }}
-          target: ${{ inputs.target }}
-          override: true
-          components: rustfmt, clippy
-      
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-      
-      - name: Build
+      - name: Set up dependencies (Ubuntu only)
+        if: matrix.platform.runs-on == 'ubuntu-22.04'
         run: |
-          if [ "${{ inputs.profile }}" = "release" ]; then
-            cargo build --release --target ${{ inputs.target }}
-          else
-            cargo build --target ${{ inputs.target }}
-          fi
-      
-      - name: Run tests
-        run: cargo test --all-features --verbose
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config musl-dev
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
+        env:
+          OPENSSL_STATIC: "1"
         with:
-          name: ratchet-${{ inputs.target }}-${{ inputs.profile }}
-          path: |
-            target/${{ inputs.target }}/${{ inputs.profile }}/ratchet-cli
-            target/${{ inputs.target }}/${{ inputs.profile }}/ratchet-cli.exe
-          if-no-files-found: warn
-      
-      - name: Display build info
-        run: |
-          echo "Build completed!"
-          echo "Rust version: ${{ inputs.rust_version }}"
-          echo "Target: ${{ inputs.target }}"
-          echo "Profile: ${{ inputs.profile }}"
-          echo "Commit: ${{ github.sha }}"
+          command: build
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release -p ratchet"
+          strip: true
+
