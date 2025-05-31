@@ -1,0 +1,89 @@
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      rust_version:
+        description: 'Rust toolchain version'
+        required: false
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - beta
+          - nightly
+      target:
+        description: 'Build target'
+        required: false
+        default: 'x86_64-unknown-linux-gnu'
+        type: string
+      profile:
+        description: 'Build profile'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
+
+jobs:
+  build:
+    name: Build ${{ inputs.target }} (${{ inputs.profile }})
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ inputs.rust_version }}
+          target: ${{ inputs.target }}
+          override: true
+          components: rustfmt, clippy
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      
+      - name: Build
+        run: |
+          if [ "${{ inputs.profile }}" = "release" ]; then
+            cargo build --release --target ${{ inputs.target }}
+          else
+            cargo build --target ${{ inputs.target }}
+          fi
+      
+      - name: Run tests
+        run: cargo test --all-features --verbose
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ratchet-${{ inputs.target }}-${{ inputs.profile }}
+          path: |
+            target/${{ inputs.target }}/${{ inputs.profile }}/ratchet-cli
+            target/${{ inputs.target }}/${{ inputs.profile }}/ratchet-cli.exe
+          if-no-files-found: warn
+      
+      - name: Display build info
+        run: |
+          echo "Build completed!"
+          echo "Rust version: ${{ inputs.rust_version }}"
+          echo "Target: ${{ inputs.target }}"
+          echo "Profile: ${{ inputs.profile }}"
+          echo "Commit: ${{ github.sha }}"
