@@ -27,6 +27,95 @@ Ratchet is a JavaScript task execution framework written in Rust, designed with 
 - **Recording**: Session recording and replay functionality
 - **CLI Interface**: Command-line interface for task operations
 
+## System Overview Architecture
+
+The following diagram shows the high-level architecture of Ratchet, illustrating how different layers interact:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Client Layer                            │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │   CLI Client    │  │  Web Frontend   │  │  External API   ││
+│  │  (ratchet-cli)  │  │   (Refine.dev)  │  │    Clients      ││
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘│
+└───────────┼────────────────────┼────────────────────┼──────────┘
+            │                    │                    │
+            ▼                    ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         API Layer                               │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                    Axum Web Server                       │   │
+│  │  ┌─────────────────┐              ┌──────────────────┐  │   │
+│  │  │   REST API      │              │   GraphQL API   │  │   │
+│  │  │                 │              │                  │  │   │
+│  │  │ • /tasks        │              │ • Query         │  │   │
+│  │  │ • /jobs         │              │ • Mutation      │  │   │
+│  │  │ • /executions   │              │ • Subscription  │  │   │
+│  │  │ • /schedules    │              │ • Playground    │  │   │
+│  │  │ • /workers      │              │                  │  │   │
+│  │  └─────────────────┘              └──────────────────┘  │   │
+│  │                                                          │   │
+│  │  ┌────────────────────────────────────────────────────┐ │   │
+│  │  │              Middleware Stack                      │ │   │
+│  │  │  • CORS • Rate Limiting • Request ID • Error      │ │   │
+│  │  │  • Validation • Pagination • Authentication       │ │   │
+│  │  └────────────────────────────────────────────────────┘ │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       Service Layer                             │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │  RatchetEngine  │  │    Service      │  │     Task        ││
+│  │                 │  │    Provider     │  │  SyncService    ││
+│  │ • Task Service  │  │                 │  │                 ││
+│  │ • HTTP Service  │  │ • Dependency    │  │ • Registry Sync ││
+│  │ • Config Service│  │   Injection     │  │ • DB Sync       ││
+│  │ • Registry Svc  │  │ • Service Init  │  │ • Unified View  ││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Execution Layer                             │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │ ProcessExecutor │  │   Job Queue     │  │  Load Balancer  ││
+│  │                 │  │    Manager      │  │                 ││
+│  │ • Worker Pool   │  │                 │  │ • Round Robin   ││
+│  │ • IPC Transport │  │ • Priority Queue│  │ • Least Loaded  ││
+│  │ • Health Check  │  │ • Scheduling    │  │ • Weighted      ││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
+│                                                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │  Retry System   │  │  Task Cache     │  │ Circuit Breaker ││
+│  │                 │  │                 │  │                 ││
+│  │ • Backoff       │  │ • LRU Eviction  │  │ • Failure       ││
+│  │ • Max Attempts  │  │ • Memory Aware  │  │   Tracking      ││
+│  │ • Jitter        │  │ • Thread Safe   │  │ • Auto Reset    ││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        Data Layer                               │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │  Task Registry  │  │    Database     │  │  File System    ││
+│  │                 │  │    (SQLite)     │  │                 ││
+│  │ • Version Mgmt  │  │                 │  │ • Task Files    ││
+│  │ • Task Loading  │  │ • Tasks         │  │ • ZIP Archives  ││
+│  │ • File Watcher  │  │ • Jobs          │  │ • Config Files  ││
+│  │ • HTTP Loader   │  │ • Executions    │  │ • Log Files     ││
+│  │                 │  │ • Schedules     │  │                 ││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Code Layout
 
 ### Workspace Structure
@@ -121,6 +210,117 @@ ratchet-lib/src/
   - Unified task view combining registry and database
   - Service provider pattern for dependency injection
 
+## Service Layer Architecture
+
+The Service Layer provides a clean abstraction between the API layer and the data/execution layers, implementing business logic and orchestrating complex operations:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   Service Layer Architecture                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    ServiceProvider                        │  │
+│  │                                                          │  │
+│  │  • Central dependency injection container                │  │
+│  │  • Service lifecycle management                          │  │
+│  │  • Configuration distribution                            │  │
+│  │                                                          │  │
+│  │  pub struct ServiceProvider {                            │  │
+│  │      pub task_service: Arc<dyn TaskService>,            │  │
+│  │      pub http_service: Arc<dyn HttpService>,            │  │
+│  │      pub config_service: Arc<dyn ConfigService>,        │  │
+│  │      pub registry_service: Arc<dyn RegistryService>,    │  │
+│  │      pub task_sync_service: Arc<TaskSyncService>,       │  │
+│  │  }                                                       │  │
+│  └────────────────────────┬─────────────────────────────────┘  │
+│                           │                                     │
+│     ┌─────────────────────┼─────────────────────────┐          │
+│     │                     │                         │          │
+│     ▼                     ▼                         ▼          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐     │
+│  │ TaskService  │  │ HttpService  │  │  ConfigService   │     │
+│  │              │  │              │  │                  │     │
+│  │ • Load       │  │ • Fetch API  │  │ • Load Config    │     │
+│  │ • Validate   │  │ • Mock Mgmt  │  │ • Env Override   │     │
+│  │ • Execute    │  │ • Recording  │  │ • Validation     │     │
+│  │ • Test       │  │ • Sessions   │  │ • Hot Reload     │     │
+│  └──────────────┘  └──────────────┘  └──────────────────┘     │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                   RatchetEngine                           │  │
+│  │                                                          │  │
+│  │  Primary service coordinator implementing business logic  │  │
+│  │                                                          │  │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────┐ │  │
+│  │  │ Task Execution │  │ Job Management │  │  Schedule  │ │  │
+│  │  │                │  │                │  │ Processing │ │  │
+│  │  │ • JS Engine    │  │ • Queue Mgmt   │  │            │ │  │
+│  │  │ • Validation   │  │ • Priority     │  │ • Cron     │ │  │
+│  │  │ • Retry Logic  │  │ • Execution    │  │ • Triggers │ │  │
+│  │  └────────────────┘  └────────────────┘  └────────────┘ │  │
+│  │                                                          │  │
+│  │  ┌────────────────────────────────────────────────────┐ │  │
+│  │  │              Cross-Cutting Concerns                 │ │  │
+│  │  │                                                     │ │  │
+│  │  │  • Error Handling   • Logging      • Metrics       │ │  │
+│  │  │  • Transactions     • Caching      • Events        │ │  │
+│  │  └────────────────────────────────────────────────────┘ │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                   TaskSyncService                         │  │
+│  │                                                          │  │
+│  │  Bridges Registry and Database for unified task view      │  │
+│  │                                                          │  │
+│  │  ┌─────────────────┐         ┌─────────────────┐        │  │
+│  │  │  Task Registry  │◄────────│  Synchronizer   │        │  │
+│  │  │                 │         │                 │        │  │
+│  │  │ • File Sources  │         │ • Diff Detection│        │  │
+│  │  │ • HTTP Sources  │         │ • Auto Sync     │        │  │
+│  │  │ • Versions      │         │ • Conflict Res  │        │  │
+│  │  └─────────────────┘         └────────┬────────┘        │  │
+│  │                                        │                 │  │
+│  │                                        ▼                 │  │
+│  │  ┌─────────────────┐         ┌─────────────────┐        │  │
+│  │  │    Database     │◄────────│  UnifiedTask    │        │  │
+│  │  │                 │         │     View        │        │  │
+│  │  │ • Task Metadata │         │                 │        │  │
+│  │  │ • Exec History  │         │ • Registry Data │        │  │
+│  │  │ • Enable/Disable│         │ • DB Metadata   │        │  │
+│  │  └─────────────────┘         └─────────────────┘        │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                Service Layer Patterns                     │  │
+│  │                                                          │  │
+│  │  1. Dependency Injection:                                │  │
+│  │     - All services injected via ServiceProvider          │  │
+│  │     - Enables testing with mock implementations          │  │
+│  │                                                          │  │
+│  │  2. Interface Segregation:                               │  │
+│  │     - Small, focused service interfaces                  │  │
+│  │     - Services depend on abstractions, not concrete      │  │
+│  │                                                          │  │
+│  │  3. Single Responsibility:                               │  │
+│  │     - Each service has one clear purpose                 │  │
+│  │     - Business logic separated from infrastructure       │  │
+│  │                                                          │  │
+│  │  4. Async/Await:                                         │  │
+│  │     - All service methods are async                      │  │
+│  │     - Non-blocking I/O throughout                        │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Service Layer Benefits
+
+1. **Testability**: Easy to mock services for unit testing
+2. **Flexibility**: Services can be swapped or extended
+3. **Reusability**: Business logic shared across API protocols
+4. **Maintainability**: Clear separation of concerns
+5. **Scalability**: Services can be distributed if needed
+
 #### `validation/` - Schema Validation
 - **Purpose**: JSON schema validation for task inputs/outputs
 - **Structure**: 
@@ -175,20 +375,38 @@ The Process Execution IPC (Inter-Process Communication) Model is a core architec
 │                    Coordinator Process                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
-│  │   GraphQL API   │  │   Job Queue     │  │   Database      ││
-│  │   (Send/Sync)   │  │   Manager       │  │   Repositories  ││
+│  │   GraphQL API   │  │   REST API      │  │   Database      ││
+│  │   (Send/Sync)   │  │   (Send/Sync)   │  │   Repositories  ││
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘│
 │                              │                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │            ProcessTaskExecutor                           │  │
+│  │               ProcessTaskExecutor                        │  │
 │  │  ┌───────────────────────────────────────────────────┐   │  │
+│  │  │            Job Queue Manager                      │   │  │
+│  │  │  • Priority Queue • Schedule Processing          │   │  │
+│  │  └─────────────────────┬─────────────────────────────┘   │  │
+│  │                        │                                  │  │
+│  │  ┌─────────────────────▼─────────────────────────────┐   │  │
+│  │  │               Load Balancer                       │   │  │
+│  │  │  • Round Robin  • Least Loaded  • Weighted       │   │  │
+│  │  │  • Health Monitoring • Worker Metrics            │   │  │
+│  │  └─────────────────────┬─────────────────────────────┘   │  │
+│  │                        │                                  │  │
+│  │  ┌─────────────────────▼─────────────────────────────┐   │  │
 │  │  │          WorkerProcessManager                    │   │  │
-│  │  │                                                  │   │  │
+│  │  │  • Process Lifecycle • Health Checks             │   │  │
+│  │  │  • Auto-restart • Resource Monitoring            │   │  │
 │  │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────┐   │  │
 │  │  │  │ WorkerProcess│  │ WorkerProcess│  │ Worker-  │   │  │
 │  │  │  │     #1       │  │     #2       │  │ Process  │   │  │
 │  │  │  │              │  │              │  │   #3     │   │  │
 │  │  │  └──────────────┘  └──────────────┘  └──────────┘   │  │
+│  │  └───────────────────────────────────────────────────┘   │  │
+│  │                                                          │  │
+│  │  ┌───────────────────────────────────────────────────┐   │  │
+│  │  │               Retry System                        │   │  │
+│  │  │  • Exponential Backoff • Max Attempts            │   │  │
+│  │  │  • Jitter • Circuit Breaker Integration          │   │  │
 │  │  └───────────────────────────────────────────────────┘   │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
@@ -202,9 +420,15 @@ The Process Execution IPC (Inter-Process Communication) Model is a core architec
 │  │                    Worker                                 │  │
 │  │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────┐ │  │
 │  │  │  RatchetEngine  │  │  Task Cache     │  │ IPC      │ │  │
-│  │  │  (Boa Engine)   │  │                 │  │ Transport│ │  │
-│  │  │  [NOT Send/Sync]│  │                 │  │ (Stdio)  │ │  │
+│  │  │  (Boa Engine)   │  │  (LRU)          │  │ Transport│ │  │
+│  │  │  [NOT Send/Sync]│  │  • Memory Aware │  │ (Stdio)  │ │  │
+│  │  │                 │  │  • Thread Safe  │  │          │ │  │
 │  │  └─────────────────┘  └─────────────────┘  └──────────┘ │  │
+│  │                                                          │  │
+│  │  ┌───────────────────────────────────────────────────┐   │  │
+│  │  │           Circuit Breaker (per Worker)            │   │  │
+│  │  │  • Failure Tracking • Auto-reset • Thresholds    │   │  │
+│  │  └───────────────────────────────────────────────────┘   │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -880,6 +1104,145 @@ warn!("Failed to reload task at {:?}: {}", path, error);
 ### Overview
 
 Ratchet provides a complete server implementation with GraphQL API, REST endpoints, and background job processing. The server architecture follows clean architecture principles with clear separation between API, business logic, and data persistence layers.
+
+## API Architecture
+
+The API layer provides multiple interfaces for interacting with Ratchet, supporting both REST and GraphQL protocols:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      API Architecture                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                   Axum Web Server                         │  │
+│  │                  (0.0.0.0:8000)                          │  │
+│  └────────────────────────┬─────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────┴─────────────────────────────────┐  │
+│  │                  Router Configuration                     │  │
+│  │                                                          │  │
+│  │  app.route("/", get(root_handler))                      │  │
+│  │     .route("/health", get(health_handler))              │  │
+│  │     .nest("/api/v1", rest_routes())                     │  │
+│  │     .nest("/graphql", graphql_routes())                 │  │
+│  │     .layer(middleware_stack())                          │  │
+│  └────────────────────────┬─────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────┴─────────────────────────────────┐  │
+│  │                    REST API Routes                        │  │
+│  │                                                          │  │
+│  │  /api/v1/tasks      → TaskHandlers                      │  │
+│  │    GET    /         → list_tasks (pagination, filter)   │  │
+│  │    GET    /:id      → get_task                         │  │
+│  │    POST   /         → create_task                      │  │
+│  │    PUT    /:id      → update_task                      │  │
+│  │    DELETE /:id      → delete_task                      │  │
+│  │                                                          │  │
+│  │  /api/v1/jobs       → JobHandlers                       │  │
+│  │    GET    /         → list_jobs                        │  │
+│  │    GET    /:id      → get_job                          │  │
+│  │    POST   /         → create_job                       │  │
+│  │    DELETE /:id      → cancel_job                       │  │
+│  │                                                          │  │
+│  │  /api/v1/executions → ExecutionHandlers                 │  │
+│  │    GET    /         → list_executions                  │  │
+│  │    GET    /:id      → get_execution                    │  │
+│  │    POST   /         → create_execution                 │  │
+│  │                                                          │  │
+│  │  /api/v1/schedules  → ScheduleHandlers                  │  │
+│  │    GET    /         → list_schedules                   │  │
+│  │    GET    /:id      → get_schedule                     │  │
+│  │    POST   /         → create_schedule                  │  │
+│  │    PUT    /:id      → update_schedule                  │  │
+│  │    DELETE /:id      → delete_schedule                  │  │
+│  │                                                          │  │
+│  │  /api/v1/workers    → WorkerHandlers                    │  │
+│  │    GET    /         → list_workers                     │  │
+│  │    GET    /health   → workers_health                   │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                  GraphQL API Routes                       │  │
+│  │                                                          │  │
+│  │  /graphql           → GraphQL endpoint                   │  │
+│  │  /graphql/playground → GraphiQL IDE                      │  │
+│  │                                                          │  │
+│  │  Schema Structure:                                        │  │
+│  │  ┌────────────────────────────────────────────────────┐  │  │
+│  │  │ type Query {                                        │  │  │
+│  │  │   # Task queries                                    │  │  │
+│  │  │   tasks(pagination: PaginationInput): TaskList!    │  │  │
+│  │  │   task(uuid: ID!, version: String): UnifiedTask    │  │  │
+│  │  │                                                     │  │  │
+│  │  │   # Job queries                                     │  │  │
+│  │  │   jobs(pagination: PaginationInput): JobList!      │  │  │
+│  │  │   job(id: Int!): Job                              │  │  │
+│  │  │                                                     │  │  │
+│  │  │   # Execution queries                              │  │  │
+│  │  │   executions(filters: ExecutionFilters): [Exec]    │  │  │
+│  │  │   execution(id: Int!): Execution                  │  │  │
+│  │  │ }                                                   │  │  │
+│  │  │                                                     │  │  │
+│  │  │ type Mutation {                                     │  │  │
+│  │  │   createTask(input: CreateTaskInput!): Task!       │  │  │
+│  │  │   executeTask(taskId: Int!, input: JSON): Job!     │  │  │
+│  │  │   createSchedule(input: ScheduleInput!): Schedule! │  │  │
+│  │  │ }                                                   │  │  │
+│  │  └────────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                   Middleware Stack                        │  │
+│  │                                                          │  │
+│  │  Request Flow:                                           │  │
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │  │
+│  │  │  Request ID │───►│ Rate Limit  │───►│    CORS     │  │  │
+│  │  │  Generation │    │   Check     │    │   Headers   │  │  │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘  │  │
+│  │         │                                      │          │  │
+│  │         ▼                                      ▼          │  │
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │  │
+│  │  │   Request   │    │ Validation  │    │   Route     │  │  │
+│  │  │   Logging   │◄───│ Middleware  │◄───│  Handler    │  │  │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘  │  │
+│  │         │                                      │          │  │
+│  │         ▼                                      ▼          │  │
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │  │
+│  │  │   Error     │    │ Pagination  │    │  Response   │  │  │
+│  │  │  Handler    │◄───│  Extractor  │◄───│ Formatting  │  │  │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                  Response Formats                         │  │
+│  │                                                          │  │
+│  │  REST Response:              GraphQL Response:           │  │
+│  │  {                           {                           │  │
+│  │    "data": [...],              "data": {                │  │
+│  │    "meta": {                     "tasks": {             │  │
+│  │      "total": 100,                 "nodes": [...],     │  │
+│  │      "page": 1,                    "pageInfo": {...}   │  │
+│  │      "limit": 10                 }                      │  │
+│  │    },                          },                       │  │
+│  │    "links": {                  "errors": []             │  │
+│  │      "self": "...",          }                          │  │
+│  │      "next": "..."                                      │  │
+│  │    }                                                    │  │
+│  │  }                                                      │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### API Design Principles
+
+1. **RESTful Design**: Standard HTTP methods and status codes
+2. **GraphQL Flexibility**: Query exactly what you need
+3. **Consistent Error Handling**: Unified error format across protocols
+4. **Pagination Support**: Both offset and cursor-based pagination
+5. **Filtering & Sorting**: Flexible query parameters
+6. **OpenAPI Documentation**: Auto-generated from code
+7. **Type Safety**: Strong typing throughout the API layer
 
 ## Configuration Management
 
