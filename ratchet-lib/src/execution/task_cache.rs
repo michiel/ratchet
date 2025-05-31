@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use crate::task::Task;
 
 /// LRU cache node for doubly linked list
 #[derive(Debug)]
 struct CacheNode {
-    key: String,
     task: Task,
     prev: Option<String>,
     next: Option<String>,
@@ -174,7 +173,6 @@ impl TaskCache {
 
     fn add_new(&mut self, key: String, task: Task, task_size: usize) {
         let node = CacheNode {
-            key: key.clone(),
             task,
             prev: None,
             next: self.head.clone(),

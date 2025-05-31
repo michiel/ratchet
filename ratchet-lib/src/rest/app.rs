@@ -4,8 +4,6 @@ use axum::{
     middleware,
 };
 use std::sync::Arc;
-use std::time::Duration;
-use tower::ServiceBuilder;
 use tower_http::{
     trace::TraceLayer,
     // timeout::TimeoutLayer,

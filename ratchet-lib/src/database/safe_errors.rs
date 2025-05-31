@@ -1,7 +1,6 @@
 use sea_orm::DbErr;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use thiserror::Error;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 

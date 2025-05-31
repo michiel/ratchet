@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn, info};
+use tracing::{debug, info};
 
 /// Worker metrics for load balancing decisions
 #[derive(Debug)]

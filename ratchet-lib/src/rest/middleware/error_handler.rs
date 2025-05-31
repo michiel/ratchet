@@ -7,7 +7,6 @@ use thiserror::Error;
 
 use crate::rest::models::common::ApiError;
 use crate::database::{SafeDatabaseError, ErrorCode};
-use super::RequestId;
 
 /// REST API specific error type
 #[derive(Error, Debug)]

@@ -1,4 +1,4 @@
-use sea_orm::{entity::*, ColumnTrait, Condition, EntityTrait, Value};
+use sea_orm::{ColumnTrait, Condition, EntityTrait, Value};
 use sea_orm::sea_query::SimpleExpr;
 
 /// Safe filter builder for database queries

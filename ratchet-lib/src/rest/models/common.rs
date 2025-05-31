@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 
 /// Standard API response wrapper for Refine.dev compatibility

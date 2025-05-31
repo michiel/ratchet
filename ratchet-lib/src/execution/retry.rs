@@ -133,7 +133,6 @@ impl RetryExecutor {
         E: Retryable + std::fmt::Display + Clone,
     {
         let mut attempt = 1;
-        let mut last_error = None;
 
         loop {
             debug!("Executing attempt {} of {}", attempt, self.policy.max_attempts);
@@ -146,7 +145,6 @@ impl RetryExecutor {
                     return Ok(result);
                 }
                 Err(error) => {
-                    last_error = Some(error.clone());
 
                     if attempt >= self.policy.max_attempts {
                         warn!("Operation failed after {} attempts: {}", attempt, error);
