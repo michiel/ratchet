@@ -110,7 +110,7 @@ development:
 # RATCHET_CACHE_SIZE=200  
 # RATCHET_LOG_LEVEL=debug
 # RATCHET_MAX_EXECUTION_SECONDS=600
-# RATCHET_DATABASE_URL=postgresql://user:pass@localhost/ratchet
+# RATCHET_DATABASE_URL=sqlite://ratchet.db
 # RATCHET_SERVER_PORT=3000
 # RATCHET_JWT_SECRET=production-secret-key  # (Future feature)
 # RATCHET_RATE_LIMIT_REQUESTS_PER_MINUTE=120

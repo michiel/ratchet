@@ -30,7 +30,7 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 - **Job Management**: Cancel, retry, and monitor job execution
 
 ### **Data Persistence**
-- **Database Layer**: SQLite with Sea-ORM, ready for PostgreSQL migration
+- **Database Layer**: SQLite with Sea-ORM for reliable data persistence
 - **Migration System**: Schema evolution with versioned migrations
 - **Repository Pattern**: Clean, testable database operations
 - **Connection Pooling**: Efficient database connection management
@@ -234,7 +234,7 @@ server:
   
   # Database configuration
   database:
-    url: "sqlite://ratchet.db"  # Or "postgresql://user:pass@host/db"
+    url: "sqlite://ratchet.db"
     max_connections: 10
     connection_timeout: 30
   
@@ -293,15 +293,15 @@ http:
 ⚠️ **Requires Configuration**:
 - **Authentication**: Currently no auth - all endpoints are public (see [roadmap](TODO.md))
 - **HTTPS/TLS**: Configure reverse proxy (nginx/caddy) for SSL
-- **Database**: Consider PostgreSQL for production scale
+- **Database**: SQLite provides reliable persistence for most workloads
 - **Monitoring**: Set up Prometheus/Grafana for metrics
 
 ### Deployment Checklist
 
 1. **Database Setup**
    ```bash
-   # For production, use PostgreSQL
-   export RATCHET_DATABASE_URL="postgresql://user:pass@host/ratchet"
+   # Database URL for different environments
+   export RATCHET_DATABASE_URL="sqlite://ratchet.db"
    ```
 
 2. **Security Configuration**
@@ -358,7 +358,7 @@ http:
 
 - **Execution Model**: Process isolation ensures thread safety
 - **Worker Pool**: Scales with CPU cores (configurable)
-- **Database**: SQLite for development, PostgreSQL for production
+- **Database**: SQLite for all environments
 - **Caching**: LRU cache for task content
 - **Rate Limiting**: Per-client quotas with token bucket algorithm
 

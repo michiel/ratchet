@@ -106,7 +106,7 @@
 
 ### 2.3 Database Scaling
 - [ ] **Database Performance**
-  - [ ] PostgreSQL migration path from SQLite
+  - [ ] **Future Enhancement**: PostgreSQL migration path from SQLite (roadmap item)
   - [ ] Database connection pooling optimization
   - [ ] Read replicas for query scaling
   - [ ] Database sharding strategy for large deployments
@@ -118,7 +118,7 @@
   - [ ] Multi-tenant data isolation
 
 **ADRs Needed:**
-- [ ] Database Strategy: SQLite vs PostgreSQL vs MySQL
+- [ ] **Future Enhancement**: Database Strategy evaluation (PostgreSQL, MySQL) for high-scale deployments
 - [ ] Scaling Approach: Vertical vs Horizontal vs Hybrid
 
 ---
@@ -397,7 +397,7 @@ Month 12: Documentation & developer tools
 ## 📋 **Architecture Decision Records (ADRs) To Create**
 
 1. **Authentication Strategy**: JWT vs Sessions vs API Keys vs OAuth2
-2. **Database Scaling**: PostgreSQL migration path and sharding strategy
+2. **Database Scaling**: Future PostgreSQL migration strategy and sharding for enterprise scale
 3. **Distributed Architecture**: Service discovery and communication patterns
 4. **Container Strategy**: Docker vs Podman vs native execution
 5. **Monitoring Stack**: Prometheus + Grafana vs ELK vs cloud solutions
@@ -445,7 +445,7 @@ Month 12: Documentation & developer tools
 ### **Requires Attention for Production** ⚠️
 - **Authentication system** (highest priority)
 - **HTTPS/TLS configuration**
-- **Production database setup** (PostgreSQL)
+- **Production database optimization** (SQLite tuning and future database strategy)
 - **Monitoring and alerting**
 - **Backup and recovery procedures**
 
