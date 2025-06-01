@@ -14,6 +14,7 @@ use crate::{
         },
         repositories::RepositoryFactory,
     },
+    output::OutputDeliveryManager,
     rest::{
         middleware::error_handler::RestError,
         extractors::ListQueryExtractor,
@@ -22,7 +23,8 @@ use crate::{
             common::ApiResponse,
             jobs::{
                 JobCreateRequest, JobDetailResponse, JobFilters, JobQueueStats, JobResponse,
-                JobUpdateRequest, PriorityStats,
+                JobUpdateRequest, PriorityStats, TestOutputDestinationsRequest,
+                TestOutputDestinationsResponse, TestDestinationResult,
             },
         },
     },
@@ -141,6 +143,9 @@ pub async fn get_job(
         None
     };
 
+    let output_destinations = job.output_destinations
+        .and_then(|json| serde_json::from_value(json.into()).ok());
+    
     let response = JobDetailResponse {
         id: job.id,
         uuid: job.uuid,
@@ -161,6 +166,7 @@ pub async fn get_job(
         started_at: job.started_at,
         completed_at: job.completed_at,
         metadata: job.metadata.clone(),
+        output_destinations,
         queue_position,
     };
 
@@ -201,6 +207,9 @@ pub async fn create_job(
     }
     if let Some(metadata) = payload.metadata {
         active_job.metadata = ActiveValue::Set(Some(sea_orm::prelude::Json::from(metadata)));
+    }
+    if let Some(destinations) = payload.output_destinations {
+        active_job.output_destinations = ActiveValue::Set(Some(sea_orm::prelude::Json::from(serde_json::to_value(destinations).unwrap())));
     }
 
     let created_job = active_job
@@ -377,5 +386,39 @@ pub async fn get_queue_stats(
         },
     };
 
+    Ok(Json(response))
+}
+
+pub async fn test_output_destinations(
+    Json(payload): Json<TestOutputDestinationsRequest>,
+) -> Result<impl IntoResponse, RestError> {
+    // Test each destination configuration
+    let test_results = OutputDeliveryManager::test_configurations(&payload.destinations)
+        .await
+        .map_err(|e| RestError::BadRequest(format!("Invalid destination configurations: {}", e)))?;
+    
+    let mut results = Vec::new();
+    let mut overall_success = true;
+    
+    for test_result in test_results {
+        let success = test_result.success;
+        if !success {
+            overall_success = false;
+        }
+        
+        results.push(TestDestinationResult {
+            index: test_result.index,
+            destination_type: test_result.destination_type,
+            success,
+            error: test_result.error,
+            estimated_time_ms: test_result.estimated_time.as_millis() as u64,
+        });
+    }
+    
+    let response = TestOutputDestinationsResponse {
+        results,
+        overall_success,
+    };
+    
     Ok(Json(response))
 }

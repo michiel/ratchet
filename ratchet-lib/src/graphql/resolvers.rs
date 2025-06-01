@@ -9,6 +9,7 @@ use crate::execution::{
 };
 use crate::registry::TaskRegistry;
 use crate::services::TaskSyncService;
+use crate::output::{OutputDeliveryManager, OutputDestinationConfig};
 use super::types::*;
 
 /// GraphQL context containing services and repositories with Send+Sync compliance
@@ -207,16 +208,23 @@ impl Query {
         let total = db_jobs.len() as u64;
         
         // Convert database jobs to GraphQL jobs
-        let jobs = db_jobs.into_iter().map(|job| Job {
-            id: job.id,
-            task_id: job.task_id,
-            priority: convert_job_priority(job.priority),
-            status: convert_job_status(job.status),
-            retry_count: job.retry_count,
-            max_retries: job.max_retries,
-            queued_at: job.queued_at,
-            scheduled_for: None, // TODO: Get actual scheduled time
-            error_message: job.error_message,
+        let jobs = db_jobs.into_iter().map(|job| {
+            let output_destinations = job.output_destinations
+                .and_then(|json| serde_json::from_value::<Vec<OutputDestinationConfig>>(json.into()).ok())
+                .map(|configs| configs.into_iter().map(convert_output_destination_config).collect());
+            
+            Job {
+                id: job.id,
+                task_id: job.task_id,
+                priority: convert_job_priority(job.priority),
+                status: convert_job_status(job.status),
+                retry_count: job.retry_count,
+                max_retries: job.max_retries,
+                queued_at: job.queued_at,
+                scheduled_for: None, // TODO: Get actual scheduled time
+                error_message: job.error_message,
+                output_destinations,
+            }
         }).collect();
         
         Ok(JobListResponse {
@@ -402,31 +410,49 @@ impl Mutation {
     ) -> Result<Job> {
         let context = ctx.data::<GraphQLContext>()?;
         
-        // Add job to queue with process-based execution
+        // Convert GraphQL output destinations to internal format
+        let output_destinations = if let Some(destinations) = input.output_destinations {
+            let configs: Result<Vec<OutputDestinationConfig>, _> = destinations
+                .into_iter()
+                .map(convert_output_destination_input)
+                .collect();
+            Some(configs.map_err(|e| Error::new(format!("Invalid output destination: {}", e)))?)
+        } else {
+            None
+        };
+        
+        // Create job directly (since job queue doesn't support output destinations yet)
         let priority = input.priority.map(convert_job_priority_to_db)
             .unwrap_or(crate::database::entities::JobPriority::Normal);
         
-        let job_id = context.job_queue.enqueue_job_send(
+        let mut job = crate::database::entities::jobs::Model::new(
             input.task_id,
             input.input_data,
             priority,
-        ).await.map_err(|e| Error::new(format!("Job queue error: {}", e)))?;
+        );
         
-        // Get the created job
-        let db_job = context.repositories.job_repo.find_by_id(job_id).await
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?
-            .ok_or_else(|| Error::new("Job not found after creation"))?;
+        if let Some(destinations) = output_destinations {
+            job.output_destinations = Some(serde_json::to_value(destinations).unwrap().into());
+        }
+        
+        let created_job = context.repositories.job_repo.create(job).await
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+        
+        let output_destinations = created_job.output_destinations
+            .and_then(|json| serde_json::from_value::<Vec<OutputDestinationConfig>>(json.into()).ok())
+            .map(|configs| configs.into_iter().map(convert_output_destination_config).collect());
         
         Ok(Job {
-            id: db_job.id,
-            task_id: db_job.task_id,
-            priority: convert_job_priority(db_job.priority),
-            status: convert_job_status(db_job.status),
-            retry_count: db_job.retry_count,
-            max_retries: db_job.max_retries,
-            queued_at: db_job.queued_at,
-            scheduled_for: None, // TODO: Get actual scheduled time
-            error_message: db_job.error_message,
+            id: created_job.id,
+            task_id: created_job.task_id,
+            priority: convert_job_priority(created_job.priority),
+            status: convert_job_status(created_job.status),
+            retry_count: created_job.retry_count,
+            max_retries: created_job.max_retries,
+            queued_at: created_job.queued_at,
+            scheduled_for: None,
+            error_message: created_job.error_message,
+            output_destinations,
         })
     }
     
@@ -502,7 +528,37 @@ impl Mutation {
             queued_at: chrono::Utc::now(),
             scheduled_for: None,
             error_message: Some("Cancelled via GraphQL".to_string()),
+            output_destinations: None,
         })
+    }
+    
+    /// Test output destination configurations
+    async fn test_output_destinations(
+        &self,
+        _ctx: &Context<'_>,
+        input: TestOutputDestinationsInput,
+    ) -> Result<Vec<TestDestinationResult>> {
+        // Convert GraphQL input to internal format
+        let configs: Result<Vec<OutputDestinationConfig>, _> = input.destinations
+            .into_iter()
+            .map(convert_output_destination_input)
+            .collect();
+        
+        let configs = configs.map_err(|e| Error::new(format!("Invalid destination configuration: {}", e)))?;
+        
+        // Test configurations
+        let test_results = OutputDeliveryManager::test_configurations(&configs)
+            .await
+            .map_err(|e| Error::new(format!("Failed to test configurations: {}", e)))?;
+        
+        // Convert results to GraphQL format
+        Ok(test_results.into_iter().map(|result| TestDestinationResult {
+            index: result.index as i32,
+            destination_type: result.destination_type,
+            success: result.success,
+            error: result.error,
+            estimated_time_ms: result.estimated_time.as_millis() as i32,
+        }).collect())
     }
 }
 
@@ -572,5 +628,152 @@ fn convert_job_status_to_db(status: JobStatus) -> crate::database::entities::Job
         JobStatus::Failed => crate::database::entities::JobStatus::Failed,
         JobStatus::Retrying => crate::database::entities::JobStatus::Retrying,
         JobStatus::Cancelled => crate::database::entities::JobStatus::Cancelled,
+    }
+}
+
+// Output destination conversion functions
+fn convert_output_destination_config(config: OutputDestinationConfig) -> OutputDestination {
+    use crate::output::OutputFormat as InternalFormat;
+    use crate::types::HttpMethod as InternalMethod;
+    
+    match config {
+        OutputDestinationConfig::Filesystem { path, format, permissions, create_dirs, overwrite, backup_existing } => {
+            OutputDestination::Filesystem(FilesystemDestination {
+                path,
+                format: convert_output_format(format),
+                permissions: format!("{:o}", permissions),
+                create_dirs,
+                overwrite,
+                backup_existing,
+            })
+        }
+        OutputDestinationConfig::Webhook { url, method, headers, timeout, retry_policy, auth, content_type } => {
+            OutputDestination::Webhook(WebhookDestination {
+                url,
+                method: convert_http_method(method),
+                headers,
+                timeout_seconds: timeout.as_secs() as i32,
+                retry_policy: RetryPolicy {
+                    max_attempts: retry_policy.max_attempts as i32,
+                    initial_delay_ms: retry_policy.initial_delay.as_millis() as i32,
+                    max_delay_ms: retry_policy.max_delay.as_millis() as i32,
+                    backoff_multiplier: retry_policy.backoff_multiplier,
+                },
+                auth: auth.map(|a| WebhookAuth {
+                    auth_type: "bearer".to_string(), // Simplified for now
+                    username: None,
+                    password: None,
+                    token: Some(format!("{:?}", a)), // Simplified serialization
+                }),
+                content_type,
+            })
+        }
+        OutputDestinationConfig::Database { .. } => {
+            OutputDestination::Database(DatabaseDestination {
+                connection_string: "not_implemented".to_string(),
+                table_name: "not_implemented".to_string(),
+                column_mappings: std::collections::HashMap::new(),
+            })
+        }
+        OutputDestinationConfig::S3 { .. } => {
+            OutputDestination::S3(S3Destination {
+                bucket: "not_implemented".to_string(),
+                key_template: "not_implemented".to_string(),
+                region: "not_implemented".to_string(),
+                access_key_id: None,
+                secret_access_key: None,
+            })
+        }
+    }
+}
+
+fn convert_output_destination_input(input: OutputDestinationInput) -> Result<OutputDestinationConfig, String> {
+    match input.destination_type {
+        DestinationType::Filesystem => {
+            let fs = input.filesystem.ok_or("Filesystem configuration required")?;
+            Ok(OutputDestinationConfig::Filesystem {
+                path: fs.path,
+                format: convert_output_format_from_graphql(fs.format),
+                permissions: fs.permissions.and_then(|p| u32::from_str_radix(&p, 8).ok()).unwrap_or(0o644),
+                create_dirs: fs.create_dirs.unwrap_or(true),
+                overwrite: fs.overwrite.unwrap_or(true),
+                backup_existing: fs.backup_existing.unwrap_or(false),
+            })
+        }
+        DestinationType::Webhook => {
+            let webhook = input.webhook.ok_or("Webhook configuration required")?;
+            Ok(OutputDestinationConfig::Webhook {
+                url: webhook.url,
+                method: convert_http_method_from_graphql(webhook.method),
+                headers: webhook.headers.unwrap_or_default(),
+                timeout: std::time::Duration::from_secs(webhook.timeout_seconds.unwrap_or(30) as u64),
+                retry_policy: crate::output::RetryPolicy {
+                    max_attempts: webhook.retry_policy.as_ref().map(|r| r.max_attempts as u32).unwrap_or(3),
+                    initial_delay: std::time::Duration::from_millis(
+                        webhook.retry_policy.as_ref().map(|r| r.initial_delay_ms as u64).unwrap_or(1000)
+                    ),
+                    max_delay: std::time::Duration::from_millis(
+                        webhook.retry_policy.as_ref().map(|r| r.max_delay_ms as u64).unwrap_or(30000)
+                    ),
+                    backoff_multiplier: webhook.retry_policy.as_ref().map(|r| r.backoff_multiplier).unwrap_or(2.0),
+                    jitter: true,
+                    retry_on_status: vec![500, 502, 503, 504],
+                },
+                auth: None, // Simplified for now
+                content_type: webhook.content_type,
+            })
+        }
+        DestinationType::Database => {
+            Err("Database destinations not yet implemented".to_string())
+        }
+        DestinationType::S3 => {
+            Err("S3 destinations not yet implemented".to_string())
+        }
+    }
+}
+
+fn convert_output_format(format: crate::output::OutputFormat) -> OutputFormat {
+    match format {
+        crate::output::OutputFormat::Json => OutputFormat::Json,
+        crate::output::OutputFormat::JsonCompact => OutputFormat::JsonCompact,
+        crate::output::OutputFormat::Yaml => OutputFormat::Yaml,
+        crate::output::OutputFormat::Csv => OutputFormat::Csv,
+        crate::output::OutputFormat::Raw => OutputFormat::Raw,
+        crate::output::OutputFormat::Template(_) => OutputFormat::Template,
+    }
+}
+
+fn convert_output_format_from_graphql(format: OutputFormat) -> crate::output::OutputFormat {
+    match format {
+        OutputFormat::Json => crate::output::OutputFormat::Json,
+        OutputFormat::JsonCompact => crate::output::OutputFormat::JsonCompact,
+        OutputFormat::Yaml => crate::output::OutputFormat::Yaml,
+        OutputFormat::Csv => crate::output::OutputFormat::Csv,
+        OutputFormat::Raw => crate::output::OutputFormat::Raw,
+        OutputFormat::Template => crate::output::OutputFormat::Template("{{output_data}}".to_string()), // Default template
+    }
+}
+
+fn convert_http_method(method: crate::types::HttpMethod) -> HttpMethod {
+    match method {
+        crate::types::HttpMethod::Get => HttpMethod::Get,
+        crate::types::HttpMethod::Post => HttpMethod::Post,
+        crate::types::HttpMethod::Put => HttpMethod::Put,
+        crate::types::HttpMethod::Patch => HttpMethod::Patch,
+        crate::types::HttpMethod::Delete => HttpMethod::Delete,
+        crate::types::HttpMethod::Head => HttpMethod::Head,
+        crate::types::HttpMethod::Options => HttpMethod::Options,
+    }
+}
+
+fn convert_http_method_from_graphql(method: HttpMethod) -> crate::types::HttpMethod {
+    match method {
+        HttpMethod::Get => crate::types::HttpMethod::Get,
+        HttpMethod::Post => crate::types::HttpMethod::Post,
+        HttpMethod::Put => crate::types::HttpMethod::Put,
+        HttpMethod::Patch => crate::types::HttpMethod::Patch,
+        HttpMethod::Delete => crate::types::HttpMethod::Delete,
+        HttpMethod::Head => crate::types::HttpMethod::Head,
+        HttpMethod::Options => crate::types::HttpMethod::Options,
     }
 }

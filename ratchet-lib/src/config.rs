@@ -39,6 +39,10 @@ pub struct RatchetConfig {
     #[serde(default)]
     pub logging: crate::logging::LoggingConfig,
     
+    /// Output destinations configuration
+    #[serde(default)]
+    pub output: OutputConfig,
+    
     /// Server configuration (optional, for future server mode)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<ServerConfig>,
@@ -97,6 +101,144 @@ pub struct CacheConfig {
     /// Whether caching is enabled
     #[serde(default = "default_true")]
     pub enabled: bool,
+}
+
+/// Output destinations configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OutputConfig {
+    /// Maximum number of concurrent deliveries
+    #[serde(default = "default_max_concurrent_deliveries")]
+    pub max_concurrent_deliveries: usize,
+    
+    /// Default timeout for deliveries
+    #[serde(with = "serde_duration_seconds", default = "default_delivery_timeout")]
+    pub default_timeout: Duration,
+    
+    /// Whether to validate destination configurations on startup
+    #[serde(default = "default_true")]
+    pub validate_on_startup: bool,
+    
+    /// Global output destination templates
+    #[serde(default)]
+    pub global_destinations: Vec<OutputDestinationTemplate>,
+    
+    /// Default retry policy for failed deliveries
+    #[serde(default)]
+    pub default_retry_policy: RetryPolicyConfig,
+}
+
+/// Output destination template for reuse
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputDestinationTemplate {
+    /// Template name for reference
+    pub name: String,
+    
+    /// Template description
+    pub description: Option<String>,
+    
+    /// Destination configuration
+    pub destination: OutputDestinationConfigTemplate,
+}
+
+/// Output destination configuration template
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum OutputDestinationConfigTemplate {
+    Filesystem {
+        /// Path template with variables
+        path: String,
+        /// Output format
+        #[serde(default = "default_output_format")]
+        format: String,
+        /// File permissions (octal as string)
+        #[serde(default = "default_file_permissions")]
+        permissions: String,
+        /// Whether to create directories
+        #[serde(default = "default_true")]
+        create_dirs: bool,
+        /// Whether to overwrite existing files
+        #[serde(default = "default_true")]
+        overwrite: bool,
+        /// Whether to backup existing files
+        #[serde(default = "default_false")]
+        backup_existing: bool,
+    },
+    Webhook {
+        /// Webhook URL template
+        url: String,
+        /// HTTP method
+        #[serde(default = "default_http_method")]
+        method: String,
+        /// HTTP headers
+        #[serde(default)]
+        headers: std::collections::HashMap<String, String>,
+        /// Request timeout in seconds
+        #[serde(default = "default_webhook_timeout")]
+        timeout_seconds: u64,
+        /// Content type header
+        content_type: Option<String>,
+        /// Authentication configuration
+        auth: Option<WebhookAuthConfig>,
+    },
+    Database {
+        /// Database connection string
+        connection_string: String,
+        /// Target table name
+        table_name: String,
+        /// Column mappings
+        column_mappings: std::collections::HashMap<String, String>,
+    },
+    S3 {
+        /// S3 bucket name
+        bucket: String,
+        /// Object key template
+        key_template: String,
+        /// AWS region
+        region: String,
+        /// AWS access key ID (optional, can use environment)
+        access_key_id: Option<String>,
+        /// AWS secret access key (optional, can use environment)
+        secret_access_key: Option<String>,
+    },
+}
+
+/// Webhook authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum WebhookAuthConfig {
+    Bearer {
+        token: String,
+    },
+    Basic {
+        username: String,
+        password: String,
+    },
+    ApiKey {
+        header: String,
+        value: String,
+    },
+}
+
+/// Retry policy configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RetryPolicyConfig {
+    /// Maximum number of retry attempts
+    #[serde(default = "default_max_retries")]
+    pub max_attempts: i32,
+    
+    /// Initial delay between retries in milliseconds
+    #[serde(default = "default_initial_delay_ms")]
+    pub initial_delay_ms: u64,
+    
+    /// Maximum delay between retries in milliseconds
+    #[serde(default = "default_max_delay_ms")]
+    pub max_delay_ms: u64,
+    
+    /// Backoff multiplier for exponential backoff
+    #[serde(default = "default_backoff_multiplier")]
+    pub backoff_multiplier: f64,
 }
 
 
@@ -202,6 +344,7 @@ impl Default for RatchetConfig {
             http: HttpConfig::default(),
             cache: CacheConfig::default(),
             logging: crate::logging::LoggingConfig::default(),
+            output: OutputConfig::default(),
             server: None,
             registry: None,
         }
@@ -234,6 +377,29 @@ impl Default for CacheConfig {
         Self {
             task_content_cache_size: 100,
             enabled: true,
+        }
+    }
+}
+
+impl Default for OutputConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrent_deliveries: 10,
+            default_timeout: Duration::from_secs(30),
+            validate_on_startup: true,
+            global_destinations: Vec::new(),
+            default_retry_policy: RetryPolicyConfig::default(),
+        }
+    }
+}
+
+impl Default for RetryPolicyConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: 3,
+            initial_delay_ms: 1000,
+            max_delay_ms: 30000,
+            backoff_multiplier: 2.0,
         }
     }
 }
@@ -367,6 +533,147 @@ impl RatchetConfig {
             return Err(ConfigError::ValidationError(
                 "Fetch variable names cannot be empty".to_string()
             ));
+        }
+        
+        // Validate output configuration
+        self.validate_output_config()?;
+        
+        Ok(())
+    }
+    
+    /// Validate output configuration
+    fn validate_output_config(&self) -> Result<(), ConfigError> {
+        let output = &self.output;
+        
+        // Validate max concurrent deliveries
+        if output.max_concurrent_deliveries == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max concurrent deliveries must be greater than 0".to_string()
+            ));
+        }
+        
+        // Validate default timeout
+        if output.default_timeout.as_secs() == 0 {
+            return Err(ConfigError::ValidationError(
+                "Default delivery timeout must be greater than 0 seconds".to_string()
+            ));
+        }
+        
+        // Validate retry policy
+        let retry = &output.default_retry_policy;
+        if retry.max_attempts <= 0 {
+            return Err(ConfigError::ValidationError(
+                "Max retry attempts must be greater than 0".to_string()
+            ));
+        }
+        
+        if retry.initial_delay_ms == 0 {
+            return Err(ConfigError::ValidationError(
+                "Initial retry delay must be greater than 0 milliseconds".to_string()
+            ));
+        }
+        
+        if retry.max_delay_ms < retry.initial_delay_ms {
+            return Err(ConfigError::ValidationError(
+                "Max retry delay must be greater than or equal to initial delay".to_string()
+            ));
+        }
+        
+        if retry.backoff_multiplier <= 1.0 {
+            return Err(ConfigError::ValidationError(
+                "Backoff multiplier must be greater than 1.0".to_string()
+            ));
+        }
+        
+        // Validate global destination templates
+        for (index, template) in output.global_destinations.iter().enumerate() {
+            if template.name.is_empty() {
+                return Err(ConfigError::ValidationError(
+                    format!("Global destination template {} has empty name", index)
+                ));
+            }
+            
+            self.validate_destination_template(&template.destination, &template.name)?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Validate a destination template configuration
+    fn validate_destination_template(&self, template: &OutputDestinationConfigTemplate, name: &str) -> Result<(), ConfigError> {
+        match template {
+            OutputDestinationConfigTemplate::Filesystem { path, format, .. } => {
+                if path.is_empty() {
+                    return Err(ConfigError::ValidationError(
+                        format!("Filesystem destination '{}' has empty path", name)
+                    ));
+                }
+                
+                let valid_formats = ["json", "json_compact", "yaml", "csv", "raw", "template"];
+                if !valid_formats.contains(&format.as_str()) {
+                    return Err(ConfigError::ValidationError(
+                        format!("Filesystem destination '{}' has invalid format '{}'. Valid formats: {}", 
+                            name, format, valid_formats.join(", "))
+                    ));
+                }
+            }
+            
+            OutputDestinationConfigTemplate::Webhook { url, method, .. } => {
+                if url.is_empty() {
+                    return Err(ConfigError::ValidationError(
+                        format!("Webhook destination '{}' has empty URL", name)
+                    ));
+                }
+                
+                // Basic URL validation
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    return Err(ConfigError::ValidationError(
+                        format!("Webhook destination '{}' has invalid URL format", name)
+                    ));
+                }
+                
+                let valid_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+                if !valid_methods.contains(&method.to_uppercase().as_str()) {
+                    return Err(ConfigError::ValidationError(
+                        format!("Webhook destination '{}' has invalid HTTP method '{}'. Valid methods: {}", 
+                            name, method, valid_methods.join(", "))
+                    ));
+                }
+            }
+            
+            OutputDestinationConfigTemplate::Database { connection_string, table_name, .. } => {
+                if connection_string.is_empty() {
+                    return Err(ConfigError::ValidationError(
+                        format!("Database destination '{}' has empty connection string", name)
+                    ));
+                }
+                
+                if table_name.is_empty() {
+                    return Err(ConfigError::ValidationError(
+                        format!("Database destination '{}' has empty table name", name)
+                    ));
+                }
+            }
+            
+            OutputDestinationConfigTemplate::S3 { bucket, key_template, region, .. } => {
+                if bucket.is_empty() {
+                    return Err(ConfigError::ValidationError(
+                        format!("S3 destination '{}' has empty bucket name", name)
+                    ));
+                }
+                
+                if key_template.is_empty() {
+                    return Err(ConfigError::ValidationError(
+                        format!("S3 destination '{}' has empty key template", name)
+                    ));
+                }
+                
+                if region.is_empty() {
+                    return Err(ConfigError::ValidationError(
+                        format!("S3 destination '{}' has empty region", name)
+                    ));
+                }
+            }
         }
         
         Ok(())
@@ -552,4 +859,49 @@ fn default_max_connections() -> u32 {
 
 fn default_connection_timeout() -> Duration {
     Duration::from_secs(30)
+}
+
+// Output configuration defaults
+fn default_max_concurrent_deliveries() -> usize {
+    10
+}
+
+fn default_delivery_timeout() -> Duration {
+    Duration::from_secs(30)
+}
+
+fn default_output_format() -> String {
+    "json".to_string()
+}
+
+fn default_file_permissions() -> String {
+    "644".to_string()
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_http_method() -> String {
+    "POST".to_string()
+}
+
+fn default_webhook_timeout() -> u64 {
+    30
+}
+
+fn default_max_retries() -> i32 {
+    3
+}
+
+fn default_initial_delay_ms() -> u64 {
+    1000
+}
+
+fn default_max_delay_ms() -> u64 {
+    30000
+}
+
+fn default_backoff_multiplier() -> f64 {
+    2.0
 }

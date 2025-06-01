@@ -20,7 +20,7 @@ use crate::{
         handlers::{
             tasks::{TasksContext, list_tasks, get_task, update_task, create_task, delete_task},
             executions::{ExecutionsContext, list_executions, get_execution, update_execution, create_execution, delete_execution, retry_execution, cancel_execution},
-            jobs::{JobsContext, list_jobs, get_job, create_job, update_job, delete_job, cancel_job, retry_job, get_queue_stats},
+            jobs::{JobsContext, list_jobs, get_job, create_job, update_job, delete_job, cancel_job, retry_job, get_queue_stats, test_output_destinations},
             schedules::{SchedulesContext, list_schedules, get_schedule, create_schedule, update_schedule, delete_schedule, enable_schedule, disable_schedule, trigger_schedule},
             workers::{WorkersContext, list_workers, get_worker, get_worker_pool_stats},
         },
@@ -90,6 +90,7 @@ pub fn create_rest_app_with_rate_limit(
     let jobs_router = Router::new()
         .route("/jobs", get(list_jobs).post(create_job))
         .route("/jobs/stats", get(get_queue_stats))
+        .route("/jobs/test-output-destinations", post(test_output_destinations))
         .route("/jobs/:id", get(get_job).patch(update_job).delete(delete_job))
         .route("/jobs/:id/cancel", post(cancel_job))
         .route("/jobs/:id/retry", post(retry_job))

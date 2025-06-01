@@ -2,6 +2,8 @@ use async_graphql::*;
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
+use std::collections::HashMap;
+use std::time::Duration;
 
 /// Task representation in GraphQL
 #[derive(SimpleObject)]
@@ -44,6 +46,7 @@ pub struct Job {
     pub queued_at: DateTime<Utc>,
     pub scheduled_for: Option<DateTime<Utc>>,
     pub error_message: Option<String>,
+    pub output_destinations: Option<Vec<OutputDestination>>,
 }
 
 /// Task execution result for direct execution
@@ -166,6 +169,7 @@ pub struct ExecuteTaskInput {
     pub task_id: i32,
     pub input_data: JsonValue,
     pub priority: Option<JobPriority>,
+    pub output_destinations: Option<Vec<OutputDestinationInput>>,
 }
 
 /// Create schedule input
@@ -276,4 +280,189 @@ impl From<crate::services::UnifiedTask> for UnifiedTask {
             in_sync: task.in_sync,
         }
     }
+}
+
+/// Output destination types for GraphQL
+#[derive(Union)]
+pub enum OutputDestination {
+    Filesystem(FilesystemDestination),
+    Webhook(WebhookDestination),
+    Database(DatabaseDestination),
+    S3(S3Destination),
+}
+
+/// Filesystem output destination
+#[derive(SimpleObject)]
+pub struct FilesystemDestination {
+    pub path: String,
+    pub format: OutputFormat,
+    pub permissions: String, // Octal representation as string
+    pub create_dirs: bool,
+    pub overwrite: bool,
+    pub backup_existing: bool,
+}
+
+/// Webhook output destination
+#[derive(SimpleObject)]
+pub struct WebhookDestination {
+    pub url: String,
+    pub method: HttpMethod,
+    pub headers: HashMap<String, String>,
+    pub timeout_seconds: i32,
+    pub retry_policy: RetryPolicy,
+    pub auth: Option<WebhookAuth>,
+    pub content_type: Option<String>,
+}
+
+/// Database output destination
+#[derive(SimpleObject)]
+pub struct DatabaseDestination {
+    pub connection_string: String,
+    pub table_name: String,
+    pub column_mappings: HashMap<String, String>,
+}
+
+/// S3 output destination
+#[derive(SimpleObject)]
+pub struct S3Destination {
+    pub bucket: String,
+    pub key_template: String,
+    pub region: String,
+    pub access_key_id: Option<String>,
+    pub secret_access_key: Option<String>,
+}
+
+/// Output format enum
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum OutputFormat {
+    Json,
+    JsonCompact,
+    Yaml,
+    Csv,
+    Raw,
+    Template, // Note: GraphQL doesn't support variant with data, so template string needs to be separate
+}
+
+/// HTTP method enum
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum HttpMethod {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+    Head,
+    Options,
+}
+
+/// Retry policy for delivery
+#[derive(SimpleObject)]
+pub struct RetryPolicy {
+    pub max_attempts: i32,
+    pub initial_delay_ms: i32,
+    pub max_delay_ms: i32,
+    pub backoff_multiplier: f64,
+}
+
+/// Webhook authentication
+#[derive(SimpleObject)]
+pub struct WebhookAuth {
+    pub auth_type: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub token: Option<String>,
+}
+
+/// Input types for output destinations
+#[derive(InputObject)]
+pub struct OutputDestinationInput {
+    pub destination_type: DestinationType,
+    pub filesystem: Option<FilesystemDestinationInput>,
+    pub webhook: Option<WebhookDestinationInput>,
+    pub database: Option<DatabaseDestinationInput>,
+    pub s3: Option<S3DestinationInput>,
+}
+
+/// Destination type enum for input
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum DestinationType {
+    Filesystem,
+    Webhook,
+    Database,
+    S3,
+}
+
+/// Filesystem destination input
+#[derive(InputObject)]
+pub struct FilesystemDestinationInput {
+    pub path: String,
+    pub format: OutputFormat,
+    pub permissions: Option<String>,
+    pub create_dirs: Option<bool>,
+    pub overwrite: Option<bool>,
+    pub backup_existing: Option<bool>,
+}
+
+/// Webhook destination input
+#[derive(InputObject)]
+pub struct WebhookDestinationInput {
+    pub url: String,
+    pub method: HttpMethod,
+    pub headers: Option<HashMap<String, String>>,
+    pub timeout_seconds: Option<i32>,
+    pub retry_policy: Option<RetryPolicyInput>,
+    pub auth: Option<WebhookAuthInput>,
+    pub content_type: Option<String>,
+}
+
+/// Database destination input
+#[derive(InputObject)]
+pub struct DatabaseDestinationInput {
+    pub connection_string: String,
+    pub table_name: String,
+    pub column_mappings: HashMap<String, String>,
+}
+
+/// S3 destination input
+#[derive(InputObject)]
+pub struct S3DestinationInput {
+    pub bucket: String,
+    pub key_template: String,
+    pub region: String,
+    pub access_key_id: Option<String>,
+    pub secret_access_key: Option<String>,
+}
+
+/// Retry policy input
+#[derive(InputObject)]
+pub struct RetryPolicyInput {
+    pub max_attempts: i32,
+    pub initial_delay_ms: i32,
+    pub max_delay_ms: i32,
+    pub backoff_multiplier: f64,
+}
+
+/// Webhook auth input
+#[derive(InputObject)]
+pub struct WebhookAuthInput {
+    pub auth_type: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub token: Option<String>,
+}
+
+/// Test output destinations input
+#[derive(InputObject)]
+pub struct TestOutputDestinationsInput {
+    pub destinations: Vec<OutputDestinationInput>,
+}
+
+/// Test destination result
+#[derive(SimpleObject)]
+pub struct TestDestinationResult {
+    pub index: i32,
+    pub destination_type: String,
+    pub success: bool,
+    pub error: Option<String>,
+    pub estimated_time_ms: i32,
 }

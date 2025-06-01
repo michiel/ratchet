@@ -4,6 +4,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::database::entities::jobs::{JobStatus, JobPriority as Priority};
+use crate::output::OutputDestinationConfig;
 
 #[derive(Debug, Serialize)]
 pub struct JobResponse {
@@ -25,6 +26,7 @@ pub struct JobResponse {
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
     pub metadata: Option<Value>,
+    pub output_destinations: Option<Vec<OutputDestinationConfig>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -48,6 +50,7 @@ pub struct JobDetailResponse {
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
     pub metadata: Option<Value>,
+    pub output_destinations: Option<Vec<OutputDestinationConfig>>,
     pub queue_position: Option<i32>,
 }
 
@@ -60,6 +63,7 @@ pub struct JobCreateRequest {
     pub max_retries: Option<i32>,
     pub retry_delay_seconds: Option<i32>,
     pub metadata: Option<Value>,
+    pub output_destinations: Option<Vec<OutputDestinationConfig>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,8 +102,34 @@ pub struct PriorityStats {
     pub low: u64,
 }
 
+/// Request to test output destination configurations
+#[derive(Debug, Deserialize)]
+pub struct TestOutputDestinationsRequest {
+    pub destinations: Vec<OutputDestinationConfig>,
+}
+
+/// Result of testing an output destination configuration
+#[derive(Debug, Serialize)]
+pub struct TestDestinationResult {
+    pub index: usize,
+    pub destination_type: String,
+    pub success: bool,
+    pub error: Option<String>,
+    pub estimated_time_ms: u64,
+}
+
+/// Response for testing output destinations
+#[derive(Debug, Serialize)]
+pub struct TestOutputDestinationsResponse {
+    pub results: Vec<TestDestinationResult>,
+    pub overall_success: bool,
+}
+
 impl From<crate::database::entities::jobs::Model> for JobResponse {
     fn from(job: crate::database::entities::jobs::Model) -> Self {
+        let output_destinations = job.output_destinations
+            .and_then(|json| serde_json::from_value(json.into()).ok());
+        
         Self {
             id: job.id,
             uuid: job.uuid,
@@ -119,6 +149,7 @@ impl From<crate::database::entities::jobs::Model> for JobResponse {
             started_at: job.started_at,
             completed_at: job.completed_at,
             metadata: job.metadata.clone(),
+            output_destinations,
         }
     }
 }
