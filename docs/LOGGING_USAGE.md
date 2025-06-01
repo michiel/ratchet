@@ -389,27 +389,397 @@ Each pattern provides:
 
 ## Configuration
 
+### Complete Configuration Example
+
+The logging system can be fully configured via YAML configuration files with environment variable overrides. Here's a comprehensive example:
+
 ```yaml
-# config.yaml
+# example-config.yaml - Complete logging configuration
 logging:
+  # Global logging level (trace, debug, info, warn, error)
   level: info
-  format: json
   
+  # Configure multiple sinks for different output targets
+  sinks:
+    # Console sink for development and debugging
+    - type: console
+      level: debug
+      format: colored  # Options: colored, plain, json
+      enabled: true
+      
+    # File sink for persistent logging
+    - type: file
+      level: info
+      path: logs/ratchet.log
+      format: json  # Always JSON for file sinks
+      enabled: true
+      rotation:
+        # Rotate when file reaches 100MB
+        max_size: 100MB
+        # Keep maximum 10 rotated files
+        max_files: 10
+        # Optional: rotate daily regardless of size
+        # max_age: 24h
+      
+    # Buffered sink for high-performance logging
+    - type: buffer
+      # Buffer wraps another sink (usually file)
+      inner_sink:
+        type: file
+        path: logs/ratchet-buffered.log
+        level: info
+        format: json
+      # Buffer configuration
+      buffer_size: 10000        # Buffer up to 10k events
+      flush_interval: 5s        # Flush every 5 seconds
+      flush_on_error: true      # Immediately flush on errors
+      enabled: true
+      
+    # Future: Database sink for centralized logging
+    # - type: database
+    #   connection_string: postgres://user:pass@localhost/logs
+    #   table_name: log_events
+    #   level: warn
+    #   enabled: false
+  
+  # Log enrichment configuration
+  enrichment:
+    enabled: true
+    # Add timestamp to all events (always enabled)
+    add_timestamp: true
+    # Add hostname to all events
+    add_hostname: true
+    # Add process information (PID, thread)
+    add_process_info: true
+    # Add memory usage information
+    add_memory_info: true
+    # Add git commit hash if available
+    add_git_info: false
+    # Custom fields to add to all events
+    custom_fields:
+      service: ratchet
+      environment: production
+      version: "1.0.0"
+  
+  # Error pattern matching configuration
+  patterns:
+    enabled: true
+    # Confidence threshold for pattern matches (0.0-1.0)
+    match_threshold: 0.8
+    # Performance: cache pattern match results
+    enable_caching: true
+    cache_size: 1000
+    # Built-in patterns (all enabled by default)
+    builtin_patterns:
+      database_errors: true
+      network_errors: true
+      task_failures: true
+      auth_failures: true
+      rate_limiting: true
+      resource_exhaustion: true
+    # Custom patterns (see Custom Patterns section)
+    custom_patterns: []
+  
+  # LLM export configuration
+  llm_export:
+    enabled: true
+    # Maximum tokens to include in LLM context
+    max_context_tokens: 8000
+    # Include system state in exports
+    include_system_state: true
+    # Include related log events
+    include_related_events: true
+    max_related_events: 10
+    # Include pattern analysis
+    include_pattern_analysis: true
+    # Include suggested prompts
+    include_suggested_prompts: true
+    # Export format (json, markdown)
+    export_format: markdown
+    # Summarization settings
+    summarization:
+      enabled: true
+      # Summarize events older than 1 hour
+      age_threshold: 1h
+      # Maximum events to include before summarizing
+      max_events_before_summary: 100
+  
+  # Performance and sampling configuration
+  performance:
+    # Maximum events per second before dropping
+    max_events_per_second: 10000
+    # Sampling rates by log level (0.0-1.0)
+    sampling_rates:
+      trace: 0.01    # Sample 1% of trace logs
+      debug: 0.1     # Sample 10% of debug logs
+      info: 0.5      # Sample 50% of info logs
+      warn: 1.0      # Log all warnings
+      error: 1.0     # Log all errors
+    # Drop logs instead of blocking when buffers are full
+    drop_on_full_buffer: true
+    # Queue size for async processing
+    async_queue_size: 1000
+  
+  # Context propagation settings
+  context:
+    # Enable automatic context propagation
+    enabled: true
+    # Maximum context lifetime
+    max_lifetime: 1h
+    # Automatically generate trace/span IDs
+    auto_generate_ids: true
+    # Context fields to propagate
+    propagate_fields:
+      - request_id
+      - user_id
+      - session_id
+      - operation
+    # Maximum context size to prevent memory leaks
+    max_context_size: 1024
+```
+
+### Environment Variable Overrides
+
+You can override any configuration value using environment variables with the `RATCHET_` prefix:
+
+```bash
+# Override global logging level
+export RATCHET_LOGGING_LEVEL=debug
+
+# Override console sink level
+export RATCHET_LOGGING_SINKS_0_LEVEL=trace
+
+# Override file sink path
+export RATCHET_LOGGING_SINKS_1_PATH=/custom/log/path.log
+
+# Disable pattern matching
+export RATCHET_LOGGING_PATTERNS_ENABLED=false
+
+# Override LLM export settings
+export RATCHET_LOGGING_LLM_EXPORT_MAX_CONTEXT_TOKENS=4000
+export RATCHET_LOGGING_LLM_EXPORT_INCLUDE_SYSTEM_STATE=false
+```
+
+### Development Configuration
+
+For local development, use this simpler configuration:
+
+```yaml
+# dev-config.yaml
+logging:
+  level: debug
   sinks:
     - type: console
-      level: warn
+      level: debug
+      format: colored
+      enabled: true
+  enrichment:
+    enabled: true
+    add_hostname: false  # Skip hostname in dev
+    add_process_info: true
+  patterns:
+    enabled: true
+  llm_export:
+    enabled: true
+    max_context_tokens: 4000
+```
+
+### Production Configuration
+
+For production environments:
+
+```yaml
+# prod-config.yaml
+logging:
+  level: info
+  sinks:
+    # Minimal console output in production
+    - type: console
+      level: error
+      format: json
+      enabled: true
       
+    # Primary structured logging to file
+    - type: buffer
+      inner_sink:
+        type: file
+        path: /var/log/ratchet/app.log
+        level: info
+        format: json
+        rotation:
+          max_size: 500MB
+          max_files: 20
+      buffer_size: 50000
+      flush_interval: 2s
+      flush_on_error: true
+      enabled: true
+      
+    # Error-only file for quick troubleshooting
     - type: file
-      path: /var/log/ratchet/app.log
+      path: /var/log/ratchet/errors.log
+      level: error
+      format: json
       rotation:
         max_size: 100MB
-        max_age: 7d
+        max_files: 10
+      enabled: true
   
   enrichment:
-    system_info: true
-    task_context: true
-    
-  sampling:
-    error_rate: 1.0  # Log all errors
-    info_rate: 0.1   # Sample 10% of info logs
+    enabled: true
+    add_hostname: true
+    add_process_info: true
+    add_memory_info: true
+    custom_fields:
+      service: ratchet
+      environment: production
+      datacenter: us-east-1
+  
+  patterns:
+    enabled: true
+    match_threshold: 0.9  # Higher threshold for production
+    enable_caching: true
+    cache_size: 5000
+  
+  llm_export:
+    enabled: true
+    max_context_tokens: 8000
+    include_system_state: true
+  
+  performance:
+    max_events_per_second: 50000
+    sampling_rates:
+      trace: 0.001  # Very low sampling for trace
+      debug: 0.01   # Low sampling for debug
+      info: 0.2     # 20% of info logs
+      warn: 1.0     # All warnings
+      error: 1.0    # All errors
+    drop_on_full_buffer: true
+```
+
+### Custom Patterns Configuration
+
+Add custom error patterns to enhance pattern matching:
+
+```yaml
+logging:
+  patterns:
+    enabled: true
+    custom_patterns:
+      # Custom pattern for API timeouts
+      - id: custom_api_timeout
+        name: "Custom API Timeout"
+        description: "Timeout calling external APIs"
+        category: network
+        matching_rules:
+          - type: message_regex
+            pattern: "(?i)api.*timeout|external.*service.*timeout"
+          - type: field_contains
+            field: error_code
+            value: "TIMEOUT"
+        suggestions:
+          - "Check API endpoint health"
+          - "Review timeout configuration"
+          - "Implement circuit breaker pattern"
+        severity_multiplier: 1.3
+        auto_resolve: true
+        
+      # Pattern for business logic errors
+      - id: business_rule_violation
+        name: "Business Rule Violation"
+        description: "Business logic validation failure"
+        category: business
+        matching_rules:
+          - type: error_type
+            value: "BusinessRuleViolation"
+        suggestions:
+          - "Review business rule implementation"
+          - "Check input data validation"
+          - "Verify business rule configuration"
+        severity_multiplier: 0.8
+        auto_resolve: false
+```
+
+### Container Configuration
+
+For Docker/Kubernetes deployments:
+
+```yaml
+# container-config.yaml
+logging:
+  level: info
+  sinks:
+    # Log to stdout for container log collection
+    - type: console
+      level: info
+      format: json  # Structured logs for log aggregation
+      enabled: true
+  
+  enrichment:
+    enabled: true
+    add_hostname: true
+    add_process_info: true
+    custom_fields:
+      service: ratchet
+      # Container environment variables
+      container_id: "${HOSTNAME}"
+      pod_name: "${POD_NAME}"
+      namespace: "${POD_NAMESPACE}"
+      node_name: "${NODE_NAME}"
+  
+  # Optimized for container environments
+  performance:
+    max_events_per_second: 20000
+    drop_on_full_buffer: true
+    async_queue_size: 2000
+  
+  patterns:
+    enabled: true
+    # Reduced caching in containers
+    enable_caching: true
+    cache_size: 1000
+  
+  llm_export:
+    enabled: true
+    # Smaller context for container environments
+    max_context_tokens: 6000
+```
+
+### Using Configuration in Code
+
+```rust
+use ratchet_lib::{RatchetConfig, logging::init_from_config};
+
+// Load configuration from file
+let config = RatchetConfig::from_file("config.yaml")?;
+
+// Initialize logging from configuration
+init_from_config(&config.logging)?;
+
+// Alternatively, load with environment overrides
+let config = RatchetConfig::from_file_with_env("config.yaml")?;
+init_from_config(&config.logging)?;
+```
+
+### Configuration Validation
+
+The system validates configuration at startup and provides helpful error messages:
+
+```rust
+// This will fail with a clear error message
+let invalid_config = r#"
+logging:
+  level: invalid_level  # Error: invalid log level
+  sinks:
+    - type: file
+      path: ""  # Error: empty file path
+"#;
+
+match RatchetConfig::from_str(invalid_config) {
+    Ok(_) => println!("Configuration valid"),
+    Err(e) => {
+        eprintln!("Configuration error: {}", e);
+        // Error: Invalid log level 'invalid_level'. Valid levels are: trace, debug, info, warn, error
+        // Error: File sink path cannot be empty
+    }
+}
 ```
