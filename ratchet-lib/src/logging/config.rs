@@ -55,7 +55,6 @@ pub enum SinkConfig {
         #[serde(default)]
         buffered: Option<BufferConfig>,
     },
-    #[cfg(feature = "database-logging")]
     Database {
         table: String,
         #[serde(default)]
@@ -210,7 +209,6 @@ impl LoggingConfig {
                     Ok(sink)
                 }
             }
-            #[cfg(feature = "database-logging")]
             SinkConfig::Database { .. } => {
                 Err(ConfigError::NotImplemented("Database sink not yet implemented".to_string()))
             }

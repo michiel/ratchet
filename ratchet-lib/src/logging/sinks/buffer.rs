@@ -7,10 +7,10 @@ use tokio::time::interval;
 
 /// Buffered sink that batches log events before forwarding to another sink
 pub struct BufferedSink {
-    buffer: Arc<Mutex<VecDeque<LogEvent>>>,
+    _buffer: Arc<Mutex<VecDeque<LogEvent>>>,
     inner_sink: Arc<dyn LogSink>,
-    max_buffer_size: usize,
-    flush_interval: Duration,
+    _max_buffer_size: usize,
+    _flush_interval: Duration,
     tx: mpsc::Sender<BufferCommand>,
 }
 
@@ -68,10 +68,10 @@ impl BufferedSink {
         });
 
         Self {
-            buffer,
+            _buffer: buffer,
             inner_sink,
-            max_buffer_size,
-            flush_interval,
+            _max_buffer_size: max_buffer_size,
+            _flush_interval: flush_interval,
             tx,
         }
     }

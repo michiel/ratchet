@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 use std::collections::HashMap;
-use std::time::Duration;
 
 /// Task representation in GraphQL
 #[derive(SimpleObject)]

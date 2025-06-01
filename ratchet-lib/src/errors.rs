@@ -112,10 +112,9 @@ pub type Result<T> = std::result::Result<T, RatchetError>;
 impl RatchetError {
     /// Convert to a log event for structured logging
     pub fn to_log_event(&self, context: &crate::logging::LogContext) -> crate::logging::LogEvent {
-        use crate::logging::{LogEvent, LogLevel, ErrorInfo, ErrorSuggestions};
-        use serde_json::json;
+        use crate::logging::{LogEvent, LogLevel, ErrorInfo};
         
-        let mut event = LogEvent::new(LogLevel::Error, self.to_string())
+        let event = LogEvent::new(LogLevel::Error, self.to_string())
             .with_logger("ratchet.error")
             .with_trace_id(context.trace_id.clone())
             .with_span_id(context.span_id.clone())

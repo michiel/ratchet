@@ -1,6 +1,5 @@
-use super::{ErrorInfo, LogEvent};
+use super::ErrorInfo;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use regex::Regex;
 
 /// Error pattern for matching and categorizing errors

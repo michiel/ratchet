@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use std::path::PathBuf;
 use thiserror::Error;
 
 /// Configuration errors

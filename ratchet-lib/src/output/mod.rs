@@ -19,7 +19,6 @@ pub use errors::{DeliveryError, ConfigError, ValidationError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
 use crate::types::HttpMethod;
 
 /// Configuration for output destinations
@@ -46,7 +45,7 @@ pub enum OutputDestinationConfig {
         method: HttpMethod,              // POST, PUT, PATCH
         #[serde(default)]
         headers: HashMap<String, String>, // Template values in headers
-        #[serde(default = "default_webhook_timeout")]
+        #[serde(default = "default_webhook_timeout", alias = "timeout_seconds", with = "duration_serde")]
         timeout: Duration,               // Request timeout (default: 30s)
         #[serde(default)]
         retry_policy: RetryPolicy,       // Retry configuration
@@ -166,6 +165,7 @@ mod duration_serde {
         Ok(Duration::from_secs(secs))
     }
 }
+
 
 /// Context for job execution
 #[derive(Debug, Clone)]

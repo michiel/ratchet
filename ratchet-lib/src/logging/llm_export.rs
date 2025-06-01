@@ -1,4 +1,4 @@
-use super::{LogEvent, ErrorInfo, patterns::{ErrorPatternMatcher, ErrorPattern}};
+use super::{LogEvent, ErrorInfo, patterns::ErrorPatternMatcher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc, Duration};

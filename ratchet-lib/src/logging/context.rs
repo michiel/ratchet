@@ -3,7 +3,6 @@ use serde::Serialize;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
-/// Thread-local storage for current log context
 tokio::task_local! {
     static CURRENT_CONTEXT: LogContext;
 }
@@ -89,7 +88,7 @@ where
     fn with_context(self, context: LogContext) -> ContextScope<Self> {
         ContextScope {
             future: self,
-            context,
+            _context: context,
         }
     }
 }
@@ -97,7 +96,7 @@ where
 /// Future wrapper that provides log context
 pub struct ContextScope<F> {
     future: F,
-    context: LogContext,
+    _context: LogContext,
 }
 
 impl<F> std::future::Future for ContextScope<F>

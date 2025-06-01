@@ -17,8 +17,8 @@ fn test_basic_logging() {
         .add_sink(console_sink)
         .build();
 
-    // Initialize global logger
-    init_logger(test_logger).expect("Failed to initialize logger");
+    // Try to initialize global logger, ignore if already initialized
+    let _ = init_logger(test_logger);
 
     // Test basic logging
     let event = LogEvent::new(LogLevel::Info, "Test message")

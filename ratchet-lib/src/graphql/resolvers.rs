@@ -633,9 +633,6 @@ fn convert_job_status_to_db(status: JobStatus) -> crate::database::entities::Job
 
 // Output destination conversion functions
 fn convert_output_destination_config(config: OutputDestinationConfig) -> OutputDestination {
-    use crate::output::OutputFormat as InternalFormat;
-    use crate::types::HttpMethod as InternalMethod;
-    
     match config {
         OutputDestinationConfig::Filesystem { path, format, permissions, create_dirs, overwrite, backup_existing } => {
             OutputDestination::Filesystem(FilesystemDestination {
