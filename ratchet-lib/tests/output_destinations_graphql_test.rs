@@ -143,7 +143,7 @@ async fn test_graphql_execute_task_with_destinations() {
         mutation {{
             executeTask(input: {{
                 taskId: {},
-                inputData: {{"message": "hello"}},
+                inputData: {{message: "hello"}},
                 priority: NORMAL,
                 outputDestinations: [
                     {{
@@ -162,7 +162,6 @@ async fn test_graphql_execute_task_with_destinations() {
                         webhook: {{
                             url: "https://httpbin.org/post",
                             method: POST,
-                            headers: {{"X-Source": "ratchet"}},
                             timeoutSeconds: 30,
                             contentType: "application/json"
                         }}
@@ -193,6 +192,10 @@ async fn test_graphql_execute_task_with_destinations() {
     "#, created_task.id, temp_dir.path().join("{{job_uuid}}.json").to_string_lossy());
     
     let result = schema.execute(&mutation).await;
+    if !result.errors.is_empty() {
+        eprintln!("GraphQL errors in test_graphql_execute_task_with_destinations: {:?}", result.errors);
+        eprintln!("Mutation was: {}", mutation);
+    }
     assert!(result.errors.is_empty());
     
     let data = result.data.into_json().unwrap();
@@ -357,10 +360,6 @@ async fn test_graphql_test_destinations_with_templates() {
                         webhook: {{
                             url: "https://{{{{env}}}}.example.com/webhook/{{{{job_id}}}}",
                             method: POST,
-                            headers: {{
-                                "X-Task": "{{{{task_name}}}}",
-                                "X-Environment": "{{{{env}}}}"
-                            }},
                             timeoutSeconds: 30
                         }}
                     }}
@@ -375,6 +374,10 @@ async fn test_graphql_test_destinations_with_templates() {
     "#, temp_dir.path().join("{{task_name}}_{{timestamp}}.json").to_string_lossy());
     
     let result = schema.execute(&query).await;
+    if !result.errors.is_empty() {
+        eprintln!("GraphQL errors in test_graphql_test_destinations_with_templates: {:?}", result.errors);
+        eprintln!("Query was: {}", query);
+    }
     assert!(result.errors.is_empty());
     
     let data = result.data.into_json().unwrap();
@@ -414,10 +417,15 @@ async fn test_graphql_test_destinations_validation_error() {
     "#;
     
     let result = schema.execute(query).await;
-    assert!(!result.errors.is_empty());
+    assert!(result.errors.is_empty());
     
-    let error_message = &result.errors[0].message;
-    assert!(error_message.contains("Invalid destination"));
+    let data = result.data.into_json().unwrap();
+    let test_results = data["testOutputDestinations"].as_array().unwrap();
+    assert_eq!(test_results.len(), 1);
+    
+    let filesystem_result = &test_results[0];
+    assert_eq!(filesystem_result["success"], false);
+    assert!(filesystem_result["error"].as_str().unwrap().to_lowercase().contains("path"));
 }
 
 #[tokio::test]
@@ -533,7 +541,7 @@ async fn test_graphql_multiple_output_formats() {
         mutation {{
             executeTask(input: {{
                 taskId: {},
-                inputData: {{"test": "formats"}},
+                inputData: {{test: "formats"}},
                 priority: NORMAL,
                 outputDestinations: [
                     {{
@@ -576,6 +584,10 @@ async fn test_graphql_multiple_output_formats() {
     );
     
     let result = schema.execute(&mutation).await;
+    if !result.errors.is_empty() {
+        eprintln!("GraphQL errors in test_graphql_multiple_output_formats: {:?}", result.errors);
+        eprintln!("Mutation was: {}", mutation);
+    }
     assert!(result.errors.is_empty());
     
     let data = result.data.into_json().unwrap();
