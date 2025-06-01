@@ -43,6 +43,9 @@ pub struct Model {
     /// Schedule metadata as JSON
     pub metadata: Option<Json>,
     
+    /// Output destinations configuration as JSON
+    pub output_destinations: Option<Json>,
+    
     /// When the schedule was created
     pub created_at: ChronoDateTimeUtc,
     
@@ -89,6 +92,7 @@ impl Model {
             execution_count: 0,
             max_executions: None,
             metadata: None,
+            output_destinations: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         }

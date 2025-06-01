@@ -1,12 +1,21 @@
 # Ratchet Development Roadmap & TODO
 
-## 🎯 Current Status: Core Platform Complete with Advanced Logging
+## 🎯 Current Status: Core Platform Complete with Advanced Logging & Output Destinations
 
-**Major Milestone**: Ratchet server is **fully functional** with comprehensive database persistence, GraphQL API, REST endpoints, task registry, and CLI serve command. **New**: Advanced structured logging system with LLM-powered error analysis, pattern matching, and AI-ready export formats implemented. All compilation and test errors resolved (153+ tests passing).
+**Major Milestone**: Ratchet server is **fully functional** with comprehensive database persistence, GraphQL API, REST endpoints, task registry, and CLI serve command. **New**: Output destination system implemented for routing task results to filesystem and webhooks with templating, authentication, and retry mechanisms. Advanced structured logging system with LLM-powered error analysis, pattern matching, and AI-ready export formats implemented. All compilation and test errors resolved (153+ tests passing).
 
 ---
 
 ## 🔧 **Current System Capabilities**
+
+### ✅ **Output Destination System** (COMPLETED)
+- **Flexible Output Routing**: Route task results to multiple destinations (filesystem, webhooks)
+- **Template Engine**: Dynamic path/URL generation with {{variable}} syntax
+- **Filesystem Destination**: Atomic writes, multiple formats (JSON, YAML, CSV), permissions
+- **Webhook Destination**: Full HTTP support with authentication (Bearer, Basic, API Key, HMAC)
+- **Retry Mechanism**: Configurable retry policies with exponential backoff
+- **Concurrent Delivery**: Parallel delivery to multiple destinations with rate limiting
+- **Database Integration**: Jobs and schedules support output destination configuration
 
 ### ✅ **Advanced Logging System** (COMPLETED)
 - **Structured Logging**: JSON-formatted logs with semantic fields and contextual enrichment
@@ -50,7 +59,21 @@
 - [ ] Authorization Model: RBAC vs ABAC vs Custom
 - [ ] Session Storage: In-memory vs Redis vs Database
 
-### 1.2 Enhanced Rate Limiting & Security
+### 1.2 Output Destination Integration & API Updates
+- [ ] **Complete Output Destination Integration**
+  - [ ] Integrate output delivery with job execution pipeline
+  - [ ] Update REST API endpoints for output destination CRUD
+  - [ ] Add GraphQL mutations for managing output destinations
+  - [ ] Configuration file support for default destinations
+  - [ ] Comprehensive tests for all output destination features
+  
+- [ ] **Additional Output Destinations**
+  - [ ] Database destination (PostgreSQL, MySQL)
+  - [ ] S3/Cloud storage destination
+  - [ ] Message queue destination (Redis, RabbitMQ)
+  - [ ] Email notification destination
+
+### 1.3 Enhanced Rate Limiting & Security
 - [ ] **Advanced Rate Limiting**
   - [ ] Per-user rate limiting with JWT integration
   - [ ] IP-based and user-based quotas

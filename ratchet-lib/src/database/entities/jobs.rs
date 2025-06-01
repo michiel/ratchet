@@ -93,6 +93,9 @@ pub struct Model {
     
     /// Job metadata as JSON
     pub metadata: Option<Json>,
+    
+    /// Output destinations configuration as JSON
+    pub output_destinations: Option<Json>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -209,6 +212,7 @@ impl Model {
             started_at: None,
             completed_at: None,
             metadata: None,
+            output_destinations: None,
         }
     }
     
