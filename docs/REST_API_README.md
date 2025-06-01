@@ -85,6 +85,14 @@ The API is designed to work seamlessly with [Refine.dev](https://refine.dev)'s S
 - **POST /api/v1/executions/{id}/retry** - Retry a failed execution
 - **POST /api/v1/executions/{id}/cancel** - Cancel a pending or running execution
 
+#### Jobs
+- **GET /api/v1/jobs** - List all jobs with pagination, filtering, and sorting
+- **GET /api/v1/jobs/{id}** - Get a specific job by ID
+- **POST /api/v1/jobs** - Create a new job with optional output destinations
+- **PATCH /api/v1/jobs/{id}** - Update a job
+- **DELETE /api/v1/jobs/{id}** - Delete a job (not allowed for running jobs)
+- **POST /api/v1/jobs/test-output-destinations** - Test output destination configurations
+
 ### Error Handling
 
 All errors follow the Refine.dev error format:
@@ -151,13 +159,25 @@ const App = () => {
 };
 ```
 
+### Output Destinations
+
+Jobs support optional output destinations for delivering task results to various endpoints:
+
+- **Filesystem** - Save outputs to local files with configurable formats
+- **Webhook** - Send outputs to HTTP endpoints with authentication and retry policies
+- **Database** - Store outputs in database tables (coming soon)
+- **S3** - Upload outputs to AWS S3 buckets (coming soon)
+
+See the [Output Destinations Guide](./OUTPUT_DESTINATIONS.md) for detailed configuration and usage examples.
+
 ## Future Enhancements
 
 The following resources are planned for future implementation:
 
-- **Jobs** - Background job management
 - **Schedules** - Scheduled task execution
 - **Workers** - Worker process management
+- **Database Destinations** - Direct database output storage
+- **S3 Destinations** - AWS S3 output storage
 
 ## Development
 

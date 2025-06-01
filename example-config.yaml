@@ -32,6 +32,67 @@ logging:
   log_to_file: false      # Whether to write logs to file
   log_file_path: null     # Log file path (if log_to_file is true)
 
+# Output destinations configuration
+output:
+  # Maximum number of concurrent deliveries
+  max_concurrent_deliveries: 10
+  
+  # Default timeout for all deliveries (in seconds)
+  default_timeout: 30
+  
+  # Validate destination configurations on startup
+  validate_on_startup: true
+  
+  # Default retry policy for failed deliveries
+  default_retry_policy:
+    max_attempts: 3                # Maximum retry attempts
+    initial_delay_ms: 1000         # Initial delay between retries (1 second)
+    max_delay_ms: 30000           # Maximum delay between retries (30 seconds)
+    backoff_multiplier: 2.0        # Exponential backoff multiplier
+  
+  # Global destination templates for reuse across jobs
+  global_destinations:
+    # Filesystem destination for production logs
+    - name: "production_logs"
+      description: "Store task outputs in organized filesystem structure"
+      destination:
+        type: filesystem
+        path: "/var/log/ratchet/outputs/{{environment}}/{{year}}/{{month}}/{{day}}/{{task_name}}_{{job_uuid}}.json"
+        format: json
+        permissions: "644"
+        create_dirs: true
+        overwrite: true
+        backup_existing: false
+    
+    # Webhook destination for analytics
+    - name: "analytics_webhook"
+      description: "Send task completion events to analytics service"
+      destination:
+        type: webhook
+        url: "https://analytics.company.com/api/v1/task-events"
+        method: POST
+        headers:
+          "Content-Type": "application/json"
+          "X-Environment": "{{environment}}"
+          "X-Task-Name": "{{task_name}}"
+          "X-Source": "ratchet"
+        timeout_seconds: 30
+        content_type: "application/json"
+        auth:
+          type: bearer
+          token: "${ANALYTICS_WEBHOOK_TOKEN}"  # Use environment variable
+    
+    # Debug filesystem destination (development only)
+    - name: "debug_filesystem"
+      description: "Debug output storage for development"
+      destination:
+        type: filesystem
+        path: "/tmp/ratchet-debug/{{task_name}}/{{timestamp}}.yaml"
+        format: yaml
+        permissions: "644"
+        create_dirs: true
+        overwrite: true
+
 # Server configuration for REST API and GraphQL
 server:
   bind_address: "127.0.0.1"  # Server bind address
@@ -114,6 +175,17 @@ development:
 # RATCHET_SERVER_PORT=3000
 # RATCHET_JWT_SECRET=production-secret-key  # (Future feature)
 # RATCHET_RATE_LIMIT_REQUESTS_PER_MINUTE=120
+#
+# Output destination environment variables:
+# RATCHET_OUTPUT_MAX_CONCURRENT=15
+# RATCHET_OUTPUT_DEFAULT_TIMEOUT=60
+# RATCHET_OUTPUT_VALIDATE_STARTUP=true
+#
+# Authentication tokens for output destinations:
+# ANALYTICS_WEBHOOK_TOKEN=your-analytics-token
+# AWS_ACCESS_KEY_ID=your-aws-access-key
+# AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+# DATABASE_CONNECTION_STRING=postgresql://user:pass@host:5432/db
 
 # Security considerations:
 # - JWT authentication is not yet implemented (planned for future release)

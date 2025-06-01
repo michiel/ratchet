@@ -40,6 +40,14 @@ Platform-specific deployment guide covering:
 - File system differences
 - Performance optimizations
 
+### [Output Destinations Guide](OUTPUT_DESTINATIONS.md)
+Flexible output delivery system for task results:
+- Filesystem, webhook, database, and S3 destinations
+- Template variables and dynamic paths
+- Authentication and retry policies
+- REST API and GraphQL usage examples
+- Configuration and best practices
+
 ### [Logging System](LOGGING_OVERVIEW.md)
 Comprehensive logging infrastructure with AI-powered error analysis:
 - [System Overview](LOGGING_OVERVIEW.md) - Architecture and components
