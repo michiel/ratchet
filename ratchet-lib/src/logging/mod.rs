@@ -3,7 +3,9 @@ pub mod context;
 pub mod enrichment;
 pub mod error_info;
 pub mod event;
+pub mod llm_export;
 pub mod logger;
+pub mod patterns;
 pub mod sinks;
 
 pub use config::{LoggingConfig, ConfigError};
@@ -11,7 +13,9 @@ pub use context::LogContext;
 pub use enrichment::{Enricher, LogEnricher};
 pub use error_info::{ErrorInfo, ErrorSuggestions, RelatedError};
 pub use event::{LogEvent, LogLevel};
+pub use llm_export::{LLMExporter, LLMExportConfig, LLMErrorReport, format_markdown_report};
 pub use logger::{StructuredLogger, LoggerBuilder};
+pub use patterns::{ErrorPattern, ErrorPatternMatcher, ErrorCategory, MatchingRule};
 
 use std::sync::Arc;
 use once_cell::sync::OnceCell;
