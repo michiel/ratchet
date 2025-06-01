@@ -40,6 +40,14 @@ Platform-specific deployment guide covering:
 - File system differences
 - Performance optimizations
 
+### [Logging System](LOGGING_OVERVIEW.md)
+Comprehensive logging infrastructure with AI-powered error analysis:
+- [System Overview](LOGGING_OVERVIEW.md) - Architecture and components
+- [Usage Guide](LOGGING_USAGE.md) - Implementation examples and best practices
+- Structured logging with contextual enrichment
+- Error pattern recognition and automated analysis
+- LLM-optimized export formats for AI debugging
+
 ## Planning Documents
 
 ### [DAG Workflow Engine Plan](plans/DAG_WORKFLOW_PLAN.md)

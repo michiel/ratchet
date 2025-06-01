@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Ratchet logging system provides structured, contextual logging optimized for both human debugging and LLM-assisted error resolution.
+The Ratchet logging system provides structured, contextual logging optimized for both human debugging and LLM-assisted error resolution. It includes advanced pattern matching, automated error analysis, and AI-ready export formats.
 
 ## Basic Usage
 
@@ -94,6 +94,59 @@ let result = context.scope(async {
     // Do some work...
     process_request().await
 }).await;
+```
+
+## LLM Report Examples
+
+### Generated Error Analysis Report
+
+```markdown
+# Error Analysis Report
+
+**Generated**: 2024-01-06 12:34:56 UTC
+**Trace ID**: trace-123-456
+
+## Error Summary
+
+- **Type**: DatabaseError
+- **Code**: DB_CONN_ERROR
+- **Message**: Connection timeout after 5s
+- **Severity**: High
+- **Retryable**: true
+
+## Execution Context
+
+- **Task**: data-processor (v1.0.0)
+- **Job ID**: 789
+- **Duration**: 5100ms
+
+## Matched Error Patterns
+
+### Database Connection Timeout (85% confidence)
+
+**Suggestions**:
+- Check database server is running and accessible
+- Verify network connectivity to database host
+- Check firewall rules allow database port
+
+**Common Causes**:
+- Database server down or overloaded
+- Network issues between application and database
+- Incorrect connection string or credentials
+
+## System State
+
+- **Host**: worker-01
+- **Memory**: 512MB
+- **CPU**: 25.5%
+
+## Suggested Analysis Questions
+
+1. Analyze this DatabaseError error in a task execution system
+2. What are the most likely root causes based on the error context?
+3. How should we handle database connection timeout errors in a distributed system?
+4. How can we prevent this high-severity error from recurring?
+5. Based on the execution context, is there a pattern or systemic issue?
 ```
 
 ## Log Output Examples
@@ -232,6 +285,107 @@ let error_info = ErrorInfo::new(
    ```
 
 5. **Use Enrichers**: Let enrichers add common fields automatically instead of manually adding them everywhere
+
+## LLM-Powered Error Analysis
+
+### Pattern Matching
+
+The logging system includes built-in error patterns for common scenarios:
+
+```rust
+use ratchet_lib::logging::{ErrorPatternMatcher, ErrorInfo};
+
+// Create a pattern matcher with default patterns
+let matcher = ErrorPatternMatcher::with_defaults();
+
+// Match an error against patterns
+let error = ErrorInfo::new("TaskNotFound", "TASK_NOT_FOUND", "Task 'weather-api' not found");
+if let Some(pattern) = matcher.match_error(&error) {
+    println!("Matched pattern: {}", pattern.name);
+    println!("Suggestions: {:?}", pattern.suggestions);
+}
+```
+
+### Custom Error Patterns
+
+```rust
+use ratchet_lib::logging::{ErrorPattern, ErrorCategory, MatchingRule};
+
+let custom_pattern = ErrorPattern {
+    id: "api_timeout".to_string(),
+    name: "API Timeout".to_string(),
+    description: "External API request timeout".to_string(),
+    category: ErrorCategory::Network,
+    matching_rules: vec![
+        MatchingRule::All { rules: vec![
+            MatchingRule::ErrorType { value: "NetworkError".to_string() },
+            MatchingRule::MessagePattern { pattern: r"(?i)timeout".to_string() },
+        ]},
+    ],
+    suggestions: vec![
+        "Check API endpoint health".to_string(),
+        "Increase timeout configuration".to_string(),
+    ],
+    preventive_measures: vec![
+        "Implement circuit breaker".to_string(),
+        "Add retry with exponential backoff".to_string(),
+    ],
+    related_documentation: vec![],
+    common_causes: vec![
+        "Network latency".to_string(),
+        "Overloaded API server".to_string(),
+    ],
+    llm_prompts: vec![
+        "How to handle API timeouts in microservices?".to_string(),
+    ],
+};
+```
+
+### LLM Export for AI Analysis
+
+```rust
+use ratchet_lib::logging::{LLMExporter, LLMExportConfig, format_markdown_report};
+
+// Configure LLM export
+let config = LLMExportConfig {
+    include_system_context: true,
+    include_similar_errors: true,
+    max_context_size: 8192,
+    include_prompts: true,
+    ..Default::default()
+};
+
+let exporter = LLMExporter::new(config);
+
+// Export error for LLM analysis
+if let Some(report) = exporter.export_for_analysis(&log_event) {
+    // Generate JSON for API
+    let json = serde_json::to_string_pretty(&report)?;
+    
+    // Generate Markdown for human reading
+    let markdown = format_markdown_report(&report);
+    
+    println!("Suggested analysis questions:");
+    for prompt in &report.suggested_prompts {
+        println!("- {}", prompt);
+    }
+}
+```
+
+### Built-in Error Patterns
+
+The system includes patterns for:
+
+- **Database Connection Timeouts**: Matches DB connection failures
+- **Task Not Found**: Identifies missing task references
+- **HTTP Timeouts**: Detects network request timeouts
+- **Rate Limiting**: Recognizes rate limit exceeded errors
+
+Each pattern provides:
+- Immediate action suggestions
+- Preventive measures
+- Common root causes
+- LLM-specific analysis prompts
 
 ## Configuration
 
