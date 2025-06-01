@@ -170,7 +170,10 @@ mod duration_serde {
 /// Context for job execution
 #[derive(Debug, Clone)]
 pub struct JobContext {
+    pub job_uuid: String,
     pub task_name: String,
     pub task_version: String,
-    pub trace_id: String,
+    pub schedule_id: Option<i32>,
+    pub priority: String,
+    pub environment: String,
 }

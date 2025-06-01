@@ -37,6 +37,7 @@ impl JobRepository {
             started_at: Set(job.started_at),
             completed_at: Set(job.completed_at),
             metadata: Set(job.metadata),
+            output_destinations: Set(job.output_destinations),
             ..Default::default()
         };
 

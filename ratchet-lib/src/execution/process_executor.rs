@@ -13,6 +13,11 @@ use crate::{
     },
     execution::executor::ExecutionError,
     services::ServiceError,
+    output::{
+        OutputDeliveryManager, OutputDestinationConfig,
+        destination::TaskOutput,
+        JobContext,
+    },
 };
 
 /// Process-based task executor that uses worker processes for task execution
@@ -151,9 +156,23 @@ impl ProcessTaskExecutor {
         match result {
             Ok(task_result) => {
                 let output_for_db = task_result.output.clone().unwrap_or_else(|| serde_json::json!({}));
-                execution_repo.mark_completed(execution_id, output_for_db).await?;
+                execution_repo.mark_completed(execution_id, output_for_db.clone()).await?;
                 
                 job_repo.mark_completed(job_id).await?;
+                
+                // Deliver output to configured destinations
+                if task_result.success {
+                    if let Err(e) = self.deliver_output(
+                        &job_entity,
+                        &task_entity,
+                        execution_id,
+                        &output_for_db,
+                        task_result.duration_ms as u128,
+                    ).await {
+                        log::error!("Failed to deliver output for job {}: {}", job_id, e);
+                        // Continue even if delivery fails - the job execution itself succeeded
+                    }
+                }
                 
                 Ok(ExecutionResult {
                     execution_id,
@@ -194,6 +213,75 @@ impl ProcessTaskExecutor {
         for result in health_results {
             if let Err(e) = result {
                 return Err(ExecutionError::TaskExecutionError(format!("Worker health check failed: {}", e)));
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Deliver task output to configured destinations
+    async fn deliver_output(
+        &self,
+        job_entity: &crate::database::entities::Job,
+        task_entity: &crate::database::entities::Task,
+        execution_id: i32,
+        output_data: &JsonValue,
+        duration_ms: u128,
+    ) -> Result<(), ExecutionError> {
+        // Check if job has output destinations configured
+        if let Some(destinations_json) = &job_entity.output_destinations {
+            // Parse destination configurations
+            let destinations: Vec<OutputDestinationConfig> = serde_json::from_value(destinations_json.clone())
+                .map_err(|e| ExecutionError::ExecutionFailed(
+                    format!("Failed to parse output destinations: {}", e)
+                ))?;
+            
+            if !destinations.is_empty() {
+                // Create output delivery manager with destinations
+                let delivery_manager = OutputDeliveryManager::from_configs(&destinations, 10)
+                    .map_err(|e| ExecutionError::ExecutionFailed(
+                        format!("Failed to create delivery manager: {}", e)
+                    ))?;
+                
+                // Create task output
+                let task_output = TaskOutput {
+                    job_id: job_entity.id,
+                    task_id: task_entity.id,
+                    execution_id,
+                    output_data: output_data.clone(),
+                    metadata: job_entity.metadata.as_ref()
+                        .map(|m| serde_json::from_value(m.clone()).unwrap_or_default())
+                        .unwrap_or_default(),
+                    completed_at: chrono::Utc::now(),
+                    execution_duration: std::time::Duration::from_millis(duration_ms as u64),
+                };
+                
+                // Create job context
+                let job_context = JobContext {
+                    job_uuid: job_entity.uuid.to_string(),
+                    task_name: task_entity.name.clone(),
+                    task_version: task_entity.version.clone(),
+                    schedule_id: job_entity.schedule_id,
+                    priority: job_entity.priority.to_string(),
+                    environment: std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()),
+                };
+                
+                // Deliver to all destinations
+                let delivery_results = delivery_manager.deliver_output(task_output, job_context).await
+                    .map_err(|e| ExecutionError::ExecutionFailed(
+                        format!("Output delivery failed: {}", e)
+                    ))?;
+                
+                // Log delivery results
+                for result in delivery_results {
+                    log::info!(
+                        "Output delivered to {}: {} ({}ms, {} bytes)",
+                        result.destination_id,
+                        if result.success { "success" } else { "failed" },
+                        result.delivery_time.as_millis(),
+                        result.size_bytes
+                    );
+                }
             }
         }
         
@@ -329,9 +417,23 @@ impl TaskExecutor for ProcessTaskExecutor {
         match result {
             Ok(task_result) => {
                 let output_for_db = task_result.output.clone().unwrap_or_else(|| serde_json::json!({}));
-                execution_repo.mark_completed(execution_id, output_for_db).await?;
+                execution_repo.mark_completed(execution_id, output_for_db.clone()).await?;
                 
                 job_repo.mark_completed(job_id).await?;
+                
+                // Deliver output to configured destinations
+                if task_result.success {
+                    if let Err(e) = self.deliver_output(
+                        &job_entity,
+                        &task_entity,
+                        execution_id,
+                        &output_for_db,
+                        task_result.duration_ms as u128,
+                    ).await {
+                        log::error!("Failed to deliver output for job {}: {}", job_id, e);
+                        // Continue even if delivery fails - the job execution itself succeeded
+                    }
+                }
                 
                 Ok(ExecutionResult {
                     execution_id,

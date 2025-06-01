@@ -341,7 +341,7 @@ impl OutputDeliveryManager {
             task_version: job_context.task_version.clone(),
             timestamp: output.completed_at,
             environment: template_vars.get("env").unwrap().clone(),
-            trace_id: job_context.trace_id.clone(),
+            trace_id: format!("{}-{}-{}", output.job_id, output.execution_id, output.completed_at.timestamp()),
             template_variables: template_vars,
         }
     }
@@ -386,9 +386,12 @@ mod tests {
 
     fn create_test_job_context() -> JobContext {
         JobContext {
+            job_uuid: "test-job-uuid".to_string(),
             task_name: "test-task".to_string(),
             task_version: "1.0.0".to_string(),
-            trace_id: "trace-123".to_string(),
+            schedule_id: None,
+            priority: "normal".to_string(),
+            environment: "test".to_string(),
         }
     }
 

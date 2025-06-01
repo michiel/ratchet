@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use std::fmt;
 
 /// Job priority enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
@@ -170,6 +171,17 @@ impl FromStr for JobPriority {
             "high" => Ok(JobPriority::High),
             "urgent" => Ok(JobPriority::Urgent),
             _ => Err(format!("Invalid priority: {}", s)),
+        }
+    }
+}
+
+impl fmt::Display for JobPriority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JobPriority::Low => write!(f, "low"),
+            JobPriority::Normal => write!(f, "normal"),
+            JobPriority::High => write!(f, "high"),
+            JobPriority::Urgent => write!(f, "urgent"),
         }
     }
 }
