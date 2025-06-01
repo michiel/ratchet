@@ -108,3 +108,139 @@ pub enum RatchetError {
 
 /// Result type for Ratchet operations
 pub type Result<T> = std::result::Result<T, RatchetError>;
+
+impl RatchetError {
+    /// Convert to a log event for structured logging
+    pub fn to_log_event(&self, context: &crate::logging::LogContext) -> crate::logging::LogEvent {
+        use crate::logging::{LogEvent, LogLevel, ErrorInfo, ErrorSuggestions};
+        use serde_json::json;
+        
+        let mut event = LogEvent::new(LogLevel::Error, self.to_string())
+            .with_logger("ratchet.error")
+            .with_trace_id(context.trace_id.clone())
+            .with_span_id(context.span_id.clone())
+            .with_fields(context.fields.clone());
+
+        let error_info = ErrorInfo {
+            error_type: self.error_type(),
+            error_code: self.error_code(),
+            message: self.to_string(),
+            severity: self.severity(),
+            is_retryable: self.is_retryable(),
+            stack_trace: None, // Backtrace capture can be expensive, enable only in debug mode
+            context: self.get_error_context(),
+            suggestions: self.get_suggestions(),
+            related_errors: Vec::new(),
+        };
+
+        event.with_error(error_info)
+    }
+
+    fn error_type(&self) -> String {
+        match self {
+            Self::Io(_) => "IoError",
+            Self::TaskNotFound(_) => "TaskNotFound",
+            Self::NotImplemented(_) => "NotImplemented",
+            Self::JsExecution(_) => "JsExecutionError",
+            Self::Database(_) => "DatabaseError",
+            Self::Configuration(_) => "ConfigurationError",
+            Self::Validation(_) => "ValidationError",
+            Self::WatcherError(_) => "WatcherError",
+            Self::LoadError(_) => "LoadError",
+            Self::Other(_) => "Other",
+        }.to_string()
+    }
+
+    fn error_code(&self) -> String {
+        match self {
+            Self::Io(_) => "IO_ERROR",
+            Self::TaskNotFound(_) => "TASK_NOT_FOUND",
+            Self::NotImplemented(_) => "NOT_IMPLEMENTED",
+            Self::JsExecution(e) => match e {
+                JsExecutionError::FileReadError(_) => "JS_FILE_READ_ERROR",
+                JsExecutionError::CompileError(_) => "JS_COMPILE_ERROR",
+                JsExecutionError::ExecutionError(_) => "JS_EXECUTION_ERROR",
+                JsExecutionError::TypedJsError(_) => "JS_TYPED_ERROR",
+                JsExecutionError::SchemaValidationError(_) => "JS_SCHEMA_VALIDATION_ERROR",
+                JsExecutionError::InvalidInputSchema(_) => "JS_INVALID_INPUT_SCHEMA",
+                JsExecutionError::InvalidOutputSchema(_) => "JS_INVALID_OUTPUT_SCHEMA",
+                JsExecutionError::InvalidOutputFormat(_) => "JS_INVALID_OUTPUT_FORMAT",
+            },
+            Self::Database(_) => "DATABASE_ERROR",
+            Self::Configuration(_) => "CONFIG_ERROR",
+            Self::Validation(_) => "VALIDATION_ERROR",
+            Self::WatcherError(_) => "WATCHER_ERROR",
+            Self::LoadError(_) => "LOAD_ERROR",
+            Self::Other(_) => "OTHER_ERROR",
+        }.to_string()
+    }
+
+    fn severity(&self) -> ErrorSeverity {
+        match self {
+            Self::Io(_) => ErrorSeverity::High,
+            Self::TaskNotFound(_) => ErrorSeverity::Medium,
+            Self::NotImplemented(_) => ErrorSeverity::Low,
+            Self::JsExecution(_) => ErrorSeverity::High,
+            Self::Database(_) => ErrorSeverity::High,
+            Self::Configuration(_) => ErrorSeverity::Critical,
+            Self::Validation(_) => ErrorSeverity::Medium,
+            Self::WatcherError(_) => ErrorSeverity::Medium,
+            Self::LoadError(_) => ErrorSeverity::High,
+            Self::Other(_) => ErrorSeverity::Medium,
+        }
+    }
+
+    fn is_retryable(&self) -> bool {
+        match self {
+            Self::Io(_) => true,
+            Self::Database(_) => true,
+            Self::JsExecution(e) => matches!(e, 
+                JsExecutionError::TypedJsError(JsErrorType::NetworkError(_)) |
+                JsExecutionError::TypedJsError(JsErrorType::TimeoutError(_)) |
+                JsExecutionError::TypedJsError(JsErrorType::ServiceUnavailableError(_))
+            ),
+            _ => false,
+        }
+    }
+
+    fn get_error_context(&self) -> std::collections::HashMap<String, serde_json::Value> {
+        use serde_json::json;
+        let mut context = std::collections::HashMap::new();
+        
+        match self {
+            Self::TaskNotFound(task) => {
+                context.insert("task_name".to_string(), json!(task));
+            }
+            Self::JsExecution(e) => {
+                context.insert("js_error_type".to_string(), json!(e.to_string()));
+            }
+            _ => {}
+        }
+        
+        context
+    }
+
+    fn get_suggestions(&self) -> crate::logging::ErrorSuggestions {
+        let mut suggestions = crate::logging::ErrorSuggestions::default();
+        
+        match self {
+            Self::TaskNotFound(task) => {
+                suggestions.immediate.push(format!("Check if task '{}' exists in the registry", task));
+                suggestions.immediate.push("Run 'ratchet list' to see available tasks".to_string());
+            }
+            Self::Configuration(msg) => {
+                suggestions.immediate.push("Check your configuration file for errors".to_string());
+                suggestions.immediate.push(format!("Configuration issue: {}", msg));
+                suggestions.preventive.push("Validate configuration on startup".to_string());
+            }
+            Self::Database(msg) => {
+                suggestions.immediate.push("Check database connectivity".to_string());
+                suggestions.immediate.push(format!("Database error: {}", msg));
+                suggestions.preventive.push("Implement connection pooling and retries".to_string());
+            }
+            _ => {}
+        }
+        
+        suggestions
+    }
+}

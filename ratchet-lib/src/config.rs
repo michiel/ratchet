@@ -37,7 +37,7 @@ pub struct RatchetConfig {
     
     /// Logging configuration
     #[serde(default)]
-    pub logging: LoggingConfig,
+    pub logging: crate::logging::LoggingConfig,
     
     /// Server configuration (optional, for future server mode)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,22 +99,6 @@ pub struct CacheConfig {
     pub enabled: bool,
 }
 
-/// Logging configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct LoggingConfig {
-    /// Log level (trace, debug, info, warn, error)
-    #[serde(default = "default_log_level")]
-    pub level: String,
-    
-    /// Whether to log to file
-    #[serde(default)]
-    pub log_to_file: bool,
-    
-    /// Log file path (if log_to_file is true)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_file_path: Option<PathBuf>,
-}
 
 /// Server configuration (for future server mode)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,7 +201,7 @@ impl Default for RatchetConfig {
             execution: ExecutionConfig::default(),
             http: HttpConfig::default(),
             cache: CacheConfig::default(),
-            logging: LoggingConfig::default(),
+            logging: crate::logging::LoggingConfig::default(),
             server: None,
             registry: None,
         }
@@ -254,15 +238,6 @@ impl Default for CacheConfig {
     }
 }
 
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self {
-            level: "info".to_string(),
-            log_to_file: false,
-            log_file_path: None,
-        }
-    }
-}
 
 impl Default for FetchVariables {
     fn default() -> Self {
@@ -341,8 +316,13 @@ impl RatchetConfig {
         }
         
         // Logging configuration overrides
-        if let Ok(log_level) = std::env::var("RATCHET_LOG_LEVEL") {
-            self.logging.level = log_level;
+        if let Ok(log_level_str) = std::env::var("RATCHET_LOG_LEVEL") {
+            use std::str::FromStr;
+            if let Ok(log_level) = crate::logging::LogLevel::from_str(&log_level_str) {
+                self.logging.level = log_level;
+            } else {
+                return Err(ConfigError::EnvError(format!("Invalid RATCHET_LOG_LEVEL: {}", log_level_str)));
+            }
         }
         
         // Execution configuration overrides
@@ -357,13 +337,7 @@ impl RatchetConfig {
     
     /// Validate configuration values
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Validate log level
-        match self.logging.level.to_lowercase().as_str() {
-            "trace" | "debug" | "info" | "warn" | "error" => {},
-            _ => return Err(ConfigError::ValidationError(
-                format!("Invalid log level: {}. Must be one of: trace, debug, info, warn, error", self.logging.level)
-            )),
-        }
+        // Log level is now an enum, so it's always valid
         
         // Validate cache size
         if self.cache.task_content_cache_size == 0 {
@@ -416,7 +390,7 @@ mod tests {
         
         assert_eq!(config.http.timeout, Duration::from_secs(30));
         assert_eq!(config.cache.task_content_cache_size, 100);
-        assert_eq!(config.logging.level, "info");
+        assert_eq!(config.logging.level, crate::logging::LogLevel::Info);
         assert_eq!(config.execution.fetch_variables.url_var, "__fetch_url");
         assert!(config.execution.validate_schemas);
     }
@@ -428,11 +402,7 @@ mod tests {
         // Valid config should pass
         assert!(config.validate().is_ok());
         
-        // Invalid log level should fail
-        config.logging.level = "invalid".to_string();
-        assert!(config.validate().is_err());
-        
-        // Reset and test zero cache size
+        // Test zero cache size
         config = RatchetConfig::default();
         config.cache.task_content_cache_size = 0;
         assert!(config.validate().is_err());
@@ -448,7 +418,7 @@ mod tests {
         
         assert_eq!(config.http.timeout, Duration::from_secs(60));
         assert_eq!(config.cache.task_content_cache_size, 200);
-        assert_eq!(config.logging.level, "debug");
+        assert_eq!(config.logging.level, crate::logging::LogLevel::Debug);
         
         // Clean up
         std::env::remove_var("RATCHET_HTTP_TIMEOUT");
@@ -478,7 +448,7 @@ logging:
         let config: RatchetConfig = serde_yaml::from_str(yaml).unwrap();
         
         // Check that defaults were applied
-        assert_eq!(config.logging.level, "debug");  // Our override
+        assert_eq!(config.logging.level, crate::logging::LogLevel::Debug);  // Our override
         assert_eq!(config.http.timeout, Duration::from_secs(30));  // Default
         assert_eq!(config.cache.task_content_cache_size, 100);  // Default
         assert!(config.execution.validate_schemas);  // Default
@@ -491,7 +461,7 @@ logging:
         let config: RatchetConfig = serde_yaml::from_str(yaml).unwrap();
         
         // Check that all defaults were applied
-        assert_eq!(config.logging.level, "info");
+        assert_eq!(config.logging.level, crate::logging::LogLevel::Info);
         assert_eq!(config.http.timeout, Duration::from_secs(30));
         assert_eq!(config.cache.task_content_cache_size, 100);
         assert!(config.execution.validate_schemas);
@@ -523,9 +493,6 @@ fn default_true() -> bool {
     true
 }
 
-fn default_log_level() -> String {
-    "info".to_string()
-}
 
 fn default_cache_size() -> usize {
     100
