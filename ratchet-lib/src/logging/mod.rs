@@ -1,3 +1,4 @@
+pub mod config;
 pub mod context;
 pub mod enrichment;
 pub mod error_info;
@@ -5,6 +6,7 @@ pub mod event;
 pub mod logger;
 pub mod sinks;
 
+pub use config::{LoggingConfig, ConfigError};
 pub use context::LogContext;
 pub use enrichment::{Enricher, LogEnricher};
 pub use error_info::{ErrorInfo, ErrorSuggestions, RelatedError};
