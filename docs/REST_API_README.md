@@ -170,6 +170,8 @@ Jobs support optional output destinations for delivering task results to various
 
 See the [Output Destinations Guide](./OUTPUT_DESTINATIONS.md) for detailed configuration and usage examples.
 
+Output destinations are also fully supported in the GraphQL API with equivalent functionality. See the GraphQL schema documentation for mutation and query examples.
+
 ## Future Enhancements
 
 The following resources are planned for future implementation:

@@ -4,6 +4,8 @@
 
 The Ratchet output destination system provides a flexible way to deliver task execution results to various destinations including filesystem, webhooks, databases, and cloud storage. This system supports template variables, retry policies, and concurrent delivery to multiple destinations.
 
+> **Note**: For GraphQL-specific syntax and limitations, see the [GraphQL Output Destinations Guide](./GRAPHQL_OUTPUT_DESTINATIONS.md).
+
 ## Supported Destination Types
 
 ### 1. Filesystem
