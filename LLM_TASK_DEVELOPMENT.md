@@ -20,6 +20,7 @@ This guide provides comprehensive instructions for Large Language Models (LLMs) 
 Ratchet is a task execution engine designed for automated workflow processing. It provides:
 
 - **Task Registry**: Manages JavaScript-based task definitions
+- **JavaScript Engine**: Secure JavaScript execution environment using Boa engine
 - **Execution Engine**: Runs tasks in isolated processes with resource management
 - **REST/GraphQL APIs**: Unified interface for task management and execution
 - **Scheduler**: Cron-based task scheduling
@@ -75,10 +76,7 @@ task-name/
   "author": "Your Name",
   "tags": ["category1", "category2"],
   "timeout": 30000,
-  "memory_limit": "128MB",
-  "requirements": {
-    "node_version": ">=14.0.0"
-  }
+  "memory_limit": "128MB"
 }
 ```
 
@@ -89,67 +87,86 @@ task-name/
 
 ### main.js Implementation
 
+The main.js file must contain a single function that takes input and returns output:
+
 ```javascript
-// Required: Main execution function
-async function execute(input, context) {
+(function(input) {
     // Your task logic here
     // - input: validated against input.schema.json
-    // - context: execution context with utilities
     // Returns: object validated against output.schema.json
-}
-
-// Optional: Setup function called once per process
-async function setup(context) {
-    // Initialize resources, connections, etc.
-}
-
-// Optional: Cleanup function called on process exit
-async function cleanup(context) {
-    // Clean up resources
-}
-
-// Export the functions
-module.exports = { execute, setup, cleanup };
+    
+    try {
+        // Extract input parameters
+        const { param1, param2 } = input;
+        
+        // Perform your task logic
+        const result = processData(param1, param2);
+        
+        // Return structured output
+        return {
+            success: true,
+            result: result,
+            timestamp: new Date().toISOString()
+        };
+    } catch (error) {
+        // Handle errors appropriately
+        throw new Error(`Task failed: ${error.message}`);
+    }
+})
 ```
 
-### Context Object
+**Important Notes:**
+- The function must be wrapped in parentheses: `(function(input) { ... })`
+- No async/await support - all operations must be synchronous
+- Use the built-in `fetch` function for HTTP requests
+- No external modules or Node.js APIs available
 
-The `context` parameter provides utilities:
+### Available APIs
+
+Ratchet provides a minimal JavaScript runtime environment with these built-in functions:
+
+#### fetch(url, options, body)
+
+Makes HTTP requests to external services:
 
 ```javascript
-{
-  // HTTP client for external API calls
-  http: {
-    get: async (url, options) => response,
-    post: async (url, data, options) => response,
-    put: async (url, data, options) => response,
-    delete: async (url, options) => response
-  },
-  
-  // Logging utilities
-  log: {
-    info: (message, data) => void,
-    error: (message, error) => void,
-    warn: (message, data) => void,
-    debug: (message, data) => void
-  },
-  
-  // Task metadata
-  meta: {
-    uuid: "task-uuid",
-    version: "1.0.0",
-    label: "Task Name"
-  },
-  
-  // Execution metadata
-  execution: {
-    id: "execution-id",
-    jobId: "job-id",
-    startTime: Date,
-    timeout: 30000
-  }
+// GET request
+const response = fetch("https://api.example.com/data");
+if (response.ok) {
+    const data = response.body;
+    // Process data
 }
+
+// POST request with body
+const response = fetch(
+    "https://api.example.com/create",
+    { method: "POST", headers: { "Content-Type": "application/json" } },
+    { name: "example", value: 42 }
+);
+
+// Response object has:
+// - ok: boolean (status 200-299)
+// - status: number (HTTP status code)
+// - statusText: string
+// - body: object (parsed JSON response)
 ```
+
+#### Error Types
+
+Built-in error types for different failure scenarios:
+
+```javascript
+// Network-related errors
+throw new NetworkError("Failed to connect to API");
+
+// Data validation errors  
+throw new DataError("Invalid response format");
+
+// General task errors
+throw new Error("Something went wrong");
+```
+
+**Note**: No context object is provided. Tasks are pure functions that take input and return output.
 
 ## Development Workflow
 
@@ -209,22 +226,22 @@ The generator creates a basic template that you should customize:
 
 ```javascript
 // Generated main.js template
-async function execute(input, context) {
+(function(input) {
     // TODO: Implement your task logic here
     
     try {
+        // Extract input parameters
+        const { /* your parameters */ } = input;
+        
         // Your implementation
         return {
             success: true,
             result: "placeholder"
         };
     } catch (error) {
-        context.log.error("Task execution failed", error);
-        throw error;
+        throw new Error(`Task execution failed: ${error.message}`);
     }
-}
-
-module.exports = { execute };
+})
 ```
 
 ## Implementation Guidelines
@@ -234,7 +251,7 @@ module.exports = { execute };
 Always rely on schema validation - the input is pre-validated:
 
 ```javascript
-async function execute(input, context) {
+(function(input) {
     // Input is already validated against input.schema.json
     // Access properties directly
     const { apiKey, endpoint, params } = input;
@@ -243,38 +260,44 @@ async function execute(input, context) {
     if (!apiKey) {
         throw new Error("API key is required");
     }
-}
+    
+    // Continue with task logic...
+})
 ```
 
 ### HTTP Requests
 
-Use the provided HTTP context for external calls:
+Use the built-in `fetch` function for external API calls:
 
 ```javascript
-async function execute(input, context) {
+(function(input) {
     try {
-        // GET request
-        const response = await context.http.get(input.url, {
+        // GET request with headers
+        const response = fetch(input.url, {
+            method: "GET",
             headers: {
                 'Authorization': `Bearer ${input.apiKey}`,
                 'Content-Type': 'application/json'
-            },
-            timeout: 10000
+            }
         });
         
-        // POST request
-        const postResponse = await context.http.post(input.webhookUrl, {
-            data: response.data
-        }, {
+        if (!response.ok) {
+            throw new NetworkError(`API request failed: ${response.status} ${response.statusText}`);
+        }
+        
+        // POST request with data
+        const postResponse = fetch(input.webhookUrl, {
+            method: "POST",
             headers: { 'Content-Type': 'application/json' }
+        }, {
+            data: response.body
         });
         
-        return { success: true, data: response.data };
+        return { success: true, data: response.body };
     } catch (error) {
-        context.log.error("HTTP request failed", error);
         throw new Error(`API call failed: ${error.message}`);
     }
-}
+})
 ```
 
 ### Error Handling
@@ -282,58 +305,65 @@ async function execute(input, context) {
 Implement comprehensive error handling:
 
 ```javascript
-async function execute(input, context) {
+(function(input) {
     try {
         // Main logic
-        const result = await performOperation(input);
+        const result = performOperation(input);
         return { success: true, data: result };
         
     } catch (error) {
-        // Log the error
-        context.log.error("Operation failed", {
-            error: error.message,
-            stack: error.stack,
-            input: input
-        });
-        
-        // Return structured error (if schema allows) or re-throw
-        if (error.code === 'TIMEOUT') {
-            return { 
-                success: false, 
-                error: "Operation timed out",
-                retryable: true 
-            };
+        // Handle different error types appropriately
+        if (error instanceof NetworkError) {
+            throw new NetworkError(`Network operation failed: ${error.message}`);
+        } else if (error instanceof DataError) {
+            throw new DataError(`Data validation failed: ${error.message}`);
+        } else {
+            throw new Error(`Task failed: ${error.message}`);
         }
-        
-        throw error; // Re-throw for system handling
     }
+})
+
+function performOperation(input) {
+    // Your business logic here
+    const response = fetch(input.apiUrl);
+    
+    if (!response.ok) {
+        throw new NetworkError(`API returned ${response.status}`);
+    }
+    
+    if (!response.body || !response.body.data) {
+        throw new DataError("Invalid response format");
+    }
+    
+    return response.body.data;
 }
 ```
 
-### Logging Best Practices
+### Debugging and Logging
 
-Use appropriate log levels:
+Since no logging context is provided, use return values and error messages for debugging:
 
 ```javascript
-async function execute(input, context) {
-    context.log.info("Starting task execution", { 
-        taskId: context.meta.uuid,
-        inputSize: JSON.stringify(input).length 
-    });
-    
-    context.log.debug("Processing data", { 
-        step: "validation",
-        details: input 
-    });
-    
+(function(input) {
     try {
-        // ... logic
-        context.log.info("Task completed successfully");
+        // Add debug information to your return values during development
+        const debugInfo = [];
+        debugInfo.push("Starting task execution");
+        
+        const result = performLogic(input);
+        debugInfo.push("Logic completed successfully");
+        
+        return {
+            success: true,
+            result: result,
+            // Include debug info in development (remove in production)
+            debug: debugInfo
+        };
     } catch (error) {
-        context.log.error("Task failed", error);
-        throw error;
+        // Provide detailed error messages
+        throw new Error(`Task failed at step: ${error.message}`);
     }
-}
+})
 ```
 
 ## Testing Framework
@@ -440,68 +470,60 @@ ratchet test sample/js-tasks/my-task --test test-001.json
 
 ## Examples
 
-### Example 1: Weather API Task
-
-Reference the existing `sample/js-tasks/weather-api/` for a complete example:
+### Example 1: Basic API Task
 
 ```javascript
-// main.js
-async function execute(input, context) {
-    const { location, apiKey, units = 'metric' } = input;
+// main.js - Simple API task
+(function(input) {
+    const { endpoint, apiKey, params = {} } = input;
     
     try {
-        context.log.info("Fetching weather data", { location, units });
+        // Build URL with parameters
+        const url = new URL(endpoint);
+        Object.keys(params).forEach(key => {
+            url.searchParams.append(key, params[key]);
+        });
         
-        const response = await context.http.get(
-            `https://api.openweathermap.org/data/2.5/weather`,
-            {
-                params: {
-                    q: location,
-                    appid: apiKey,
-                    units: units
-                },
-                timeout: 10000
+        // Make HTTP request
+        const response = fetch(url.toString(), {
+            method: "GET",
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
             }
-        );
+        });
         
-        const weather = response.data;
+        if (!response.ok) {
+            throw new NetworkError(`API request failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = response.body;
         
         return {
-            location: weather.name,
-            country: weather.sys.country,
-            temperature: weather.main.temp,
-            description: weather.weather[0].description,
-            humidity: weather.main.humidity,
-            windSpeed: weather.wind.speed,
+            success: true,
+            data: data,
             timestamp: new Date().toISOString()
         };
         
     } catch (error) {
-        if (error.response?.status === 401) {
-            throw new Error("Invalid API key");
-        } else if (error.response?.status === 404) {
-            throw new Error(`Location '${location}' not found`);
+        if (error instanceof NetworkError) {
+            throw error;
         }
-        
-        context.log.error("Weather API request failed", error);
-        throw new Error(`Weather service error: ${error.message}`);
+        throw new Error(`Task execution failed: ${error.message}`);
     }
-}
-
-module.exports = { execute };
+})
 ```
 
 ### Example 2: Data Processing Task
 
 ```javascript
 // main.js - Data transformation task
-async function execute(input, context) {
+(function(input) {
     const { data, transformations, outputFormat = 'json' } = input;
     
-    context.log.info("Processing data", { 
-        recordCount: data.length,
-        transformations: transformations.length 
-    });
+    if (!Array.isArray(data)) {
+        throw new DataError("Input data must be an array");
+    }
     
     let processedData = [...data];
     
@@ -535,21 +557,28 @@ async function execute(input, context) {
         format: outputFormat,
         processedAt: new Date().toISOString()
     };
-}
-
-function evaluateFilter(item, condition) {
-    // Implement filter logic
-}
-
-function applyMapping(item, mapping) {
-    // Implement mapping logic
-}
-
-function compareValues(a, b, order) {
-    // Implement sorting logic
-}
-
-module.exports = { execute };
+    
+    function evaluateFilter(item, condition) {
+        // Implement filter logic based on condition
+        return item[condition.field] === condition.value;
+    }
+    
+    function applyMapping(item, mapping) {
+        // Apply field mapping transformations
+        const mapped = {};
+        for (const [key, value] of Object.entries(mapping)) {
+            mapped[key] = item[value];
+        }
+        return mapped;
+    }
+    
+    function compareValues(a, b, order) {
+        if (order === 'desc') {
+            return b - a;
+        }
+        return a - b;
+    }
+})
 ```
 
 ## Best Practices
@@ -628,9 +657,9 @@ Example input schema:
    ```
    Error: Cannot find module 'xyz'
    ```
-   - Ratchet runs in isolated environment
-   - Only built-in Node.js modules available
-   - Use context.http instead of external HTTP libraries
+   - Ratchet runs in isolated Boa JavaScript environment
+   - No external modules available
+   - Use built-in fetch function instead of external HTTP libraries
 
 3. **Timeout Errors**:
    ```
@@ -650,9 +679,13 @@ Example input schema:
 
 ### Debugging Tips
 
-1. **Use logging extensively**:
+1. **Include debug information in return values**:
    ```javascript
-   context.log.debug("Current state", { variable1, variable2 });
+   return {
+       success: true,
+       result: processedData,
+       debug: { step: "processing", itemCount: data.length }
+   };
    ```
 
 2. **Test with simple cases first**:
@@ -679,9 +712,9 @@ Before considering a task complete:
 - [ ] Metadata.json has correct UUID, version, and description
 - [ ] Input schema validates all required fields with proper constraints
 - [ ] Output schema matches actual return structure
-- [ ] Main.js implements execute function correctly
+- [ ] Main.js implements function wrapper correctly: (function(input) { ... })
 - [ ] Error handling covers common failure scenarios
-- [ ] Logging provides useful information without exposing secrets
+- [ ] Return values provide useful information without exposing secrets
 - [ ] At least 3 test cases: success, failure, edge case
 - [ ] Test cases include proper mocking for external APIs
 - [ ] All tests pass when run with `ratchet test`
@@ -709,4 +742,4 @@ curl -X POST http://localhost:3000/graphql \
   -d '{"query": "mutation { executeTask(input: {taskId: \"uuid\", inputData: {key: \"value\"}}) { id status } }"}'
 ```
 
-This guide provides everything needed to understand and develop tasks for the Ratchet system. Follow the patterns shown in `sample/js-tasks/weather-api/` as a reference implementation.
+This guide provides everything needed to understand and develop tasks for the Ratchet system. Follow the patterns shown in the examples above for proper task implementation.
