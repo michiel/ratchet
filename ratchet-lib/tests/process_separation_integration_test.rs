@@ -142,11 +142,19 @@ async fn test_ipc_message_serialization() {
     let correlation_id = Uuid::new_v4();
     
     // Test WorkerMessage serialization
+    let execution_context = ratchet_lib::execution::ipc::ExecutionContext::new(
+        Uuid::new_v4(), 
+        None, 
+        Uuid::new_v4(), 
+        "1.0.0".to_string()
+    );
+    
     let worker_message = WorkerMessage::ExecuteTask {
         job_id: 123,
         task_id: 456,
         task_path: "/path/to/task".to_string(),
         input_data: json!({"test": "data"}),
+        execution_context,
         correlation_id,
     };
     

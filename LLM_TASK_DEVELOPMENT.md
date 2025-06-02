@@ -87,17 +87,28 @@ task-name/
 
 ### main.js Implementation
 
-The main.js file must contain a single function that takes input and returns output:
+The main.js file must contain a single function that takes input and optionally context, and returns output:
 
 ```javascript
-(function(input) {
+(function(input, context) {
     // Your task logic here
     // - input: validated against input.schema.json
+    // - context: execution context with metadata (optional)
     // Returns: object validated against output.schema.json
     
     try {
         // Extract input parameters
         const { param1, param2 } = input;
+        
+        // Access execution context if provided
+        if (context) {
+            console.log("Execution ID:", context.executionId);
+            console.log("Task ID:", context.taskId);
+            console.log("Task Version:", context.taskVersion);
+            if (context.jobId) {
+                console.log("Job ID:", context.jobId);
+            }
+        }
         
         // Perform your task logic
         const result = processData(param1, param2);
@@ -105,7 +116,8 @@ The main.js file must contain a single function that takes input and returns out
         // Return structured output
         return {
             result: result,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            executedBy: context ? context.taskId : "unknown"
         };
     } catch (error) {
         // Handle errors appropriately
@@ -115,10 +127,24 @@ The main.js file must contain a single function that takes input and returns out
 ```
 
 **Important Notes:**
-- The function must be wrapped in parentheses: `(function(input) { ... })`
+- The function must be wrapped in parentheses: `(function(input, context) { ... })`
+- The context parameter is optional - tasks can work with just `(function(input) { ... })`
 - No async/await support - all operations must be synchronous
 - Use the built-in `fetch` function for HTTP requests
 - No external modules or Node.js APIs available
+
+### Context Object
+
+The context object provides execution metadata and contains:
+
+```javascript
+{
+  executionId: "uuid-string",  // Unique execution identifier
+  taskId: "uuid-string",       // Task UUID
+  taskVersion: "1.0.0",        // Task version string
+  jobId: "uuid-string"         // Job UUID (only present for scheduled executions)
+}
+```
 
 ### Available APIs
 
@@ -225,12 +251,18 @@ The generator creates a basic template that you should customize:
 
 ```javascript
 // Generated main.js template
-(function(input) {
+(function(input, context) {
     // TODO: Implement your task logic here
     
     try {
         // Extract input parameters
         const { /* your parameters */ } = input;
+        
+        // Access execution context if needed
+        if (context) {
+            // Log execution metadata
+            console.log("Executing task:", context.taskId);
+        }
         
         // Your implementation
         return {

@@ -56,3 +56,20 @@ pub fn convert_js_result_to_json(
     serde_json::from_str(&json_str)
         .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))
 }
+
+/// Set a JavaScript value in the global context
+pub fn set_js_value(
+    context: &mut BoaContext<'_>,
+    variable_name: &str,
+    value: &JsonValue,
+) -> Result<(), JsExecutionError> {
+    let value_str = serde_json::to_string(value)
+        .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
+
+    let js_code = format!("var {} = {};", variable_name, value_str);
+    context
+        .eval(Source::from_bytes(&js_code))
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set variable {}: {}", variable_name, e)))?;
+
+    Ok(())
+}

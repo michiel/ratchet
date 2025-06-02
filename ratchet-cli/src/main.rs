@@ -737,7 +737,7 @@ async fn run_worker_process(worker_id: String) -> Result<()> {
                         debug!("Worker {} received message: {:?}", worker_id, envelope.message);
                         
                         let response = match envelope.message {
-                            WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, correlation_id } => {
+                            WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, correlation_id, .. } => {
                                 execute_task_worker(job_id, task_id, &task_path, &input_data, correlation_id).await
                             }
                             WorkerMessage::ValidateTask { task_path, correlation_id } => {

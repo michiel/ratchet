@@ -127,9 +127,10 @@ impl Worker {
                 task_id,
                 task_path,
                 input_data,
+                execution_context,
                 correlation_id,
             } => {
-                let result = self.execute_task_impl(job_id, task_id, &task_path, input_data).await;
+                let result = self.execute_task_impl(job_id, task_id, &task_path, input_data, execution_context).await;
                 Ok(Some(CoordinatorMessage::TaskResult {
                     job_id,
                     correlation_id,
@@ -171,6 +172,7 @@ impl Worker {
         _task_id: i32,
         task_path: &str,
         input_data: serde_json::Value,
+        _execution_context: crate::execution::ipc::ExecutionContext,
     ) -> TaskExecutionResult {
         let started_at = chrono::Utc::now();
         
@@ -198,7 +200,7 @@ impl Worker {
         };
         
         // Execute the task
-        match self.engine.services().task_service().execute_task(&mut task, input_data).await {
+        match self.engine.services().task_service().execute_task_with_context(&mut task, input_data, Some(_execution_context)).await {
             Ok(output) => {
                 let completed_at = chrono::Utc::now();
                 let duration_ms = (completed_at - started_at).num_milliseconds() as i32;

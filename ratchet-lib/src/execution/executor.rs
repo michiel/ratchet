@@ -59,7 +59,7 @@ pub trait TaskExecutor {
         &self,
         task_id: i32,
         input_data: JsonValue,
-        context: Option<ExecutionContext>,
+        context: Option<crate::execution::ipc::ExecutionContext>,
     ) -> Result<ExecutionResult, ExecutionError>;
     
     /// Execute a job from the job queue

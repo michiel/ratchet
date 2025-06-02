@@ -50,6 +50,13 @@ pub trait TaskService {
     /// Execute a task with given input
     async fn execute_task(&self, task: &mut Task, input: JsonValue) -> ServiceResult<JsonValue>;
     
+    async fn execute_task_with_context(
+        &self, 
+        task: &mut Task, 
+        input: JsonValue,
+        execution_context: Option<crate::execution::ipc::ExecutionContext>
+    ) -> ServiceResult<JsonValue>;
+    
     /// Validate a task structure and syntax
     async fn validate_task(&self, task: &mut Task) -> ServiceResult<()>;
     
@@ -204,6 +211,18 @@ impl TaskService for DefaultTaskService {
             .map_err(ServiceError::ExecutionError)
     }
     
+    async fn execute_task_with_context(
+        &self, 
+        task: &mut Task, 
+        input: JsonValue,
+        execution_context: Option<crate::execution::ipc::ExecutionContext>
+    ) -> ServiceResult<JsonValue> {
+        let http_manager = HttpManager::new();
+        crate::js_executor::execute_task_with_context(task, input, &http_manager, execution_context)
+            .await
+            .map_err(ServiceError::ExecutionError)
+    }
+    
     async fn validate_task(&self, task: &mut Task) -> ServiceResult<()> {
         task.validate().map_err(ServiceError::TaskError)
     }
@@ -305,6 +324,19 @@ mod tests {
         }
         
         async fn execute_task(&self, _task: &mut Task, input: JsonValue) -> ServiceResult<JsonValue> {
+            if self.should_fail {
+                Err(ServiceError::ExecutionError(JsExecutionError::ExecutionError("mock error".to_string())))
+            } else {
+                Ok(input) // Echo input as output
+            }
+        }
+        
+        async fn execute_task_with_context(
+            &self, 
+            _task: &mut Task, 
+            input: JsonValue,
+            _execution_context: Option<crate::execution::ipc::ExecutionContext>
+        ) -> ServiceResult<JsonValue> {
             if self.should_fail {
                 Err(ServiceError::ExecutionError(JsExecutionError::ExecutionError("mock error".to_string())))
             } else {

@@ -7,7 +7,7 @@ use crate::{
     config::RatchetConfig,
     database::repositories::RepositoryFactory,
     execution::{
-        TaskExecutor, ExecutionContext, ExecutionResult,
+        TaskExecutor, ExecutionResult,
         WorkerProcessManager,
         ipc::TaskExecutionResult,
     },
@@ -64,7 +64,7 @@ impl ProcessTaskExecutor {
         &self,
         task_id: i32,
         input_data: JsonValue,
-        _context: Option<ExecutionContext>,
+        _context: Option<crate::execution::ipc::ExecutionContext>,
     ) -> Result<ExecutionResult, ExecutionError> {
         // Direct implementation to avoid ?Send trait issues
         let task_repo = &self.repositories.task_repo;
@@ -85,6 +85,10 @@ impl ProcessTaskExecutor {
             task_id,
             &task_entity.path,
             &input_data,
+            created_execution.uuid,
+            None, // no job_uuid for direct task execution
+            task_entity.uuid,
+            task_entity.version.clone(),
         ).await;
         
         // Update execution record with results
@@ -150,6 +154,10 @@ impl ProcessTaskExecutor {
             job_entity.task_id,
             &task_entity.path,
             &job_entity.input_data,
+            created_execution.uuid,
+            Some(job_entity.uuid),
+            task_entity.uuid,
+            task_entity.version.clone(),
         ).await;
         
         // Update both execution and job records with results
@@ -328,7 +336,7 @@ impl TaskExecutor for ProcessTaskExecutor {
         &self,
         task_id: i32,
         input_data: JsonValue,
-        _context: Option<ExecutionContext>,
+        _context: Option<crate::execution::ipc::ExecutionContext>,
     ) -> Result<ExecutionResult, ExecutionError> {
         let task_repo = &self.repositories.task_repo;
         let execution_repo = &self.repositories.execution_repo;
@@ -348,6 +356,10 @@ impl TaskExecutor for ProcessTaskExecutor {
             task_id,
             &task_entity.path,
             &input_data,
+            created_execution.uuid,
+            None, // no job_uuid for direct task execution
+            task_entity.uuid,
+            task_entity.version.clone(),
         ).await;
         
         // Update execution record with results
@@ -411,6 +423,10 @@ impl TaskExecutor for ProcessTaskExecutor {
             job_entity.task_id,
             &task_entity.path,
             &job_entity.input_data,
+            created_execution.uuid,
+            Some(job_entity.uuid),
+            task_entity.uuid,
+            task_entity.version.clone(),
         ).await;
         
         // Update both execution and job records with results
@@ -481,17 +497,24 @@ impl ProcessTaskExecutor {
         task_id: i32,
         task_path: &str,
         input_data: &JsonValue,
+        execution_uuid: uuid::Uuid,
+        job_uuid: Option<uuid::Uuid>,
+        task_uuid: uuid::Uuid,
+        task_version: String,
     ) -> Result<TaskExecutionResult, ExecutionError> {
-        use crate::execution::ipc::{WorkerMessage, CoordinatorMessage};
+        use crate::execution::ipc::{WorkerMessage, CoordinatorMessage, ExecutionContext};
         use uuid::Uuid;
         use tokio::time::Duration;
         
         let correlation_id = Uuid::new_v4();
+        let execution_context = ExecutionContext::new(execution_uuid, job_uuid, task_uuid, task_version);
+        
         let message = WorkerMessage::ExecuteTask {
             job_id,
             task_id,
             task_path: task_path.to_string(),
             input_data: input_data.clone(),
+            execution_context,
             correlation_id,
         };
         
@@ -849,11 +872,19 @@ mod tests {
         // This tests the message preparation logic in execute_task_in_worker
         // Even though workers aren't actually running, we can verify the message structure
         let correlation_id = Uuid::new_v4();
+        let execution_context = crate::execution::ipc::ExecutionContext::new(
+            uuid::Uuid::new_v4(), 
+            None, 
+            uuid::Uuid::new_v4(), 
+            "1.0.0".to_string()
+        );
+        
         let message = WorkerMessage::ExecuteTask {
             job_id: 0,
             task_id,
             task_path: task_path.clone(),
             input_data: input_data.clone(),
+            execution_context,
             correlation_id,
         };
         

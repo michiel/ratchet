@@ -3,6 +3,26 @@ use serde_json::Value as JsonValue;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
+/// Execution context passed to JavaScript tasks
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutionContext {
+    pub execution_id: String,  // Execution UUID as string
+    pub job_id: Option<String>, // Job UUID as string (optional for direct executions)
+    pub task_id: String,       // Task UUID as string  
+    pub task_version: String,  // Task version
+}
+
+impl ExecutionContext {
+    pub fn new(execution_uuid: Uuid, job_uuid: Option<Uuid>, task_uuid: Uuid, task_version: String) -> Self {
+        Self {
+            execution_id: execution_uuid.to_string(),
+            job_id: job_uuid.map(|uuid| uuid.to_string()),
+            task_id: task_uuid.to_string(),
+            task_version,
+        }
+    }
+}
+
 /// Messages sent from coordinator to worker processes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkerMessage {
@@ -12,6 +32,7 @@ pub enum WorkerMessage {
         task_id: i32,
         task_path: String,
         input_data: JsonValue,
+        execution_context: ExecutionContext,
         correlation_id: Uuid,
     },
     
@@ -289,11 +310,19 @@ mod tests {
     
     #[test]
     fn test_message_serialization() {
+        let execution_context = ExecutionContext::new(
+            Uuid::new_v4(),
+            Some(Uuid::new_v4()),
+            Uuid::new_v4(),
+            "1.0.0".to_string(),
+        );
+        
         let message = WorkerMessage::ExecuteTask {
             job_id: 123,
             task_id: 456,
             task_path: "/path/to/task".to_string(),
             input_data: serde_json::json!({"key": "value"}),
+            execution_context,
             correlation_id: Uuid::new_v4(),
         };
         

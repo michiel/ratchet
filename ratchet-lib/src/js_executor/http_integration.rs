@@ -168,3 +168,95 @@ pub async fn handle_fetch_processing(
 
     Ok(result)
 }
+
+/// Handle HTTP fetch processing with context and re-execute function
+pub async fn handle_fetch_processing_with_context(
+    context: &mut BoaContext<'_>,
+    func: &boa_engine::JsValue,
+    input_arg: &boa_engine::JsValue,
+    context_arg: &boa_engine::JsValue,
+    http_manager: &crate::http::HttpManager,
+    url: String,
+    params: Option<JsonValue>,
+    body: Option<JsonValue>,
+) -> Result<boa_engine::JsValue, JsExecutionError> {
+    debug!("Processing HTTP fetch request for URL: {}", url);
+    
+    // Make the actual HTTP request
+    let response_result = http_manager.call_http(&url, params.as_ref(), body.as_ref()).await
+        .map_err(|e| JsExecutionError::ExecutionError(format!("HTTP request failed: {}", e)))?;
+    
+    debug!("HTTP request completed, setting result");
+    
+    // Set the HTTP response result in the JavaScript context
+    crate::js_executor::conversion::set_js_value(
+        context,
+        "__http_result",
+        &serde_json::to_value(response_result)
+            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e)))?
+    ).map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e)))?;
+    
+    // Replace the fetch function to return the stored result and throw appropriate errors
+    context
+        .eval(Source::from_bytes(r#"
+            fetch = function(url, params, body) {
+                var response = __http_result;
+                
+                // Check if response is OK, throw appropriate errors if not
+                if (!response.ok) {
+                    var status = response.status || 0;
+                    var statusText = response.statusText || "Unknown Status";
+                    
+                    // Map status codes to appropriate error types
+                    if (status === 401) {
+                        throw new AuthenticationError("HTTP " + status + ": " + statusText);
+                    } else if (status === 403) {
+                        throw new AuthorizationError("HTTP " + status + ": " + statusText);
+                    } else if (status === 429) {
+                        throw new RateLimitError("HTTP " + status + ": " + statusText);
+                    } else if (status >= 500 && status < 600) {
+                        throw new ServiceUnavailableError("HTTP " + status + ": " + statusText);
+                    } else if (status >= 400 && status < 500) {
+                        throw new HttpError(status, "HTTP " + status + ": " + statusText);
+                    } else {
+                        throw new NetworkError("HTTP " + status + ": " + statusText);
+                    }
+                }
+                
+                return response;
+            };
+        "#))
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e)))?;
+
+    debug!("Re-calling JavaScript function with updated fetch and context");
+    
+    // Get the function as an object
+    let func_obj = func.as_object().ok_or_else(|| {
+        JsExecutionError::ExecutionError("Failed to convert to object".to_string())
+    })?;
+
+    // Re-call the JavaScript function with both input and context now that fetch will return the real result
+    let result = func_obj
+        .call(func, &[input_arg.clone(), context_arg.clone()], context)
+        .map_err(|e| {
+            let error_message = e.to_string();
+            // Try to parse as a typed JS error first
+            if error_message.contains("Error:") {
+                let parsed_error = parse_js_error(&error_message);
+                JsExecutionError::TypedJsError(parsed_error)
+            } else {
+                JsExecutionError::ExecutionError(error_message)
+            }
+        })?;
+
+    debug!("Clearing fetch state variables");
+    
+    // Clear the fetch state
+    context
+        .eval(Source::from_bytes(
+            "__fetch_url = null; __fetch_params = null; __fetch_body = null; __http_result = null;",
+        ))
+        .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
+
+    Ok(result)
+}

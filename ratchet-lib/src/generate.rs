@@ -172,9 +172,19 @@ fn create_output_schema() -> Result<JsonValue> {
 /// Create main.js content
 fn create_main_js_content() -> String {
     debug!("Creating main.js content");
-    r#"(function(input) {
+    r#"(function(input, context) {
     // Extract input parameters
     const { value } = input;
+    
+    // Access execution context if provided
+    if (context) {
+        console.log("Execution ID:", context.executionId);
+        console.log("Task ID:", context.taskId);
+        console.log("Task Version:", context.taskVersion);
+        if (context.jobId) {
+            console.log("Job ID:", context.jobId);
+        }
+    }
     
     // Validate input (schema validation happens automatically)
     if (!value || typeof value !== 'string') {

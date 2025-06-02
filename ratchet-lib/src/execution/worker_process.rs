@@ -152,11 +152,20 @@ impl WorkerProcess {
     ) -> Result<TaskExecutionResult, WorkerProcessError> {
         let correlation_id = Uuid::new_v4();
 
+        // Create a placeholder execution context for testing
+        let execution_context = crate::execution::ipc::ExecutionContext::new(
+            Uuid::new_v4(),
+            Some(Uuid::new_v4()),
+            Uuid::new_v4(),
+            "1.0.0".to_string(),
+        );
+        
         let message = WorkerMessage::ExecuteTask {
             job_id,
             task_id,
             task_path,
             input_data,
+            execution_context,
             correlation_id,
         };
 
