@@ -11,7 +11,7 @@ use crate::{
         middleware::{RestError, WithPaginationHeaders},
         models::{
             common::{ApiResponse, ApiError},
-            tasks::{TaskResponse, TaskDetailResponse, TaskUpdateRequest, TaskFilters},
+            tasks::{TaskResponse, TaskUpdateRequest, TaskFilters},
         },
         extractors::ListQueryExtractor,
     },
@@ -42,13 +42,13 @@ pub async fn list_tasks(
     let filter = query.filter();
     let filters = TaskFilters {
         uuid: filter.get_filter("uuid").cloned(),
-        label: filter.get_filter("label").cloned(),
+        name: filter.get_filter("name").cloned(),
         version: filter.get_filter("version").cloned(),
         enabled: filter.get_filter("enabled")
             .and_then(|s| s.parse().ok()),
         registry_source: filter.get_filter("registrySource")
             .and_then(|s| s.parse().ok()),
-        label_like: filter.get_like_filter("label").cloned(),
+        name_like: filter.get_like_filter("name").cloned(),
     };
 
     // Apply filters
@@ -56,7 +56,7 @@ pub async fn list_tasks(
         .into_iter()
         .filter(|task| {
             filters.matches_uuid(&task.uuid) &&
-            filters.matches_label(&task.label) &&
+            filters.matches_name(&task.label) &&
             filters.matches_version(&task.version) &&
             filters.matches_enabled(task.enabled) &&
             filters.matches_registry_source(task.registry_source)
@@ -70,7 +70,7 @@ pub async fn list_tasks(
     let sort = query.sort();
     if let Some(sort_field) = sort.sort_field() {
         match sort_field {
-            "label" => {
+            "name" | "label" => {
                 sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.label.cmp(&b.label),
                     crate::rest::models::common::SortDirection::Desc => b.label.cmp(&a.label),
@@ -136,21 +136,18 @@ pub async fn get_task(
         .map_err(|e| RestError::InternalError(format!("Failed to get task: {}", e)))?
         .ok_or_else(|| RestError::NotFound("Task not found".to_string()))?;
 
-    // Try to get detailed information from registry if available
-    let mut response = TaskDetailResponse {
-        task: TaskResponse::from(unified_task.clone()),
-        input_schema: None,
-        output_schema: None,
-    };
+    // Convert to API type which includes schema fields
+    let mut api_task = crate::api::types::UnifiedTask::from(unified_task);
 
+    // Try to get detailed information from registry if available
     if let Some(registry) = &ctx.registry {
         if let Ok(Some(registry_task)) = registry.get_task(uuid, None).await {
-            response.input_schema = Some(registry_task.input_schema.clone());
-            response.output_schema = Some(registry_task.output_schema.clone());
+            api_task.input_schema = Some(registry_task.input_schema.clone());
+            api_task.output_schema = Some(registry_task.output_schema.clone());
         }
     }
 
-    Ok(Json(ApiResponse::new(response)))
+    Ok(Json(ApiResponse::new(api_task)))
 }
 
 /// PATCH /api/v1/tasks/{id} - Update a task (limited fields)

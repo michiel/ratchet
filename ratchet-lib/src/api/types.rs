@@ -1,9 +1,8 @@
 /// Unified API types for consistent representation across REST and GraphQL
-use async_graphql::*;
+use async_graphql::{*, scalar};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 
 /// Unified ID type that works consistently across both APIs
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -72,25 +71,11 @@ impl From<&str> for ApiId {
 }
 
 // GraphQL scalar implementation
-impl Scalar for ApiId {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        match value {
-            Value::String(s) => Ok(Self(s)),
-            Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Ok(Self(i.to_string()))
-                } else {
-                    Err(InputValueError::custom("Invalid ID format"))
-                }
-            }
-            _ => Err(InputValueError::custom("ID must be a string or number")),
-        }
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(self.0.clone())
-    }
-}
+scalar!(
+    ApiId,
+    "ApiId",
+    "A unified ID that accepts both strings and numbers"
+);
 
 /// Unified Task representation
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]

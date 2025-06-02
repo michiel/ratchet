@@ -71,7 +71,7 @@ impl RestError {
             RestError::MethodNotAllowed(msg) => UnifiedApiError::bad_request(format!("Method not allowed: {}", msg)),
             RestError::ServiceUnavailable(msg) => UnifiedApiError::service_unavailable(Some(msg)),
             RestError::Conflict(msg) => UnifiedApiError::conflict("Resource", msg),
-            RestError::Timeout(msg) => UnifiedApiError::timeout("Request"),
+            RestError::Timeout(_msg) => UnifiedApiError::timeout("Request"),
             RestError::SafeDatabase(safe_err) => {
                 match safe_err.code {
                     ErrorCode::NotFound => UnifiedApiError::not_found("Resource", &safe_err.message),
@@ -89,7 +89,7 @@ impl RestError {
     
     /// Convert to legacy API error for backward compatibility
     pub fn to_legacy_error(&self) -> ApiError {
-        let (status, error_response) = match self {
+        let (_status, error_response) = match self {
             RestError::NotFound(msg) => (
                 StatusCode::NOT_FOUND,
                 ApiError::not_found(msg),
@@ -135,33 +135,25 @@ impl RestError {
                     timestamp: safe_err.timestamp,
                     path: None, // Will be set by the calling handler if needed
                     #[cfg(debug_assertions)]
-                    debug_info: safe_err.debug_info,
+                    debug_info: safe_err.debug_info.clone(),
                 };
 
                 (status_code, api_error)
             },
             RestError::Database(err) => {
-                // Convert raw database errors to safe errors
-                let safe_err = SafeDatabaseError::from(err);
-                let status_code = match safe_err.code {
-                    ErrorCode::NotFound => StatusCode::NOT_FOUND,
-                    ErrorCode::Conflict => StatusCode::CONFLICT,
-                    ErrorCode::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
-                    ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-                    ErrorCode::ValidationError => StatusCode::BAD_REQUEST,
-                    ErrorCode::Timeout => StatusCode::REQUEST_TIMEOUT,
+                // For database errors, we can't directly convert to SafeDatabaseError from a reference
+                // Instead, we'll create an appropriate API error based on the error message
+                let error_msg = err.to_string();
+                let (status_code, api_error) = if error_msg.contains("not found") || error_msg.contains("No row found") {
+                    (StatusCode::NOT_FOUND, ApiError::not_found("Database record not found"))
+                } else if error_msg.contains("constraint") || error_msg.contains("duplicate") {
+                    (StatusCode::CONFLICT, ApiError::conflict("Database constraint violation"))
+                } else if error_msg.contains("timeout") {
+                    (StatusCode::REQUEST_TIMEOUT, ApiError::timeout("Database operation timed out"))
+                } else {
+                    (StatusCode::INTERNAL_SERVER_ERROR, ApiError::internal_error(format!("Database error: {}", error_msg)))
                 };
-
-                let api_error = ApiError {
-                    error: safe_err.message.clone(),
-                    error_code: Some(format!("{:?}", safe_err.code)),
-                    request_id: Some(safe_err.request_id.clone()),
-                    timestamp: safe_err.timestamp,
-                    path: None, // Will be set by the calling handler if needed
-                    #[cfg(debug_assertions)]
-                    debug_info: safe_err.debug_info,
-                };
-
+                
                 (status_code, api_error)
             },
             RestError::Task(err) => (

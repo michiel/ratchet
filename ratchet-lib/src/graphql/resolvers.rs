@@ -115,45 +115,29 @@ impl Query {
             Ok(task.map(UnifiedTask::from))
         } else {
             // Fallback to database
-            let db_task = context.repositories.task_repo.find_by_uuid(uuid).await
-                .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+            let db_task = context.repositories.task_repository()
+                .find_by_uuid(uuid).await
+                .map_err(|e| {
+                    let api_error = ApiError::internal_error(format!("Database error: {}", e));
+                    Error::from(api_error)
+                })?;
             
-            Ok(db_task.map(|task| UnifiedTask {
-                id: Some(task.id),
-                uuid: task.uuid,
-                version: task.version.clone(),
-                label: task.name,
-                description: task.description.unwrap_or_default(),
-                available_versions: vec![task.version],
-                registry_source: false,
-                enabled: task.enabled,
-                created_at: Some(task.created_at),
-                updated_at: Some(task.updated_at),
-                validated_at: task.validated_at,
-                in_sync: true,
-            }))
+            Ok(db_task.map(UnifiedTask::from))
         }
     }
     
     /// Get task by UUID
-    async fn task_by_uuid(&self, ctx: &Context<'_>, uuid: Uuid) -> Result<Option<Task>> {
+    async fn task_by_uuid(&self, ctx: &Context<'_>, uuid: Uuid) -> Result<Option<UnifiedTask>> {
         let context = ctx.data::<GraphQLContext>()?;
         
-        let db_task = context.repositories.task_repo.find_by_uuid(uuid).await
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+        let db_task = context.repositories.task_repository()
+            .find_by_uuid(uuid).await
+            .map_err(|e| {
+                let api_error = ApiError::internal_error(format!("Database error: {}", e));
+                Error::from(api_error)
+            })?;
         
-        Ok(db_task.map(|task| Task {
-            id: task.id,
-            uuid: task.uuid,
-            name: task.name,
-            description: task.description,
-            version: task.version,
-            path: task.path,
-            enabled: task.enabled,
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            validated_at: task.validated_at,
-        }))
+        Ok(db_task.map(UnifiedTask::from))
     }
     
     /// Get executions with optional pagination
@@ -161,40 +145,43 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         pagination: Option<PaginationInput>,
-        task_id: Option<i32>,
-    ) -> Result<ExecutionListResponse> {
+        task_id: Option<ApiId>,
+    ) -> Result<ListResponse<UnifiedExecution>> {
         let context = ctx.data::<GraphQLContext>()?;
-        let page = pagination.as_ref().and_then(|p| p.page).unwrap_or(1);
-        let limit = pagination.as_ref().and_then(|p| p.limit).unwrap_or(10);
+        let pagination = pagination.unwrap_or_default();
         
         // Get executions from repository
-        let db_executions = if let Some(task_id) = task_id {
-            context.repositories.execution_repo.find_by_task_id(task_id).await
+        let db_executions = if let Some(task_id) = task_id.and_then(|id| id.as_i32()) {
+            context.repositories.execution_repository()
+                .find_by_task_id(task_id).await
         } else {
-            context.repositories.execution_repo.find_recent(limit).await
-        }.map_err(|e| Error::new(format!("Database error: {}", e)))?;
+            let limit = pagination.get_limit() as usize;
+            context.repositories.execution_repository()
+                .find_recent(limit as u64).await
+        }.map_err(|e| {
+            let api_error = ApiError::internal_error(format!("Database error: {}", e));
+            Error::from(api_error)
+        })?;
         
         let total = db_executions.len() as u64;
         
-        // Convert database executions to GraphQL executions
-        let executions = db_executions.into_iter().map(|exec| Execution {
-            id: exec.id,
-            uuid: exec.uuid,
-            task_id: exec.task_id,
-            status: convert_execution_status(exec.status),
-            error_message: exec.error_message,
-            queued_at: exec.queued_at,
-            started_at: exec.started_at,
-            completed_at: exec.completed_at,
-            duration_ms: exec.duration_ms.map(|d| d as i64),
-        }).collect();
+        // Convert to unified executions
+        let all_executions: Vec<UnifiedExecution> = db_executions
+            .into_iter()
+            .map(UnifiedExecution::from)
+            .collect();
+            
+        // Apply pagination
+        let offset = pagination.get_offset() as usize;
+        let limit = pagination.get_limit() as usize;
+        let items = if offset < all_executions.len() {
+            let end = (offset + limit).min(all_executions.len());
+            all_executions[offset..end].to_vec()
+        } else {
+            vec![]
+        };
         
-        Ok(ExecutionListResponse {
-            executions,
-            total,
-            page,
-            limit,
-        })
+        Ok(ListResponse::new(items, &pagination, total))
     }
     
     /// Get jobs with optional pagination
@@ -203,56 +190,51 @@ impl Query {
         ctx: &Context<'_>,
         pagination: Option<PaginationInput>,
         status: Option<JobStatus>,
-    ) -> Result<JobListResponse> {
+    ) -> Result<ListResponse<UnifiedJob>> {
         let context = ctx.data::<GraphQLContext>()?;
-        let page = pagination.as_ref().and_then(|p| p.page).unwrap_or(1);
-        let limit = pagination.as_ref().and_then(|p| p.limit).unwrap_or(10);
+        let pagination = pagination.unwrap_or_default();
+        let limit = pagination.get_limit() as u64;
         
         // Get jobs from repository
         let db_jobs = if let Some(status) = status {
-            let db_status = convert_job_status_to_db(status);
-            context.repositories.job_repo.find_by_status(db_status).await
+            let db_status = status.into();
+            context.repositories.job_repository()
+                .find_by_status(db_status).await
         } else {
-            context.repositories.job_repo.find_ready_for_processing(limit as u64).await
-        }.map_err(|e| Error::new(format!("Database error: {}", e)))?;
+            context.repositories.job_repository()
+                .find_ready_for_processing(limit).await
+        }.map_err(|e| {
+            let api_error = ApiError::internal_error(format!("Database error: {}", e));
+            Error::from(api_error)
+        })?;
         
         let total = db_jobs.len() as u64;
         
-        // Convert database jobs to GraphQL jobs
-        let jobs = db_jobs.into_iter().map(|job| {
-            let output_destinations = job.output_destinations
-                .and_then(|json| serde_json::from_value::<Vec<OutputDestinationConfig>>(json.into()).ok())
-                .map(|configs| configs.into_iter().map(convert_output_destination_config).collect());
+        // Convert to unified jobs
+        let all_jobs: Vec<UnifiedJob> = db_jobs
+            .into_iter()
+            .map(UnifiedJob::from)
+            .collect();
             
-            Job {
-                id: job.id,
-                task_id: job.task_id,
-                priority: convert_job_priority(job.priority),
-                status: convert_job_status(job.status),
-                retry_count: job.retry_count,
-                max_retries: job.max_retries,
-                queued_at: job.queued_at,
-                scheduled_for: None, // TODO: Get actual scheduled time
-                error_message: job.error_message,
-                output_destinations,
-            }
-        }).collect();
+        // Apply pagination
+        let offset = pagination.get_offset() as usize;
+        let items = if offset < all_jobs.len() {
+            let end = (offset + limit as usize).min(all_jobs.len());
+            all_jobs[offset..end].to_vec()
+        } else {
+            vec![]
+        };
         
-        Ok(JobListResponse {
-            jobs,
-            total,
-            page,
-            limit,
-        })
+        Ok(ListResponse::new(items, &pagination, total))
     }
     
     /// Get task statistics
     async fn task_stats(&self, ctx: &Context<'_>) -> Result<TaskStats> {
         let context = ctx.data::<GraphQLContext>()?;
         
-        let total_tasks = context.repositories.task_repo.count().await
+        let total_tasks = context.repositories.task_repository().count().await
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-        let enabled_tasks = context.repositories.task_repo.count_enabled().await
+        let enabled_tasks = context.repositories.task_repository().count_enabled().await
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
         let disabled_tasks = total_tasks - enabled_tasks;
         
@@ -267,7 +249,7 @@ impl Query {
     async fn execution_stats(&self, ctx: &Context<'_>) -> Result<ExecutionStats> {
         let context = ctx.data::<GraphQLContext>()?;
         
-        let stats = context.repositories.execution_repo.get_stats().await
+        let stats = context.repositories.execution_repository().get_stats().await
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
         
         Ok(ExecutionStats {
@@ -283,7 +265,7 @@ impl Query {
     async fn job_stats(&self, ctx: &Context<'_>) -> Result<JobStats> {
         let context = ctx.data::<GraphQLContext>()?;
         
-        let stats = context.repositories.job_repo.get_queue_stats().await
+        let stats = context.repositories.job_repository().get_queue_stats().await
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
         
         Ok(JobStats {
@@ -301,7 +283,7 @@ impl Query {
         let context = ctx.data::<GraphQLContext>()?;
         
         // Check database health
-        let database_healthy = context.repositories.task_repo.health_check_send().await.is_ok();
+        let database_healthy = context.repositories.task_repository().health_check_send().await.is_ok();
         
         // Check job queue health
         let job_queue_healthy = true; // Job queue is always healthy if it can be accessed
@@ -418,7 +400,7 @@ impl Mutation {
         &self,
         ctx: &Context<'_>,
         input: ExecuteTaskInput,
-    ) -> Result<Job> {
+    ) -> Result<UnifiedJob> {
         let context = ctx.data::<GraphQLContext>()?;
         
         // Convert GraphQL output destinations to internal format
@@ -433,11 +415,13 @@ impl Mutation {
         };
         
         // Create job directly (since job queue doesn't support output destinations yet)
-        let priority = input.priority.map(convert_job_priority_to_db)
+        let task_id = input.task_id.as_i32()
+            .ok_or_else(|| Error::new("Invalid task ID"))?;
+        let priority = input.priority.map(Into::into)
             .unwrap_or(crate::database::entities::JobPriority::Normal);
         
         let mut job = crate::database::entities::jobs::Model::new(
-            input.task_id,
+            task_id,
             input.input_data,
             priority,
         );
@@ -446,69 +430,65 @@ impl Mutation {
             job.output_destinations = Some(serde_json::to_value(destinations).unwrap().into());
         }
         
-        let created_job = context.repositories.job_repo.create(job).await
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+        let created_job = context.repositories.job_repository()
+            .create(job).await
+            .map_err(|e| {
+                let api_error = ApiError::internal_error(format!("Database error: {}", e));
+                Error::from(api_error)
+            })?;
         
-        let output_destinations = created_job.output_destinations
-            .and_then(|json| serde_json::from_value::<Vec<OutputDestinationConfig>>(json.into()).ok())
-            .map(|configs| configs.into_iter().map(convert_output_destination_config).collect());
-        
-        Ok(Job {
-            id: created_job.id,
-            task_id: created_job.task_id,
-            priority: convert_job_priority(created_job.priority),
-            status: convert_job_status(created_job.status),
-            retry_count: created_job.retry_count,
-            max_retries: created_job.max_retries,
-            queued_at: created_job.queued_at,
-            scheduled_for: None,
-            error_message: created_job.error_message,
-            output_destinations,
-        })
+        Ok(UnifiedJob::from(created_job))
     }
     
     /// Update task enabled status
     async fn update_task_status(
         &self,
         ctx: &Context<'_>,
-        id: i32,
+        id: ApiId,
         enabled: bool,
-    ) -> Result<Task> {
+    ) -> Result<UnifiedTask> {
         let context = ctx.data::<GraphQLContext>()?;
         
-        context.repositories.task_repo.set_enabled(id, enabled).await
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+        let task_id = id.as_i32()
+            .ok_or_else(|| Error::new("Invalid task ID"))?;
         
-        let db_task = context.repositories.task_repo.find_by_id(id).await
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?
-            .ok_or_else(|| Error::new("Task not found"))?;
+        context.repositories.task_repository()
+            .set_enabled(task_id, enabled).await
+            .map_err(|e| {
+                let api_error = ApiError::internal_error(format!("Database error: {}", e));
+                Error::from(api_error)
+            })?;
         
-        Ok(Task {
-            id: db_task.id,
-            uuid: db_task.uuid,
-            name: db_task.name,
-            description: db_task.description,
-            version: db_task.version,
-            path: db_task.path,
-            enabled: db_task.enabled,
-            created_at: db_task.created_at,
-            updated_at: db_task.updated_at,
-            validated_at: db_task.validated_at,
-        })
+        let db_task = context.repositories.task_repository()
+            .find_by_id(task_id).await
+            .map_err(|e| {
+                let api_error = ApiError::internal_error(format!("Database error: {}", e));
+                Error::from(api_error)
+            })?
+            .ok_or_else(|| {
+                let api_error = ApiError::not_found("Task", &task_id.to_string());
+                Error::from(api_error)
+            })?;
+        
+        Ok(UnifiedTask::from(db_task))
     }
     
     /// Execute a task directly (immediate execution)
     async fn execute_task_direct(
         &self,
         ctx: &Context<'_>,
-        task_id: i32,
+        task_id: ApiId,
         input_data: serde_json::Value,
     ) -> Result<TaskExecutionResult> {
         let context = ctx.data::<GraphQLContext>()?;
         
+        // Get numeric task ID
+        let task_id_num = task_id.as_i32()
+            .ok_or_else(|| Error::new("Invalid task ID"))?;
+            
         // Execute task directly using process executor
         let execution_result = context.task_executor
-            .execute_task_send(task_id, input_data, None)
+            .execute_task_send(task_id_num, input_data, None)
             .await
             .map_err(|e| Error::new(format!("Task execution failed: {}", e)))?;
         
@@ -529,9 +509,9 @@ impl Mutation {
         //     .map_err(|e| Error::new(format!("Database error: {}", e)))?;
         
         // Return a placeholder job for now
-        Ok(Job {
-            id,
-            task_id: 0,
+        Ok(UnifiedJob {
+            id: ApiId::from_i32(id),
+            task_id: ApiId::from_i32(0),
             priority: JobPriority::Normal,
             status: JobStatus::Cancelled,
             retry_count: 0,
@@ -592,53 +572,53 @@ impl Subscription {
 }
 
 // Helper conversion functions
-fn convert_execution_status(status: crate::database::entities::ExecutionStatus) -> ExecutionStatus {
+fn convert_execution_status(status: crate::database::entities::executions::ExecutionStatus) -> ExecutionStatus {
     match status {
-        crate::database::entities::ExecutionStatus::Pending => ExecutionStatus::Pending,
-        crate::database::entities::ExecutionStatus::Running => ExecutionStatus::Running,
-        crate::database::entities::ExecutionStatus::Completed => ExecutionStatus::Completed,
-        crate::database::entities::ExecutionStatus::Failed => ExecutionStatus::Failed,
-        crate::database::entities::ExecutionStatus::Cancelled => ExecutionStatus::Cancelled,
+        crate::database::entities::executions::ExecutionStatus::Pending => ExecutionStatus::Pending,
+        crate::database::entities::executions::ExecutionStatus::Running => ExecutionStatus::Running,
+        crate::database::entities::executions::ExecutionStatus::Completed => ExecutionStatus::Completed,
+        crate::database::entities::executions::ExecutionStatus::Failed => ExecutionStatus::Failed,
+        crate::database::entities::executions::ExecutionStatus::Cancelled => ExecutionStatus::Cancelled,
     }
 }
 
-fn convert_job_priority(priority: crate::database::entities::JobPriority) -> JobPriority {
+fn convert_job_priority(priority: crate::database::entities::jobs::JobPriority) -> JobPriority {
     match priority {
-        crate::database::entities::JobPriority::Low => JobPriority::Low,
-        crate::database::entities::JobPriority::Normal => JobPriority::Normal,
-        crate::database::entities::JobPriority::High => JobPriority::High,
-        crate::database::entities::JobPriority::Urgent => JobPriority::Critical,
+        crate::database::entities::jobs::JobPriority::Low => JobPriority::Low,
+        crate::database::entities::jobs::JobPriority::Normal => JobPriority::Normal,
+        crate::database::entities::jobs::JobPriority::High => JobPriority::High,
+        crate::database::entities::jobs::JobPriority::Urgent => JobPriority::Critical,
     }
 }
 
-fn convert_job_priority_to_db(priority: JobPriority) -> crate::database::entities::JobPriority {
+fn convert_job_priority_to_db(priority: JobPriority) -> crate::database::entities::jobs::JobPriority {
     match priority {
-        JobPriority::Low => crate::database::entities::JobPriority::Low,
-        JobPriority::Normal => crate::database::entities::JobPriority::Normal,
-        JobPriority::High => crate::database::entities::JobPriority::High,
-        JobPriority::Critical => crate::database::entities::JobPriority::Urgent,
+        JobPriority::Low => crate::database::entities::jobs::JobPriority::Low,
+        JobPriority::Normal => crate::database::entities::jobs::JobPriority::Normal,
+        JobPriority::High => crate::database::entities::jobs::JobPriority::High,
+        JobPriority::Critical => crate::database::entities::jobs::JobPriority::Urgent,
     }
 }
 
-fn convert_job_status(status: crate::database::entities::JobStatus) -> JobStatus {
+fn convert_job_status(status: crate::database::entities::jobs::JobStatus) -> JobStatus {
     match status {
-        crate::database::entities::JobStatus::Queued => JobStatus::Queued,
-        crate::database::entities::JobStatus::Processing => JobStatus::Processing,
-        crate::database::entities::JobStatus::Completed => JobStatus::Completed,
-        crate::database::entities::JobStatus::Failed => JobStatus::Failed,
-        crate::database::entities::JobStatus::Retrying => JobStatus::Retrying,
-        crate::database::entities::JobStatus::Cancelled => JobStatus::Cancelled,
+        crate::database::entities::jobs::JobStatus::Queued => JobStatus::Queued,
+        crate::database::entities::jobs::JobStatus::Processing => JobStatus::Processing,
+        crate::database::entities::jobs::JobStatus::Completed => JobStatus::Completed,
+        crate::database::entities::jobs::JobStatus::Failed => JobStatus::Failed,
+        crate::database::entities::jobs::JobStatus::Retrying => JobStatus::Retrying,
+        crate::database::entities::jobs::JobStatus::Cancelled => JobStatus::Cancelled,
     }
 }
 
-fn convert_job_status_to_db(status: JobStatus) -> crate::database::entities::JobStatus {
+fn convert_job_status_to_db(status: JobStatus) -> crate::database::entities::jobs::JobStatus {
     match status {
-        JobStatus::Queued => crate::database::entities::JobStatus::Queued,
-        JobStatus::Processing => crate::database::entities::JobStatus::Processing,
-        JobStatus::Completed => crate::database::entities::JobStatus::Completed,
-        JobStatus::Failed => crate::database::entities::JobStatus::Failed,
-        JobStatus::Retrying => crate::database::entities::JobStatus::Retrying,
-        JobStatus::Cancelled => crate::database::entities::JobStatus::Cancelled,
+        JobStatus::Queued => crate::database::entities::jobs::JobStatus::Queued,
+        JobStatus::Processing => crate::database::entities::jobs::JobStatus::Processing,
+        JobStatus::Completed => crate::database::entities::jobs::JobStatus::Completed,
+        JobStatus::Failed => crate::database::entities::jobs::JobStatus::Failed,
+        JobStatus::Retrying => crate::database::entities::jobs::JobStatus::Retrying,
+        JobStatus::Cancelled => crate::database::entities::jobs::JobStatus::Cancelled,
     }
 }
 
@@ -741,47 +721,20 @@ fn convert_output_destination_input(input: OutputDestinationInput) -> Result<Out
 }
 
 fn convert_output_format(format: crate::output::OutputFormat) -> OutputFormat {
-    match format {
-        crate::output::OutputFormat::Json => OutputFormat::Json,
-        crate::output::OutputFormat::JsonCompact => OutputFormat::JsonCompact,
-        crate::output::OutputFormat::Yaml => OutputFormat::Yaml,
-        crate::output::OutputFormat::Csv => OutputFormat::Csv,
-        crate::output::OutputFormat::Raw => OutputFormat::Raw,
-        crate::output::OutputFormat::Template(_) => OutputFormat::Template,
-    }
+    // Use the conversion from the api module
+    format.into()
 }
 
 fn convert_output_format_from_graphql(format: OutputFormat) -> crate::output::OutputFormat {
-    match format {
-        OutputFormat::Json => crate::output::OutputFormat::Json,
-        OutputFormat::JsonCompact => crate::output::OutputFormat::JsonCompact,
-        OutputFormat::Yaml => crate::output::OutputFormat::Yaml,
-        OutputFormat::Csv => crate::output::OutputFormat::Csv,
-        OutputFormat::Raw => crate::output::OutputFormat::Raw,
-        OutputFormat::Template => crate::output::OutputFormat::Template("{{output_data}}".to_string()), // Default template
-    }
+    // Use the conversion from the api module
+    format.into()
 }
 
+// Use conversion implementations from api::conversions module
 fn convert_http_method(method: crate::types::HttpMethod) -> HttpMethod {
-    match method {
-        crate::types::HttpMethod::Get => HttpMethod::Get,
-        crate::types::HttpMethod::Post => HttpMethod::Post,
-        crate::types::HttpMethod::Put => HttpMethod::Put,
-        crate::types::HttpMethod::Patch => HttpMethod::Patch,
-        crate::types::HttpMethod::Delete => HttpMethod::Delete,
-        crate::types::HttpMethod::Head => HttpMethod::Head,
-        crate::types::HttpMethod::Options => HttpMethod::Options,
-    }
+    method.into()
 }
 
 fn convert_http_method_from_graphql(method: HttpMethod) -> crate::types::HttpMethod {
-    match method {
-        HttpMethod::Get => crate::types::HttpMethod::Get,
-        HttpMethod::Post => crate::types::HttpMethod::Post,
-        HttpMethod::Put => crate::types::HttpMethod::Put,
-        HttpMethod::Patch => crate::types::HttpMethod::Patch,
-        HttpMethod::Delete => crate::types::HttpMethod::Delete,
-        HttpMethod::Head => crate::types::HttpMethod::Head,
-        HttpMethod::Options => crate::types::HttpMethod::Options,
-    }
+    method.into()
 }

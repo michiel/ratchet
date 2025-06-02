@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
 use crate::api::{
-    errors::ApiError,
-    pagination::{PaginationInput, PaginationMeta, ListResponse},
+    pagination::{PaginationInput, PaginationMeta},
 };
 
 /// Standard API response wrapper for Refine.dev compatibility
@@ -22,8 +21,7 @@ impl<T> ApiResponse<T> {
 /// Re-export unified list response
 pub use crate::api::pagination::ListResponse as ApiListResponse;
 
-/// Re-export unified API error (keeping legacy struct for backward compatibility)
-pub use crate::api::errors::ApiError as UnifiedApiError;
+// Unified API error is already imported above
 
 /// Legacy API error response for backward compatibility
 #[derive(Debug, Serialize)]

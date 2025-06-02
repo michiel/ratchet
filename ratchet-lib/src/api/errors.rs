@@ -2,7 +2,6 @@
 use async_graphql::*;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Unified API error type that works for both REST and GraphQL
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
@@ -167,7 +166,8 @@ impl From<ApiError> for Error {
                 e.set("path", path.clone());
             }
             if let Some(details) = &api_error.details {
-                e.set("details", details.clone());
+                // Convert serde_json::Value to string for GraphQL extensions
+                e.set("details", details.to_string());
             }
             if let Some(suggestions) = &api_error.suggestions {
                 e.set("suggestions", suggestions.clone());

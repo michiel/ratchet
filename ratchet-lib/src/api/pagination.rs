@@ -161,25 +161,64 @@ impl PaginationMeta {
 }
 
 /// Unified list response wrapper
-#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ListResponse<T> 
-where
-    T: OutputType,
-{
+pub struct ListResponse<T> {
     /// The list of items
     pub items: Vec<T>,
     /// Pagination metadata
     pub meta: PaginationMeta,
 }
 
-impl<T> ListResponse<T> 
-where
-    T: OutputType,
-{
+impl<T> ListResponse<T> {
     pub fn new(items: Vec<T>, pagination: &PaginationInput, total: u64) -> Self {
         let meta = PaginationMeta::new(pagination, total);
         Self { items, meta }
+    }
+}
+
+// Manual GraphQL implementation to provide unique type names
+#[async_graphql::Object(name = "TaskListResponse")]
+impl ListResponse<crate::api::types::UnifiedTask> {
+    async fn items(&self) -> &Vec<crate::api::types::UnifiedTask> {
+        &self.items
+    }
+    
+    async fn meta(&self) -> &PaginationMeta {
+        &self.meta
+    }
+}
+
+#[async_graphql::Object(name = "ExecutionListResponse")]
+impl ListResponse<crate::api::types::UnifiedExecution> {
+    async fn items(&self) -> &Vec<crate::api::types::UnifiedExecution> {
+        &self.items
+    }
+    
+    async fn meta(&self) -> &PaginationMeta {
+        &self.meta
+    }
+}
+
+#[async_graphql::Object(name = "JobListResponse")]
+impl ListResponse<crate::api::types::UnifiedJob> {
+    async fn items(&self) -> &Vec<crate::api::types::UnifiedJob> {
+        &self.items
+    }
+    
+    async fn meta(&self) -> &PaginationMeta {
+        &self.meta
+    }
+}
+
+#[async_graphql::Object(name = "ScheduleListResponse")]
+impl ListResponse<crate::api::types::UnifiedSchedule> {
+    async fn items(&self) -> &Vec<crate::api::types::UnifiedSchedule> {
+        &self.items
+    }
+    
+    async fn meta(&self) -> &PaginationMeta {
+        &self.meta
     }
 }
 

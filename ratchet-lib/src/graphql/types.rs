@@ -242,28 +242,7 @@ pub struct LegacyUnifiedTask {
 /// Legacy UnifiedTaskListResponse - use ListResponse<UnifiedTask> instead
 pub type UnifiedTaskListResponse = ListResponse<UnifiedTask>;
 
-/// Convert from service UnifiedTask to API UnifiedTask
-impl From<crate::services::UnifiedTask> for crate::api::types::UnifiedTask {
-    fn from(task: crate::services::UnifiedTask) -> Self {
-        Self {
-            id: ApiId::from_uuid(task.uuid),
-            uuid: task.uuid,
-            name: task.label,
-            description: Some(task.description),
-            version: task.version,
-            enabled: task.enabled,
-            registry_source: task.registry_source,
-            available_versions: task.available_versions,
-            created_at: task.created_at.unwrap_or_else(chrono::Utc::now),
-            updated_at: task.updated_at.unwrap_or_else(chrono::Utc::now),
-            validated_at: task.validated_at,
-            in_sync: task.in_sync,
-            input_schema: None,
-            output_schema: None,
-            metadata: None,
-        }
-    }
-}
+// Conversion is handled in api::conversions module
 
 /// Output destination types for GraphQL
 #[derive(Union)]
@@ -315,28 +294,8 @@ pub struct S3Destination {
     pub secret_access_key: Option<String>,
 }
 
-/// Output format enum
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub enum OutputFormat {
-    Json,
-    JsonCompact,
-    Yaml,
-    Csv,
-    Raw,
-    Template, // Note: GraphQL doesn't support variant with data, so template string needs to be separate
-}
-
-/// HTTP method enum
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub enum HttpMethod {
-    Get,
-    Post,
-    Put,
-    Patch,
-    Delete,
-    Head,
-    Options,
-}
+// Use unified types from api module
+pub use crate::api::types::{OutputFormat, HttpMethod};
 
 /// Retry policy for delivery
 #[derive(SimpleObject)]

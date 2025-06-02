@@ -173,14 +173,15 @@ async fn test_graphql_execute_task_with_destinations() {
                 priority
                 status
                 outputDestinations {{
-                    ... on FilesystemDestination {{
+                    destinationType
+                    template
+                    filesystem {{
                         path
                         format
+                        compression
                         permissions
-                        createDirs
-                        overwrite
                     }}
-                    ... on WebhookDestination {{
+                    webhook {{
                         url
                         method
                         timeoutSeconds
@@ -201,7 +202,7 @@ async fn test_graphql_execute_task_with_destinations() {
     let data = result.data.into_json().unwrap();
     let job_data = &data["executeTask"];
     
-    assert_eq!(job_data["taskId"], created_task.id);
+    assert_eq!(job_data["taskId"], created_task.id.to_string());
     assert_eq!(job_data["priority"], "NORMAL");
     assert_eq!(job_data["status"], "QUEUED");
     
@@ -210,17 +211,20 @@ async fn test_graphql_execute_task_with_destinations() {
     
     // Check filesystem destination
     let filesystem_dest = &destinations[0];
-    assert!(filesystem_dest["path"].as_str().unwrap().contains("{{job_uuid}}"));
-    assert_eq!(filesystem_dest["format"], "JSON");
-    assert_eq!(filesystem_dest["permissions"], "644");
-    assert_eq!(filesystem_dest["createDirs"], true);
+    assert_eq!(filesystem_dest["destinationType"], "filesystem");
+    let fs_config = &filesystem_dest["filesystem"];
+    assert!(fs_config["path"].as_str().unwrap().contains("{{job_uuid}}"));
+    assert_eq!(fs_config["format"], "JSON");
+    assert_eq!(fs_config["permissions"], "644");
     
     // Check webhook destination
     let webhook_dest = &destinations[1];
-    assert_eq!(webhook_dest["url"], "https://httpbin.org/post");
-    assert_eq!(webhook_dest["method"], "POST");
-    assert_eq!(webhook_dest["timeoutSeconds"], 30);
-    assert_eq!(webhook_dest["contentType"], "application/json");
+    assert_eq!(webhook_dest["destinationType"], "webhook");
+    let webhook_config = &webhook_dest["webhook"];
+    assert_eq!(webhook_config["url"], "https://httpbin.org/post");
+    assert_eq!(webhook_config["method"], "POST");
+    assert_eq!(webhook_config["timeoutSeconds"], 30);
+    assert_eq!(webhook_config["contentType"], "application/json");
 }
 
 #[tokio::test]
@@ -277,26 +281,30 @@ async fn test_graphql_query_jobs_with_destinations() {
     let query = r#"
         query {
             jobs(pagination: {page: 1, limit: 10}) {
-                jobs {
+                items {
                     id
                     taskId
                     priority
                     status
                     outputDestinations {
-                        ... on FilesystemDestination {
+                        destinationType
+                        filesystem {
                             path
                             format
                         }
-                        ... on WebhookDestination {
+                        webhook {
                             url
                             method
+                            timeoutSeconds
                             contentType
                         }
                     }
                 }
-                total
-                page
-                limit
+                meta {
+                    total
+                    page
+                    limit
+                }
             }
         }
     "#;
@@ -307,13 +315,13 @@ async fn test_graphql_query_jobs_with_destinations() {
     let data = result.data.into_json().unwrap();
     let jobs_data = &data["jobs"];
     
-    assert!(jobs_data["total"].as_u64().unwrap() > 0);
+    assert!(jobs_data["meta"]["total"].as_u64().unwrap() > 0);
     
-    let jobs = jobs_data["jobs"].as_array().unwrap();
+    let jobs = jobs_data["items"].as_array().unwrap();
     assert!(!jobs.is_empty());
     
     let job_data = &jobs[0];
-    assert_eq!(job_data["taskId"], created_task.id);
+    assert_eq!(job_data["taskId"], created_task.id.to_string());
     assert_eq!(job_data["priority"], "HIGH");
     
     let destinations = job_data["outputDestinations"].as_array().unwrap();
@@ -324,14 +332,19 @@ async fn test_graphql_query_jobs_with_destinations() {
     let mut has_webhook = false;
     
     for dest in destinations {
-        if dest.get("path").is_some() {
-            has_filesystem = true;
-            assert_eq!(dest["format"], "JSON");
-        }
-        if dest.get("url").is_some() {
-            has_webhook = true;
-            assert_eq!(dest["method"], "POST");
-            assert_eq!(dest["contentType"], "application/json");
+        match dest["destinationType"].as_str().unwrap() {
+            "filesystem" => {
+                has_filesystem = true;
+                let fs_config = &dest["filesystem"];
+                assert_eq!(fs_config["format"], "JSON");
+            }
+            "webhook" => {
+                has_webhook = true;
+                let webhook_config = &dest["webhook"];
+                assert_eq!(webhook_config["method"], "POST");
+                assert_eq!(webhook_config["contentType"], "application/json");
+            }
+            _ => {}
         }
     }
     
@@ -569,7 +582,8 @@ async fn test_graphql_multiple_output_formats() {
             }}) {{
                 id
                 outputDestinations {{
-                    ... on FilesystemDestination {{
+                    destinationType
+                    filesystem {{
                         path
                         format
                     }}
@@ -599,7 +613,9 @@ async fn test_graphql_multiple_output_formats() {
     // Check that all formats are represented
     let mut formats = std::collections::HashSet::new();
     for dest in destinations {
-        formats.insert(dest["format"].as_str().unwrap());
+        assert_eq!(dest["destinationType"], "filesystem");
+        let fs_config = &dest["filesystem"];
+        formats.insert(fs_config["format"].as_str().unwrap());
     }
     
     assert!(formats.contains("JSON"));

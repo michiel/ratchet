@@ -103,8 +103,8 @@ pub async fn create_execution(
     State(ctx): State<ExecutionsContext>,
     Json(request): Json<ExecutionCreateRequest>,
 ) -> Result<impl IntoResponse, RestError> {
-    let task_id = request.task_id.parse::<i32>()
-        .map_err(|_| RestError::BadRequest("Invalid task ID format".to_string()))?;
+    let task_id = request.task_id.as_i32()
+        .ok_or_else(|| RestError::BadRequest("Task ID must be a numeric value".to_string()))?;
     
     // Create new execution
     let execution = Execution::new(task_id, request.input);
@@ -144,17 +144,21 @@ pub async fn update_execution(
     
     // Status updates
     if let Some(new_status) = request.status {
+        // Convert API status to database status
+        let db_new_status: crate::database::entities::executions::ExecutionStatus = new_status.into();
+        
         // Validate status transitions
-        match (&execution.status, &new_status) {
+        use crate::database::entities::executions::ExecutionStatus as DbExecutionStatus;
+        match (&execution.status, &db_new_status) {
             // Allow cancellation of pending/running executions
-            (ExecutionStatus::Pending | ExecutionStatus::Running, ExecutionStatus::Cancelled) => {
-                execution.status = new_status;
+            (DbExecutionStatus::Pending | DbExecutionStatus::Running, DbExecutionStatus::Cancelled) => {
+                execution.status = db_new_status;
                 execution.completed_at = Some(chrono::Utc::now());
                 updated = true;
             }
             // Allow manual completion with output
-            (ExecutionStatus::Running, ExecutionStatus::Completed) => {
-                execution.status = new_status;
+            (DbExecutionStatus::Running, DbExecutionStatus::Completed) => {
+                execution.status = db_new_status;
                 if let Some(output) = request.output {
                     execution.output = Some(sea_orm::prelude::Json::from(output));
                 }
@@ -168,8 +172,8 @@ pub async fn update_execution(
                 updated = true;
             }
             // Allow manual failure
-            (ExecutionStatus::Running, ExecutionStatus::Failed) => {
-                execution.status = new_status;
+            (DbExecutionStatus::Running, DbExecutionStatus::Failed) => {
+                execution.status = db_new_status;
                 if let Some(error_msg) = request.error_message {
                     execution.error_message = Some(error_msg);
                 }

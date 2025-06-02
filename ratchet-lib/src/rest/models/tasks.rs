@@ -1,20 +1,14 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 use crate::{
-    api::types::{UnifiedTask, ApiId},
-    services::UnifiedTask as ServiceUnifiedTask,
+    api::types::UnifiedTask,
 };
 
 /// REST API representation of a Task (now unified)
 pub type TaskResponse = UnifiedTask;
 
-impl From<ServiceUnifiedTask> for TaskResponse {
-    fn from(task: ServiceUnifiedTask) -> Self {
-        UnifiedTask::from(task)
-    }
-}
+// Conversion handled by api::conversions module
 
 /// Detailed task response with schemas (now just an alias)
 pub type TaskDetailResponse = UnifiedTask;

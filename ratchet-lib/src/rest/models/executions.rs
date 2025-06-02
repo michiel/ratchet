@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     api::types::{UnifiedExecution, ExecutionStatus, ApiId},
-    database::entities::Execution,
 };
 
 /// Execution response model for REST API (now unified)
@@ -76,17 +75,7 @@ pub struct ExecutionFilters {
     pub uuid_in: Option<Vec<String>>,
 }
 
-impl From<Execution> for ExecutionResponse {
-    fn from(execution: Execution) -> Self {
-        UnifiedExecution::from(execution)
-    }
-}
-
-impl From<Execution> for ExecutionDetailResponse {
-    fn from(execution: Execution) -> Self {
-        UnifiedExecution::from(execution)
-    }
-}
+// Conversions handled by api::conversions module
 
 impl ExecutionFilters {
     pub fn get_valid_sort_fields() -> Vec<&'static str> {
