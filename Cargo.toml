@@ -1,6 +1,14 @@
 [workspace]
 members = [
-    "ratchet-lib",
+    "ratchet-core",
+    "ratchet-runtime",
+    "ratchet-storage", 
+    "ratchet-api",
+    "ratchet-ipc",
+    "ratchet-resilience",
+    "ratchet-caching",
+    "ratchet-plugins",
+    "ratchet-lib",  # Keep for now during migration
     "ratchet-cli",
 ]
 resolver = "2"

@@ -1,0 +1,25 @@
+[package]
+name = "ratchet-resilience"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Resilience patterns (retry, circuit breaker, graceful shutdown) for Ratchet"
+
+[dependencies]
+ratchet-core = { path = "../ratchet-core" }
+
+serde = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = "0.1"
+log = { workspace = true }
+chrono = { workspace = true }
+rand = "0.8"
+parking_lot = "0.12"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
