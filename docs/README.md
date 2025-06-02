@@ -83,6 +83,14 @@ Complete ecosystem design for bundling, distributing, and monetizing tasks:
 ### [Execution Module Restructure Plan](plans/EXECUTION_RESTRUCTURE_PLAN.md)
 Future improvement plan for the execution module architecture (not yet implemented).
 
+### [MCP Integration Plan](plans/MCP_INTEGRATION_PLAN.md) 🆕
+Comprehensive design proposal for adding LLM Model Context Protocol support:
+- Enable AI-powered tasks through standardized MCP protocol
+- Support for multiple LLM providers (Anthropic, OpenAI, etc.)
+- Tool integration and structured interactions
+- Maintains process isolation and security
+- [Example MCP Task](plans/MCP_TASK_EXAMPLE.md) - Concrete implementation example
+
 ## Additional Resources
 
 ### Shell Scripts
