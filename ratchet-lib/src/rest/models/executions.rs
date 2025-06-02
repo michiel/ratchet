@@ -1,63 +1,22 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::database::entities::{executions::ExecutionStatus, Execution};
+use crate::{
+    api::types::{UnifiedExecution, ExecutionStatus, ApiId},
+    database::entities::Execution,
+};
 
-/// Execution response model for REST API
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExecutionResponse {
-    pub id: String,
-    pub uuid: String,
-    pub task_id: String,
-    pub input: serde_json::Value,
-    pub output: Option<serde_json::Value>,
-    pub status: ExecutionStatus,
-    pub error_message: Option<String>,
-    pub error_details: Option<serde_json::Value>,
-    pub queued_at: DateTime<Utc>,
-    pub started_at: Option<DateTime<Utc>>,
-    pub completed_at: Option<DateTime<Utc>>,
-    pub duration_ms: Option<i32>,
-    pub http_requests: Option<serde_json::Value>,
-    pub recording_path: Option<String>,
-}
+/// Execution response model for REST API (now unified)
+pub type ExecutionResponse = UnifiedExecution;
 
-/// Detailed execution response with additional metadata
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExecutionDetailResponse {
-    pub id: String,
-    pub uuid: String,
-    pub task_id: String,
-    pub input: serde_json::Value,
-    pub output: Option<serde_json::Value>,
-    pub status: ExecutionStatus,
-    pub error_message: Option<String>,
-    pub error_details: Option<serde_json::Value>,
-    pub queued_at: DateTime<Utc>,
-    pub started_at: Option<DateTime<Utc>>,
-    pub completed_at: Option<DateTime<Utc>>,
-    pub duration_ms: Option<i32>,
-    pub http_requests: Option<serde_json::Value>,
-    pub recording_path: Option<String>,
-    /// Additional execution metadata for detailed view
-    pub metadata: ExecutionMetadata,
-}
+/// Detailed execution response with additional metadata (now unified)
+pub type ExecutionDetailResponse = UnifiedExecution;
 
-/// Additional execution metadata
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExecutionMetadata {
-    /// Whether the execution can be retried
-    pub can_retry: bool,
-    /// Whether the execution can be cancelled
-    pub can_cancel: bool,
-    /// Execution progress if available
-    pub progress: Option<f32>,
-}
 
 /// Request model for creating a new execution
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExecutionCreateRequest {
-    pub task_id: String,
+    pub task_id: ApiId,
     pub input: serde_json::Value,
     /// Optional execution options
     pub options: Option<ExecutionOptions>,
@@ -90,7 +49,7 @@ pub struct ExecutionOptions {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExecutionFilters {
     /// Filter by task ID
-    pub task_id: Option<String>,
+    pub task_id: Option<ApiId>,
     /// Filter by status
     pub status: Option<ExecutionStatus>,
     /// Filter by status (multiple values)
@@ -119,50 +78,13 @@ pub struct ExecutionFilters {
 
 impl From<Execution> for ExecutionResponse {
     fn from(execution: Execution) -> Self {
-        Self {
-            id: execution.id.to_string(),
-            uuid: execution.uuid.to_string(),
-            task_id: execution.task_id.to_string(),
-            input: execution.input.clone(),
-            output: execution.output.clone(),
-            status: execution.status,
-            error_message: execution.error_message,
-            error_details: execution.error_details.clone(),
-            queued_at: execution.queued_at,
-            started_at: execution.started_at,
-            completed_at: execution.completed_at,
-            duration_ms: execution.duration_ms,
-            http_requests: execution.http_requests.clone(),
-            recording_path: execution.recording_path,
-        }
+        UnifiedExecution::from(execution)
     }
 }
 
 impl From<Execution> for ExecutionDetailResponse {
     fn from(execution: Execution) -> Self {
-        let metadata = ExecutionMetadata {
-            can_retry: matches!(execution.status, ExecutionStatus::Failed | ExecutionStatus::Cancelled),
-            can_cancel: matches!(execution.status, ExecutionStatus::Pending | ExecutionStatus::Running),
-            progress: None, // TODO: Implement progress tracking
-        };
-
-        Self {
-            id: execution.id.to_string(),
-            uuid: execution.uuid.to_string(),
-            task_id: execution.task_id.to_string(),
-            input: execution.input.clone(),
-            output: execution.output.clone(),
-            status: execution.status,
-            error_message: execution.error_message,
-            error_details: execution.error_details.clone(),
-            queued_at: execution.queued_at,
-            started_at: execution.started_at,
-            completed_at: execution.completed_at,
-            duration_ms: execution.duration_ms,
-            http_requests: execution.http_requests.clone(),
-            recording_path: execution.recording_path,
-            metadata,
-        }
+        UnifiedExecution::from(execution)
     }
 }
 

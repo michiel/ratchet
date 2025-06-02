@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
+use crate::api::{
+    errors::ApiError,
+    pagination::{PaginationInput, PaginationMeta, ListResponse},
+};
+
 /// Standard API response wrapper for Refine.dev compatibility
 #[derive(Debug, Serialize)]
 pub struct ApiResponse<T> {
@@ -14,7 +19,13 @@ impl<T> ApiResponse<T> {
     }
 }
 
-/// Standard API error response for Refine.dev compatibility
+/// Re-export unified list response
+pub use crate::api::pagination::ListResponse as ApiListResponse;
+
+/// Re-export unified API error (keeping legacy struct for backward compatibility)
+pub use crate::api::errors::ApiError as UnifiedApiError;
+
+/// Legacy API error response for backward compatibility
 #[derive(Debug, Serialize)]
 pub struct ApiError {
     pub error: String,
@@ -93,7 +104,7 @@ impl ApiError {
     }
 }
 
-/// Pagination query parameters for Refine.dev compatibility
+/// Legacy pagination query parameters for Refine.dev compatibility
 #[derive(Debug, Deserialize)]
 pub struct PaginationQuery {
     #[serde(rename = "_start")]
@@ -111,6 +122,11 @@ impl PaginationQuery {
         let start = self.start.unwrap_or(0);
         let end = self.end.unwrap_or(start + 25);
         if end > start { end - start } else { 25 }
+    }
+    
+    /// Convert to unified pagination input
+    pub fn to_unified(&self) -> PaginationInput {
+        PaginationInput::from_refine(self.start, self.end)
     }
 }
 
@@ -209,11 +225,21 @@ impl ListQuery {
     }
 }
 
-/// Standard list response metadata
+/// Legacy list response metadata (use PaginationMeta instead)
 #[derive(Debug, Serialize)]
 pub struct ListMeta {
     pub total: u64,
     pub offset: u64,
     pub limit: u64,
+}
+
+impl From<PaginationMeta> for ListMeta {
+    fn from(meta: PaginationMeta) -> Self {
+        Self {
+            total: meta.total,
+            offset: meta.offset as u64,
+            limit: meta.limit as u64,
+        }
+    }
 }
 

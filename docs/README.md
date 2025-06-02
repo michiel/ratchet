@@ -10,6 +10,13 @@ Comprehensive technical documentation covering:
 - Technology stack
 - Implementation details
 
+### [API Consistency Guide](API_CONSISTENCY_GUIDE.md) 🆕
+Unified API design across REST and GraphQL:
+- Standardized ID types and field naming
+- Consistent pagination and error handling
+- Migration guide for developers
+- Type system unification
+
 ### [REST API Documentation](REST_API_README.md)
 Complete REST API reference including:
 - Refine.dev compatibility

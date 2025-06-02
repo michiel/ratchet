@@ -142,7 +142,7 @@ async fn test_graphql_execute_task_with_destinations() {
     let mutation = format!(r#"
         mutation {{
             executeTask(input: {{
-                taskId: {},
+                taskId: "{}",
                 inputData: {{message: "hello"}},
                 priority: NORMAL,
                 outputDestinations: [
@@ -540,7 +540,7 @@ async fn test_graphql_multiple_output_formats() {
     let mutation = format!(r#"
         mutation {{
             executeTask(input: {{
-                taskId: {},
+                taskId: "{}",
                 inputData: {{test: "formats"}},
                 priority: NORMAL,
                 outputDestinations: [

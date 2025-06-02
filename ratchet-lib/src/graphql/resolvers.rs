@@ -2,14 +2,21 @@ use async_graphql::*;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::database::repositories::RepositoryFactory;
-use crate::execution::{
-    job_queue::JobQueueManager, 
-    ProcessTaskExecutor,
+use crate::{
+    api::{
+        types::*,
+        pagination::{PaginationInput, ListResponse},
+        errors::ApiError,
+    },
+    database::repositories::RepositoryFactory,
+    execution::{
+        job_queue::JobQueueManager, 
+        ProcessTaskExecutor,
+    },
+    registry::TaskRegistry,
+    services::TaskSyncService,
+    output::{OutputDeliveryManager, OutputDestinationConfig},
 };
-use crate::registry::TaskRegistry;
-use crate::services::TaskSyncService;
-use crate::output::{OutputDeliveryManager, OutputDestinationConfig};
 use super::types::*;
 
 /// GraphQL context containing services and repositories with Send+Sync compliance
@@ -31,59 +38,63 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         pagination: Option<PaginationInput>,
-    ) -> Result<UnifiedTaskListResponse> {
+    ) -> Result<ListResponse<UnifiedTask>> {
         let context = ctx.data::<GraphQLContext>()?;
         
         // Use sync service if available, otherwise fall back to database
         if let Some(sync_service) = &context.task_sync_service {
             let unified_tasks = sync_service.list_all_tasks().await
-                .map_err(|e| Error::new(format!("Failed to list tasks: {}", e)))?;
+                .map_err(|e| {
+                    let api_error = ApiError::internal_error(format!("Failed to list tasks: {}", e));
+                    Error::from(api_error)
+                })?;
             
             let total = unified_tasks.len() as u64;
             
-            // Apply pagination if requested
-            let tasks = if let Some(pagination) = pagination {
-                let page = pagination.page.unwrap_or(1);
-                let limit = pagination.limit.unwrap_or(10);
-                let start = ((page - 1) * limit) as usize;
-                let end = (start + limit as usize).min(unified_tasks.len());
-                
-                unified_tasks[start..end]
+            // Apply pagination using unified system
+            let pagination = pagination.unwrap_or_default();
+            let offset = pagination.get_offset() as usize;
+            let limit = pagination.get_limit() as usize;
+            
+            let items = if offset < unified_tasks.len() {
+                let end = (offset + limit).min(unified_tasks.len());
+                unified_tasks[offset..end]
                     .iter()
                     .cloned()
                     .map(UnifiedTask::from)
                     .collect()
             } else {
-                unified_tasks.into_iter()
-                    .map(UnifiedTask::from)
-                    .collect()
+                vec![]
             };
             
-            Ok(UnifiedTaskListResponse { tasks, total })
+            Ok(ListResponse::new(items, &pagination, total))
         } else {
             // Fallback to database-only view
-            let db_tasks = context.repositories.task_repo.find_all().await
-                .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+            let db_tasks = context.repositories.task_repository()
+                .find_all().await
+                .map_err(|e| {
+                    let api_error = ApiError::internal_error(format!("Database error: {}", e));
+                    Error::from(api_error)
+                })?;
             
             let total = db_tasks.len() as u64;
             
-            // Convert database tasks to unified view
-            let tasks = db_tasks.into_iter().map(|task| UnifiedTask {
-                id: Some(task.id),
-                uuid: task.uuid,
-                version: task.version.clone(),
-                label: task.name,
-                description: task.description.unwrap_or_default(),
-                available_versions: vec![task.version],
-                registry_source: false,
-                enabled: task.enabled,
-                created_at: Some(task.created_at),
-                updated_at: Some(task.updated_at),
-                validated_at: task.validated_at,
-                in_sync: true,
-            }).collect();
+            // Convert database tasks to unified view and apply pagination
+            let pagination = pagination.unwrap_or_default();
+            let offset = pagination.get_offset() as usize;
+            let limit = pagination.get_limit() as usize;
             
-            Ok(UnifiedTaskListResponse { tasks, total })
+            let items = if offset < db_tasks.len() {
+                let end = (offset + limit).min(db_tasks.len());
+                db_tasks[offset..end]
+                    .iter()
+                    .map(|task| UnifiedTask::from(task.clone()))
+                    .collect()
+            } else {
+                vec![]
+            };
+            
+            Ok(ListResponse::new(items, &pagination, total))
         }
     }
     

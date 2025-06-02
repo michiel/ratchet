@@ -2,60 +2,22 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
-use crate::services::UnifiedTask;
+use crate::{
+    api::types::{UnifiedTask, ApiId},
+    services::UnifiedTask as ServiceUnifiedTask,
+};
 
-/// REST API representation of a Task
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TaskResponse {
-    pub id: String,
-    pub uuid: String,
-    pub version: String,
-    pub label: String,
-    pub description: String,
-    pub enabled: bool,
-    #[serde(rename = "registrySource")]
-    pub registry_source: bool,
-    #[serde(rename = "availableVersions")]
-    pub available_versions: Vec<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: Option<DateTime<Utc>>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: Option<DateTime<Utc>>,
-    #[serde(rename = "validatedAt")]
-    pub validated_at: Option<DateTime<Utc>>,
-    #[serde(rename = "inSync")]
-    pub in_sync: bool,
-}
+/// REST API representation of a Task (now unified)
+pub type TaskResponse = UnifiedTask;
 
-impl From<UnifiedTask> for TaskResponse {
-    fn from(task: UnifiedTask) -> Self {
-        Self {
-            id: task.uuid.to_string(),
-            uuid: task.uuid.to_string(),
-            version: task.version,
-            label: task.label,
-            description: task.description,
-            enabled: task.enabled,
-            registry_source: task.registry_source,
-            available_versions: task.available_versions,
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            validated_at: task.validated_at,
-            in_sync: task.in_sync,
-        }
+impl From<ServiceUnifiedTask> for TaskResponse {
+    fn from(task: ServiceUnifiedTask) -> Self {
+        UnifiedTask::from(task)
     }
 }
 
-/// Detailed task response with schemas
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TaskDetailResponse {
-    #[serde(flatten)]
-    pub task: TaskResponse,
-    #[serde(rename = "inputSchema")]
-    pub input_schema: Option<serde_json::Value>,
-    #[serde(rename = "outputSchema")]
-    pub output_schema: Option<serde_json::Value>,
-}
+/// Detailed task response with schemas (now just an alias)
+pub type TaskDetailResponse = UnifiedTask;
 
 /// Task update request
 #[derive(Debug, Deserialize)]
@@ -67,12 +29,12 @@ pub struct TaskUpdateRequest {
 #[derive(Debug, Deserialize)]
 pub struct TaskFilters {
     pub uuid: Option<String>,
-    pub label: Option<String>,
+    pub name: Option<String>, // Changed from 'label' to 'name' for consistency
     pub version: Option<String>,
     pub enabled: Option<bool>,
     #[serde(rename = "registrySource")]
     pub registry_source: Option<bool>,
-    pub label_like: Option<String>,
+    pub name_like: Option<String>, // Changed from 'label_like' to 'name_like'
 }
 
 impl TaskFilters {
@@ -83,11 +45,11 @@ impl TaskFilters {
         }
     }
 
-    pub fn matches_label(&self, label: &str) -> bool {
-        match &self.label_like {
-            Some(filter) => label.to_lowercase().contains(&filter.to_lowercase()),
-            None => match &self.label {
-                Some(exact) => label == exact,
+    pub fn matches_name(&self, name: &str) -> bool {
+        match &self.name_like {
+            Some(filter) => name.to_lowercase().contains(&filter.to_lowercase()),
+            None => match &self.name {
+                Some(exact) => name == exact,
                 None => true,
             }
         }

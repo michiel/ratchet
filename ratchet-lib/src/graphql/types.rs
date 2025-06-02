@@ -4,9 +4,14 @@ use serde_json::Value as JsonValue;
 use uuid::Uuid;
 use std::collections::HashMap;
 
-/// Task representation in GraphQL
+// Re-export unified types for GraphQL
+pub use crate::api::types::*;
+pub use crate::api::pagination::*;
+pub use crate::api::errors::ApiError as UnifiedApiError;
+
+/// Legacy Task type (use UnifiedTask instead)
 #[derive(SimpleObject)]
-pub struct Task {
+pub struct LegacyTask {
     pub id: i32,
     pub uuid: Uuid,
     pub name: String,
@@ -19,9 +24,12 @@ pub struct Task {
     pub validated_at: Option<DateTime<Utc>>,
 }
 
-/// Execution representation in GraphQL
+/// Use unified task type
+pub type Task = UnifiedTask;
+
+/// Legacy Execution type (use UnifiedExecution instead)
 #[derive(SimpleObject)]
-pub struct Execution {
+pub struct LegacyExecution {
     pub id: i32,
     pub uuid: Uuid,
     pub task_id: i32,
@@ -33,9 +41,12 @@ pub struct Execution {
     pub duration_ms: Option<i64>,
 }
 
-/// Job representation in GraphQL
+/// Use unified execution type
+pub type Execution = UnifiedExecution;
+
+/// Legacy Job type (use UnifiedJob instead)
 #[derive(SimpleObject)]
-pub struct Job {
+pub struct LegacyJob {
     pub id: i32,
     pub task_id: i32,
     pub priority: JobPriority,
@@ -45,8 +56,11 @@ pub struct Job {
     pub queued_at: DateTime<Utc>,
     pub scheduled_for: Option<DateTime<Utc>>,
     pub error_message: Option<String>,
-    pub output_destinations: Option<Vec<OutputDestination>>,
+    pub output_destinations: Option<Vec<UnifiedOutputDestination>>,
 }
+
+/// Use unified job type
+pub type Job = UnifiedJob;
 
 /// Task execution result for direct execution
 #[derive(SimpleObject)]
@@ -57,9 +71,9 @@ pub struct TaskExecutionResult {
     pub duration_ms: i64,
 }
 
-/// Schedule representation in GraphQL
+/// Legacy Schedule type (use UnifiedSchedule instead)
 #[derive(SimpleObject)]
-pub struct Schedule {
+pub struct LegacySchedule {
     pub id: i32,
     pub task_id: i32,
     pub name: String,
@@ -72,9 +86,15 @@ pub struct Schedule {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Execution status enum for GraphQL
+/// Use unified schedule type
+pub type Schedule = UnifiedSchedule;
+
+// Re-export unified enums (already defined in api::types)
+// pub use crate::api::types::{ExecutionStatus, JobPriority, JobStatus};
+
+/// Legacy enums (kept for backward compatibility during migration)
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub enum ExecutionStatus {
+pub enum LegacyExecutionStatus {
     Pending,
     Running,
     Completed,
@@ -82,18 +102,16 @@ pub enum ExecutionStatus {
     Cancelled,
 }
 
-/// Job priority enum for GraphQL
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub enum JobPriority {
+pub enum LegacyJobPriority {
     Low,
     Normal,
     High,
     Critical,
 }
 
-/// Job status enum for GraphQL
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub enum JobStatus {
+pub enum LegacyJobStatus {
     Queued,
     Processing,
     Completed,
@@ -154,18 +172,17 @@ pub struct CreateTaskInput {
 /// Update task input
 #[derive(InputObject)]
 pub struct UpdateTaskInput {
-    pub id: i32,
+    pub id: ApiId,
     pub name: Option<String>,
     pub description: Option<String>,
     pub version: Option<String>,
-    pub path: Option<String>,
     pub enabled: Option<bool>,
 }
 
 /// Execute task input
 #[derive(InputObject)]
 pub struct ExecuteTaskInput {
-    pub task_id: i32,
+    pub task_id: ApiId,
     pub input_data: JsonValue,
     pub priority: Option<JobPriority>,
     pub output_destinations: Option<Vec<OutputDestinationInput>>,
@@ -174,7 +191,7 @@ pub struct ExecuteTaskInput {
 /// Create schedule input
 #[derive(InputObject)]
 pub struct CreateScheduleInput {
-    pub task_id: i32,
+    pub task_id: ApiId,
     pub name: String,
     pub description: Option<String>,
     pub cron_expression: String,
@@ -184,7 +201,7 @@ pub struct CreateScheduleInput {
 /// Update schedule input
 #[derive(InputObject)]
 pub struct UpdateScheduleInput {
-    pub id: i32,
+    pub id: ApiId,
     pub name: Option<String>,
     pub description: Option<String>,
     pub cron_expression: Option<String>,
@@ -192,91 +209,58 @@ pub struct UpdateScheduleInput {
     pub input_data: Option<JsonValue>,
 }
 
-/// Pagination input
-#[derive(InputObject)]
-pub struct PaginationInput {
-    pub page: Option<u64>,
-    pub limit: Option<u64>,
-}
+// Use unified pagination input
+// pub use crate::api::pagination::PaginationInput;
 
-/// Task list response with pagination
-#[derive(SimpleObject)]
-pub struct TaskListResponse {
-    pub tasks: Vec<Task>,
-    pub total: u64,
-    pub page: u64,
-    pub limit: u64,
-}
+/// Task list response with pagination (use unified ListResponse<UnifiedTask> instead)
+pub type TaskListResponse = ListResponse<UnifiedTask>;
 
-/// Execution list response with pagination
-#[derive(SimpleObject)]
-pub struct ExecutionListResponse {
-    pub executions: Vec<Execution>,
-    pub total: u64,
-    pub page: u64,
-    pub limit: u64,
-}
+/// Execution list response with pagination (use unified ListResponse<UnifiedExecution> instead)
+pub type ExecutionListResponse = ListResponse<UnifiedExecution>;
 
-/// Job list response with pagination
-#[derive(SimpleObject)]
-pub struct JobListResponse {
-    pub jobs: Vec<Job>,
-    pub total: u64,
-    pub page: u64,
-    pub limit: u64,
-}
+/// Job list response with pagination (use unified ListResponse<UnifiedJob> instead)
+pub type JobListResponse = ListResponse<UnifiedJob>;
 
-/// Unified task representation combining registry and database information
+/// Legacy UnifiedTask type - use crate::api::types::UnifiedTask instead
+/// Kept for backward compatibility during migration
 #[derive(SimpleObject)]
-pub struct UnifiedTask {
-    /// Database ID (if task exists in database)
+pub struct LegacyUnifiedTask {
     pub id: Option<i32>,
-    /// Task UUID
     pub uuid: Uuid,
-    /// Current version
     pub version: String,
-    /// Task label/name
     pub label: String,
-    /// Task description
     pub description: String,
-    /// All available versions in registry
     pub available_versions: Vec<String>,
-    /// Whether task is from registry
     pub registry_source: bool,
-    /// Whether task is enabled for execution
     pub enabled: bool,
-    /// When task was first created (in database)
     pub created_at: Option<DateTime<Utc>>,
-    /// When task was last updated (in database)
     pub updated_at: Option<DateTime<Utc>>,
-    /// When task was last validated
     pub validated_at: Option<DateTime<Utc>>,
-    /// Whether task is synced between registry and database
     pub in_sync: bool,
 }
 
-/// Unified task list response
-#[derive(SimpleObject)]
-pub struct UnifiedTaskListResponse {
-    pub tasks: Vec<UnifiedTask>,
-    pub total: u64,
-}
+/// Legacy UnifiedTaskListResponse - use ListResponse<UnifiedTask> instead
+pub type UnifiedTaskListResponse = ListResponse<UnifiedTask>;
 
-impl From<crate::services::UnifiedTask> for UnifiedTask {
+/// Convert from service UnifiedTask to API UnifiedTask
+impl From<crate::services::UnifiedTask> for crate::api::types::UnifiedTask {
     fn from(task: crate::services::UnifiedTask) -> Self {
         Self {
-            id: task.id,
+            id: ApiId::from_uuid(task.uuid),
             uuid: task.uuid,
+            name: task.label,
+            description: Some(task.description),
             version: task.version,
-            label: task.label,
-            description: task.description,
-            available_versions: task.available_versions,
-            registry_source: task.registry_source,
             enabled: task.enabled,
-            created_at: task.created_at,
-            updated_at: task.updated_at,
+            registry_source: task.registry_source,
+            available_versions: task.available_versions,
+            created_at: task.created_at.unwrap_or_else(chrono::Utc::now),
+            updated_at: task.updated_at.unwrap_or_else(chrono::Utc::now),
             validated_at: task.validated_at,
             in_sync: task.in_sync,
+            input_schema: None,
+            output_schema: None,
+            metadata: None,
         }
     }
 }

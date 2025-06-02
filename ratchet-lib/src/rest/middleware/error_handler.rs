@@ -5,8 +5,11 @@ use axum::{
 };
 use thiserror::Error;
 
-use crate::rest::models::common::ApiError;
-use crate::database::{SafeDatabaseError, ErrorCode};
+use crate::{
+    api::errors::ApiError as UnifiedApiError,
+    rest::models::common::ApiError,
+    database::{SafeDatabaseError, ErrorCode},
+};
 
 /// REST API specific error type
 #[derive(Error, Debug)]
@@ -47,6 +50,45 @@ pub enum RestError {
 
 impl IntoResponse for RestError {
     fn into_response(self) -> Response {
+        // Convert to unified error first, then to legacy format for backward compatibility
+        let unified_error = self.to_unified_error();
+        let status = StatusCode::from_u16(unified_error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        
+        // For now, convert back to legacy format for compatibility
+        let legacy_error = self.to_legacy_error();
+        
+        (status, Json(legacy_error)).into_response()
+    }
+}
+
+impl RestError {
+    /// Convert to unified API error
+    pub fn to_unified_error(&self) -> UnifiedApiError {
+        match self {
+            RestError::NotFound(msg) => UnifiedApiError::not_found("Resource", msg),
+            RestError::BadRequest(msg) => UnifiedApiError::bad_request(msg),
+            RestError::InternalError(msg) => UnifiedApiError::internal_error(msg),
+            RestError::MethodNotAllowed(msg) => UnifiedApiError::bad_request(format!("Method not allowed: {}", msg)),
+            RestError::ServiceUnavailable(msg) => UnifiedApiError::service_unavailable(Some(msg)),
+            RestError::Conflict(msg) => UnifiedApiError::conflict("Resource", msg),
+            RestError::Timeout(msg) => UnifiedApiError::timeout("Request"),
+            RestError::SafeDatabase(safe_err) => {
+                match safe_err.code {
+                    ErrorCode::NotFound => UnifiedApiError::not_found("Resource", &safe_err.message),
+                    ErrorCode::Conflict => UnifiedApiError::conflict("Resource", &safe_err.message),
+                    ErrorCode::ValidationError => UnifiedApiError::validation_error("field", &safe_err.message),
+                    ErrorCode::Timeout => UnifiedApiError::timeout("Database operation"),
+                    _ => UnifiedApiError::internal_error(&safe_err.message),
+                }
+            },
+            RestError::Database(err) => UnifiedApiError::internal_error(format!("Database error: {}", err)),
+            RestError::Task(err) => UnifiedApiError::validation_error("task", &err.to_string()),
+            RestError::Ratchet(err) => UnifiedApiError::internal_error(format!("System error: {}", err)),
+        }
+    }
+    
+    /// Convert to legacy API error for backward compatibility
+    pub fn to_legacy_error(&self) -> ApiError {
         let (status, error_response) = match self {
             RestError::NotFound(msg) => (
                 StatusCode::NOT_FOUND,
@@ -131,8 +173,8 @@ impl IntoResponse for RestError {
                 ApiError::internal_error(format!("System error: {}", err)),
             ),
         };
-
-        (status, Json(error_response)).into_response()
+        
+        error_response
     }
 }
 
