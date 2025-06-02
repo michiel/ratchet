@@ -849,7 +849,7 @@ fn default_port() -> u16 {
 }
 
 fn default_database_url() -> String {
-    "sqlite://ratchet.db".to_string()
+    "sqlite::memory:".to_string()
 }
 
 fn default_max_connections() -> u32 {

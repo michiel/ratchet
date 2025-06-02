@@ -35,6 +35,9 @@ impl DatabaseConnection {
     pub async fn new(config: DatabaseConfig) -> Result<Self, DatabaseError> {
         info!("Connecting to database: {}", config.url);
         
+        // Handle SQLite file creation if needed
+        Self::ensure_sqlite_file_exists(&config.url)?;
+        
         let mut opts = ConnectOptions::new(&config.url);
         opts
             .max_connections(config.max_connections)
@@ -51,6 +54,63 @@ impl DatabaseConnection {
         debug!("Database connection established with {} max connections", config.max_connections);
         
         Ok(Self { connection, config })
+    }
+    
+    /// Ensure SQLite database file and directory exist for file-based databases
+    fn ensure_sqlite_file_exists(database_url: &str) -> Result<(), DatabaseError> {
+        // Check if this is a file-based SQLite database
+        if database_url.starts_with("sqlite:") && !database_url.contains(":memory:") {
+            // Extract the file path from the URL, handling various SQLite URL formats
+            let file_path = if database_url.starts_with("sqlite:///") {
+                // Absolute path: sqlite:///path/to/file.db -> /path/to/file.db
+                database_url.strip_prefix("sqlite://")
+                    .ok_or_else(|| DatabaseError::ConfigError(
+                        format!("Invalid SQLite URL format: {}", database_url)
+                    ))?
+            } else if database_url.starts_with("sqlite://") {
+                // Relative path: sqlite://file.db -> file.db
+                database_url.strip_prefix("sqlite://")
+                    .ok_or_else(|| DatabaseError::ConfigError(
+                        format!("Invalid SQLite URL format: {}", database_url)
+                    ))?
+            } else if database_url.starts_with("sqlite:") {
+                // Direct path: sqlite:file.db -> file.db
+                database_url.strip_prefix("sqlite:")
+                    .ok_or_else(|| DatabaseError::ConfigError(
+                        format!("Invalid SQLite URL format: {}", database_url)
+                    ))?
+            } else {
+                return Err(DatabaseError::ConfigError(
+                    format!("Invalid SQLite URL format: {}", database_url)
+                ));
+            };
+            
+            let path = std::path::Path::new(file_path);
+            
+            // Create parent directory if it doesn't exist
+            if let Some(parent_dir) = path.parent() {
+                if !parent_dir.exists() {
+                    info!("Creating database directory: {:?}", parent_dir);
+                    std::fs::create_dir_all(parent_dir)
+                        .map_err(|e| DatabaseError::ConfigError(
+                            format!("Failed to create database directory {:?}: {}", parent_dir, e)
+                        ))?;
+                }
+            }
+            
+            // SQLite will create the file if it doesn't exist, we just need to ensure the directory exists
+            if !path.exists() {
+                info!("Database file will be created by SQLite: {:?}", path);
+            } else {
+                debug!("Using existing database file: {:?}", path);
+            }
+        } else if database_url.contains(":memory:") {
+            debug!("Using in-memory SQLite database");
+        } else {
+            debug!("Non-SQLite database detected, skipping file creation logic");
+        }
+        
+        Ok(())
     }
     
     /// Get the underlying Sea-ORM connection
@@ -161,5 +221,75 @@ mod tests {
         
         let stats = db.get_stats();
         assert_eq!(stats.max_connections, 5);
+    }
+    
+    #[tokio::test]
+    async fn test_in_memory_database() {
+        let config = DatabaseConfig {
+            url: "sqlite::memory:".to_string(),
+            max_connections: 5,
+            connection_timeout: Duration::from_secs(10),
+        };
+        
+        let db = DatabaseConnection::new(config).await;
+        assert!(db.is_ok());
+        
+        let db = db.unwrap();
+        assert!(db.ping().await.is_ok());
+    }
+    
+    #[tokio::test]
+    async fn test_file_database_directory_creation() {
+        use tempfile::tempdir;
+        
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("subdir").join("test.db");
+        let db_url = format!("sqlite://{}", db_path.display());
+        
+        // Verify directory doesn't exist initially
+        assert!(!db_path.parent().unwrap().exists());
+        
+        // Test the directory creation logic directly
+        let result = DatabaseConnection::ensure_sqlite_file_exists(&db_url);
+        assert!(result.is_ok());
+        
+        // Verify directory was created
+        assert!(db_path.parent().unwrap().exists());
+    }
+    
+    #[test]
+    fn test_ensure_sqlite_file_exists_in_memory() {
+        let result = DatabaseConnection::ensure_sqlite_file_exists("sqlite::memory:");
+        assert!(result.is_ok());
+    }
+    
+    #[test]
+    fn test_ensure_sqlite_file_exists_file_path() {
+        use tempfile::tempdir;
+        
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("nested").join("test.db");
+        let db_url = format!("sqlite://{}", db_path.display());
+        
+        // Verify directory doesn't exist initially
+        assert!(!db_path.parent().unwrap().exists());
+        
+        let result = DatabaseConnection::ensure_sqlite_file_exists(&db_url);
+        assert!(result.is_ok());
+        
+        // Verify directory was created
+        assert!(db_path.parent().unwrap().exists());
+    }
+    
+    #[test]
+    fn test_ensure_sqlite_file_exists_non_sqlite() {
+        let result = DatabaseConnection::ensure_sqlite_file_exists("postgresql://localhost/test");
+        assert!(result.is_ok());
+    }
+    
+    #[test]
+    fn test_ensure_sqlite_file_exists_invalid_url() {
+        let result = DatabaseConnection::ensure_sqlite_file_exists("invalid-url");
+        assert!(result.is_ok()); // Should handle gracefully
     }
 }

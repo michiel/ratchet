@@ -100,9 +100,10 @@ server:
   
   # Database configuration
   database:
-    url: "sqlite://ratchet.db"  # Database URL (SQLite file path)
-    max_connections: 10         # Maximum database connection pool size
-    connection_timeout: 30      # Connection timeout in seconds
+    url: "sqlite://data/ratchet.db"  # Database URL - file path (creates file and directory if needed)
+    # url: "sqlite::memory:"        # Alternative: in-memory database (default, loses data on restart)
+    max_connections: 10               # Maximum database connection pool size
+    connection_timeout: 30            # Connection timeout in seconds
   
   # Authentication configuration (FUTURE FEATURE - Not yet implemented)
   # auth:
