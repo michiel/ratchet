@@ -104,7 +104,6 @@ The main.js file must contain a single function that takes input and returns out
         
         // Return structured output
         return {
-            success: true,
             result: result,
             timestamp: new Date().toISOString()
         };
@@ -235,7 +234,6 @@ The generator creates a basic template that you should customize:
         
         // Your implementation
         return {
-            success: true,
             result: "placeholder"
         };
     } catch (error) {
@@ -293,7 +291,7 @@ Use the built-in `fetch` function for external API calls:
             data: response.body
         });
         
-        return { success: true, data: response.body };
+        return { data: response.body };
     } catch (error) {
         throw new Error(`API call failed: ${error.message}`);
     }
@@ -309,7 +307,7 @@ Implement comprehensive error handling:
     try {
         // Main logic
         const result = performOperation(input);
-        return { success: true, data: result };
+        return { data: result };
         
     } catch (error) {
         // Handle different error types appropriately
@@ -354,7 +352,6 @@ Since no logging context is provided, use return values and error messages for d
         debugInfo.push("Logic completed successfully");
         
         return {
-            success: true,
             result: result,
             // Include debug info in development (remove in production)
             debug: debugInfo
@@ -500,7 +497,6 @@ ratchet test sample/js-tasks/my-task --test test-001.json
         const data = response.body;
         
         return {
-            success: true,
             data: data,
             timestamp: new Date().toISOString()
         };
@@ -682,7 +678,6 @@ Example input schema:
 1. **Include debug information in return values**:
    ```javascript
    return {
-       success: true,
        result: processedData,
        debug: { step: "processing", itemCount: data.length }
    };

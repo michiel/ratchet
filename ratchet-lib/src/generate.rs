@@ -172,27 +172,28 @@ fn create_output_schema() -> Result<JsonValue> {
 /// Create main.js content
 fn create_main_js_content() -> String {
     debug!("Creating main.js content");
-    r#"// Task implementation
-// This function receives input matching input.schema.json
-// and must return output matching output.schema.json
-
-function main(input) {
-    // Validate input
-    if (!input || typeof input.value !== 'string') {
+    r#"(function(input) {
+    // Extract input parameters
+    const { value } = input;
+    
+    // Validate input (schema validation happens automatically)
+    if (!value || typeof value !== 'string') {
         throw new Error('Invalid input: value must be a string');
     }
     
-    // Process the input
-    const processedValue = `Processed: ${input.value}`;
-    
-    // Return the result matching the output schema
-    return {
-        result: processedValue
-    };
-}
-
-// Export the main function (required)
-main;
+    try {
+        // Process the input
+        const processedValue = `Processed: ${value}`;
+        
+        // Return the result matching the output schema
+        return {
+            result: processedValue
+        };
+    } catch (error) {
+        // Handle any processing errors
+        throw new Error(`Task processing failed: ${error.message}`);
+    }
+})
 "#.to_string()
 }
 
