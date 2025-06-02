@@ -1,4 +1,4 @@
-# Ratchet Server CLI Command
+# Ratchet CLI Usage Guide
 
 The `ratchet serve` command starts a full Ratchet server with GraphQL API, task execution, and worker processes.
 

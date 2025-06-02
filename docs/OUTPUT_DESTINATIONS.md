@@ -4,7 +4,7 @@
 
 The Ratchet output destination system provides a flexible way to deliver task execution results to various destinations including filesystem, webhooks, databases, and cloud storage. This system supports template variables, retry policies, and concurrent delivery to multiple destinations.
 
-> **Note**: For GraphQL-specific syntax and limitations, see the [GraphQL Output Destinations Guide](./GRAPHQL_OUTPUT_DESTINATIONS.md).
+This guide covers both REST API and GraphQL API usage, with specific syntax requirements and limitations noted for each.
 
 ## Supported Destination Types
 
@@ -714,3 +714,316 @@ When upgrading to newer versions:
 - Test destination configurations after upgrade
 - Monitor delivery success rates post-upgrade
 - Update templates if new variables are available
+
+## GraphQL API Usage
+
+### GraphQL Syntax Requirements
+
+When using output destinations with the GraphQL API, follow these syntax requirements:
+
+#### JSON Input Data
+Use GraphQL object syntax, not JSON string syntax:
+
+```graphql
+# ✅ Correct - GraphQL object syntax
+inputData: {message: "hello", count: 42}
+
+# ❌ Incorrect - JSON string syntax
+inputData: {"message": "hello", "count": 42}
+```
+
+#### Field Names
+GraphQL requires unquoted field names:
+
+```graphql
+# ✅ Correct
+filesystem: {
+  path: "/tmp/output.json"
+  format: JSON
+}
+
+# ❌ Incorrect
+filesystem: {
+  "path": "/tmp/output.json"
+  "format": "JSON"
+}
+```
+
+### GraphQL Destination Configuration
+
+#### Filesystem Destination
+
+```graphql
+{
+  destinationType: FILESYSTEM
+  filesystem: {
+    path: "/var/data/outputs/result.json"
+    format: JSON
+    compression: GZIP
+    permissions: "0644"
+  }
+  template: "{{task_name}}_{{timestamp}}.json"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | String | Yes | Absolute path where the output will be stored |
+| `format` | Enum | No | Output format: `JSON`, `YAML`, `CSV`, `XML` (default: `JSON`) |
+| `compression` | Enum | No | Compression type: `GZIP`, `ZSTD` (optional) |
+| `permissions` | String | No | Unix file permissions (e.g., "0644") |
+
+#### Webhook Destination
+
+```graphql
+{
+  destinationType: WEBHOOK
+  webhook: {
+    url: "https://api.example.com/webhook"
+    method: POST
+    timeoutSeconds: 60
+    contentType: "application/json"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | String | Yes | Full URL of the webhook endpoint |
+| `method` | Enum | No | HTTP method: `GET`, `POST`, `PUT`, `PATCH` (default: `POST`) |
+| `timeoutSeconds` | Int | No | Request timeout in seconds (default: 30) |
+| `contentType` | String | No | Content-Type header (default: "application/json") |
+
+### GraphQL API Operations
+
+#### Execute Task with Output Destinations
+
+```graphql
+mutation ExecuteTaskWithDestinations {
+  executeTask(input: {
+    taskId: 123
+    inputData: {key: "value"}
+    priority: NORMAL
+    outputDestinations: [
+      {
+        destinationType: FILESYSTEM
+        filesystem: {
+          path: "/tmp/output.json"
+          format: JSON
+        }
+      }
+      {
+        destinationType: WEBHOOK
+        webhook: {
+          url: "https://webhook.site/your-uuid"
+          method: POST
+        }
+      }
+    ]
+  }) {
+    id
+    taskId
+    status
+    priority
+    outputDestinations {
+      destinationType
+      template
+    }
+  }
+}
+```
+
+#### Test Output Destinations
+
+```graphql
+mutation TestDestinations {
+  testOutputDestinations(input: {
+    destinations: [
+      {
+        destinationType: FILESYSTEM
+        filesystem: {
+          path: "/tmp/test.json"
+          format: JSON
+        }
+      }
+    ]
+  }) {
+    destinationType
+    success
+    error
+    webhookResponse {
+      statusCode
+      headers
+      body
+    }
+  }
+}
+```
+
+#### Query Jobs with Output Destinations
+
+```graphql
+query GetJobsWithDestinations {
+  jobs(first: 10) {
+    edges {
+      node {
+        id
+        taskId
+        status
+        outputDestinations {
+          destinationType
+          filesystem {
+            path
+            format
+          }
+          webhook {
+            url
+            method
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### GraphQL Examples
+
+#### Multiple Format Outputs
+
+```graphql
+mutation ExecuteWithMultipleFormats {
+  executeTask(input: {
+    taskId: 456
+    inputData: {operation: "process"}
+    outputDestinations: [
+      {
+        destinationType: FILESYSTEM
+        filesystem: {
+          path: "/data/outputs/result.json"
+          format: JSON
+        }
+      }
+      {
+        destinationType: FILESYSTEM
+        filesystem: {
+          path: "/data/outputs/result.yaml"
+          format: YAML
+        }
+      }
+      {
+        destinationType: FILESYSTEM
+        filesystem: {
+          path: "/data/outputs/result.csv"
+          format: CSV
+        }
+      }
+    ]
+  }) {
+    id
+    status
+  }
+}
+```
+
+#### Webhook with Retry
+
+```graphql
+mutation ExecuteWithWebhookRetry {
+  executeTask(input: {
+    taskId: 789
+    inputData: {data: "important"}
+    outputDestinations: [{
+      destinationType: WEBHOOK
+      webhook: {
+        url: "https://api.partner.com/receive"
+        method: POST
+        timeoutSeconds: 30
+        retryPolicy: {
+          maxAttempts: 3
+          backoffMultiplier: 2.0
+          initialDelaySeconds: 1
+        }
+      }
+    }]
+  }) {
+    id
+    status
+  }
+}
+```
+
+### GraphQL Limitations
+
+#### Type System Limitations
+
+1. **No HashMap Support**: Custom webhook headers cannot be specified directly in mutations due to GraphQL type limitations.
+
+2. **JSON Input Syntax**: Complex JSON objects must use GraphQL object syntax. Nested quotes are not supported.
+
+3. **Enum Values**: Enum values (like `POST`, `JSON`, `FILESYSTEM`) must be unquoted in GraphQL.
+
+#### Webhook Limitations
+
+1. **Headers**: Custom headers are not directly supported in GraphQL mutations.
+
+2. **Authentication**: Currently supports:
+   - Bearer token authentication
+   - Basic authentication
+   - API key authentication
+
+3. **Response Size**: Webhook responses are limited to 10MB.
+
+### GraphQL Error Handling
+
+The `testOutputDestinations` mutation returns validation results as data, not GraphQL errors:
+
+```graphql
+{
+  testOutputDestinations(input: {...}) {
+    success      # false if validation failed
+    error        # Error message if validation failed
+    destinationType
+  }
+}
+```
+
+Common error scenarios:
+
+```json
+// Invalid Path
+{
+  "success": false,
+  "error": "Invalid path: must be absolute",
+  "destinationType": "FILESYSTEM"
+}
+
+// Invalid URL
+{
+  "success": false,
+  "error": "Invalid URL format",
+  "destinationType": "WEBHOOK"
+}
+
+// Network Timeout
+{
+  "success": false,
+  "error": "Request timeout after 30 seconds",
+  "destinationType": "WEBHOOK"
+}
+```
+
+### GraphQL vs REST API Comparison
+
+| Feature | REST API | GraphQL API |
+|---------|----------|-------------|
+| Headers | Supported as object | Not directly supported |
+| JSON Input | Standard JSON syntax | GraphQL object syntax |
+| Error Handling | HTTP status codes | Success/error in response data |
+| Batch Operations | Separate requests | Single mutation with multiple destinations |
+
+## Related Documentation
+
+- [REST API Guide](./REST_API_README.md) - REST API documentation and examples
+- [GraphQL Schema](../openapi.yaml) - Complete API schema definitions
+- [Configuration Guide](./README.md) - Main Ratchet documentation

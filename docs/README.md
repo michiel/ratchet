@@ -10,12 +10,12 @@ Comprehensive technical documentation covering:
 - Technology stack
 - Implementation details
 
-### [API Consistency Guide](API_CONSISTENCY_GUIDE.md) 🆕
-Unified API design across REST and GraphQL:
-- Standardized ID types and field naming
-- Consistent pagination and error handling
-- Migration guide for developers
-- Type system unification
+### [CLI Usage Guide](CLI_USAGE.md)
+Complete command-line interface documentation:
+- Server command usage and configuration
+- Environment variables and config files
+- Available endpoints and features
+- GraphQL examples and session workflows
 
 ### [REST API Documentation](REST_API_README.md)
 Complete REST API reference including:
@@ -92,5 +92,5 @@ Future improvement plan for the execution module architecture (not yet implement
 - [README.md](../README.md) - Project overview and quick start guide
 - [TODO.md](../TODO.md) - Comprehensive architectural roadmap
 - [CHANGES.md](../CHANGES.md) - Release notes and changelog
-- [CLI-SERVE.md](../CLI-SERVE.md) - Server command documentation
+- [CLI Usage Guide](CLI_USAGE.md) - Server command documentation
 - [example-config.yaml](../example-config.yaml) - Complete configuration example
