@@ -1,0 +1,32 @@
+[package]
+name = "ratchet-plugins"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Plugin system for extending Ratchet"
+
+[dependencies]
+ratchet-core = { path = "../ratchet-core" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = "0.1"
+log = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Dynamic loading support
+libloading = { version = "0.8", optional = true }
+
+[features]
+default = []
+dynamic = ["libloading"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

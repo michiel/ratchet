@@ -1,11 +1,12 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::sea_query::StringLen;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::fmt;
 
 /// Job priority enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(20))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
 pub enum JobPriority {
     #[sea_orm(string_value = "low")]
     Low,
@@ -19,7 +20,7 @@ pub enum JobPriority {
 
 /// Job status enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(20))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
 pub enum JobStatus {
     #[sea_orm(string_value = "queued")]
     Queued,

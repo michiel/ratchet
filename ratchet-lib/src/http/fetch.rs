@@ -1,6 +1,6 @@
 use boa_engine::{
     Context, JsValue, JsError, Source,
-    JsNativeError, JsResult
+    JsNativeError, JsResult, JsString, property::PropertyKey
 };
 use serde_json::{Value as JsonValue};
 use super::manager::call_http;
@@ -10,7 +10,7 @@ use super::manager::call_http;
 async fn fetch_native(
     _this: &JsValue,
     args: &[JsValue],
-    context: &mut Context<'_>,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
     // Extract arguments
     let url = if args.is_empty() {
@@ -29,7 +29,7 @@ async fn fetch_native(
     // Convert params to JsonValue if provided
     let params_json = if args.len() > 1 && !args[1].is_null() && !args[1].is_undefined() {
         // Set a temporary variable in the global context
-        context.global_object().set("__temp_params", args[1].clone(), true, context)?;
+        context.global_object().set(PropertyKey::from(JsString::from("__temp_params")), args[1].clone(), true, context)?;
         
         // Stringify it using JSON.stringify
         let params_json_str = context.eval(Source::from_bytes("JSON.stringify(__temp_params)"))?;
@@ -47,7 +47,7 @@ async fn fetch_native(
     // Convert body to JsonValue if provided
     let body_json = if args.len() > 2 && !args[2].is_null() && !args[2].is_undefined() {
         // Set a temporary variable in the global context
-        context.global_object().set("__temp_body", args[2].clone(), true, context)?;
+        context.global_object().set(PropertyKey::from(JsString::from("__temp_body")), args[2].clone(), true, context)?;
         
         // Stringify it using JSON.stringify
         let body_json_str = context.eval(Source::from_bytes("JSON.stringify(__temp_body)"))?;

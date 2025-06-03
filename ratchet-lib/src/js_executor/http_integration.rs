@@ -1,12 +1,12 @@
 use crate::errors::JsExecutionError;
 use crate::js_executor::error_handling::parse_js_error;
-use boa_engine::{Context as BoaContext, Source};
+use boa_engine::{Context as BoaContext, Source, JsString, property::PropertyKey};
 use serde_json::Value as JsonValue;
 use tracing::debug;
 
 /// Check if fetch API was called and extract parameters
 pub fn check_fetch_call(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
 ) -> Result<Option<(String, Option<JsonValue>, Option<JsonValue>)>, JsExecutionError> {
     debug!("Checking for fetch API calls");
     let fetch_marker = context
@@ -73,7 +73,7 @@ pub fn check_fetch_call(
 
 /// Handle HTTP fetch processing and inject result back into context
 pub async fn handle_fetch_processing(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     func: &boa_engine::JsValue,
     input_arg: &boa_engine::JsValue,
     http_manager: &crate::http::HttpManager,
@@ -94,7 +94,7 @@ pub async fn handle_fetch_processing(
     // Store the HTTP result in a global variable
     context
         .global_object()
-        .set("__http_result", 
+        .set(PropertyKey::from(JsString::from("__http_result")), 
              context.eval(Source::from_bytes(&format!("({})", 
                 serde_json::to_string(&http_result)
                     .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e)))?
@@ -171,7 +171,7 @@ pub async fn handle_fetch_processing(
 
 /// Handle HTTP fetch processing with context and re-execute function
 pub async fn handle_fetch_processing_with_context(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     func: &boa_engine::JsValue,
     input_arg: &boa_engine::JsValue,
     context_arg: &boa_engine::JsValue,

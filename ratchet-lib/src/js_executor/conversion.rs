@@ -1,11 +1,11 @@
 use crate::errors::JsExecutionError;
-use boa_engine::{Context as BoaContext, Source};
+use boa_engine::{Context as BoaContext, Source, JsString, property::PropertyKey};
 use serde_json::Value as JsonValue;
 use tracing::{debug, trace};
 
 /// Prepare input data for JavaScript execution
 pub fn prepare_input_argument(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     input_data: &JsonValue,
 ) -> Result<boa_engine::JsValue, JsExecutionError> {
     trace!("Converting input data to JavaScript format");
@@ -25,7 +25,7 @@ pub fn prepare_input_argument(
 
 /// Convert JavaScript result to JSON
 pub fn convert_js_result_to_json(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     result: boa_engine::JsValue,
 ) -> Result<JsonValue, JsExecutionError> {
     debug!("Converting JavaScript result back to JSON");
@@ -33,7 +33,7 @@ pub fn convert_js_result_to_json(
     // Set temporary variable to hold the result so we can stringify it
     context
         .global_object()
-        .set("__temp_result", result, true, context)
+        .set(PropertyKey::from(JsString::from("__temp_result")), result, true, context)
         .map_err(|e| {
             JsExecutionError::ExecutionError(format!("Failed to set temporary result: {}", e))
         })?;
@@ -59,7 +59,7 @@ pub fn convert_js_result_to_json(
 
 /// Set a JavaScript value in the global context
 pub fn set_js_value(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     variable_name: &str,
     value: &JsonValue,
 ) -> Result<(), JsExecutionError> {

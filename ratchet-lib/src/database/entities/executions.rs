@@ -1,9 +1,10 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::sea_query::StringLen;
 use serde::{Deserialize, Serialize};
 
 /// Execution status enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(20))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
 pub enum ExecutionStatus {
     #[sea_orm(string_value = "pending")]
     Pending,

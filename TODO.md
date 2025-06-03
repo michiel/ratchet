@@ -1,8 +1,8 @@
 # Ratchet Development Roadmap & TODO
 
-## 🎯 Current Status: Core Platform Complete with Advanced Logging & Output Destinations
+## 🎯 Current Status: Modular Architecture Complete with Plugin System
 
-**Major Milestone**: Ratchet server is **fully functional** with comprehensive database persistence, GraphQL API, REST endpoints, task registry, and CLI serve command. **New**: Output destination system implemented for routing task results to filesystem and webhooks with templating, authentication, and retry mechanisms. Advanced structured logging system with LLM-powered error analysis, pattern matching, and AI-ready export formats implemented. All compilation and test errors resolved (153+ tests passing).
+**Major Milestone**: Ratchet has been successfully restructured into **7 modular crates** with comprehensive plugin system architecture. **Latest**: Complete modular architecture with plugin system (Phase 8) implemented, featuring async lifecycle hooks, dynamic/static plugin loading, dependency resolution, and 46+ passing tests. All build errors resolved including BOA engine compatibility and Sea-ORM syntax fixes. Ready for production-grade REST/GraphQL server implementation.
 
 ---
 
@@ -25,13 +25,135 @@
 - **YAML Configuration**: Flexible logging configuration with environment overrides
 - **Performance**: <10μs pattern matching, 500K+ events/second throughput
 
+### ✅ **Modular Architecture** (COMPLETED)
+- **7 Modular Crates**: Clean separation of concerns with ratchet-api, ratchet-caching, ratchet-config, ratchet-ipc, ratchet-plugin, ratchet-resilience, ratchet-runtime, ratchet-storage
+- **Plugin System**: Full lifecycle management with async hooks, dependency resolution, dynamic/static loading
+- **Storage Abstraction**: Repository pattern with unified entity types and migration system
+- **Resilience Patterns**: Retry policies, circuit breakers, graceful shutdown coordination
+- **Configuration Management**: Domain-specific configs with validation and environment overrides
+- **Caching Layer**: Multiple store backends (in-memory, LRU, TTL, Moka) with HTTP request caching
+- **Runtime Components**: Worker management, process coordination, and task execution infrastructure
+
 ### ✅ **Production Infrastructure**
 - **Database Persistence**: SQLite with PostgreSQL roadmap, full migration system
-- **REST API**: Comprehensive endpoints with pagination, filtering, validation
-- **GraphQL API**: Type-safe schema with DataLoader optimization
+- **REST API**: Comprehensive endpoints with pagination, filtering, validation (ratchet-lib implementation)
+- **GraphQL API**: Type-safe schema with DataLoader optimization (ratchet-lib implementation)
 - **Task Registry**: File system and HTTP-based task loading with caching
 - **Job Queue**: Priority-based job scheduling with retry logic
 - **Process Separation**: Secure task execution in isolated processes
+
+---
+
+## 🚀 **Phase 0: Production-Ready REST & GraphQL Servers** (CRITICAL PRIORITY)
+
+### 0.1 Dependency Version Resolution & Compatibility
+- [ ] **Core Dependency Upgrades** 
+  - [ ] Upgrade workspace axum from 0.6 → 0.7 for async-graphql 7.0 compatibility
+  - [ ] Update async-graphql from 6.0 → 7.0 for latest features and security
+  - [ ] Upgrade tower-http from 0.4 → 0.5 for axum 0.7 compatibility
+  - [ ] Update async-graphql-axum to 7.0 for integration layer
+  - [ ] Resolve all downstream dependency conflicts (tower, hyper, etc.)
+  
+- [ ] **Compatibility Testing**
+  - [ ] Ensure all existing REST endpoints work with axum 0.7
+  - [ ] Verify GraphQL playground and introspection functionality
+  - [ ] Test middleware stack compatibility with new versions
+  - [ ] Validate WebSocket/subscription support if needed
+
+### 0.2 Enable ratchet-api Unified Server Implementation
+- [ ] **Feature Enablement**
+  ```rust
+  // In ratchet-api/Cargo.toml
+  [features]
+  default = ["rest", "graphql"]
+  rest = ["axum", "tower", "tower-http", "serde_json"]
+  graphql = ["async-graphql", "async-graphql-axum", "axum"]
+  full = ["rest", "graphql", "websockets", "metrics"]
+  ```
+  
+- [ ] **Core Server Implementation**
+  - [ ] Create `ratchet-api/src/rest/` with full REST API implementation
+    - [ ] `mod.rs` - REST router and middleware setup
+    - [ ] `handlers/` - Migrate handlers from ratchet-lib with enhanced features
+    - [ ] `middleware/` - Enhanced middleware with plugin integration
+    - [ ] `routes.rs` - Centralized route definitions with versioning
+  
+  - [ ] Create `ratchet-api/src/graphql/` with enhanced GraphQL implementation
+    - [ ] `mod.rs` - GraphQL server setup with async-graphql 7.0
+    - [ ] `schema.rs` - Enhanced schema with subscription support
+    - [ ] `resolvers/` - Modular resolver organization by domain
+    - [ ] `context.rs` - Enhanced context with plugin and auth integration
+  
+  - [ ] Create `ratchet-api/src/server.rs` - Unified production server
+    - [ ] Combined REST + GraphQL routing
+    - [ ] Health checks and monitoring endpoints  
+    - [ ] Graceful shutdown with connection draining
+    - [ ] Plugin hook integration points
+    - [ ] Metrics and observability setup
+
+### 0.3 Authentication Integration Points
+- [ ] **API Authentication Middleware**
+  - [ ] Create `ratchet-api/src/middleware/auth.rs` with JWT validation
+  - [ ] Implement API key authentication middleware
+  - [ ] Add authentication context injection for GraphQL
+  - [ ] Create protected route macros and decorators
+  
+- [ ] **Security Middleware Stack**
+  - [ ] `security_headers.rs` - HSTS, CSP, X-Frame-Options, etc.
+  - [ ] `content_validation.rs` - Request size limits, content-type validation
+  - [ ] `rate_limiting.rs` - Enhanced rate limiting with user/API key context
+  - [ ] `input_sanitization.rs` - Advanced input validation and sanitization
+
+### 0.4 Production-Ready Features
+- [ ] **Enhanced Error Handling**
+  - [ ] Structured error responses with correlation IDs
+  - [ ] Client-safe error messages vs internal logging
+  - [ ] GraphQL error extensions with proper error codes
+  - [ ] Custom error types for different failure scenarios
+  
+- [ ] **API Documentation & Tooling**
+  - [ ] OpenAPI 3.0 specification generation from code
+  - [ ] Interactive API documentation endpoint
+  - [ ] GraphQL schema documentation and introspection
+  - [ ] API client generation tools
+  
+- [ ] **Monitoring & Observability**
+  - [ ] Prometheus metrics endpoint (`/metrics`)
+  - [ ] Custom API metrics (request duration, error rates, etc.)
+  - [ ] Health check endpoints with dependency validation
+  - [ ] Request tracing with correlation IDs
+
+### 0.5 Migration Strategy
+- [ ] **Gradual Migration Plan**
+  - [ ] Phase 0a: Enable ratchet-api with feature flags
+  - [ ] Phase 0b: Migrate core endpoints one domain at a time
+  - [ ] Phase 0c: Switch default server to ratchet-api implementation
+  - [ ] Phase 0d: Deprecate ratchet-lib server implementation
+  
+- [ ] **Backward Compatibility**
+  - [ ] Ensure API contract compatibility during migration
+  - [ ] Maintain existing endpoint URLs and response formats
+  - [ ] Add deprecation warnings for endpoints being migrated
+  - [ ] Provide migration guide for API consumers
+
+### 0.6 Plugin System Integration
+- [ ] **API Extension Points**
+  - [ ] Plugin hooks for request/response middleware
+  - [ ] Custom endpoint registration via plugins
+  - [ ] GraphQL schema extension through plugins
+  - [ ] Authentication provider plugins
+  
+- [ ] **Plugin API Framework**
+  - [ ] Plugin-safe API context for request handling
+  - [ ] Plugin configuration integration with API server
+  - [ ] Plugin health checks in API monitoring
+  - [ ] Plugin metrics in API observability
+
+**Architecture Decision Records (ADRs) Needed:**
+- [ ] REST API Versioning Strategy: URL path vs Header vs Content-Type
+- [ ] GraphQL Evolution: Schema versioning and breaking change management  
+- [ ] Dependency Management: Workspace vs per-crate dependency versions
+- [ ] Migration Strategy: Big-bang vs gradual vs feature-flag driven
 
 ---
 
@@ -396,22 +518,44 @@ Month 12: Documentation & developer tools
 
 ## 🎯 **Immediate Next Steps** (Next 2-4 weeks)
 
-### **Priority 1: Authentication Implementation**
-1. **Create Authentication Middleware**
+### **Priority 0: Production-Ready REST & GraphQL Servers**
+1. **Dependency Version Resolution**
    ```rust
-   // Files to create:
-   src/rest/middleware/auth.rs       // JWT validation middleware
-   src/rest/handlers/auth.rs         // Login/logout endpoints  
-   src/database/entities/users.rs    // User entity
-   src/database/entities/api_keys.rs // API key entity
+   // Critical dependency upgrades needed:
+   axum = "0.7"                    // For async-graphql 7.0 compatibility
+   async-graphql = "7.0"           // Latest features and security
+   tower-http = "0.5"              // For axum 0.7 compatibility
+   async-graphql-axum = "7.0"      // Integration layer
+   ```
+
+2. **Enable ratchet-api Implementation**
+   - Uncomment and enable REST/GraphQL features in ratchet-api
+   - Create unified server implementation with plugin integration
+   - Migrate core functionality from ratchet-lib to ratchet-api
+   - Test compatibility with existing API contracts
+
+3. **Production Features**
+   - Add authentication middleware integration points
+   - Implement security headers and enhanced validation
+   - Set up monitoring endpoints and metrics collection
+   - Create comprehensive API documentation
+
+### **Priority 1: Authentication Implementation** (After API Server)
+1. **Create Authentication System**
+   ```rust
+   // Files to create in ratchet-api:
+   ratchet-api/src/middleware/auth.rs    // JWT validation middleware
+   ratchet-api/src/handlers/auth.rs      // Login/logout endpoints  
+   ratchet-storage/src/entities/user.rs  // User entity
+   ratchet-storage/src/entities/api_key.rs // API key entity
    ```
 
 2. **Database Schema Updates**
-   - Add users and API keys tables
+   - Add users and API keys tables in ratchet-storage
    - Create migration for authentication tables
    - Update existing entities with user relationships
 
-3. **API Security**
+3. **API Security Integration**
    - Protect sensitive endpoints with authentication
    - Add user context to GraphQL resolvers
    - Implement proper error handling for auth failures
@@ -437,9 +581,21 @@ Month 12: Documentation & developer tools
 
 ## ✅ **Completed Major Milestones**
 
+### **Modular Architecture & Plugin System** ✅ **COMPLETED** (Latest)
+- [x] **Complete modular restructure** into 7 specialized crates
+- [x] **Plugin system architecture** with async lifecycle hooks and dependency resolution
+- [x] **Storage abstraction layer** with repository pattern and unified entity types
+- [x] **Resilience patterns** including retry policies, circuit breakers, graceful shutdown
+- [x] **Configuration management** with domain-specific configs and validation
+- [x] **Caching layer** with multiple store backends (in-memory, LRU, TTL, Moka)
+- [x] **Runtime components** for worker management and process coordination
+- [x] **IPC transport layer** with protocol definitions and error handling
+- [x] **Build system fixes** resolving BOA engine compatibility and Sea-ORM syntax issues
+- [x] **Comprehensive test coverage** (46+ plugin tests, all passing)
+
 ### **Server Infrastructure** ✅ **COMPLETED**
-- [x] Complete GraphQL API with async-graphql v6.0
-- [x] REST API with comprehensive error handling 
+- [x] Complete GraphQL API with async-graphql v6.0 (ratchet-lib implementation)
+- [x] REST API with comprehensive error handling (ratchet-lib implementation)
 - [x] Process separation architecture for thread-safe execution
 - [x] Database layer with Sea-ORM and SQLite
 - [x] Job queue system with priority and retry logic
@@ -449,40 +605,51 @@ Month 12: Documentation & developer tools
 - [x] CLI serve command for easy deployment
 - [x] Rate limiting with token bucket algorithm
 - [x] SQL injection prevention with SafeFilterBuilder
-- [x] Comprehensive test coverage (116 tests passing)
+- [x] **Output destination system** with filesystem/webhook delivery and templating
 
 ### **Code Quality & Architecture** ✅ **COMPLETED**
-- [x] Module organization and separation of concerns
-- [x] Type safety improvements with enums
-- [x] Error handling unification
-- [x] Configuration management system
-- [x] Service layer abstraction
-- [x] Repository pattern implementation
+- [x] **Modular crate organization** with clear separation of concerns
+- [x] **Plugin system architecture** with extensible hook points
+- [x] **Unified type system** across all crates with consistent error handling
+- [x] **Repository pattern** with storage abstraction
+- [x] **Configuration validation** with domain-specific config modules
+- [x] **Service layer abstraction** with dependency injection
+- [x] **Advanced logging system** with LLM integration and structured output
 
 ---
 
 ## 📋 **Architecture Decision Records (ADRs) To Create**
 
-1. **Authentication Strategy**: JWT vs Sessions vs API Keys vs OAuth2
-2. **Database Scaling**: Future PostgreSQL migration strategy and sharding for enterprise scale
-3. **Distributed Architecture**: Service discovery and communication patterns
-4. **Container Strategy**: Docker vs Podman vs native execution
-5. **Monitoring Stack**: Prometheus + Grafana vs ELK vs cloud solutions
-6. **Message Queue**: Redis vs RabbitMQ vs Apache Kafka for job distribution
-7. **API Evolution**: Versioning strategy and backward compatibility
-8. **Multi-tenancy**: Data isolation and resource management approach
+### **Critical Priority (Phase 0)**
+1. **REST/GraphQL Implementation Strategy**: ratchet-lib migration vs ratchet-api unified approach
+2. **Dependency Management Strategy**: Workspace vs per-crate versions, upgrade timeline
+3. **API Server Migration**: Big-bang vs gradual vs feature-flag driven approach
+
+### **High Priority (Phase 1)**
+4. **Authentication Strategy**: JWT vs Sessions vs API Keys vs OAuth2
+5. **API Evolution**: Versioning strategy and backward compatibility
+6. **Security Architecture**: Middleware stack design and plugin integration
+
+### **Medium Priority (Future Phases)**
+7. **Database Scaling**: Future PostgreSQL migration strategy and sharding for enterprise scale
+8. **Distributed Architecture**: Service discovery and communication patterns
+9. **Container Strategy**: Docker vs Podman vs native execution
+10. **Monitoring Stack**: Prometheus + Grafana vs ELK vs cloud solutions
+11. **Message Queue**: Redis vs RabbitMQ vs Apache Kafka for job distribution
+12. **Multi-tenancy**: Data isolation and resource management approach
 
 ---
 
 ## 🔍 **Current Codebase Health**
 
 ### **Metrics** ✅ **EXCELLENT**
-- **Tests**: 116 passing (0 failures)
-- **Compilation**: Clean (0 errors, 11 warnings)
-- **Coverage**: High coverage across all modules
-- **Architecture**: Well-structured with clear separation of concerns
+- **Tests**: 46+ plugin tests passing, comprehensive coverage across 7 crates
+- **Compilation**: Clean workspace build (0 errors, minor warnings only)
+- **Architecture**: **Modular architecture complete** with 7 specialized crates
+- **Plugin System**: Full lifecycle management with 46+ passing tests
+- **Code Quality**: Repository pattern, unified error handling, type safety
 
-### **Technical Debt** 🟡 **LOW-MEDIUM**
+### **Technical Debt** 🟡 **LOW**
 - Some unused imports (11 warnings) - easily fixable
 - Magic strings could be extracted to constants
 - Some complex functions could benefit from further breakdown

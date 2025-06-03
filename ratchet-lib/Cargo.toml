@@ -24,8 +24,8 @@ tokio.workspace = true
 
 # For crate-specific dependencies
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
-boa_engine = "0.17"
-boa_runtime = "0.17"
+boa_engine = "0.20"
+boa_runtime = "0.20"
 jsonschema = "0.17"
 rand = "0.8"
 uuid = { version = "1.4", features = ["v4", "serde"] }
@@ -51,9 +51,9 @@ gethostname = "0.4"
 fastrand = "2.0"
 
 # Database dependencies
-sea-orm = { version = "0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
-sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-rustls", "chrono", "uuid"] }
-sea-orm-migration = "0.12"
+sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
+sqlx = { workspace = true }
+sea-orm-migration = "1.1"
 
 # Job scheduling dependencies
 tokio-cron-scheduler = "0.9"
