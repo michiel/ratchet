@@ -47,6 +47,10 @@ pub enum CacheError {
 
 impl From<serde_json::Error> for CacheError {
     fn from(err: serde_json::Error) -> Self {
-        CacheError::SerializationError(err.to_string())
+        if err.is_data() {
+            CacheError::DeserializationError(err.to_string())
+        } else {
+            CacheError::SerializationError(err.to_string())
+        }
     }
 }
