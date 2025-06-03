@@ -1,0 +1,52 @@
+[package]
+name = "ratchet-mcp"
+version = "0.0.6"
+edition = "2021"
+description = "Model Context Protocol (MCP) implementation for Ratchet"
+license = "MIT"
+repository = "https://github.com/michiel/ratchet"
+authors = ["Ratchet Contributors"]
+
+[dependencies]
+# Core async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Serialization and JSON handling
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+# HTTP client and server
+reqwest = { workspace = true }
+axum = { workspace = true }
+
+# Logging and tracing
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# Additional dependencies
+url = { workspace = true }
+tokio-stream = { workspace = true }
+
+# Internal dependencies
+ratchet-core = { path = "../ratchet-core" }
+ratchet-ipc = { path = "../ratchet-ipc" }
+ratchet-storage = { path = "../ratchet-storage" }
+
+[features]
+default = ["server", "client"]
+server = []
+client = []
+transport-stdio = []
+transport-sse = ["reqwest/stream"]
+
+[dev-dependencies]
+tokio-test = "0.4"
