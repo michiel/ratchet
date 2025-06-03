@@ -3484,7 +3484,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "axum",
@@ -3505,7 +3505,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-api"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3523,7 +3523,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-caching"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3541,7 +3541,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-config"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "chrono",
  "derivative",
@@ -3558,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-core"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3577,7 +3577,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-ipc"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3595,7 +3595,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-plugin"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3616,7 +3616,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-plugins"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3633,7 +3633,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-resilience"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3652,7 +3652,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-runtime"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3673,7 +3673,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet-storage"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3695,7 +3695,7 @@ dependencies = [
 
 [[package]]
 name = "ratchet_lib"
-version = "0.1.0"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "async-graphql",
