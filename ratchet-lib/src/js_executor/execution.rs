@@ -9,7 +9,7 @@ use tracing::{debug, info, trace, warn};
 
 /// Execute JavaScript function and handle errors
 fn execute_javascript_function(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     func: &boa_engine::JsValue,
     input_arg: &boa_engine::JsValue,
 ) -> Result<boa_engine::JsValue, JsExecutionError> {
@@ -44,7 +44,7 @@ fn execute_javascript_function(
 
 /// Execute JavaScript function with context and handle errors
 fn execute_javascript_function_with_context(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     func: &boa_engine::JsValue,
     input_arg: &boa_engine::JsValue,
     context_arg: &boa_engine::JsValue,
@@ -80,7 +80,7 @@ fn execute_javascript_function_with_context(
 
 /// Execute a JavaScript function with HTTP fetch support
 pub async fn call_js_function(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     func: &boa_engine::JsValue,
     input_data: &JsonValue,
     http_manager: &crate::http::HttpManager,
@@ -90,7 +90,7 @@ pub async fn call_js_function(
 
 /// Execute a JavaScript function with HTTP fetch support and execution context
 pub async fn call_js_function_with_context(
-    context: &mut BoaContext<'_>,
+    context: &mut BoaContext,
     func: &boa_engine::JsValue,
     input_data: &JsonValue,
     http_manager: &crate::http::HttpManager,

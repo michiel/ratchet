@@ -108,7 +108,7 @@ pub fn generate_all_error_classes() -> String {
 }
 
 /// Register custom error types in the JavaScript context
-pub fn register_error_types(context: &mut BoaContext<'_>) -> Result<(), JsExecutionError> {
+pub fn register_error_types(context: &mut BoaContext) -> Result<(), JsExecutionError> {
     let error_classes = generate_all_error_classes();
 
     context

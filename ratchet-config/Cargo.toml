@@ -1,0 +1,29 @@
+[package]
+name = "ratchet-config"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+thiserror = "2.0"
+url = "2.5"
+chrono = { version = "0.4", features = ["serde"] }
+
+# For validation
+validator = { version = "0.19", features = ["derive"] }
+
+# For environment variable handling
+envy = "0.4"
+
+# For default macro
+derivative = "2.2"
+
+[dev-dependencies]
+tokio = { version = "1.42", features = ["full"] }
+temp-env = "0.3"

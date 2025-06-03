@@ -69,7 +69,7 @@ impl ServiceRegistry {
     where
         T: Send + Sync + 'static,
         F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<T>> + Send + 'static,
+        Fut: std::future::Future<Output = Result<T>> + Send + Sync + 'static,
     {
         self.factories.insert(
             TypeId::of::<T>(),
@@ -94,10 +94,10 @@ impl ServiceRegistry {
 
         // Check singletons first
         if let Some(service) = self.singletons.get(&type_id) {
-            return service
-                .downcast_ref::<Arc<T>>()
-                .cloned()
-                .ok_or_else(|| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
+            let any_arc = service.clone();
+            return any_arc
+                .downcast::<T>()
+                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
         }
 
         // Try factory
@@ -196,7 +196,7 @@ impl<T, F, Fut> ServiceFactory for AsyncServiceFactory<T, F, Fut>
 where
     T: Send + Sync + 'static,
     F: Fn() -> Fut + Send + Sync,
-    Fut: std::future::Future<Output = Result<T>> + Send + 'static,
+    Fut: std::future::Future<Output = Result<T>> + Send + Sync + 'static,
 {
     async fn create(&self) -> Result<Box<dyn Any + Send + Sync>> {
         let service = (self.factory)().await?;
@@ -237,10 +237,10 @@ impl<'a> ServiceScope<'a> {
 
         // Check scoped services first
         if let Some(service) = self.scoped_services.get(&type_id) {
-            return service
-                .downcast_ref::<Arc<T>>()
-                .cloned()
-                .ok_or_else(|| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
+            let any_arc = service.clone();
+            return any_arc
+                .downcast::<T>()
+                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
         }
 
         // Fall back to parent registry
@@ -315,7 +315,7 @@ impl ServiceBuilder {
     where
         T: Send + Sync + 'static,
         F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<T>> + Send + 'static,
+        Fut: std::future::Future<Output = Result<T>> + Send + Sync + 'static,
     {
         self.registry.register_async_factory::<T, F, Fut>(factory);
         self

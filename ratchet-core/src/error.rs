@@ -1,7 +1,6 @@
 //! Core error types for Ratchet
 
 use thiserror::Error;
-use std::fmt;
 
 /// Core error type for all Ratchet errors
 #[derive(Debug, Error)]
@@ -13,6 +12,10 @@ pub enum RatchetError {
     /// Execution-related errors
     #[error("Execution error: {0}")]
     Execution(#[from] ExecutionError),
+    
+    /// Simple execution error message
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
     
     /// Storage-related errors
     #[error("Storage error: {0}")]
