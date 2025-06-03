@@ -3598,8 +3598,15 @@ name = "ratchet-api"
 version = "0.0.6"
 dependencies = [
  "anyhow",
+ "async-graphql",
+ "async-graphql-axum",
  "async-trait",
+ "axum",
  "chrono",
+ "futures",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "hyper 1.6.0",
  "log",
  "ratchet-core",
  "ratchet-storage",
@@ -3607,6 +3614,8 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tower 0.4.13",
+ "tower-http",
  "tracing",
  "uuid",
 ]

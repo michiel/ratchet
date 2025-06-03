@@ -11,24 +11,24 @@ pub mod errors;
 pub mod pagination;
 pub mod types;
 
-// REST and GraphQL modules are disabled for now due to compatibility issues
-// #[cfg(feature = "rest")]
-// pub mod rest;
-// 
-// #[cfg(feature = "graphql")]
-// pub mod graphql;
-// 
-// #[cfg(any(feature = "rest", feature = "graphql"))]
-// pub mod server;
+// REST and GraphQL modules
+#[cfg(feature = "rest")]
+pub mod rest;
+
+#[cfg(feature = "graphql")]
+pub mod graphql;
+
+#[cfg(any(feature = "rest", feature = "graphql"))]
+pub mod server;
 
 // Re-export core types for convenience
 pub use config::ApiConfig;
 pub use errors::{ApiError, ApiResult};
 pub use pagination::{PaginationInput, PaginationMeta, ListResponse};
-pub use types::{ApiId, UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule};
+pub use types::{ApiId, UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule, UnifiedWorker};
 
-// #[cfg(any(feature = "rest", feature = "graphql"))]
-// pub use server::create_api_server;
+#[cfg(any(feature = "rest", feature = "graphql"))]
+pub use server::create_api_server;
 
 /// API version information
 pub const API_VERSION: &str = "1.0.0";

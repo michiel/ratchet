@@ -60,11 +60,11 @@ tokio-cron-scheduler = "0.9"
 cron = "0.12"
 
 # GraphQL and web server dependencies (re-enabled with compatible versions)
-async-graphql = { version = "6.0", features = ["uuid", "chrono", "dataloader"] }
-async-graphql-axum = "6.0"
-axum = "0.6"
-tower = "0.4"
-tower-http = { version = "0.4", features = ["trace", "cors", "fs"] }
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
 futures = "0.3"
 # validator = { version = "0.16", features = ["derive"] }
 # nix = { version = "0.27", features = ["signal", "process"] }

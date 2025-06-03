@@ -224,6 +224,24 @@ pub enum ScheduleStatus {
     Failed,
 }
 
+/// Unified worker representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnifiedWorker {
+    pub id: String,
+    pub status: WorkerStatus,
+    pub pid: u32,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub last_activity: chrono::DateTime<chrono::Utc>,
+    pub tasks_executed: u64,
+    pub tasks_failed: u64,
+    pub memory_usage_mb: Option<f64>,
+    pub cpu_usage_percent: Option<f64>,
+    pub pool: Option<String>,
+    pub capabilities: Vec<String>,
+    pub current_task_id: Option<ApiId>,
+    pub metadata: serde_json::Value,
+}
+
 /// Worker information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerInfo {

@@ -262,99 +262,61 @@ impl<T> ListResponse<T> {
     }
 }
 
-// GraphQL types (disabled for now)
-// #[cfg(feature = "graphql")]
-// mod graphql_types {
-//     use super::*;
-//     use async_graphql::*;
-//     
-//     #[Object]
-//     impl PaginationMeta {
-//         /// Current page number
-//         async fn page(&self) -> u32 {
-//             self.page
-//         }
-//         
-//         /// Number of items per page
-//         async fn limit(&self) -> u32 {
-//             self.limit
-//         }
-//         
-//         /// Total number of items
-//         async fn total(&self) -> u64 {
-//             self.total
-//         }
-//         
-//         /// Total number of pages
-//         async fn pages(&self) -> u32 {
-//             self.pages
-//         }
-//         
-//         /// Whether there are more pages
-//         async fn has_next(&self) -> bool {
-//             self.has_next
-//         }
-//         
-//         /// Whether there are previous pages
-//         async fn has_prev(&self) -> bool {
-//             self.has_prev
-//         }
-//         
-//         /// Offset of first item
-//         async fn offset(&self) -> u32 {
-//             self.offset
-//         }
-//     }
-//     
-//     #[InputObject]
-//     impl PaginationInput {
-//         /// Page number (0-based)
-//         fn page(&self) -> Option<u32> {
-//             self.page
-//         }
-//         
-//         /// Number of items per page
-//         fn limit(&self) -> Option<u32> {
-//             self.limit
-//         }
-//         
-//         /// Sort field
-//         fn sort(&self) -> Option<&str> {
-//             self.sort.as_deref()
-//         }
-//         
-//         /// Sort order
-//         fn order(&self) -> Option<SortOrder> {
-//             self.order
-//         }
-//     }
-//     
-//     #[Scalar]
-//     impl ScalarType for SortOrder {
-//         fn parse(value: Value) -> InputValueResult<Self> {
-//             match value {
-//                 Value::Enum(name) => match name.as_str() {
-//                     "ASC" => Ok(SortOrder::Asc),
-//                     "DESC" => Ok(SortOrder::Desc),
-//                     _ => Err(InputValueError::expected_type(value)),
-//                 },
-//                 Value::String(s) => match s.to_lowercase().as_str() {
-//                     "asc" | "ascending" => Ok(SortOrder::Asc),
-//                     "desc" | "descending" => Ok(SortOrder::Desc),
-//                     _ => Err(InputValueError::expected_type(value)),
-//                 },
-//                 _ => Err(InputValueError::expected_type(value)),
-//             }
-//         }
-//         
-//         fn to_value(&self) -> Value {
-//             match self {
-//                 SortOrder::Asc => Value::Enum("ASC".into()),
-//                 SortOrder::Desc => Value::Enum("DESC".into()),
-//             }
-//         }
-//     }
-// }
+// GraphQL types
+#[cfg(feature = "graphql")]
+use async_graphql::InputObject;
+
+#[cfg(feature = "graphql")]
+#[derive(InputObject)]
+pub struct PaginationInputGql {
+    /// Page number (0-based)
+    pub page: Option<u32>,
+    /// Number of items per page
+    pub limit: Option<u32>,
+    /// Sort field
+    pub sort: Option<String>,
+    /// Sort order
+    pub order: Option<SortOrderGql>,
+}
+
+#[cfg(feature = "graphql")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, async_graphql::Enum)]
+pub enum SortOrderGql {
+    Asc,
+    Desc,
+}
+
+#[cfg(feature = "graphql")]
+impl From<PaginationInputGql> for PaginationInput {
+    fn from(gql: PaginationInputGql) -> Self {
+        Self {
+            page: gql.page,
+            limit: gql.limit,
+            offset: None,
+            sort: gql.sort,
+            order: gql.order.map(|o| match o {
+                SortOrderGql::Asc => SortOrder::Asc,
+                SortOrderGql::Desc => SortOrder::Desc,
+            }),
+            _start: None,
+            _end: None,
+            _sort: None,
+            _order: None,
+        }
+    }
+}
+
+#[cfg(feature = "graphql")]
+impl Default for PaginationInputGql {
+    fn default() -> Self {
+        Self {
+            page: Some(0),
+            limit: Some(20),
+            sort: None,
+            order: Some(SortOrderGql::Asc),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
