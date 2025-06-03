@@ -12,7 +12,7 @@ use ratchet_lib::execution::ProcessTaskExecutor;
 use ratchet_lib::database::repositories::{TaskRepository, ExecutionRepository};
 
 use crate::{McpResult, McpError, McpAuth};
-use crate::server::{McpServer, McpServerBuilder, McpServerConfig, McpServerTransport, RatchetMcpAdapter, RatchetToolRegistry};
+use crate::server::{McpServer, McpServerConfig, McpServerTransport, RatchetMcpAdapter, RatchetToolRegistry};
 use crate::security::{McpAuthManager, AuditLogger, SecurityConfig};
 
 /// MCP service configuration

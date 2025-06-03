@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 use crate::{McpError, McpResult};
-use crate::protocol::{JsonRpcRequest, JsonRpcResponse, McpMessage};
+use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 
 /// Transport type configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

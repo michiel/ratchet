@@ -135,7 +135,7 @@ impl TaskExecutor for ExecutionEngine {
 
         // Get an available worker
         let mut manager = self.worker_manager.write().await;
-        let worker_id = manager.get_available_worker().await
+        let _worker_id = manager.get_available_worker().await
             .ok_or_else(|| RatchetError::ExecutionError("No available workers".to_string()))?;
 
         // Create execution context if not provided

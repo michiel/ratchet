@@ -29,18 +29,18 @@ pub struct ServerConnection {
 /// MCP client
 pub struct McpClient {
     /// Client configuration
-    config: McpClientConfig,
+    _config: McpClientConfig,
     
     /// Active server connections
-    connections: HashMap<String, ServerConnection>,
+    _connections: HashMap<String, ServerConnection>,
 }
 
 impl McpClient {
     /// Create a new MCP client
     pub fn new(config: McpClientConfig) -> Self {
         Self {
-            config,
-            connections: HashMap::new(),
+            _config: config,
+            _connections: HashMap::new(),
         }
     }
     
@@ -87,6 +87,6 @@ mod tests {
         };
         
         let client = McpClient::new(config);
-        assert_eq!(client.config.name, "test-client");
+        assert_eq!(client._config.name, "test-client");
     }
 }

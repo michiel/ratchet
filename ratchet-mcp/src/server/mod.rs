@@ -40,7 +40,7 @@ pub struct McpServer {
     audit_logger: Arc<AuditLogger>,
     
     /// Active client sessions
-    sessions: RwLock<HashMap<String, SecurityContext>>,
+    _sessions: RwLock<HashMap<String, SecurityContext>>,
     
     /// Whether the server is initialized
     initialized: RwLock<bool>,
@@ -59,7 +59,7 @@ impl McpServer {
             tool_registry,
             auth_manager,
             audit_logger,
-            sessions: RwLock::new(HashMap::new()),
+            _sessions: RwLock::new(HashMap::new()),
             initialized: RwLock::new(false),
         }
     }
@@ -103,7 +103,7 @@ impl McpServer {
             tool_registry: Arc::new(tool_registry),
             auth_manager,
             audit_logger,
-            sessions: RwLock::new(HashMap::new()),
+            _sessions: RwLock::new(HashMap::new()),
             initialized: RwLock::new(false),
         })
     }

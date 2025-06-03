@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::{McpError, McpResult};
 use crate::protocol::{
-    ToolsListParams, ToolsListResult, ToolsCallParams, ToolsCallResult,
+    ToolsListParams, ToolsListResult, ToolsCallParams,
     ResourcesListParams, ResourcesListResult, ResourcesReadParams, ResourcesReadResult,
 };
 use crate::security::{SecurityContext, AuditLogger, McpAuthManager, PermissionChecker};
@@ -18,13 +18,13 @@ pub struct McpRequestHandler {
     tool_registry: Arc<dyn ToolRegistry>,
     
     /// Authentication manager
-    auth_manager: Arc<McpAuthManager>,
+    _auth_manager: Arc<McpAuthManager>,
     
     /// Audit logger
     audit_logger: Arc<AuditLogger>,
     
     /// Server configuration
-    config: McpServerConfig,
+    _config: McpServerConfig,
 }
 
 impl McpRequestHandler {
@@ -37,9 +37,9 @@ impl McpRequestHandler {
     ) -> Self {
         Self {
             tool_registry,
-            auth_manager,
+            _auth_manager: auth_manager,
             audit_logger,
-            config: config.clone(),
+            _config: config.clone(),
         }
     }
     
@@ -205,6 +205,7 @@ impl McpRequestHandler {
     }
     
     /// Validate request size against quotas
+    #[allow(dead_code)]
     fn validate_request_size(&self, security_ctx: &SecurityContext, params: &Value) -> McpResult<()> {
         let request_size = params.to_string().len() as u64;
         
@@ -218,6 +219,7 @@ impl McpRequestHandler {
     }
     
     /// Check if the request has timed out
+    #[allow(dead_code)]
     fn check_timeout(&self, security_ctx: &SecurityContext) -> McpResult<()> {
         if security_ctx.is_timed_out() {
             Err(McpError::ServerTimeout {
@@ -309,7 +311,7 @@ mod tests {
         assert!(result.is_ok());
         
         let value = result.unwrap();
-        let call_result: ToolsCallResult = serde_json::from_value(value).unwrap();
+        let call_result: crate::protocol::ToolsCallResult = serde_json::from_value(value).unwrap();
         // Without an executor configured, the tool should return an error
         assert!(call_result.is_error);
     }

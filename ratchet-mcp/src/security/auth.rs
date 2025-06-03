@@ -38,6 +38,7 @@ impl From<AuthError> for McpError {
 /// Authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[derive(Default)]
 pub enum McpAuth {
     /// API key authentication
     #[serde(rename = "api_key")]
@@ -66,6 +67,7 @@ pub enum McpAuth {
     
     /// No authentication (insecure - for development only)
     #[serde(rename = "none")]
+    #[default]
     None,
 }
 
@@ -233,11 +235,6 @@ impl McpAuthManager {
     }
 }
 
-impl Default for McpAuth {
-    fn default() -> Self {
-        McpAuth::None
-    }
-}
 
 #[cfg(test)]
 mod tests {

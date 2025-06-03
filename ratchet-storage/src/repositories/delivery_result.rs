@@ -22,11 +22,11 @@ impl DeliveryResultRepository {
         }
     }
     
-    pub async fn find_by_job_id(&self, job_id: i32) -> StorageResult<Vec<DeliveryResult>> {
+    pub async fn find_by_job_id(&self, _job_id: i32) -> StorageResult<Vec<DeliveryResult>> {
         Ok(Vec::new())
     }
     
-    pub async fn find_by_execution_id(&self, execution_id: i32) -> StorageResult<Vec<DeliveryResult>> {
+    pub async fn find_by_execution_id(&self, _execution_id: i32) -> StorageResult<Vec<DeliveryResult>> {
         Ok(Vec::new())
     }
     

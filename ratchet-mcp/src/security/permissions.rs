@@ -5,6 +5,7 @@ use std::time::Duration;
 
 /// Client permissions configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ClientPermissions {
     /// Whether client can execute tasks
     pub can_execute_tasks: bool,
@@ -25,18 +26,6 @@ pub struct ClientPermissions {
     pub resource_quotas: ResourceQuotas,
 }
 
-impl Default for ClientPermissions {
-    fn default() -> Self {
-        Self {
-            can_execute_tasks: false,
-            can_read_logs: false,
-            can_read_traces: false,
-            allowed_task_patterns: vec![],
-            rate_limits: RateLimits::default(),
-            resource_quotas: ResourceQuotas::default(),
-        }
-    }
-}
 
 impl ClientPermissions {
     /// Create permissions with full access

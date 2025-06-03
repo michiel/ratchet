@@ -472,7 +472,7 @@ async fn mcp_serve_command(
         // Use server database config if available, otherwise default
         let db_config = ratchet_config.server.as_ref()
             .map(|s| s.database.clone())
-            .unwrap_or_else(|| ratchet_lib::config::DatabaseConfig::default());
+            .unwrap_or_else(ratchet_lib::config::DatabaseConfig::default);
         (db_config, Some(mcp_config.clone()))
     } else if let Some(server_config) = &ratchet_config.server {
         info!("Using server configuration for MCP server");

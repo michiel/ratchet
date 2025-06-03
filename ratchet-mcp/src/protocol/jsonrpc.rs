@@ -235,12 +235,12 @@ pub enum JsonRpcErrorCode {
 impl JsonRpcErrorCode {
     /// Check if this is a server error (in the -32000 to -32099 range)
     pub fn is_server_error(code: i32) -> bool {
-        code >= -32099 && code <= -32000
+        (-32099..=-32000).contains(&code)
     }
     
     /// Check if this is a reserved error (predefined by JSON-RPC spec)
     pub fn is_reserved_error(code: i32) -> bool {
-        code >= -32768 && code <= -32000
+        (-32768..=-32000).contains(&code)
     }
 }
 

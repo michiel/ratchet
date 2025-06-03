@@ -26,7 +26,7 @@ impl ScheduleRepository {
         Ok(Vec::new())
     }
     
-    pub async fn find_by_task_id(&self, task_id: i32) -> StorageResult<Vec<Schedule>> {
+    pub async fn find_by_task_id(&self, _task_id: i32) -> StorageResult<Vec<Schedule>> {
         Ok(Vec::new())
     }
     

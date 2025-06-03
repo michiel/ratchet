@@ -188,7 +188,7 @@ impl ServerCapabilities {
     
     /// Check if prompts list_changed notifications are supported
     pub fn supports_prompts_list_changed(&self) -> bool {
-        self.prompts.as_ref().map_or(false, |p| p.list_changed)
+        self.prompts.as_ref().is_some_and(|p| p.list_changed)
     }
     
     /// Check if resources are supported
@@ -198,12 +198,12 @@ impl ServerCapabilities {
     
     /// Check if resource subscription is supported
     pub fn supports_resources_subscribe(&self) -> bool {
-        self.resources.as_ref().map_or(false, |r| r.subscribe)
+        self.resources.as_ref().is_some_and(|r| r.subscribe)
     }
     
     /// Check if resource list_changed notifications are supported
     pub fn supports_resources_list_changed(&self) -> bool {
-        self.resources.as_ref().map_or(false, |r| r.list_changed)
+        self.resources.as_ref().is_some_and(|r| r.list_changed)
     }
     
     /// Check if tools are supported
@@ -213,7 +213,7 @@ impl ServerCapabilities {
     
     /// Check if tools list_changed notifications are supported
     pub fn supports_tools_list_changed(&self) -> bool {
-        self.tools.as_ref().map_or(false, |t| t.list_changed)
+        self.tools.as_ref().is_some_and(|t| t.list_changed)
     }
     
     /// Check if experimental capability is supported

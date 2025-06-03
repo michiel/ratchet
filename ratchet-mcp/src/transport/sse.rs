@@ -23,7 +23,7 @@ pub struct SseTransport {
     auth: Option<SseAuth>,
     
     /// Request timeout
-    timeout: Duration,
+    _timeout: Duration,
     
     /// Whether to verify SSL certificates
     verify_ssl: bool,
@@ -77,7 +77,7 @@ impl SseTransport {
             url,
             headers,
             auth,
-            timeout,
+            _timeout: timeout,
             verify_ssl,
             client,
             event_stream: None,
@@ -147,10 +147,8 @@ impl SseTransport {
                                 // Parse SSE event
                                 if line.starts_with("data: ") {
                                     let data = &line[6..]; // Remove "data: " prefix
-                                    if !data.trim().is_empty() {
-                                        if tx.send(data.to_string()).await.is_err() {
-                                            break; // Receiver dropped
-                                        }
+                                    if !data.trim().is_empty() && tx.send(data.to_string()).await.is_err() {
+                                        break; // Receiver dropped
                                     }
                                 }
                             }

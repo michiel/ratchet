@@ -1,12 +1,9 @@
-use std::io::{self, BufRead};
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use ratchet_mcp::{
-    server::{McpServer, adapter::RatchetMcpAdapter}, 
-    transport::{TransportType, stdio::StdioTransport},
+    server::{McpServer, adapter::RatchetMcpAdapter},
     config::McpConfig,
-    error::McpResult,
 };
 use ratchet_lib::{
     execution::ProcessTaskExecutor,
@@ -20,7 +17,6 @@ use ratchet_lib::{
     },
     config::{RatchetConfig, DatabaseConfig},
 };
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[derive(Parser)]
 #[command(name = "ratchet-mcp")]

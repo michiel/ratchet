@@ -89,8 +89,8 @@ impl MigrationManager {
     }
     
     /// Get all applied migrations
-    pub async fn get_applied_migrations(&self, connection: &dyn Connection) -> StorageResult<Vec<MigrationRecord>> {
-        let query = format!(
+    pub async fn get_applied_migrations(&self, _connection: &dyn Connection) -> StorageResult<Vec<MigrationRecord>> {
+        let _query = format!(
             "SELECT id, description, applied_at, checksum FROM {} ORDER BY applied_at",
             self.table_name
         );
@@ -192,8 +192,8 @@ impl MigrationManager {
     }
     
     /// Check if a migration has been applied
-    async fn is_migration_applied(&self, connection: &dyn Connection, migration_id: &str) -> StorageResult<bool> {
-        let query = format!(
+    async fn is_migration_applied(&self, _connection: &dyn Connection, migration_id: &str) -> StorageResult<bool> {
+        let _query = format!(
             "SELECT COUNT(*) FROM {} WHERE id = ?",
             self.table_name
         );
@@ -205,14 +205,14 @@ impl MigrationManager {
     }
     
     /// Record a successful migration
-    async fn record_migration(&self, connection: &dyn Connection, migration_id: &str, description: &str) -> StorageResult<()> {
-        let query = format!(
+    async fn record_migration(&self, _connection: &dyn Connection, migration_id: &str, description: &str) -> StorageResult<()> {
+        let _query = format!(
             "INSERT INTO {} (id, description, applied_at, checksum) VALUES (?, ?, ?, ?)",
             self.table_name
         );
         
         let now = Utc::now();
-        let checksum = self.calculate_checksum(migration_id, description);
+        let _checksum = self.calculate_checksum(migration_id, description);
         
         // In a real implementation, this would execute the query
         log::debug!("Recording migration: {} at {}", migration_id, now);
@@ -281,8 +281,8 @@ impl MigrationManager {
     }
     
     /// Remove migration record
-    async fn remove_migration_record(&self, connection: &dyn Connection, migration_id: &str) -> StorageResult<()> {
-        let query = format!("DELETE FROM {} WHERE id = ?", self.table_name);
+    async fn remove_migration_record(&self, _connection: &dyn Connection, migration_id: &str) -> StorageResult<()> {
+        let _query = format!("DELETE FROM {} WHERE id = ?", self.table_name);
         
         // In a real implementation, this would execute the query
         log::debug!("Removing migration record: {}", migration_id);

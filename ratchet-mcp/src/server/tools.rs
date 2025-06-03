@@ -527,7 +527,7 @@ impl RatchetToolRegistry {
             })?;
             
         // Check if executor is configured (which provides access to repositories)
-        let executor = match self.task_executor.as_ref() {
+        let _executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
             None => {
                 return Ok(ToolsCallResult {
@@ -671,7 +671,7 @@ impl RatchetToolRegistry {
             .unwrap_or("json");
         
         // Check if executor is configured
-        let executor = match self.task_executor.as_ref() {
+        let _executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
             None => {
                 return Ok(ToolsCallResult {
@@ -840,7 +840,7 @@ impl RatchetToolRegistry {
             .unwrap_or(true);
         
         // Check if executor is configured
-        let executor = match self.task_executor.as_ref() {
+        let _executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
             None => {
                 return Ok(ToolsCallResult {

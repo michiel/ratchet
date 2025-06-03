@@ -399,6 +399,12 @@ pub struct HealthMonitor {
     health_data: RwLock<HashMap<ServerId, HashMap<ConnectionId, ConnectionHealth>>>,
 }
 
+impl Default for HealthMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HealthMonitor {
     /// Create a new health monitor
     pub fn new() -> Self {

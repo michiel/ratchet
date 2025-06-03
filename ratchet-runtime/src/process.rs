@@ -378,8 +378,8 @@ pub struct WorkerProcessManager {
     config: WorkerConfig,
     workers: Arc<Mutex<Vec<WorkerProcess>>>,
     pending_tasks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<TaskExecutionResult>>>>,
-    pending_validations: Arc<Mutex<HashMap<Uuid, oneshot::Sender<TaskValidationResult>>>>,
-    pending_health_checks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<WorkerStatus>>>>,
+    _pending_validations: Arc<Mutex<HashMap<Uuid, oneshot::Sender<TaskValidationResult>>>>,
+    _pending_health_checks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<WorkerStatus>>>>,
     message_tx: mpsc::UnboundedSender<WorkerToManagerMessage>,
 }
 
@@ -389,14 +389,14 @@ impl WorkerProcessManager {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
         let workers = Arc::new(Mutex::new(Vec::new()));
         let pending_tasks = Arc::new(Mutex::new(HashMap::new()));
-        let pending_validations = Arc::new(Mutex::new(HashMap::new()));
-        let pending_health_checks = Arc::new(Mutex::new(HashMap::new()));
+        let _pending_validations = Arc::new(Mutex::new(HashMap::new()));
+        let _pending_health_checks = Arc::new(Mutex::new(HashMap::new()));
         
         // Start message processing task
         let workers_clone = workers.clone();
         let pending_tasks_clone = pending_tasks.clone();
-        let pending_validations_clone = pending_validations.clone();
-        let pending_health_checks_clone = pending_health_checks.clone();
+        let pending_validations_clone = _pending_validations.clone();
+        let pending_health_checks_clone = _pending_health_checks.clone();
         tokio::spawn(async move {
             Self::process_worker_messages(
                 workers_clone, 
@@ -411,8 +411,8 @@ impl WorkerProcessManager {
             config,
             workers,
             pending_tasks,
-            pending_validations,
-            pending_health_checks,
+            _pending_validations,
+            _pending_health_checks,
             message_tx,
         }
     }
@@ -464,7 +464,7 @@ impl WorkerProcessManager {
         workers: Arc<Mutex<Vec<WorkerProcess>>>,
         pending_tasks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<TaskExecutionResult>>>>,
         pending_validations: Arc<Mutex<HashMap<Uuid, oneshot::Sender<TaskValidationResult>>>>,
-        pending_health_checks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<WorkerStatus>>>>,
+        _pending_health_checks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<WorkerStatus>>>>,
         mut message_rx: mpsc::UnboundedReceiver<WorkerToManagerMessage>,
     ) {
         while let Some(worker_msg) = message_rx.recv().await {
@@ -518,7 +518,7 @@ impl WorkerProcessManager {
                     }
                 }
                 CoordinatorMessage::Pong { correlation_id, status, .. } => {
-                    if let Ok(mut pending) = pending_health_checks.try_lock() {
+                    if let Ok(mut pending) = _pending_health_checks.try_lock() {
                         if let Some(sender) = pending.remove(&correlation_id) {
                             debug!("Resolving pending health check with correlation_id: {}", correlation_id);
                             if sender.send(status).is_err() {
