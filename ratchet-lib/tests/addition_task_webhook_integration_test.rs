@@ -427,3 +427,168 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
     
     println!("GraphQL API integration test completed successfully!");
 }
+
+#[tokio::test]
+async fn test_addition_task_with_webhook_via_rest_api() {
+    // Start webhook server
+    let (webhook_addr, _webhook_state) = start_webhook_server().await;
+    let webhook_url = format!("http://{}/webhook", webhook_addr);
+    println!("Webhook server listening on: {}", webhook_url);
+    
+    // Set up test database
+    let db_config = DatabaseConfig {
+        url: "sqlite::memory:".to_string(),
+        max_connections: 5,
+        connection_timeout: Duration::from_secs(10),
+    };
+    
+    let db_connection = DatabaseConnection::new(db_config.clone()).await.unwrap();
+    let repositories = RepositoryFactory::new(db_connection.clone());
+    
+    // Run migrations
+    use ratchet_lib::database::migrations::Migrator;
+    use sea_orm_migration::MigratorTrait;
+    Migrator::up(db_connection.get_connection(), None)
+        .await
+        .unwrap();
+    
+    // Get the path to sample tasks
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+    let sample_tasks_path = project_root.join("sample").join("js-tasks");
+    
+    // Load the addition task directly and create it in the database
+    let addition_task_path = sample_tasks_path.join("addition");
+    let addition_task = load_from_directory(&addition_task_path)
+        .expect("Failed to load addition task");
+    
+    println!("Loaded task: {} ({})", addition_task.metadata.label, addition_task.metadata.uuid);
+    
+    // Create task in database
+    use ratchet_lib::database::entities::tasks::ActiveModel as TaskActiveModel;
+    use sea_orm::{ActiveModelTrait, Set};
+    
+    let task_model = TaskActiveModel {
+        uuid: Set(addition_task.uuid()),
+        name: Set(addition_task.metadata.label.clone()),
+        description: Set(Some(addition_task.metadata.description.clone())),
+        version: Set(addition_task.metadata.version.clone()),
+        path: Set(addition_task_path.to_string_lossy().to_string()),
+        metadata: Set(serde_json::to_value(&addition_task.metadata).unwrap()),
+        input_schema: Set(addition_task.input_schema.clone()),
+        output_schema: Set(addition_task.output_schema.clone()),
+        enabled: Set(true),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        validated_at: Set(Some(Utc::now())),
+        ..Default::default()
+    };
+    
+    let created_task = task_model.insert(db_connection.get_connection()).await.unwrap();
+    println!("Created task with ID: {}", created_task.id);
+    
+    // Set up REST API application
+    use ratchet_lib::rest::app::create_rest_app;
+    use ratchet_lib::execution::{
+        job_queue::{JobQueueConfig, JobQueueManager},
+        process_executor::ProcessTaskExecutor,
+    };
+    use ratchet_lib::config::RatchetConfig;
+    use std::sync::Arc;
+    
+    // Create required components for REST API
+    let job_queue_config = JobQueueConfig {
+        max_dequeue_batch_size: 10,
+        max_queue_size: 1000,
+        default_retry_delay: 60,
+        default_max_retries: 3,
+    };
+    let job_queue = Arc::new(JobQueueManager::new(repositories.clone(), job_queue_config));
+    
+    let ratchet_config = RatchetConfig::default();
+    let task_executor = Arc::new(ProcessTaskExecutor::new(repositories.clone(), ratchet_config).await.unwrap());
+    
+    let app = create_rest_app(
+        repositories.clone(),
+        job_queue,
+        task_executor,
+        None,  // registry
+        None,  // task_sync_service
+    );
+    
+    // Start the REST API server
+    use axum_test::TestServer;
+    let server = TestServer::new(app).unwrap();
+    
+    // Create job with webhook output destination via REST API
+    let job_request = json!({
+        "task_id": created_task.id,
+        "input_data": {
+            "num1": 1,
+            "num2": 2
+        },
+        "priority": "Normal",
+        "output_destinations": [{
+            "type": "webhook",
+            "url": webhook_url,
+            "method": "POST",
+            "headers": {},
+            "timeout": 30,
+            "retry_policy": {
+                "max_retries": 3,
+                "initial_delay": 1,
+                "max_delay": 60,
+                "backoff_multiplier": 2.0,
+                "retry_on_status": [500, 502, 503, 504]
+            },
+            "auth": null,
+            "content_type": "application/json"
+        }]
+    });
+    
+    // Send POST request to create job
+    let response = server
+        .post("/jobs")
+        .json(&job_request)
+        .await;
+    
+    println!("REST API Response Status: {}", response.status_code());
+    println!("REST API Response Body: {}", response.text());
+    
+    // Check if the request was successful
+    assert_eq!(response.status_code(), 201, "Job creation should succeed");
+    
+    let job_response: Value = response.json();
+    assert!(job_response["id"].as_i64().is_some(), "Job should have an ID");
+    
+    let job_id = job_response["id"].as_i64().unwrap() as i32;
+    println!("Created job via REST API with ID: {}", job_id);
+    
+    // Verify the job was created with webhook output destination
+    let job = repositories.job_repository()
+        .find_by_id(job_id)
+        .await
+        .unwrap()
+        .expect("Job should exist");
+    
+    assert!(job.output_destinations.is_some(), "Job should have output destinations");
+    
+    let destinations: Vec<OutputDestinationConfig> = serde_json::from_value(
+        job.output_destinations.unwrap()
+    ).unwrap();
+    
+    assert_eq!(destinations.len(), 1, "Should have one output destination");
+    
+    match &destinations[0] {
+        OutputDestinationConfig::Webhook { url, method, .. } => {
+            assert_eq!(url, &webhook_url);
+            assert_eq!(method, &HttpMethod::Post);
+        }
+        _ => panic!("Expected webhook destination"),
+    }
+    
+    // Since the REST API only creates the job (doesn't execute it immediately),
+    // we would need to trigger execution separately or have a job queue processor running
+    // For this test, we'll verify the job was created correctly with the webhook configuration
+    
+    println!("REST API integration test completed successfully!");
+}
