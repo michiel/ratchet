@@ -608,27 +608,38 @@ async function monitorSystem() {
 
 ## Implementation Phases
 
-### Phase 1: Read-Only Access (2 weeks)
-- Implement MCP server framework
-- Add tools for listing tasks, reading logs, viewing traces
+**UPDATED PRIORITIES**: MCP Server implementation is now the highest priority, with JavaScript integration deprioritized.
+
+### Phase 1: Architecture Foundation (3-4 weeks) - **HIGHEST PRIORITY**
+- Complete modularization with ratchet-mcp crate
+- Enhanced worker architecture supporting persistent connections
+- Bidirectional IPC layer for MCP message routing
+- JSON-RPC 2.0 and MCP protocol implementation
+
+### Phase 2: MCP Server Core (4-5 weeks) - **HIGHEST PRIORITY**
+- Implement MCP server framework with tool registry
+- Add tools for task execution, monitoring, and debugging
+- Connection management and pooling
 - Basic authentication and rate limiting
 
-### Phase 2: Task Execution (3 weeks)
-- Add task execution tool with progress tracking
-- Implement security controls and permissions
-- Add execution monitoring tools
-
-### Phase 3: Advanced Features (2 weeks)
-- Error analysis tools
-- Workflow orchestration helpers
-- Performance optimization tools
-- Caching layer for frequent queries
-
-### Phase 4: Production Hardening (2 weeks)
-- Comprehensive audit logging
+### Phase 3: Security & Performance (3-4 weeks) - **HIGH PRIORITY**
+- Comprehensive security controls and permissions
 - Advanced rate limiting and quotas
+- Performance optimization for high-frequency operations
+- Streaming and real-time support
+
+### Phase 4: Production Hardening (2-3 weeks) - **HIGH PRIORITY**
+- Comprehensive audit logging
 - Monitoring and alerting
+- Error analysis and debugging tools
 - Documentation and examples
+
+### Phase 5: JavaScript Integration (2-3 weeks) - **DEPRIORITIZED**
+- MCP JavaScript API for task environment
+- Client-side MCP operations
+- Connection management from JavaScript
+
+**Note**: JavaScript integration has been deprioritized to focus on the core MCP server infrastructure that enables LLMs to control Ratchet. This provides immediate value for AI-powered automation scenarios.
 
 ## Conclusion
 

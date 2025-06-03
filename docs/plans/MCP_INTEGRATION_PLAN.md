@@ -322,78 +322,80 @@ pub enum McpOperation {
 
 ## Implementation Plan
 
-### Phase 1: Core Protocol (2-3 weeks)
+**UPDATED PRIORITIES**: Focus shifted to MCP Server implementation first, with JavaScript client integration deprioritized.
 
-1. **MCP Types & Protocol**
-   - Define all MCP message types
-   - Implement JSON-RPC 2.0 handling
-   - Create protocol state machine
+### Phase 1: Architecture Foundation (3-4 weeks) - **HIGHEST PRIORITY**
 
-2. **Transport Layer**
-   - Implement stdio transport for local servers
-   - Implement SSE transport for remote servers
+1. **Enhanced Worker Architecture**
+   - Complete modularization with ratchet-mcp crate
+   - Implement bidirectional IPC for MCP message routing
+   - Add support for persistent connections in worker processes
+   - Create connection pooling and health monitoring
+
+2. **Core Protocol Implementation**
+   - Define all MCP message types for bidirectional communication
+   - Implement JSON-RPC 2.0 handling with proper error propagation
+   - Create protocol state machine for connection lifecycle
+   - Add request/response correlation system
+
+3. **Transport Layer**
+   - Implement enhanced stdio transport for MCP JSON-RPC
+   - Implement SSE transport for HTTP-based MCP connections
    - Add connection pooling and reconnection logic
+   - Create transport abstraction for multiple connection types
 
-3. **Basic Service Implementation**
-   - Create McpService trait and implementation
-   - Implement server connection management
-   - Add basic error handling
+### Phase 2: MCP Server Implementation (4-5 weeks) - **HIGHEST PRIORITY**
 
-### Phase 2: JavaScript Integration (2 weeks)
+1. **Tool Registry & Execution**
+   - Implement MCP server framework with tool registry
+   - Add task execution tool (`ratchet.execute_task`)
+   - Add monitoring tools (`ratchet.get_execution_status`, `ratchet.get_execution_logs`)
+   - Add debugging tools (`ratchet.analyze_execution_error`)
 
-1. **JavaScript API**
+2. **Security & Access Control**
+   - Authentication for MCP connections (API keys, OAuth2)
+   - Fine-grained permissions for LLM tool access
+   - Rate limiting per client and tool
+   - Audit logging for all MCP operations
+
+3. **Performance Optimization**
+   - High-performance message handling with batching
+   - Streaming responses for long-running tasks
+   - Real-time progress updates
+   - Binary encoding options for performance-critical paths
+
+### Phase 3: Configuration & Management (2-3 weeks) - **HIGH PRIORITY**
+
+1. **Enhanced Configuration System**
+   - MCP server configuration with security settings
+   - Authentication and authorization configuration
+   - Performance tuning parameters
+   - Resource quotas and limits
+
+2. **Production Features**
+   - Comprehensive audit logging
+   - Monitoring and alerting integration
+   - Health checks and status endpoints
+   - Documentation and examples
+
+### Phase 4: JavaScript Client Integration (2-3 weeks) - **DEPRIORITIZED**
+
+1. **JavaScript API** *(Lower Priority)*
    - Create mcp global object in Boa context
-   - Implement async operations (similar to fetch)
+   - Implement async operations (mcp.invokeTool, mcp.complete)
    - Add proper error propagation
 
-2. **IPC Integration**
-   - Extend worker messages for MCP
+2. **IPC Integration** *(Lower Priority)*
+   - Extend worker messages for MCP client operations
    - Handle MCP requests in worker process
    - Implement response routing
 
 3. **Testing Framework**
    - Create mock MCP server for testing
-   - Add integration tests
+   - Add integration tests for both server and client
    - Document JavaScript API
 
-### Phase 3: Configuration & Management (1-2 weeks)
-
-1. **Configuration System**
-   - Extend YAML config schema
-   - Add environment variable support
-   - Implement server validation
-
-2. **Connection Management**
-   - Implement connection pooling
-   - Add health checks
-   - Handle reconnection strategies
-
-3. **Monitoring & Logging**
-   - Add MCP-specific logging
-   - Implement request/response tracing
-   - Add performance metrics
-
-### Phase 4: Advanced Features (2-3 weeks)
-
-1. **Tool Discovery**
-   - Implement tool listing and caching
-   - Add tool schema validation
-   - Create tool documentation generator
-
-2. **Sampling & Progress**
-   - Implement sampling API
-   - Add progress callbacks
-   - Handle streaming responses
-
-3. **Resource Management**
-   - Implement resource listing
-   - Add resource template support
-   - Handle large resource transfers
-
-4. **Security Features**
-   - Add request sanitization
-   - Implement rate limiting
-   - Add audit logging
+**Priority Rationale**: The MCP server implementation provides immediate value by enabling LLMs to control Ratchet directly for AI-powered debugging, workflow orchestration, and automated operations. JavaScript client integration can be added later once the core server infrastructure is stable.
 
 ## Security Considerations
 
