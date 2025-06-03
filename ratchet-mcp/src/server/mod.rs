@@ -3,10 +3,12 @@
 pub mod config;
 pub mod tools;
 pub mod handler;
+pub mod adapter;
 
 pub use config::{McpServerConfig, McpServerTransport};
-pub use tools::{McpTool, ToolRegistry, RatchetToolRegistry};
+pub use tools::{McpTool, ToolRegistry, RatchetToolRegistry, McpTaskExecutor, McpTaskInfo};
 pub use handler::McpRequestHandler;
+pub use adapter::{RatchetMcpAdapter, RatchetMcpAdapterBuilder};
 
 use async_trait::async_trait;
 use std::collections::HashMap;

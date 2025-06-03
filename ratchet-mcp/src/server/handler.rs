@@ -310,7 +310,8 @@ mod tests {
         
         let value = result.unwrap();
         let call_result: ToolsCallResult = serde_json::from_value(value).unwrap();
-        assert!(!call_result.is_error);
+        // Without an executor configured, the tool should return an error
+        assert!(call_result.is_error);
     }
 
     #[tokio::test]

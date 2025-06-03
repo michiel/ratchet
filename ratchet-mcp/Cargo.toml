@@ -40,6 +40,7 @@ tokio-stream = { workspace = true }
 ratchet-core = { path = "../ratchet-core" }
 ratchet-ipc = { path = "../ratchet-ipc" }
 ratchet-storage = { path = "../ratchet-storage" }
+ratchet_lib = { path = "../ratchet-lib" }
 
 [features]
 default = ["server", "client"]
