@@ -30,6 +30,7 @@ axum.workspace = true
 
 # Local dependencies
 ratchet_lib = { path = "../ratchet-lib" }
+ratchet-mcp = { path = "../ratchet-mcp" }
 
 # Binary-specific dependencies (commented out for now due to network issues)
 # dialoguer = "0.11"

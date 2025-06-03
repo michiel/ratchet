@@ -61,6 +61,68 @@ impl McpServer {
         }
     }
     
+    /// Create a new MCP server with adapter
+    pub async fn with_adapter(
+        config: crate::config::McpConfig,
+        adapter: RatchetMcpAdapter,
+    ) -> McpResult<Self> {
+        // Create tool registry from adapter
+        let mut tool_registry = RatchetToolRegistry::new();
+        tool_registry.set_executor(Arc::new(adapter));
+        
+        // Create security components
+        let auth_manager = Arc::new(McpAuthManager::new(config.auth.clone()));
+        let audit_logger = Arc::new(AuditLogger::new(false)); // TODO: Make configurable
+        
+        // Convert config to server config
+        let server_config = McpServerConfig {
+            transport: match config.transport_type {
+                crate::config::SimpleTransportType::Stdio => McpServerTransport::Stdio,
+                crate::config::SimpleTransportType::Sse => McpServerTransport::Sse {
+                    host: config.host.clone(),
+                    port: config.port,
+                    tls: false,
+                    cors: config::CorsConfig {
+                        allowed_origins: vec!["*".to_string()],
+                        allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
+                        allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
+                        allow_credentials: false,
+                    },
+                    timeout: config.timeouts.request_timeout,
+                },
+            },
+            security: crate::security::SecurityConfig::default(),
+            bind_address: Some(format!("{}:{}", config.host, config.port)),
+        };
+        
+        Ok(Self {
+            config: server_config,
+            tool_registry: Arc::new(tool_registry),
+            auth_manager,
+            audit_logger,
+            sessions: RwLock::new(HashMap::new()),
+            initialized: RwLock::new(false),
+        })
+    }
+    
+    /// Run the server with stdio transport
+    pub async fn run_stdio(&mut self) -> McpResult<()> {
+        self.start_stdio_server().await
+    }
+    
+    /// Run the server with SSE transport
+    pub async fn run_sse(&mut self) -> McpResult<()> {
+        match &self.config.transport {
+            McpServerTransport::Sse { host, port, .. } => {
+                let bind_address = format!("{}:{}", host, port);
+                self.start_sse_server(&bind_address).await
+            }
+            _ => Err(McpError::Configuration {
+                message: "Server not configured for SSE transport".to_string(),
+            }),
+        }
+    }
+    
     /// Start the MCP server
     pub async fn start(&self) -> McpResult<()> {
         match &self.config.transport {

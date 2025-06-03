@@ -53,6 +53,7 @@ pub mod client;
 
 pub mod security;
 pub mod error;
+pub mod config;
 
 // Re-export commonly used types
 pub use error::{McpError, McpResult};
@@ -69,6 +70,7 @@ pub use client::{McpClient, McpClientConfig, ServerConnection};
 
 pub use transport::{McpTransport, TransportType};
 pub use security::{McpAuth, McpAuthManager, ClientPermissions};
+pub use config::{McpConfig, SimpleTransportType, ConnectionLimits, Timeouts, ToolConfig};
 
 /// MCP protocol version supported by this implementation
 pub const MCP_VERSION: &str = "1.0.0";

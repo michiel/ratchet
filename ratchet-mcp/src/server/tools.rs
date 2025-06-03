@@ -330,6 +330,11 @@ impl RatchetToolRegistry {
         self.logger = Some(logger);
         self
     }
+    
+    /// Set the task executor (for mutable access)
+    pub fn set_executor(&mut self, executor: Arc<dyn McpTaskExecutor>) {
+        self.task_executor = Some(executor);
+    }
 }
 
 #[async_trait]

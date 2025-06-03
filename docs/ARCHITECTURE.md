@@ -120,11 +120,32 @@ The following diagram shows the high-level architecture of Ratchet, illustrating
 
 ## Code Layout
 
+### Modular Crate Architecture
+
+Ratchet has evolved from a monolithic structure to a modular architecture with specialized crates:
+
+```
+ratchet/
+├── ratchet-core/         # Core domain models and types
+├── ratchet-api/          # Unified API layer (REST & GraphQL)
+├── ratchet-caching/      # Caching abstractions and implementations
+├── ratchet-cli/          # Command-line interface
+├── ratchet-config/       # Configuration management
+├── ratchet-ipc/          # Inter-process communication
+├── ratchet-lib/          # Legacy monolithic library (being phased out)
+├── ratchet-mcp/          # Model Context Protocol server for LLM integration
+├── ratchet-plugin/       # Plugin infrastructure
+├── ratchet-plugins/      # Plugin implementations
+├── ratchet-resilience/   # Resilience patterns (circuit breakers, retry)
+├── ratchet-runtime/      # Task execution runtime
+└── ratchet-storage/      # Storage abstraction layer
+```
+
 ### Workspace Structure
 
 ```
 ratchet/
-├── ratchet-lib/          # Core library functionality
+├── ratchet-lib/          # Core library functionality (being modularized)
 │   └── src/
 ├── ratchet-cli/          # Command-line interface
 │   └── src/

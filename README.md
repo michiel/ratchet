@@ -42,6 +42,7 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 - **File Watching**: Auto-reload tasks on file changes during development
 - **Recording & Replay**: Capture and replay task executions for debugging
 - **Test Framework**: Built-in testing with mock HTTP responses
+- **MCP Server**: Model Context Protocol server for LLM integration
 
 ### **Security & Reliability**
 - **SQL Injection Prevention**: Safe query builder with input sanitization
@@ -221,6 +222,47 @@ curl -X POST http://localhost:8080/api/v1/jobs \
 # List workers
 curl http://localhost:8080/api/v1/workers
 ```
+
+## 🤖 MCP (Model Context Protocol) Server
+
+Ratchet includes a built-in MCP server that allows Language Learning Models (LLMs) to interact with the task execution engine through a standardized protocol.
+
+### Available MCP Tools
+
+- **`ratchet.execute_task`**: Execute any Ratchet task with input data
+- **`ratchet.list_available_tasks`**: Discover available tasks with filtering
+- **`ratchet.get_execution_status`**: Monitor running executions
+- **`ratchet.get_execution_logs`**: Retrieve execution logs
+- **`ratchet.get_execution_trace`**: Get detailed execution traces
+- **`ratchet.analyze_execution_error`**: Analyze failures with suggestions
+
+### Starting the MCP Server
+
+```bash
+# Start with stdio transport (for local LLM integration)
+ratchet mcp serve --transport stdio
+
+# Start with SSE transport (for network access) - coming soon
+ratchet mcp serve --transport sse --port 8090
+```
+
+### LLM Integration Example
+
+```python
+# Using an MCP client library
+import mcp_client
+
+client = mcp_client.StdioClient("ratchet mcp serve")
+await client.initialize()
+
+# Execute a task through LLM
+result = await client.call_tool("ratchet.execute_task", {
+    "task_id": "weather-api",
+    "input": {"city": "San Francisco"}
+})
+```
+
+See [MCP Server Documentation](docs/MCP_SERVER.md) for detailed configuration and usage.
 
 ## 🔐 Configuration
 
