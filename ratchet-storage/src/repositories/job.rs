@@ -31,11 +31,11 @@ impl JobRepository {
         Ok(Vec::new())
     }
     
-    pub async fn find_by_priority(&self, priority: JobPriority) -> StorageResult<Vec<Job>> {
+    pub async fn find_by_priority(&self, _priority: JobPriority) -> StorageResult<Vec<Job>> {
         Ok(Vec::new())
     }
     
-    pub async fn get_next_jobs(&self, limit: u32) -> StorageResult<Vec<Job>> {
+    pub async fn get_next_jobs(&self, _limit: u32) -> StorageResult<Vec<Job>> {
         Ok(Vec::new())
     }
 }

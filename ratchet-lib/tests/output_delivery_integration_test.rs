@@ -11,7 +11,7 @@ use ratchet_lib::{
 use std::time::Duration;
 use tempfile::TempDir;
 use serde_json::json;
-use sea_orm::prelude::{Uuid, Json};
+use sea_orm::prelude::Uuid;
 
 async fn setup_test_environment() -> (RepositoryFactory, TempDir) {
     let temp_dir = TempDir::new().unwrap();

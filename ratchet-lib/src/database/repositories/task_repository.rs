@@ -342,7 +342,7 @@ mod tests {
     use crate::config::DatabaseConfig;
     use crate::database::entities::Task;
     use crate::database::repositories::Repository;
-    use sea_orm::prelude::Json;
+    
     use serde_json::json;
     use std::time::Duration;
 

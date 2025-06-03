@@ -572,6 +572,7 @@ impl Subscription {
 }
 
 // Helper conversion functions
+#[allow(dead_code)]
 fn convert_execution_status(status: crate::database::entities::executions::ExecutionStatus) -> ExecutionStatus {
     match status {
         crate::database::entities::executions::ExecutionStatus::Pending => ExecutionStatus::Pending,
@@ -582,6 +583,7 @@ fn convert_execution_status(status: crate::database::entities::executions::Execu
     }
 }
 
+#[allow(dead_code)]
 fn convert_job_priority(priority: crate::database::entities::jobs::JobPriority) -> JobPriority {
     match priority {
         crate::database::entities::jobs::JobPriority::Low => JobPriority::Low,
@@ -591,6 +593,7 @@ fn convert_job_priority(priority: crate::database::entities::jobs::JobPriority) 
     }
 }
 
+#[allow(dead_code)]
 fn convert_job_priority_to_db(priority: JobPriority) -> crate::database::entities::jobs::JobPriority {
     match priority {
         JobPriority::Low => crate::database::entities::jobs::JobPriority::Low,
@@ -600,6 +603,7 @@ fn convert_job_priority_to_db(priority: JobPriority) -> crate::database::entitie
     }
 }
 
+#[allow(dead_code)]
 fn convert_job_status(status: crate::database::entities::jobs::JobStatus) -> JobStatus {
     match status {
         crate::database::entities::jobs::JobStatus::Queued => JobStatus::Queued,
@@ -611,6 +615,7 @@ fn convert_job_status(status: crate::database::entities::jobs::JobStatus) -> Job
     }
 }
 
+#[allow(dead_code)]
 fn convert_job_status_to_db(status: JobStatus) -> crate::database::entities::jobs::JobStatus {
     match status {
         JobStatus::Queued => crate::database::entities::jobs::JobStatus::Queued,
@@ -623,6 +628,7 @@ fn convert_job_status_to_db(status: JobStatus) -> crate::database::entities::job
 }
 
 // Output destination conversion functions
+#[allow(dead_code)]
 fn convert_output_destination_config(config: OutputDestinationConfig) -> OutputDestination {
     match config {
         OutputDestinationConfig::Filesystem { path, format, permissions, create_dirs, overwrite, backup_existing } => {
@@ -720,6 +726,7 @@ fn convert_output_destination_input(input: OutputDestinationInput) -> Result<Out
     }
 }
 
+#[allow(dead_code)]
 fn convert_output_format(format: crate::output::OutputFormat) -> OutputFormat {
     // Use the conversion from the api module
     format.into()
@@ -731,6 +738,7 @@ fn convert_output_format_from_graphql(format: OutputFormat) -> crate::output::Ou
 }
 
 // Use conversion implementations from api::conversions module
+#[allow(dead_code)]
 fn convert_http_method(method: crate::types::HttpMethod) -> HttpMethod {
     method.into()
 }

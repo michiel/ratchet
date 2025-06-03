@@ -55,6 +55,25 @@ enum Commands {
         config: Option<PathBuf>,
     },
 
+    /// Start the MCP (Model Context Protocol) server for LLM integration
+    McpServe {
+        /// Path to configuration file (YAML)
+        #[arg(long, value_name = "PATH")]
+        config: Option<PathBuf>,
+        
+        /// Transport type to use (stdio or sse)
+        #[arg(long, default_value = "stdio")]
+        transport: String,
+        
+        /// Server host for SSE transport
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        
+        /// Server port for SSE transport
+        #[arg(long, default_value = "3000")]
+        port: u16,
+    },
+
     /// Validate a task's structure and syntax
     Validate {
         /// Path to the file system resource
@@ -281,12 +300,61 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     
     // Create the application
     let app = create_app(
-        repositories,
+        repositories.clone(),
         job_queue,
         task_executor.clone(),
         registry,
         sync_service,
     );
+    
+    // Start MCP service if configured
+    let mcp_service_handle = if let Some(mcp_config) = &config.mcp {
+        if mcp_config.enabled {
+            info!("Starting MCP service");
+            
+            use ratchet_mcp::server::McpService;
+            
+            // Determine log file path from logging config
+            let log_file_path = config.logging.sinks.iter()
+                .find_map(|sink| match sink {
+                    ratchet_lib::logging::config::SinkConfig::File { path, .. } => Some(path.clone()),
+                    _ => None,
+                });
+            
+            // Create MCP service
+            let mcp_service = match McpService::from_ratchet_config(
+                mcp_config,
+                task_executor.clone(),
+                Arc::new(repositories.task_repo.clone()),
+                Arc::new(repositories.execution_repo.clone()),
+                log_file_path,
+            ).await {
+                Ok(service) => Arc::new(service),
+                Err(e) => {
+                    error!("Failed to create MCP service: {}", e);
+                    return Err(anyhow::anyhow!("Failed to create MCP service: {}", e));
+                }
+            };
+            
+            // Start MCP service in background task if using SSE transport
+            if mcp_config.transport == "sse" {
+                let service = mcp_service.clone();
+                Some(tokio::spawn(async move {
+                    if let Err(e) = service.start().await {
+                        error!("MCP service error: {}", e);
+                    }
+                }))
+            } else {
+                // For stdio transport, we'll need to handle it differently
+                warn!("MCP stdio transport should be started separately using 'ratchet mcp-serve'");
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     
     // Create server address
     let addr = format!("{}:{}", server_config.bind_address, server_config.port);
@@ -297,6 +365,12 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     info!("📊 GraphQL playground available at http://{}/playground", addr);
     info!("🏥 Health check available at http://{}/health", addr);
     info!("📖 REST API documentation available at http://{}/api-docs", addr);
+    
+    if let Some(mcp_config) = &config.mcp {
+        if mcp_config.enabled && mcp_config.transport == "sse" {
+            info!("🤖 MCP server available at http://{}:{}", mcp_config.host, mcp_config.port);
+        }
+    }
     
     // Create shutdown signal
     let shutdown_signal = async {
@@ -341,11 +415,220 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
         }
     }
     
+    // Stop MCP service if running
+    if let Some(handle) = mcp_service_handle {
+        info!("Stopping MCP service");
+        handle.abort();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await;
+    }
+    
     // Stop worker processes
     info!("Stopping worker processes");
     task_executor.stop().await.context("Failed to stop worker processes")?;
     
     info!("Ratchet server shutdown complete");
+    Ok(())
+}
+
+/// Start the MCP (Model Context Protocol) server
+async fn mcp_serve_command(
+    config_path: Option<&PathBuf>,
+    transport: &str,
+    host: &str,
+    port: u16,
+) -> Result<()> {
+    use ratchet_mcp::{
+        McpServer, McpConfig, SimpleTransportType,
+        server::adapter::RatchetMcpAdapter,
+    };
+    use ratchet_lib::{
+        database::DatabaseConnection,
+        database::repositories::{
+            task_repository::TaskRepository,
+            execution_repository::ExecutionRepository,
+        },
+        execution::ProcessTaskExecutor,
+    };
+    use std::sync::Arc;
+    use tokio::signal;
+
+    info!("Starting Ratchet MCP server");
+
+    // Parse transport type
+    let transport_type = match transport.to_lowercase().as_str() {
+        "stdio" => SimpleTransportType::Stdio,
+        "sse" => SimpleTransportType::Sse,
+        _ => {
+            return Err(anyhow::anyhow!("Invalid transport type: {}. Use 'stdio' or 'sse'", transport));
+        }
+    };
+
+    // Load configuration
+    let ratchet_config = load_config(config_path)?;
+    
+    // Get MCP configuration (use dedicated MCP config if available, otherwise fall back to server config)
+    let (database_config, mcp_server_config) = if let Some(mcp_config) = &ratchet_config.mcp {
+        info!("Using dedicated MCP server configuration");
+        // Use server database config if available, otherwise default
+        let db_config = ratchet_config.server.as_ref()
+            .map(|s| s.database.clone())
+            .unwrap_or_else(ratchet_lib::config::DatabaseConfig::default);
+        (db_config, Some(mcp_config.clone()))
+    } else if let Some(server_config) = &ratchet_config.server {
+        info!("Using server configuration for MCP server");
+        (server_config.database.clone(), None)
+    } else {
+        info!("Using default configuration for MCP server");
+        (ratchet_lib::config::DatabaseConfig::default(), None)
+    };
+
+    info!("MCP server configuration loaded");
+
+    // Initialize database
+    info!("Connecting to database: {}", database_config.url);
+    let database = DatabaseConnection::new(database_config).await
+        .context("Failed to connect to database")?;
+    
+    // Run migrations
+    info!("Running database migrations");
+    database.migrate().await.context("Failed to run database migrations")?;
+    
+    // Initialize repositories
+    let task_repository = Arc::new(TaskRepository::new(database.clone()));
+    let execution_repository = Arc::new(ExecutionRepository::new(database.clone()));
+    
+    // Initialize task executor
+    info!("Initializing process task executor");
+    let executor = Arc::new(
+        ProcessTaskExecutor::new(
+            ratchet_lib::database::repositories::RepositoryFactory::new(database),
+            ratchet_config.clone()
+        ).await.context("Failed to initialize process task executor")?
+    );
+    
+    // Start worker processes
+    info!("Starting worker processes");
+    executor.start().await.context("Failed to start worker processes")?;
+    
+    // Create MCP adapter
+    let adapter = RatchetMcpAdapter::new(
+        executor.clone(),
+        task_repository,
+        execution_repository,
+    );
+    
+    // Create MCP server config (prioritize file config, then CLI args, then defaults)
+    let mcp_config = if let Some(file_config) = mcp_server_config {
+        McpConfig {
+            transport_type: if file_config.enabled { 
+                match file_config.transport.as_str() {
+                    "sse" => SimpleTransportType::Sse,
+                    _ => SimpleTransportType::Stdio,
+                }
+            } else { 
+                transport_type.clone() 
+            },
+            host: if file_config.host != "127.0.0.1" { 
+                file_config.host 
+            } else { 
+                host.to_string() 
+            },
+            port: if file_config.port != 3000 { 
+                file_config.port 
+            } else { 
+                port 
+            },
+            ..Default::default()
+        }
+    } else {
+        McpConfig {
+            transport_type: transport_type.clone(),
+            host: host.to_string(),
+            port,
+            ..Default::default()
+        }
+    };
+    
+    info!("MCP server starting with transport: {:?}, host: {}, port: {}", 
+          mcp_config.transport_type, mcp_config.host, mcp_config.port);
+    
+    // Create MCP server
+    let mut server = McpServer::with_adapter(mcp_config, adapter).await
+        .context("Failed to create MCP server")?;
+    
+    info!("🚀 Ratchet MCP server starting with {} transport", transport);
+    
+    match transport_type {
+        SimpleTransportType::Stdio => {
+            info!("MCP server ready on stdio - waiting for LLM connections");
+            info!("Use this with LLM clients that support MCP over stdio");
+        }
+        SimpleTransportType::Sse => {
+            info!("MCP server starting on http://{}:{}", host, port);
+            info!("LLM clients can connect via Server-Sent Events");
+        }
+    }
+    
+    // Create shutdown signal
+    let shutdown_signal = async {
+        let ctrl_c = async {
+            signal::ctrl_c()
+                .await
+                .expect("Failed to install Ctrl+C handler");
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("Failed to install signal handler")
+                .recv()
+                .await;
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => {},
+            _ = terminate => {},
+        }
+
+        info!("Shutdown signal received, starting graceful shutdown");
+    };
+    
+    // Start server based on transport type
+    let result = match transport_type {
+        SimpleTransportType::Stdio => {
+            tokio::select! {
+                result = server.run_stdio() => result,
+                _ = shutdown_signal => {
+                    info!("Graceful shutdown initiated");
+                    Ok(())
+                }
+            }
+        }
+        SimpleTransportType::Sse => {
+            tokio::select! {
+                result = server.run_sse() => result,
+                _ = shutdown_signal => {
+                    info!("Graceful shutdown initiated");
+                    Ok(())
+                }
+            }
+        }
+    };
+    
+    // Handle any server errors
+    if let Err(e) = result {
+        error!("MCP server error: {}", e);
+        return Err(e.into());
+    }
+    
+    // Stop worker processes
+    info!("Stopping worker processes");
+    executor.stop().await.context("Failed to stop worker processes")?;
+    
+    info!("Ratchet MCP server shutdown complete");
     Ok(())
 }
 
@@ -966,6 +1249,10 @@ fn main() -> Result<()> {
         Some(Commands::Serve { config }) => {
             info!("Starting Ratchet server");
             runtime.block_on(serve_command(config.as_ref()))
+        }
+        Some(Commands::McpServe { config, transport, host, port }) => {
+            info!("Starting MCP server");
+            runtime.block_on(mcp_serve_command(config.as_ref(), transport, host, *port))
         }
         Some(Commands::Validate { from_fs }) => validate_task(from_fs),
         Some(Commands::Test { from_fs }) => runtime.block_on(test_task(from_fs)),

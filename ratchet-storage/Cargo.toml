@@ -32,6 +32,8 @@ sqlx = { workspace = true, optional = true }
 [features]
 default = []
 database = ["sea-orm", "sea-query", "sqlx"]
+postgres = ["database"]
+mysql = ["database"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

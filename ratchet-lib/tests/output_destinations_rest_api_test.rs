@@ -12,7 +12,7 @@ use ratchet_lib::{
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
-use sea_orm::prelude::{Uuid, Json};
+use sea_orm::prelude::Uuid;
 use tempfile::TempDir;
 
 /// Test helper to create a test REST API server with database

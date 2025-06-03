@@ -240,8 +240,8 @@ async fn test_process_executor_with_valid_task_structure() {
             "label": "Integration Test Task",
             "description": "Task for testing process separation architecture"
         }),
-        input_schema: input_schema,
-        output_schema: output_schema,
+        input_schema,
+        output_schema,
         enabled: true,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
@@ -330,8 +330,8 @@ async fn test_concurrent_process_executor_operations() {
             "label": "Concurrent Test Task",
             "description": "Task for testing concurrent execution"
         }),
-        input_schema: input_schema,
-        output_schema: output_schema,
+        input_schema,
+        output_schema,
         enabled: true,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),

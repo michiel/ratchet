@@ -42,6 +42,7 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 - **File Watching**: Auto-reload tasks on file changes during development
 - **Recording & Replay**: Capture and replay task executions for debugging
 - **Test Framework**: Built-in testing with mock HTTP responses
+- **MCP Server**: Model Context Protocol server for LLM integration
 
 ### **Security & Reliability**
 - **SQL Injection Prevention**: Safe query builder with input sanitization
@@ -221,6 +222,60 @@ curl -X POST http://localhost:8080/api/v1/jobs \
 # List workers
 curl http://localhost:8080/api/v1/workers
 ```
+
+## 🤖 MCP (Model Context Protocol) Server
+
+Ratchet includes a built-in MCP server that allows Language Learning Models (LLMs) to interact with the task execution engine through a standardized protocol.
+
+### Available MCP Tools
+
+- **`ratchet.execute_task`**: Execute any Ratchet task with input data
+- **`ratchet.list_available_tasks`**: Discover available tasks with filtering
+- **`ratchet.get_execution_status`**: Monitor running executions
+- **`ratchet.get_execution_logs`**: Retrieve execution logs
+- **`ratchet.get_execution_trace`**: Get detailed execution traces
+- **`ratchet.analyze_execution_error`**: Analyze failures with suggestions
+
+### Starting the MCP Server
+
+```bash
+# Start with stdio transport (for local LLM integration)
+ratchet mcp-serve --transport stdio
+
+# Start with SSE transport (for network access)
+ratchet mcp-serve --transport sse --port 3001
+
+# Or configure in your config.yaml and start with the main server
+server:
+  # ... server config ...
+
+mcp:
+  enabled: true
+  transport: sse
+  host: localhost
+  port: 3001
+  auth_type: none
+  max_connections: 10
+  request_timeout: 30
+  rate_limit_per_minute: 100
+```
+
+### LLM Integration Example
+
+For Claude Desktop, add to your config:
+
+```json
+{
+  "mcpServers": {
+    "ratchet": {
+      "command": "ratchet",
+      "args": ["mcp-serve", "--config", "/path/to/config.yaml"]
+    }
+  }
+}
+```
+
+See [MCP User Guide](docs/MCP_USER_GUIDE.md) for detailed configuration and usage.
 
 ## 🔐 Configuration
 

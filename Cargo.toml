@@ -8,7 +8,8 @@ members = [
     "ratchet-resilience",
     "ratchet-caching",
     "ratchet-plugins",
-    "ratchet-lib",  # Keep for now during migration
+    "ratchet-mcp",      # New MCP implementation
+    "ratchet-lib",      # Keep for now during migration
     "ratchet-cli", "ratchet-config", "ratchet-plugin",
 ]
 resolver = "2"
@@ -31,6 +32,10 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
 axum = "0.6"
+reqwest = { version = "0.11", features = ["json", "stream"] }
+url = "2.4"
+async-trait = "0.1"
+tokio-stream = "0.1"
 
 # Workspace-level configuration for targets
 [workspace.package]

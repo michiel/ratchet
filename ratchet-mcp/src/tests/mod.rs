@@ -1,0 +1,269 @@
+//! Integration tests for MCP server
+
+use std::sync::Arc;
+use serde_json::json;
+use tokio::sync::mpsc;
+
+use crate::{
+    McpServer, McpConfig, SimpleTransportType,
+    server::adapter::RatchetMcpAdapter,
+    protocol::{InitializeParams, ClientInfo, ClientCapabilities},
+};
+
+/// Test the MCP server initialization sequence
+#[tokio::test]
+async fn test_mcp_server_initialization() {
+    // Create a mock adapter for testing
+    let adapter = create_test_adapter().await;
+    
+    // Create MCP server config
+    let config = McpConfig {
+        transport_type: SimpleTransportType::Stdio,
+        ..Default::default()
+    };
+    
+    // Create MCP server
+    let server = McpServer::with_adapter(config, adapter).await
+        .expect("Failed to create MCP server");
+    
+    // Test initialize request
+    let init_request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "1.0.0",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "Test Client",
+                "version": "1.0.0"
+            }
+        }
+    });
+    
+    let response = server.handle_message(
+        &serde_json::to_string(&init_request).unwrap(),
+        None
+    ).await.expect("Failed to handle initialize request");
+    
+    assert!(response.is_some());
+    let response = response.unwrap();
+    
+    // Verify the response
+    assert_eq!(response.id, Some(json!(1)));
+    assert!(response.result.is_some());
+    assert!(response.error.is_none());
+    
+    // Parse the result as InitializeResult
+    let result: serde_json::Value = response.result.unwrap();
+    assert!(result["serverInfo"]["name"].as_str().unwrap().contains("Ratchet"));
+    assert!(result["capabilities"]["tools"].is_object());
+}
+
+/// Test the tools/list request
+#[tokio::test]
+async fn test_mcp_server_tools_list() {
+    let adapter = create_test_adapter().await;
+    let config = McpConfig::default();
+    let server = McpServer::with_adapter(config, adapter).await.unwrap();
+    
+    // Initialize first
+    let init_request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "1.0.0",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "Test Client",
+                "version": "1.0.0"
+            }
+        }
+    });
+    
+    server.handle_message(&serde_json::to_string(&init_request).unwrap(), None)
+        .await.unwrap();
+    
+    // Send initialized notification
+    let initialized_notification = json!({
+        "jsonrpc": "2.0",
+        "method": "initialized"
+    });
+    
+    server.handle_message(&serde_json::to_string(&initialized_notification).unwrap(), None)
+        .await.unwrap();
+    
+    // Test tools/list request
+    let tools_request = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+    });
+    
+    let response = server.handle_message(
+        &serde_json::to_string(&tools_request).unwrap(),
+        None
+    ).await.expect("Failed to handle tools/list request");
+    
+    assert!(response.is_some());
+    let response = response.unwrap();
+    
+    // Verify the response
+    assert_eq!(response.id, Some(json!(2)));
+    assert!(response.result.is_some());
+    assert!(response.error.is_none());
+    
+    // Parse the result
+    let result: serde_json::Value = response.result.unwrap();
+    let tools = result["tools"].as_array().unwrap();
+    
+    // Should have our built-in tools
+    assert!(!tools.is_empty());
+    
+    // Check for ratchet.execute_task tool
+    let execute_task_tool = tools.iter()
+        .find(|tool| tool["name"].as_str() == Some("ratchet.execute_task"));
+    assert!(execute_task_tool.is_some());
+}
+
+/// Test error handling for invalid requests
+#[tokio::test]
+async fn test_mcp_server_error_handling() {
+    let adapter = create_test_adapter().await;
+    let config = McpConfig::default();
+    let server = McpServer::with_adapter(config, adapter).await.unwrap();
+    
+    // Test invalid JSON
+    let response = server.handle_message("invalid json", None).await;
+    assert!(response.is_err());
+    
+    // Test method not found
+    let invalid_method_request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "nonexistent/method"
+    });
+    
+    let response = server.handle_message(
+        &serde_json::to_string(&invalid_method_request).unwrap(),
+        None
+    ).await.unwrap();
+    
+    assert!(response.is_some());
+    let response = response.unwrap();
+    assert!(response.error.is_some());
+    assert_eq!(response.error.unwrap().code, -32601); // Method not found
+}
+
+/// Create a test adapter with mock repositories
+async fn create_test_adapter() -> RatchetMcpAdapter {
+    use ratchet_lib::{
+        database::{DatabaseConnection, repositories::{TaskRepository, ExecutionRepository}},
+        execution::ProcessTaskExecutor,
+        config::RatchetConfig,
+    };
+    
+    // Create in-memory database for testing
+    let db_config = ratchet_lib::config::DatabaseConfig {
+        url: "sqlite::memory:".to_string(),
+        max_connections: 1,
+        connection_timeout: std::time::Duration::from_secs(5),
+    };
+    
+    let database = DatabaseConnection::new(db_config).await
+        .expect("Failed to create test database");
+    
+    // Run migrations
+    database.migrate().await
+        .expect("Failed to run migrations");
+    
+    // Create repositories
+    let task_repository = Arc::new(TaskRepository::new(database.clone()));
+    let execution_repository = Arc::new(ExecutionRepository::new(database.clone()));
+    
+    // Create executor with test config
+    let config = RatchetConfig::default();
+    let executor = Arc::new(
+        ProcessTaskExecutor::new(
+            ratchet_lib::database::repositories::RepositoryFactory::new(database),
+            config
+        ).await.expect("Failed to create test executor")
+    );
+    
+    RatchetMcpAdapter::new(executor, task_repository, execution_repository)
+}
+
+/// Test that demonstrates a complete MCP session
+#[tokio::test]
+async fn test_complete_mcp_session() {
+    let adapter = create_test_adapter().await;
+    let config = McpConfig::default();
+    let server = McpServer::with_adapter(config, adapter).await.unwrap();
+    
+    // 1. Initialize
+    let init_request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "1.0.0",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "Test LLM Client",
+                "version": "1.0.0"
+            }
+        }
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&init_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    assert!(response.error.is_none());
+    
+    // 2. Send initialized notification
+    let initialized = json!({
+        "jsonrpc": "2.0",
+        "method": "initialized"
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&initialized).unwrap(), None)
+        .await.unwrap();
+    assert!(response.is_none()); // Notifications don't return responses
+    
+    // 3. List tools
+    let tools_request = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&tools_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    assert!(response.error.is_none());
+    
+    // 4. Try to execute a task (will fail since no tasks in test DB, but should be handled gracefully)
+    let execute_request = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "ratchet.execute_task",
+            "arguments": {
+                "task_id": "nonexistent-task",
+                "input": {}
+            }
+        }
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&execute_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    
+    // Should get a response (not an error), but the tool execution should indicate failure
+    assert!(response.error.is_none());
+    assert!(response.result.is_some());
+    
+    // The result should indicate the tool execution failed
+    let result = response.result.unwrap();
+    let content = &result["content"];
+    assert!(content.is_array());
+}

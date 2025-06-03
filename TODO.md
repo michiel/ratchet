@@ -157,9 +157,160 @@
 
 ---
 
-## 🚀 **Phase 1: Security & Production Readiness** (HIGH PRIORITY)
+## 🤖 **Phase 1: MCP Server Implementation** (HIGHEST PRIORITY) - IN PROGRESS
 
-### 1.1 Authentication & Authorization System
+### 1.1 Architecture Foundation for MCP Server ✅ COMPLETED
+- [x] **Complete Modularization for MCP**
+  - [x] Create `ratchet-mcp/` crate with MCP server implementation
+  - [x] Implement thread-safe task execution using ProcessTaskExecutor
+  - [x] Create adapter pattern for bridging MCP with Ratchet engine
+  - [ ] Add bidirectional IPC layer for MCP message routing (future enhancement)
+  ```rust
+  // New crate structure:
+  ratchet-mcp/           // MCP implementation
+  ├── src/
+  │   ├── server/        // MCP server for LLM integration
+  │   ├── transport/     // stdio and SSE transports
+  │   ├── protocol/      // JSON-RPC 2.0 & MCP messages
+  │   └── security/      // Auth & access control
+  ```
+
+- [ ] **Enhanced Worker Architecture**
+  - [ ] Support for persistent MCP server connections
+  - [ ] Bidirectional communication for LLM interactions
+  - [ ] Connection pooling and health monitoring
+  - [ ] Message routing with correlation tracking
+  ```rust
+  pub enum WorkerType {
+      Task,           // Current task execution
+      McpServer,      // MCP server hosting for LLMs
+      Hybrid,         // Both task and MCP capabilities
+  }
+  ```
+
+### 1.2 MCP Protocol Implementation ✅ COMPLETED
+- [x] **Core Protocol Types**
+  - [x] JSON-RPC 2.0 message types with proper error handling
+  - [x] MCP-specific message types (initialize, tools/list, tools/call, resources)
+  - [x] Protocol handshake and capability negotiation
+  - [x] Server capabilities and client info structures
+  ```rust
+  #[derive(Debug, Clone, Serialize, Deserialize)]
+  #[serde(tag = "method")]
+  pub enum McpMethod {
+      Initialize(InitializeParams),
+      ToolsList,
+      ToolsCall(ToolCallParams),
+      ResourcesList,
+      SamplingCreateMessage(SamplingParams),
+  }
+  ```
+
+- [x] **Transport Layer** (Partially Complete)
+  - [x] Enhanced stdio transport for MCP JSON-RPC
+  - [ ] SSE (Server-Sent Events) transport for HTTP-based connections
+  - [x] Connection management and pooling infrastructure
+  - [x] Health checks and monitoring system
+  ```rust
+  pub struct McpConnectionPool {
+      active_connections: Arc<Mutex<VecDeque<McpConnection>>>,
+      max_connections: usize,
+      health_monitor: Arc<McpHealthMonitor>,
+  }
+  ```
+
+### 1.3 MCP Server for LLM Integration (PARTIALLY COMPLETE)
+- [x] **Tool Registry Implementation**
+  - [x] Expose Ratchet capabilities as MCP tools for LLMs
+  - [x] Task execution tool (`ratchet.execute_task`) - Connected to ProcessTaskExecutor
+  - [ ] Monitoring tools (`ratchet.get_execution_status`, `ratchet.get_execution_logs`) - Placeholders
+  - [ ] Debugging tools (`ratchet.analyze_execution_error`, `ratchet.get_execution_trace`) - Placeholders
+  - [x] Task discovery tools (`ratchet.list_available_tasks`) - Connected to TaskRepository
+  ```rust
+  pub struct RatchetMcpServer {
+      task_service: Arc<dyn TaskService>,
+      execution_service: Arc<dyn ExecutionService>,
+      logging_service: Arc<dyn LoggingService>,
+      tool_registry: Arc<McpToolRegistry>,
+  }
+  ```
+
+- [x] **Security & Access Control** ✅ COMPLETED
+  - [x] Authentication for MCP connections (API keys, JWT, OAuth2 support)
+  - [x] Fine-grained permissions for LLM tool access
+  - [x] Rate limiting per client and tool
+  - [x] Audit logging for all MCP operations
+  ```rust
+  pub struct McpAuthManager {
+      allowed_clients: HashMap<String, ClientPermissions>,
+      rate_limiters: HashMap<String, RateLimiter>,
+      audit_logger: AuditLogger,
+  }
+  ```
+
+### 1.4 Performance Optimization
+- [ ] **High-Performance Message Handling**
+  - [ ] Optimized message serialization for high-frequency operations
+  - [ ] Message batching for bulk operations
+  - [ ] Binary encoding options for performance-critical paths
+  ```rust
+  pub enum MessageEncoding {
+      Json,           // Human-readable, slower
+      Bincode,        // Binary, much faster
+      MessagePack,    // Compact binary
+  }
+  ```
+
+- [ ] **Streaming & Real-time Support**
+  - [ ] Streaming responses for long-running tasks
+  - [ ] Real-time progress updates
+  - [ ] Event-driven notifications for task completion
+  ```rust
+  pub struct ProgressStreamer {
+      execution_id: String,
+      progress_sender: mpsc::Sender<ProgressUpdate>,
+  }
+  ```
+
+### 1.5 MCP Configuration
+- [ ] **Enhanced Configuration System**
+  ```yaml
+  mcp:
+    server:
+      enabled: true
+      transport: "sse"
+      bind_address: "0.0.0.0:8090"
+      
+      auth:
+        type: "api_key"
+        api_keys:
+          - key: "${MCP_API_KEY_AI_ASSISTANT}"
+            name: "ai-assistant"
+            permissions:
+              can_execute_tasks: true
+              can_read_logs: true
+              allowed_task_patterns: ["safe-*", "read-only-*"]
+      
+      security:
+        max_execution_time: 300
+        audit_log_enabled: true
+        input_sanitization: true
+      
+      performance:
+        max_concurrent_executions_per_client: 5
+        connection_pool_size: 20
+        enable_compression: true
+  ```
+
+**Priority Rationale**: MCP server implementation enables LLMs to control Ratchet directly, providing AI-powered debugging, workflow orchestration, and automated operations. This creates significant competitive advantage and unlocks new use cases.
+
+**Timeline**: 5-6 weeks for complete MCP server implementation
+
+---
+
+## 🚀 **Phase 2: Security & Production Readiness** (HIGH PRIORITY)
+
+### 2.1 Authentication & Authorization System
 - [ ] **JWT Authentication Middleware** 
   - [ ] Create `src/rest/middleware/auth.rs` with JWT validation
   - [ ] Implement login/logout endpoints (`src/rest/handlers/auth.rs`)
@@ -181,7 +332,7 @@
 - [ ] Authorization Model: RBAC vs ABAC vs Custom
 - [ ] Session Storage: In-memory vs Redis vs Database
 
-### 1.2 Output Destination Integration & API Updates
+### 2.2 Output Destination Integration & API Updates
 - [ ] **Complete Output Destination Integration**
   - [ ] Integrate output delivery with job execution pipeline
   - [ ] Update REST API endpoints for output destination CRUD
@@ -195,7 +346,7 @@
   - [ ] Message queue destination (Redis, RabbitMQ)
   - [ ] Email notification destination
 
-### 1.3 Enhanced Rate Limiting & Security
+### 2.3 Enhanced Rate Limiting & Security
 - [ ] **Advanced Rate Limiting**
   - [ ] Per-user rate limiting with JWT integration
   - [ ] IP-based and user-based quotas
@@ -210,9 +361,9 @@
 
 ---
 
-## 🏗️ **Phase 2: Scalability & Performance** (MEDIUM-HIGH PRIORITY)
+## 🏗️ **Phase 3: Scalability & Performance** (MEDIUM-HIGH PRIORITY)
 
-### 2.1 Logging Infrastructure Completion
+### 3.1 Logging Infrastructure Completion
 - [ ] **Database Storage Backend** (Phase 4 of Logging Plan)
   - [ ] PostgreSQL log storage with optimized schema
   - [ ] Log aggregation and trend analysis
@@ -236,7 +387,7 @@
   pub async fn get_error_analysis(error_id: String) -> Json<LLMErrorReport>
   ```
 
-### 2.2 Distributed Architecture Support
+### 3.2 Distributed Architecture Support
 - [ ] **Distributed Job Queue**
   - [ ] Redis-based distributed job queue implementation
   - [ ] Job coordination with distributed locking
@@ -269,7 +420,7 @@
 - [ ] Service Discovery: Consul vs etcd vs Kubernetes native
 - [ ] Load Balancing Strategy: Round-robin vs Least-connections vs Weighted
 
-### 2.2 Advanced Execution Engine
+### 3.3 Advanced Execution Engine
 - [ ] **Containerized Task Execution**
   - [ ] Docker/Podman integration for task isolation
   - [ ] Resource quotas and limits per task
@@ -293,7 +444,7 @@
 - [ ] Container Runtime: Docker vs Podman vs Native execution
 - [ ] Resource Management: cgroups vs Docker limits vs Custom
 
-### 2.3 Database Scaling
+### 3.4 Database Scaling
 - [ ] **Database Performance**
   - [ ] **Future Enhancement**: PostgreSQL migration path from SQLite (roadmap item)
   - [ ] Database connection pooling optimization
@@ -312,9 +463,9 @@
 
 ---
 
-## 📊 **Phase 3: Observability & Monitoring** (MEDIUM PRIORITY)
+## 📊 **Phase 4: Observability & Monitoring** (MEDIUM PRIORITY)
 
-### 3.1 Comprehensive Monitoring System
+### 4.1 Comprehensive Monitoring System
 - [ ] **Metrics Collection**
   - [ ] Prometheus metrics integration
   - [ ] Custom business metrics for task execution
@@ -339,7 +490,7 @@
   - [ ] Performance bottleneck detection
   - [ ] End-to-end execution tracing
 
-### 3.2 Advanced Logging & Audit
+### 4.2 Advanced Logging & Audit
 - [ ] **Structured Logging**
   - [ ] Correlation IDs for request tracing
   - [ ] Log aggregation and search capabilities
@@ -352,7 +503,7 @@
   - [ ] Compliance reporting capabilities
   - [ ] Data retention policies
 
-### 3.3 Health Monitoring
+### 4.3 Health Monitoring
 - [ ] **Advanced Health Checks**
   - [ ] Deep health checks for all components
   - [ ] Dependency health monitoring
@@ -365,9 +516,34 @@
 
 ---
 
-## 🔧 **Phase 4: Developer Experience** (MEDIUM PRIORITY)
+## 🔧 **Phase 5: JavaScript Integration & Developer Experience** (LOWER PRIORITY)
 
-### 4.1 Task Development Framework
+### 5.1 MCP JavaScript API (Deprioritized)
+- [ ] **JavaScript MCP API Implementation**
+  - [ ] Create `mcp` global object in JavaScript environment
+  - [ ] Implement async MCP operations (`mcp.listServers()`, `mcp.invokeTool()`, `mcp.complete()`)
+  - [ ] Error propagation from Rust to JavaScript
+  - [ ] Connection management from JavaScript context
+  ```javascript
+  // Example usage in tasks:
+  (async function(input) {
+      const tools = await mcp.listTools('claude');
+      const result = await mcp.invokeTool('claude', 'web_search', {
+          query: input.query,
+          max_results: 5
+      });
+      return result;
+  })
+  ```
+
+- [ ] **IPC Integration for MCP**
+  - [ ] Extend worker messages for MCP operations
+  - [ ] Handle MCP requests in worker process
+  - [ ] Implement response routing and correlation
+
+**Note**: This phase is deprioritized in favor of MCP server implementation. JavaScript integration can be added later once the core MCP server infrastructure is stable.
+
+### 5.2 Task Development Framework
 - [ ] **Task SDK Development**
   - [ ] TypeScript SDK with type definitions
   - [ ] Python SDK for Python tasks
@@ -393,7 +569,7 @@
   - [ ] Mock services for external dependencies
   - [ ] Performance testing tools
 
-### 4.2 Enhanced APIs
+### 5.3 Enhanced APIs
 - [ ] **GraphQL Enhancements**
   - [ ] GraphQL subscriptions for real-time updates
   - [ ] GraphQL Federation for microservices
@@ -407,7 +583,7 @@
   - [ ] Bulk operations API
   - [ ] Advanced filtering and search capabilities
 
-### 4.3 Development Tools
+### 5.4 Development Tools
 - [ ] **CLI Enhancements**
   - [ ] Task scaffolding and generation tools
   - [ ] Development server with hot reloading
@@ -422,9 +598,9 @@
 
 ---
 
-## 🏗️ **Phase 5: Advanced Features** (LOWER PRIORITY)
+## 🏗️ **Phase 6: Advanced Features** (LOWER PRIORITY)
 
-### 5.1 Workflow Engine
+### 6.1 Workflow Engine
 - [ ] **DAG-based Workflows**
   - [ ] Workflow definition language
   - [ ] Visual workflow designer
@@ -456,7 +632,7 @@
   - [ ] Error handling and recovery
   - [ ] Workflow monitoring and analytics
 
-### 5.2 Multi-tenancy Support
+### 6.2 Multi-tenancy Support
 - [ ] **Tenant Isolation**
   - [ ] Tenant-specific task namespaces
   - [ ] Resource quotas per tenant
@@ -469,7 +645,7 @@
   - [ ] Usage analytics and insights
   - [ ] Cost optimization recommendations
 
-### 5.3 Advanced Integrations
+### 6.3 Advanced Integrations
 - [ ] **External Service Integrations**
   - [ ] Message queue integrations (RabbitMQ, Apache Kafka)
   - [ ] Cloud service integrations (AWS, GCP, Azure)
@@ -486,18 +662,18 @@
 
 ## 📈 **Implementation Timeline**
 
-### **Quarter 1: Security Foundation** (Next 3 months)
+### **Quarter 1: MCP Server Foundation** (Next 3 months)
 ```
-Month 1: JWT authentication & authorization system
-Month 2: Security hardening & audit logging
-Month 3: Enhanced rate limiting & monitoring
+Month 1: MCP architecture foundation & protocol implementation
+Month 2: MCP server with tool registry & security
+Month 3: Performance optimization & production hardening
 ```
 
-### **Quarter 2: Scalability** (Months 4-6)
+### **Quarter 2: Security & Scalability** (Months 4-6)
 ```
-Month 4: Distributed job queue implementation
-Month 5: Worker node discovery & management
-Month 6: Performance optimization & load testing
+Month 4: JWT authentication & authorization system
+Month 5: Distributed job queue implementation
+Month 6: Worker node discovery & performance optimization
 ```
 
 ### **Quarter 3: Observability** (Months 7-9)
@@ -507,10 +683,10 @@ Month 8: Distributed tracing & logging
 Month 9: Health monitoring & alerting
 ```
 
-### **Quarter 4: Developer Experience** (Months 10-12)
+### **Quarter 4: JavaScript Integration & Developer Experience** (Months 10-12)
 ```
-Month 10: Task SDK development
-Month 11: Enhanced APIs & tooling
+Month 10: JavaScript MCP API implementation
+Month 11: Task SDK development & enhanced APIs
 Month 12: Documentation & developer tools
 ```
 
@@ -518,7 +694,31 @@ Month 12: Documentation & developer tools
 
 ## 🎯 **Immediate Next Steps** (Next 2-4 weeks)
 
-### **Priority 0: Production-Ready REST & GraphQL Servers**
+### **Priority 0: MCP Server Architecture Foundation**
+1. **Create ratchet-mcp Crate**
+   ```rust
+   // New crate structure to create:
+   ratchet-mcp/
+   ├── Cargo.toml
+   └── src/
+       ├── lib.rs
+       ├── server/          // MCP server implementation
+       ├── transport/       // stdio and SSE transports  
+       ├── protocol/        // JSON-RPC 2.0 & MCP messages
+       └── security/        // Auth & access control
+   ```
+
+2. **Enhanced Worker Architecture**
+   - Implement bidirectional IPC for MCP message routing
+   - Add support for persistent connections in worker processes
+   - Create connection pooling and health monitoring infrastructure
+
+3. **MCP Protocol Foundation**
+   - Implement JSON-RPC 2.0 message types
+   - Create MCP-specific message types (initialize, tools/list, tools/call)
+   - Add protocol handshake and capability negotiation
+
+### **Priority 1: Production-Ready REST & GraphQL Servers**
 1. **Dependency Version Resolution**
    ```rust
    // Critical dependency upgrades needed:
@@ -540,7 +740,7 @@ Month 12: Documentation & developer tools
    - Set up monitoring endpoints and metrics collection
    - Create comprehensive API documentation
 
-### **Priority 1: Authentication Implementation** (After API Server)
+### **Priority 2: Authentication Implementation** (After MCP & API Server)
 1. **Create Authentication System**
    ```rust
    // Files to create in ratchet-api:
@@ -560,7 +760,7 @@ Month 12: Documentation & developer tools
    - Add user context to GraphQL resolvers
    - Implement proper error handling for auth failures
 
-### **Priority 2: Production Configuration**
+### **Priority 3: Production Configuration**
 1. **Enhanced Configuration**
    ```rust
    pub struct SecurityConfig {
