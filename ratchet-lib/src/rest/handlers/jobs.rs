@@ -133,7 +133,7 @@ pub async fn get_job(
     let queue_position = if job.status == JobStatus::Queued {
         let position = Jobs::find()
             .filter(jobs::Column::Status.eq(JobStatus::Queued))
-            .filter(jobs::Column::Priority.gte(job.priority.clone()))
+            .filter(jobs::Column::Priority.gte(job.priority))
             .filter(jobs::Column::QueuedAt.lt(job.queued_at))
             .count(db)
             .await
@@ -144,7 +144,7 @@ pub async fn get_job(
     };
 
     let output_destinations = job.output_destinations
-        .and_then(|json| serde_json::from_value(json.into()).ok());
+        .and_then(|json| serde_json::from_value(json).ok());
     
     let response = JobDetailResponse {
         id: job.id,
@@ -206,10 +206,10 @@ pub async fn create_job(
         active_job.retry_delay_seconds = ActiveValue::Set(retry_delay);
     }
     if let Some(metadata) = payload.metadata {
-        active_job.metadata = ActiveValue::Set(Some(sea_orm::prelude::Json::from(metadata)));
+        active_job.metadata = ActiveValue::Set(Some(metadata));
     }
     if let Some(destinations) = payload.output_destinations {
-        active_job.output_destinations = ActiveValue::Set(Some(sea_orm::prelude::Json::from(serde_json::to_value(destinations).unwrap())));
+        active_job.output_destinations = ActiveValue::Set(Some(serde_json::to_value(destinations).unwrap()));
     }
 
     let created_job = active_job

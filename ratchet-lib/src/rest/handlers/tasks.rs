@@ -171,7 +171,7 @@ pub async fn update_task(
         ));
     }
 
-    return Err(RestError::BadRequest("No valid updates provided".to_string()));
+    Err(RestError::BadRequest("No valid updates provided".to_string()))
 }
 
 /// POST /api/v1/tasks - Create a task (not supported for registry tasks)

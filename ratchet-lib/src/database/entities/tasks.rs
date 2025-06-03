@@ -89,14 +89,14 @@ impl Model {
             description: Some(task.metadata.description.clone()),
             version: task.metadata.version.clone(),
             path: task.path.to_string_lossy().to_string(),
-            metadata: Json::from(serde_json::json!({
+            metadata: serde_json::json!({
                 "uuid": task.metadata.uuid,
                 "version": task.metadata.version,
                 "label": task.metadata.label,
                 "description": task.metadata.description,
-            })),
-            input_schema: Json::from(task.input_schema.clone()),
-            output_schema: Json::from(task.output_schema.clone()),
+            }),
+            input_schema: task.input_schema.clone(),
+            output_schema: task.output_schema.clone(),
             enabled: true,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),

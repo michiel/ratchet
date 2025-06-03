@@ -51,7 +51,7 @@ pub async fn request_id_middleware<B>(
         .get(REQUEST_ID_HEADER)
         .and_then(|h| h.to_str().ok())
         .map(|s| RequestId::from_string(s.to_string()))
-        .unwrap_or_else(RequestId::new);
+        .unwrap_or_default();
 
     // Store request ID in request extensions for handlers to access
     request.extensions_mut().insert(Arc::new(request_id.clone()));
@@ -64,7 +64,9 @@ pub async fn request_id_middleware<B>(
         uri = %request.uri(),
     );
 
-    let response = async move {
+    
+
+    async move {
         let mut response = next.run(request).await;
 
         // Add request ID to response headers
@@ -73,9 +75,7 @@ pub async fn request_id_middleware<B>(
         }
 
         response
-    }.instrument(span).await;
-
-    response
+    }.instrument(span).await
 }
 
 /// Extension trait for extracting request ID from axum requests
@@ -92,7 +92,7 @@ impl<B> RequestIdExt for Request<B> {
     }
 
     fn request_id_or_generate(&self) -> RequestId {
-        self.request_id().unwrap_or_else(RequestId::new)
+        self.request_id().unwrap_or_default()
     }
 }
 
@@ -111,7 +111,7 @@ where
             .extensions
             .get::<Arc<RequestId>>()
             .map(|id| id.as_ref().clone())
-            .unwrap_or_else(RequestId::new))
+            .unwrap_or_default())
     }
 }
 

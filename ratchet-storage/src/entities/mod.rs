@@ -120,6 +120,12 @@ pub struct Query {
     pub filter: Filter,
 }
 
+impl Default for Query {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Query {
     /// Create a new query with default parameters
     pub fn new() -> Self {

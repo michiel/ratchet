@@ -49,7 +49,7 @@ impl StaticPluginLoader {
 
     /// Discover static plugins using inventory
     pub fn discover_static_plugins() -> Self {
-        let loader = Self::new();
+        
         
         // TODO: Use inventory to collect static plugins when needed
         // The inventory crate pattern would be:
@@ -58,7 +58,7 @@ impl StaticPluginLoader {
         // }
         // This requires setting up proper inventory submission patterns.
         
-        loader
+        Self::new()
     }
 }
 
@@ -152,7 +152,7 @@ impl DynamicPluginLoader {
             // Get the plugin factory function
             let factory: libloading::Symbol<PluginFactory> = lib
                 .get(b"create_plugin")
-                .map_err(|e| PluginError::DynamicLoadingError(e.into()))?;
+                .map_err(PluginError::DynamicLoadingError)?;
 
             // Create the plugin
             let plugin = factory();
@@ -577,8 +577,8 @@ mod tests {
         let loader = ConfiguredPluginLoader::new(config);
 
         assert_eq!(loader.loader_type(), "configured");
-        assert_eq!(loader.config().enable_static, true);
-        assert_eq!(loader.config().enable_dynamic, true);
+        assert!(loader.config().enable_static);
+        assert!(loader.config().enable_dynamic);
     }
 
     #[test]

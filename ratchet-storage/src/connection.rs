@@ -100,6 +100,12 @@ pub struct InMemoryConnectionManager {
     stats: Arc<RwLock<ConnectionStats>>,
 }
 
+impl Default for InMemoryConnectionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryConnectionManager {
     /// Create a new in-memory connection manager
     pub fn new() -> Self {

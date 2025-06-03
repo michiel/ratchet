@@ -72,8 +72,10 @@ pub struct Execution {
 /// Execution status enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ExecutionStatus {
     /// Execution is queued and waiting to be processed
+    #[default]
     Pending,
     
     /// Execution is currently running
@@ -295,11 +297,6 @@ impl Execution {
     }
 }
 
-impl Default for ExecutionStatus {
-    fn default() -> Self {
-        ExecutionStatus::Pending
-    }
-}
 
 impl std::fmt::Display for ExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

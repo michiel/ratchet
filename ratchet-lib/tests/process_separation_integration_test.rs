@@ -121,7 +121,7 @@ async fn test_worker_process_manager_lifecycle() {
     if start_result.is_ok() {
         // If workers started successfully, test stats
         let stats = manager.get_worker_stats().await;
-        assert!(stats.len() > 0);
+        assert!(!stats.is_empty());
         
         // Test health checks
         let health_results = manager.health_check_all().await;
@@ -234,14 +234,14 @@ async fn test_process_executor_with_valid_task_structure() {
         description: Some("Task for testing process separation architecture".to_string()),
         version: "1.0.0".to_string(),
         path: task_path,
-        metadata: sea_orm::entity::prelude::Json::from(serde_json::json!({
+        metadata: serde_json::json!({
             "uuid": "integration-test-task",
             "version": "1.0.0",
             "label": "Integration Test Task",
             "description": "Task for testing process separation architecture"
-        })),
-        input_schema: sea_orm::entity::prelude::Json::from(input_schema),
-        output_schema: sea_orm::entity::prelude::Json::from(output_schema),
+        }),
+        input_schema: input_schema,
+        output_schema: output_schema,
         enabled: true,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
@@ -275,7 +275,7 @@ async fn test_process_executor_with_valid_task_structure() {
         
         assert_eq!(execution.task_id, created_task.id);
         // Compare JSON values (note: Sea-ORM Json wraps serde_json::Value)
-        let execution_input: serde_json::Value = execution.input.clone().into();
+        let execution_input: serde_json::Value = execution.input.clone();
         assert_eq!(execution_input, input_data);
         
         // Status should be either completed or failed
@@ -324,14 +324,14 @@ async fn test_concurrent_process_executor_operations() {
         description: Some("Task for testing concurrent execution".to_string()),
         version: "1.0.0".to_string(),
         path: task_path,
-        metadata: sea_orm::entity::prelude::Json::from(serde_json::json!({
+        metadata: serde_json::json!({
             "uuid": "concurrent-test-task",
             "version": "1.0.0",
             "label": "Concurrent Test Task",
             "description": "Task for testing concurrent execution"
-        })),
-        input_schema: sea_orm::entity::prelude::Json::from(input_schema),
-        output_schema: sea_orm::entity::prelude::Json::from(output_schema),
+        }),
+        input_schema: input_schema,
+        output_schema: output_schema,
         enabled: true,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),

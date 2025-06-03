@@ -155,13 +155,9 @@ impl HttpManager {
         
         // Extract headers for recording
         let request_headers: Option<HashMap<String, String>> = if let Some(params) = params {
-            if let Some(headers) = params.get("headers").and_then(|h| h.as_object()) {
-                Some(headers.iter().filter_map(|(k, v)| {
+            params.get("headers").and_then(|h| h.as_object()).map(|headers| headers.iter().filter_map(|(k, v)| {
                     v.as_str().map(|s| (k.clone(), s.to_string()))
                 }).collect())
-            } else {
-                None
-            }
         } else {
             None
         };

@@ -92,7 +92,7 @@ impl Model {
             id: 0, // Will be set by database
             uuid: Uuid::new_v4(),
             task_id,
-            input: Json::from(input),
+            input,
             output: None,
             status: ExecutionStatus::Pending,
             error_message: None,
@@ -115,7 +115,7 @@ impl Model {
     /// Mark execution as completed with output
     pub fn complete(&mut self, output: serde_json::Value) {
         self.status = ExecutionStatus::Completed;
-        self.output = Some(Json::from(output));
+        self.output = Some(output);
         self.completed_at = Some(chrono::Utc::now());
         
         // Calculate duration if we have start time
@@ -129,7 +129,7 @@ impl Model {
     pub fn fail(&mut self, error: String, details: Option<serde_json::Value>) {
         self.status = ExecutionStatus::Failed;
         self.error_message = Some(error);
-        self.error_details = details.map(Json::from);
+        self.error_details = details;
         self.completed_at = Some(chrono::Utc::now());
         
         // Calculate duration if we have start time

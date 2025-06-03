@@ -21,6 +21,7 @@ pub enum ConfigError {
 /// Main Ratchet configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct RatchetConfig {
     /// Task execution configuration
     #[serde(default)]
@@ -336,19 +337,6 @@ mod serde_duration_seconds {
     }
 }
 
-impl Default for RatchetConfig {
-    fn default() -> Self {
-        Self {
-            execution: ExecutionConfig::default(),
-            http: HttpConfig::default(),
-            cache: CacheConfig::default(),
-            logging: crate::logging::LoggingConfig::default(),
-            output: OutputConfig::default(),
-            server: None,
-            registry: None,
-        }
-    }
-}
 
 impl Default for ExecutionConfig {
     fn default() -> Self {

@@ -617,9 +617,9 @@ mod tests {
             description: Some("A test task for process executor testing".to_string()),
             version: "1.0.0".to_string(),
             path: task_path_str.clone(),
-            metadata: sea_orm::entity::prelude::Json::from(metadata),
-            input_schema: sea_orm::entity::prelude::Json::from(input_schema),
-            output_schema: sea_orm::entity::prelude::Json::from(output_schema),
+            metadata: metadata,
+            input_schema: input_schema,
+            output_schema: output_schema,
             enabled: true,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -713,7 +713,7 @@ mod tests {
         
         assert_eq!(execution.task_id, task_id);
         // Compare JSON values (note: Sea-ORM Json wraps serde_json::Value)
-        let execution_input: serde_json::Value = execution.input.clone().into();
+        let execution_input: serde_json::Value = execution.input.clone();
         assert_eq!(execution_input, input_data);
         
         // Status should be either completed or failed (depending on worker availability)
@@ -766,7 +766,7 @@ mod tests {
         
         assert_eq!(execution.task_id, task_id);
         // Compare JSON values (note: Sea-ORM Json wraps serde_json::Value)
-        let execution_input: serde_json::Value = execution.input.clone().into();
+        let execution_input: serde_json::Value = execution.input.clone();
         assert_eq!(execution_input, input_data);
         
         // Both execution and job status should be updated (may be completed, failed, or retrying since workers might not be available)
@@ -840,7 +840,7 @@ mod tests {
         
         // Should have worker stats (even if empty)
         let stats = manager_guard.get_worker_stats().await;
-        assert!(stats.len() == 0); // No workers started yet
+        assert!(stats.is_empty()); // No workers started yet
         
         drop(manager_guard);
         

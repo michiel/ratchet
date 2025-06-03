@@ -59,8 +59,10 @@ pub struct RegistrySourceConfig {
 /// Registry source type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RegistrySourceType {
     /// Local filesystem source
+    #[default]
     Filesystem,
     /// HTTP/HTTPS source
     Http,
@@ -73,6 +75,7 @@ pub enum RegistrySourceType {
 /// Source-specific configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct SourceSpecificConfig {
     /// Filesystem-specific configuration
     pub filesystem: FilesystemSourceConfig,
@@ -224,22 +227,7 @@ impl Default for RegistryConfig {
     }
 }
 
-impl Default for RegistrySourceType {
-    fn default() -> Self {
-        RegistrySourceType::Filesystem
-    }
-}
 
-impl Default for SourceSpecificConfig {
-    fn default() -> Self {
-        Self {
-            filesystem: FilesystemSourceConfig::default(),
-            http: HttpSourceConfig::default(),
-            git: GitSourceConfig::default(),
-            s3: S3SourceConfig::default(),
-        }
-    }
-}
 
 impl Default for FilesystemSourceConfig {
     fn default() -> Self {

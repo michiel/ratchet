@@ -45,6 +45,7 @@ pub struct DatabaseConfig {
 /// Database-specific configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct DatabaseSpecificConfig {
     /// SQLite-specific configuration
     pub sqlite: SqliteConfig,
@@ -155,15 +156,6 @@ impl Default for DatabaseConfig {
     }
 }
 
-impl Default for DatabaseSpecificConfig {
-    fn default() -> Self {
-        Self {
-            sqlite: SqliteConfig::default(),
-            postgres: PostgresConfig::default(),
-            mysql: MysqlConfig::default(),
-        }
-    }
-}
 
 impl Default for SqliteConfig {
     fn default() -> Self {

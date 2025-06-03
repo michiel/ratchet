@@ -164,7 +164,7 @@ impl OutputDeliveryManager {
             total_duration,
         );
         
-        Ok(delivery_results.into_iter().collect::<Result<Vec<_>, _>>()?)
+        delivery_results.into_iter().collect::<Result<Vec<_>, _>>()
     }
 
     /// Test delivery configurations without actually delivering
@@ -251,7 +251,7 @@ impl OutputDeliveryManager {
             } => {
                 let webhook_config = WebhookConfig {
                     url_template: url.clone(),
-                    method: method.clone(),
+                    method: *method,
                     headers: headers.clone(),
                     timeout: *timeout,
                     retry_policy: retry_policy.clone(),

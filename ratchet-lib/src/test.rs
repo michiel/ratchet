@@ -111,7 +111,7 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
         };
         
         // Check for optional mock data
-        let mock = test_json.get("mock").map(|m| m.clone());
+        let mock = test_json.get("mock").cloned();
         
         let test_name = path.file_name().unwrap().to_string_lossy();
         debug!("Loaded test case: {}", test_name);

@@ -119,7 +119,7 @@ impl MatchingRule {
             }
             
             Self::FieldPattern { field, pattern } => {
-                error.context.get(field).and_then(|v| v.as_str()).map_or(false, |s| {
+                error.context.get(field).and_then(|v| v.as_str()).is_some_and(|s| {
                     match Regex::new(pattern) {
                         Ok(re) => re.is_match(s),
                         Err(_) => false,

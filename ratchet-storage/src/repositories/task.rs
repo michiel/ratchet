@@ -8,7 +8,7 @@ use crate::{
     connection::ConnectionManager,
     entities::{task::{Task, TaskStatus}, Query},
     repositories::{Repository, BaseRepository, BaseRepositoryImpl},
-    StorageResult, StorageError,
+    StorageResult,
 };
 
 /// Task repository for managing task entities

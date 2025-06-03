@@ -85,7 +85,7 @@ impl Model {
             task_id,
             name,
             cron_expression,
-            input_data: Json::from(input_data),
+            input_data,
             enabled: true,
             next_run_at: None, // Will be calculated by scheduler
             last_run_at: None,

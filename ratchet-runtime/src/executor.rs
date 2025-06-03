@@ -9,7 +9,7 @@ use log::{debug, info, warn};
 use uuid::Uuid;
 
 use ratchet_core::{task::Task, RatchetError, Result};
-use ratchet_ipc::{TaskExecutionResult, WorkerMessage};
+use ratchet_ipc::WorkerMessage;
 use crate::process::{WorkerProcessManager, WorkerConfig, WorkerProcessError};
 
 /// Task executor trait

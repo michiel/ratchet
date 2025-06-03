@@ -9,6 +9,12 @@ use crate::task::Task;
 
 pub struct FilesystemTaskLoader;
 
+impl Default for FilesystemTaskLoader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FilesystemTaskLoader {
     pub fn new() -> Self {
         Self

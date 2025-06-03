@@ -141,7 +141,7 @@ impl WebhookDestination {
     /// Check if HTTP status should trigger a retry
     fn should_retry_status(&self, status: u16) -> bool {
         self.config.retry_policy.retry_on_status.contains(&status) ||
-            (status >= 500 && status < 600) || // Server errors
+            (500..600).contains(&status) || // Server errors
             status == 429 // Rate limited
     }
 

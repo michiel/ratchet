@@ -28,7 +28,9 @@ pub struct Schedule {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ScheduleStatus {
+    #[default]
     Active,
     Inactive,
     Completed,
@@ -68,11 +70,8 @@ impl Schedule {
     pub fn is_ready_to_run(&self) -> bool {
         self.enabled && 
         matches!(self.status, ScheduleStatus::Active) &&
-        self.next_run_at.map_or(false, |next| Utc::now() >= next) &&
+        self.next_run_at.is_some_and(|next| Utc::now() >= next) &&
         self.max_executions.map_or(true, |max| self.execution_count < max)
     }
 }
 
-impl Default for ScheduleStatus {
-    fn default() -> Self { ScheduleStatus::Active }
-}

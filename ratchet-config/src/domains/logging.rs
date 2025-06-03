@@ -33,9 +33,11 @@ pub struct LoggingConfig {
 /// Log level enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum LogLevel {
     Error,
     Warn,
+    #[default]
     Info,
     Debug,
     Trace,
@@ -44,8 +46,10 @@ pub enum LogLevel {
 /// Log format enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum LogFormat {
     Json,
+    #[default]
     Text,
     Compact,
     Pretty,
@@ -90,17 +94,7 @@ impl Default for LoggingConfig {
     }
 }
 
-impl Default for LogLevel {
-    fn default() -> Self {
-        LogLevel::Info
-    }
-}
 
-impl Default for LogFormat {
-    fn default() -> Self {
-        LogFormat::Text
-    }
-}
 
 impl FromStr for LogLevel {
     type Err = String;

@@ -8,6 +8,12 @@ pub struct SafeFilterBuilder<E: EntityTrait> {
     _phantom: std::marker::PhantomData<E>,
 }
 
+impl<E: EntityTrait> Default for SafeFilterBuilder<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<E: EntityTrait> SafeFilterBuilder<E> {
     pub fn new() -> Self {
         Self {

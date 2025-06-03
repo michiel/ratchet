@@ -160,7 +160,7 @@ pub async fn update_execution(
             (DbExecutionStatus::Running, DbExecutionStatus::Completed) => {
                 execution.status = db_new_status;
                 if let Some(output) = request.output {
-                    execution.output = Some(sea_orm::prelude::Json::from(output));
+                    execution.output = Some(output);
                 }
                 execution.completed_at = Some(chrono::Utc::now());
                 
@@ -178,7 +178,7 @@ pub async fn update_execution(
                     execution.error_message = Some(error_msg);
                 }
                 if let Some(error_details) = request.error_details {
-                    execution.error_details = Some(sea_orm::prelude::Json::from(error_details));
+                    execution.error_details = Some(error_details);
                 }
                 execution.completed_at = Some(chrono::Utc::now());
                 

@@ -30,7 +30,9 @@ pub struct PaginationInput {
 /// Sort order
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum SortOrder {
+    #[default]
     Asc,
     Desc,
 }
@@ -86,11 +88,6 @@ impl Default for PaginationInput {
     }
 }
 
-impl Default for SortOrder {
-    fn default() -> Self {
-        SortOrder::Asc
-    }
-}
 
 impl PaginationInput {
     /// Create new pagination input

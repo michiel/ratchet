@@ -39,6 +39,12 @@ pub struct SystemEnricher {
     hostname: String,
 }
 
+impl Default for SystemEnricher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemEnricher {
     pub fn new() -> Self {
         Self {
@@ -61,6 +67,12 @@ impl Enricher for SystemEnricher {
 pub struct ProcessEnricher {
     process_id: u32,
     process_name: String,
+}
+
+impl Default for ProcessEnricher {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProcessEnricher {
@@ -102,6 +114,12 @@ impl Enricher for ProcessEnricher {
 /// Enricher that adds task context
 pub struct TaskContextEnricher;
 
+impl Default for TaskContextEnricher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TaskContextEnricher {
     pub fn new() -> Self {
         Self
@@ -121,6 +139,12 @@ impl Enricher for TaskContextEnricher {
 
 /// Enricher that adds execution context
 pub struct ExecutionContextEnricher;
+
+impl Default for ExecutionContextEnricher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ExecutionContextEnricher {
     pub fn new() -> Self {

@@ -72,8 +72,10 @@ pub enum OutputDestinationConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum OutputFormat {
     #[serde(rename = "json")]
+    #[default]
     Json,           // Pretty JSON
     #[serde(rename = "json_compact")]
     JsonCompact,    // Minified JSON
@@ -87,11 +89,6 @@ pub enum OutputFormat {
     Template(String), // Custom template
 }
 
-impl Default for OutputFormat {
-    fn default() -> Self {
-        OutputFormat::Json
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WebhookAuth {

@@ -1,6 +1,5 @@
 use ratchet_lib::config::{RatchetConfig, OutputConfig, RetryPolicyConfig, ConfigError, OutputDestinationTemplate, OutputDestinationConfigTemplate, WebhookAuthConfig};
 use std::time::Duration;
-use serde_yaml;
 use tempfile::NamedTempFile;
 use std::io::Write;
 
@@ -10,7 +9,7 @@ fn test_output_config_defaults() {
     
     assert_eq!(config.max_concurrent_deliveries, 10);
     assert_eq!(config.default_timeout, Duration::from_secs(30));
-    assert_eq!(config.validate_on_startup, true);
+    assert!(config.validate_on_startup);
     assert_eq!(config.global_destinations.len(), 0);
     assert_eq!(config.default_retry_policy.max_attempts, 3);
 }

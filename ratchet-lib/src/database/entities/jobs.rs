@@ -7,10 +7,12 @@ use std::fmt;
 /// Job priority enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
+#[derive(Default)]
 pub enum JobPriority {
     #[sea_orm(string_value = "low")]
     Low,
     #[sea_orm(string_value = "normal")]
+    #[default]
     Normal,
     #[sea_orm(string_value = "high")]
     High,
@@ -144,11 +146,6 @@ impl Related<super::schedules::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}
 
-impl Default for JobPriority {
-    fn default() -> Self {
-        JobPriority::Normal
-    }
-}
 
 impl JobPriority {
     /// Get numeric priority value for ordering (higher number = higher priority)
@@ -214,7 +211,7 @@ impl Model {
             schedule_id: None,
             priority,
             status: JobStatus::Queued,
-            input_data: Json::from(input_data),
+            input_data,
             retry_count: 0,
             max_retries: 3, // Default retry limit
             retry_delay_seconds: 60, // Default 1 minute delay
@@ -258,7 +255,7 @@ impl Model {
     /// Mark job as failed and prepare for retry
     pub fn fail(&mut self, error: String, details: Option<serde_json::Value>) -> bool {
         self.error_message = Some(error);
-        self.error_details = details.map(Json::from);
+        self.error_details = details;
         self.retry_count += 1;
         
         if self.retry_count < self.max_retries {

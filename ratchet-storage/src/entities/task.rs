@@ -66,8 +66,10 @@ pub struct Task {
 /// Task status enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TaskStatus {
     /// Task is being processed/validated
+    #[default]
     Pending,
     
     /// Task is active and ready for execution
@@ -228,17 +230,12 @@ impl Task {
         let query = query.to_lowercase();
         
         self.name.to_lowercase().contains(&query) ||
-        self.description.as_ref().map_or(false, |d| d.to_lowercase().contains(&query)) ||
+        self.description.as_ref().is_some_and(|d| d.to_lowercase().contains(&query)) ||
         self.tags.iter().any(|tag| tag.to_lowercase().contains(&query)) ||
         self.version.to_lowercase().contains(&query)
     }
 }
 
-impl Default for TaskStatus {
-    fn default() -> Self {
-        TaskStatus::Pending
-    }
-}
 
 impl std::fmt::Display for TaskStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

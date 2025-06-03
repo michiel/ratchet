@@ -8,7 +8,9 @@ use thiserror::Error;
 /// HTTP methods supported by the Ratchet HTTP client
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[derive(Default)]
 pub enum HttpMethod {
+    #[default]
     Get,
     Post,
     Put,
@@ -46,11 +48,6 @@ impl HttpMethod {
     }
 }
 
-impl Default for HttpMethod {
-    fn default() -> Self {
-        HttpMethod::Get
-    }
-}
 
 impl fmt::Display for HttpMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -78,9 +75,11 @@ impl FromStr for HttpMethod {
 /// Log levels supported by the Ratchet framework
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum LogLevel {
     Trace,
     Debug,
+    #[default]
     Info,
     Warn,
     Error,
@@ -110,11 +109,6 @@ impl LogLevel {
     }
 }
 
-impl Default for LogLevel {
-    fn default() -> Self {
-        LogLevel::Info
-    }
-}
 
 impl fmt::Display for LogLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -140,8 +134,10 @@ impl FromStr for LogLevel {
 /// Job/Task priority levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Priority {
     Low,
+    #[default]
     Normal,
     High,
     Urgent,
@@ -169,11 +165,6 @@ impl Priority {
     }
 }
 
-impl Default for Priority {
-    fn default() -> Self {
-        Priority::Normal
-    }
-}
 
 impl fmt::Display for Priority {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

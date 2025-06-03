@@ -194,7 +194,7 @@ pub async fn create_schedule(
         active_schedule.max_executions = ActiveValue::Set(Some(max_executions));
     }
     if let Some(metadata) = payload.metadata {
-        active_schedule.metadata = ActiveValue::Set(Some(sea_orm::prelude::Json::from(metadata)));
+        active_schedule.metadata = ActiveValue::Set(Some(metadata));
     }
 
     let created_schedule = active_schedule
@@ -204,7 +204,7 @@ pub async fn create_schedule(
 
     // Calculate next run time
     let next_run = created_schedule.calculate_next_run()
-        .map_err(|e| RestError::BadRequest(e))?
+        .map_err(RestError::BadRequest)?
         .ok_or_else(|| RestError::BadRequest("Schedule is exhausted or disabled".to_string()))?;
     
     // Update next run time
@@ -252,7 +252,7 @@ pub async fn update_schedule(
         cron_changed = true;
     }
     if let Some(input_data) = payload.input_data {
-        active_schedule.input_data = ActiveValue::Set(sea_orm::prelude::Json::from(input_data));
+        active_schedule.input_data = ActiveValue::Set(input_data);
     }
     if let Some(enabled) = payload.enabled {
         active_schedule.enabled = ActiveValue::Set(enabled);
@@ -261,7 +261,7 @@ pub async fn update_schedule(
         active_schedule.max_executions = ActiveValue::Set(Some(max_executions));
     }
     if let Some(metadata) = payload.metadata {
-        active_schedule.metadata = ActiveValue::Set(Some(sea_orm::prelude::Json::from(metadata)));
+        active_schedule.metadata = ActiveValue::Set(Some(metadata));
     }
 
     active_schedule.updated_at = ActiveValue::Set(chrono::Utc::now());
@@ -274,7 +274,7 @@ pub async fn update_schedule(
     // If cron expression changed, recalculate next run time
     let final_schedule = if cron_changed {
         let next_run = updated_schedule.calculate_next_run()
-            .map_err(|e| RestError::BadRequest(e))?;
+            .map_err(RestError::BadRequest)?;
         
         schedule_repo
             .update_next_run(id, next_run)
@@ -382,7 +382,7 @@ pub async fn trigger_schedule(
     // Create a job for this schedule
     // Convert sea_orm::Json to serde_json::Value
     let input_data: serde_json::Value = serde_json::to_value(&schedule.input_data)
-        .and_then(|v| serde_json::from_value(v))
+        .and_then(serde_json::from_value)
         .unwrap_or(serde_json::Value::Null);
     
     let new_job = crate::database::entities::jobs::Model::new_scheduled(

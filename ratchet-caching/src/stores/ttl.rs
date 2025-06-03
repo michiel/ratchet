@@ -51,7 +51,7 @@ impl<K: CacheKey + 'static, V: CacheValue + 'static> TtlCache<K, V> {
         let expired_keys: Vec<K> = store
             .iter()
             .filter(|(_, entry)| {
-                entry.expires_at.map_or(false, |expires_at| now > expires_at)
+                entry.expires_at.is_some_and(|expires_at| now > expires_at)
             })
             .map(|(k, _)| k.clone())
             .collect();

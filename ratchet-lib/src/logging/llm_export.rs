@@ -407,7 +407,7 @@ pub fn format_markdown_report(report: &LLMErrorReport) -> String {
     let mut output = String::new();
     
     // Header
-    output.push_str(&format!("# Error Analysis Report\n\n"));
+    output.push_str("# Error Analysis Report\n\n");
     output.push_str(&format!("**Generated**: {}\n", report.metadata.generated_at.format("%Y-%m-%d %H:%M:%S UTC")));
     output.push_str(&format!("**Trace ID**: {}\n\n", report.error_summary.trace_id.as_ref().unwrap_or(&"N/A".to_string())));
     
@@ -426,7 +426,7 @@ pub fn format_markdown_report(report: &LLMErrorReport) -> String {
         if let Some(version) = &report.execution_context.task_version {
             output.push_str(&format!("(v{})", version));
         }
-        output.push_str("\n");
+        output.push('\n');
     }
     if let Some(job_id) = report.execution_context.job_id {
         output.push_str(&format!("- **Job ID**: {}\n", job_id));
@@ -446,7 +446,7 @@ pub fn format_markdown_report(report: &LLMErrorReport) -> String {
                 for suggestion in &pattern.suggestions {
                     output.push_str(&format!("- {}\n", suggestion));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
             
             if !pattern.common_causes.is_empty() {
@@ -454,7 +454,7 @@ pub fn format_markdown_report(report: &LLMErrorReport) -> String {
                 for cause in &pattern.common_causes {
                     output.push_str(&format!("- {}\n", cause));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
         }
     }
@@ -505,7 +505,7 @@ mod tests {
         
         assert_eq!(report.error_summary.error_type, "TaskExecutionError");
         assert_eq!(report.execution_context.task_name, Some("weather-api".to_string()));
-        assert!(report.suggested_prompts.len() > 0);
+        assert!(!report.suggested_prompts.is_empty());
     }
     
     #[test]

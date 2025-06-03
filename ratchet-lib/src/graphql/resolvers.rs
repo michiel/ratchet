@@ -427,7 +427,7 @@ impl Mutation {
         );
         
         if let Some(destinations) = output_destinations {
-            job.output_destinations = Some(serde_json::to_value(destinations).unwrap().into());
+            job.output_destinations = Some(serde_json::to_value(destinations).unwrap());
         }
         
         let created_job = context.repositories.job_repository()

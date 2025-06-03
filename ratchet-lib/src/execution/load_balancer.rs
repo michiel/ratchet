@@ -143,6 +143,12 @@ pub struct RoundRobinStrategy {
     counter: AtomicU32,
 }
 
+impl Default for RoundRobinStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RoundRobinStrategy {
     pub fn new() -> Self {
         Self {

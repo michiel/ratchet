@@ -956,10 +956,8 @@ fn main() -> Result<()> {
             if record.is_some() {
                 if let Err(e) = ratchet_lib::recording::finalize_recording() {
                     warn!("Failed to finalize recording: {}", e);
-                } else {
-                    if let Some(dir) = ratchet_lib::recording::get_recording_dir() {
-                        println!("Recording saved to: {:?}", dir);
-                    }
+                } else if let Some(dir) = ratchet_lib::recording::get_recording_dir() {
+                    println!("Recording saved to: {:?}", dir);
                 }
             }
             

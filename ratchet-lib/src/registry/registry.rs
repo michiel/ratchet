@@ -20,6 +20,12 @@ pub struct TaskRegistry {
     sources: Vec<TaskSource>,
 }
 
+impl Default for TaskRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TaskRegistry {
     pub fn new() -> Self {
         Self {

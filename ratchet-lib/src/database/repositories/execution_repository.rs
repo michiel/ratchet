@@ -138,7 +138,7 @@ impl ExecutionRepository {
         let active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(ExecutionStatus::Completed),
-            output: Set(Some(sea_orm::prelude::Json::from(output))),
+            output: Set(Some(output)),
             completed_at: Set(Some(chrono::Utc::now())),
             ..Default::default()
         };
@@ -153,7 +153,7 @@ impl ExecutionRepository {
             id: Set(id),
             status: Set(ExecutionStatus::Failed),
             error_message: Set(Some(error)),
-            error_details: Set(details.map(sea_orm::prelude::Json::from)),
+            error_details: Set(details),
             completed_at: Set(Some(chrono::Utc::now())),
             ..Default::default()
         };

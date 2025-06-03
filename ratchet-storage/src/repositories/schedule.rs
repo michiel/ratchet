@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     connection::ConnectionManager,
-    entities::{schedule::{Schedule, ScheduleStatus}, Query},
+    entities::{schedule::Schedule, Query},
     repositories::{Repository, BaseRepository, BaseRepositoryImpl},
     StorageResult,
 };

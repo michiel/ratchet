@@ -128,7 +128,7 @@ pub struct TestOutputDestinationsResponse {
 impl From<crate::database::entities::jobs::Model> for JobResponse {
     fn from(job: crate::database::entities::jobs::Model) -> Self {
         let output_destinations = job.output_destinations
-            .and_then(|json| serde_json::from_value(json.into()).ok());
+            .and_then(|json| serde_json::from_value(json).ok());
         
         Self {
             id: job.id,

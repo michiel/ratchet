@@ -7,6 +7,12 @@ use crate::task::Task;
 
 pub struct HttpTaskLoader;
 
+impl Default for HttpTaskLoader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HttpTaskLoader {
     pub fn new() -> Self {
         Self

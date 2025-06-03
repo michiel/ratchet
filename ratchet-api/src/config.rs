@@ -182,8 +182,10 @@ pub struct AuthConfig {
 /// Authentication type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum AuthType {
     /// No authentication
+    #[default]
     None,
     
     /// JWT token authentication
@@ -359,11 +361,6 @@ impl Default for CorsConfig {
     }
 }
 
-impl Default for AuthType {
-    fn default() -> Self {
-        AuthType::None
-    }
-}
 
 impl ApiConfig {
     /// Create a development configuration

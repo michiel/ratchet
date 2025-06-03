@@ -20,6 +20,7 @@ pub struct ErrorInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ErrorSuggestions {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub immediate: Vec<String>,
@@ -91,11 +92,3 @@ impl ErrorInfo {
     }
 }
 
-impl Default for ErrorSuggestions {
-    fn default() -> Self {
-        Self {
-            immediate: Vec::new(),
-            preventive: Vec::new(),
-        }
-    }
-}

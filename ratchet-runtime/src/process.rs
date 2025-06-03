@@ -499,7 +499,7 @@ impl WorkerProcessManager {
                     if let Ok(mut pending) = pending_tasks.try_lock() {
                         if let Some(sender) = pending.remove(&correlation_id) {
                             debug!("Resolving pending task with correlation_id: {}", correlation_id);
-                            if let Err(_) = sender.send(result) {
+                            if sender.send(result).is_err() {
                                 warn!("Failed to send task result - receiver may have been dropped");
                             }
                         } else {
@@ -511,7 +511,7 @@ impl WorkerProcessManager {
                     if let Ok(mut pending) = pending_validations.try_lock() {
                         if let Some(sender) = pending.remove(&correlation_id) {
                             debug!("Resolving pending validation with correlation_id: {}", correlation_id);
-                            if let Err(_) = sender.send(result) {
+                            if sender.send(result).is_err() {
                                 warn!("Failed to send validation result - receiver may have been dropped");
                             }
                         }
@@ -521,7 +521,7 @@ impl WorkerProcessManager {
                     if let Ok(mut pending) = pending_health_checks.try_lock() {
                         if let Some(sender) = pending.remove(&correlation_id) {
                             debug!("Resolving pending health check with correlation_id: {}", correlation_id);
-                            if let Err(_) = sender.send(status) {
+                            if sender.send(status).is_err() {
                                 warn!("Failed to send health check result - receiver may have been dropped");
                             }
                         }
@@ -542,7 +542,7 @@ impl WorkerProcessManager {
                                     completed_at: chrono::Utc::now(),
                                     duration_ms: 0,
                                 };
-                                if let Err(_) = sender.send(error_result) {
+                                if sender.send(error_result).is_err() {
                                     warn!("Failed to send error result - receiver may have been dropped");
                                 }
                             }

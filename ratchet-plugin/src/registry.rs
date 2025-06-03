@@ -639,7 +639,7 @@ mod tests {
 
         // Resolve load order
         let load_order = registry
-            .resolve_load_order(&vec!["plugin-c".to_string(), "plugin-a".to_string(), "plugin-b".to_string()])
+            .resolve_load_order(&["plugin-c".to_string(), "plugin-a".to_string(), "plugin-b".to_string()])
             .await
             .unwrap();
 

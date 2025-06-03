@@ -75,11 +75,13 @@ pub struct Job {
 /// Job priority enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum JobPriority {
     /// Low priority job
     Low = 1,
     
     /// Normal priority job (default)
+    #[default]
     Normal = 2,
     
     /// High priority job
@@ -92,8 +94,10 @@ pub enum JobPriority {
 /// Job status enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum JobStatus {
     /// Job is queued and waiting to be processed
+    #[default]
     Queued,
     
     /// Job is currently being processed
@@ -351,17 +355,7 @@ impl Job {
     }
 }
 
-impl Default for JobPriority {
-    fn default() -> Self {
-        JobPriority::Normal
-    }
-}
 
-impl Default for JobStatus {
-    fn default() -> Self {
-        JobStatus::Queued
-    }
-}
 
 impl std::fmt::Display for JobPriority {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
