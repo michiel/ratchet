@@ -15,6 +15,16 @@ pub fn create_api_routes() -> Router<Arc<AppState>> {
         // Health check
         .route("/health", get(handlers::health::health_check))
         
+        // Authentication endpoints
+        .route("/api/v1/auth/login", post(handlers::auth::login))
+        .route("/api/v1/auth/me", get(handlers::auth::me))
+        .route("/api/v1/auth/profile", get(handlers::auth::profile))
+        .route("/api/v1/auth/admin", get(handlers::auth::admin_only))
+        .route("/api/v1/auth/api-key", get(handlers::auth::api_key_protected))
+        .route("/api/v1/auth/flexible", get(handlers::auth::flexible_auth))
+        .route("/api/v1/auth/public", get(handlers::auth::public_info))
+        .route("/api/v1/auth/health", get(handlers::auth::health_with_auth))
+        
         // Task endpoints
         .route("/api/v1/tasks", get(handlers::tasks::list_tasks))
         .route("/api/v1/tasks", post(handlers::tasks::create_task))

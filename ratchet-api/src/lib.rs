@@ -11,6 +11,9 @@ pub mod errors;
 pub mod pagination;
 pub mod types;
 
+#[cfg(feature = "auth")]
+pub mod middleware;
+
 // REST and GraphQL modules
 #[cfg(feature = "rest")]
 pub mod rest;
