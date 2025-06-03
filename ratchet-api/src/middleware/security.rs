@@ -2,7 +2,7 @@
 
 use axum::{
     body::Body,
-    http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode, Request},
+    http::{header, HeaderName, HeaderValue, Request},
     middleware::Next,
     response::Response,
 };

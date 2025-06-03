@@ -2,7 +2,7 @@
 
 use axum::{
     extract::FromRequestParts,
-    http::{header, request::Parts, StatusCode},
+    http::{header, request::Parts},
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -208,7 +208,7 @@ where
 
 /// API key management functions
 pub mod management {
-    use super::*;
+    use rand::Rng;
     
     /// Generate a new API key
     pub fn generate_api_key() -> String {
@@ -232,7 +232,7 @@ pub mod management {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{ApiKeyUser, ApiKeyInfo, management};
 
     #[test]
     fn test_api_key_generation() {

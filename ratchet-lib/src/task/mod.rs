@@ -38,6 +38,7 @@ pub enum TaskError {
     JavaScriptParseError(String),
     
     #[error("ZIP error: {0}")]
+    #[cfg(feature = "output")]
     ZipError(#[from] zip::result::ZipError),
 }
 

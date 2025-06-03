@@ -85,6 +85,7 @@ impl FilesystemDestination {
     }
 
     /// Convert JSON data to CSV format
+    #[cfg(feature = "output")]
     fn convert_to_csv(&self, data: &serde_json::Value) -> Result<Vec<u8>, DeliveryError> {
         match data {
             serde_json::Value::Array(arr) if !arr.is_empty() => {
@@ -169,6 +170,17 @@ impl FilesystemDestination {
                     })
             }
         }
+    }
+    
+    /// Convert JSON data to CSV format (fallback when output feature disabled)
+    #[cfg(not(feature = "output"))]
+    fn convert_to_csv(&self, data: &serde_json::Value) -> Result<Vec<u8>, DeliveryError> {
+        // Fallback to JSON when CSV feature is not available
+        serde_json::to_vec_pretty(data)
+            .map_err(|e| DeliveryError::Serialization {
+                format: "csv_fallback_json".to_string(),
+                error: format!("CSV feature not enabled, falling back to JSON: {}", e),
+            })
     }
 
     /// Backup existing file with timestamp

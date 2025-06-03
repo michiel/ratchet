@@ -73,7 +73,7 @@ futures = { version = "0.3", optional = true }
 # Testing dependencies (only used in #[cfg(test)])
 # Feature flags to reduce compilation complexity
 [features]
-default = ["server", "database", "javascript"]
+default = ["server", "database", "javascript", "output"]
 core = []
 server = ["axum", "tower", "tower-http", "async-graphql", "async-graphql-axum", "futures"]
 database = ["sea-orm", "sqlx", "sea-orm-migration"]

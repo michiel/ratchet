@@ -19,7 +19,7 @@ resolver = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # Reduce tokio feature overhead - specific crates can add features as needed
-tokio = { version = "1.45", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-util", "net", "fs"] }
+tokio = { version = "1.45", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-util", "net", "fs", "signal", "process"] }
 clap = { version = "4.4", features = ["derive"] }
 thiserror = "1.0"
 anyhow = "1.0"
@@ -35,9 +35,9 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"], default-features = false }
 axum = { version = "0.6", default-features = false, features = ["http1", "http2", "json", "original-uri", "form", "headers", "matched-path"] }
 tower = { version = "0.4", default-features = false, features = ["util", "timeout", "limit", "load-shed", "steer"] }
-tower-http = { version = "0.4", features = ["cors", "trace", "timeout", "limit"] }
-# Remove GraphQL dataloader to reduce dependencies unless specifically needed
-async-graphql = { version = "6.0", features = ["uuid", "chrono"], default-features = false }
+tower-http = { version = "0.4", features = ["cors", "trace", "timeout", "limit", "fs"] }
+# GraphQL with essential features
+async-graphql = { version = "6.0", features = ["uuid", "chrono", "graphiql"], default-features = false }
 async-graphql-axum = "6.0"
 # Use reqwest 0.12 to consolidate versions
 reqwest = { version = "0.12", features = ["json", "stream"], default-features = false }

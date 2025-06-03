@@ -1,15 +1,14 @@
 //! Authentication-related REST API handlers
 
 use axum::{
-    extract::Query,
     response::Json,
     http::StatusCode,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::{
     errors::{ApiError, ApiResult},
-    middleware::{AuthUser, JwtAuth, OptionalJwtAuth, ApiKeyAuth, Auth},
+    middleware::{JwtAuth, OptionalJwtAuth, ApiKeyAuth, Auth},
 };
 
 #[cfg(feature = "auth")]

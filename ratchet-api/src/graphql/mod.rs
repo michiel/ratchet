@@ -1,10 +1,12 @@
 //! GraphQL API implementation for Ratchet
 
 use async_graphql::{
-    http::GraphiQLSource,
     EmptySubscription,
     Schema,
 };
+
+#[cfg(feature = "graphql")]
+use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     extract::State,
@@ -35,8 +37,14 @@ pub fn create_graphql_router(config: &ApiConfig, schema: RatchetSchema) -> ApiRe
 }
 
 /// GraphQL playground handler
+#[cfg(feature = "graphql")]
 async fn graphql_playground() -> impl IntoResponse {
     Html(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+#[cfg(not(feature = "graphql"))]
+async fn graphql_playground() -> impl IntoResponse {
+    Html("<h1>GraphQL Playground not available - compile with 'graphql' feature</h1>")
 }
 
 /// GraphQL request handler
