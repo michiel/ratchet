@@ -118,7 +118,7 @@ pub async fn graphql_playground() -> impl IntoResponse {
     errorMessage
   }
 }`,
-                        variables: '{"input": {"taskId": "1", "inputData": {}, "priority": "Normal"}}'
+                        variables: '{"input": {"taskId": "1", "inputData": {}, "priority": "NORMAL"}}'
                     },
                     {
                         name: 'Execute Task Direct',
@@ -247,7 +247,7 @@ pub async fn graphql_playground() -> impl IntoResponse {
     estimatedTimeMs
   }
 }`,
-                        variables: '{"input": {"destinations": [{"destinationType": "Filesystem", "filesystem": {"path": "/tmp/test.json", "format": "Json"}}]}}'
+                        variables: '{"input": {"destinations": [{"destinationType": "FILESYSTEM", "filesystem": {"path": "/tmp/test.json", "format": "JSON"}}]}}'
                     }
                 ]
             })
