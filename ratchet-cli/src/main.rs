@@ -445,7 +445,7 @@ async fn mcp_serve_command(
     
     // Create MCP server config
     let mcp_config = McpConfig {
-        transport_type,
+        transport_type: transport_type.clone(),
         host: host.to_string(),
         port,
         ..Default::default()

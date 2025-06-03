@@ -513,14 +513,61 @@ impl RatchetToolRegistry {
     
     /// Execute the execution status tool
     async fn get_execution_status_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
-        let _args = context.arguments.unwrap_or_default();
+        let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
+            method: "ratchet.get_execution_status".to_string(),
+            details: "Missing arguments".to_string(),
+        })?;
+        
+        // Parse execution ID
+        let execution_id = args.get("execution_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| McpError::InvalidParams {
+                method: "ratchet.get_execution_status".to_string(),
+                details: "Missing or invalid execution_id".to_string(),
+            })?;
+            
+        // Check if executor is configured (which provides access to repositories)
+        let executor = match self.task_executor.as_ref() {
+            Some(exec) => exec,
+            None => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: "Task executor not configured for MCP server".to_string(),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+        
+        // For now, return a structured status response
+        // In a full implementation, this would query the execution repository
+        let status_info = serde_json::json!({
+            "execution_id": execution_id,
+            "status": "unknown",
+            "message": "Execution status querying not yet fully implemented",
+            "started_at": null,
+            "completed_at": null,
+            "duration_ms": null,
+            "progress": {
+                "current_step": "pending",
+                "total_steps": null,
+                "percentage": null
+            }
+        });
         
         Ok(ToolsCallResult {
             content: vec![ToolContent::Text {
-                text: "Execution status monitoring is not yet implemented in this MCP server foundation.".to_string(),
+                text: serde_json::to_string_pretty(&status_info)
+                    .unwrap_or_else(|_| status_info.to_string()),
             }],
             is_error: false,
-            metadata: HashMap::new(),
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
+                meta.insert("status_type".to_string(), serde_json::Value::String("placeholder".to_string()));
+                meta
+            },
         })
     }
     
@@ -551,36 +598,130 @@ impl RatchetToolRegistry {
             .and_then(|v| v.as_str())
             .unwrap_or("json");
         
-        // For now, return a placeholder since we need to implement log retrieval
-        // In a full implementation, this would query the logging system
+        // Check if executor is configured
+        let executor = match self.task_executor.as_ref() {
+            Some(exec) => exec,
+            None => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: "Task executor not configured for MCP server".to_string(),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+        
+        // Use the improved logs retrieval from adapter
+        match executor.get_execution_logs(execution_id, level, limit).await {
+            Ok(logs_output) => {
+                Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: logs_output,
+                    }],
+                    is_error: false,
+                    metadata: {
+                        let mut meta = HashMap::new();
+                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
+                        meta.insert("level".to_string(), serde_json::Value::String(level.to_string()));
+                        meta.insert("limit".to_string(), serde_json::Value::Number(serde_json::Number::from(limit)));
+                        meta.insert("format".to_string(), serde_json::Value::String(format.to_string()));
+                        meta
+                    },
+                })
+            }
+            Err(e) => {
+                Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to retrieve logs: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: {
+                        let mut meta = HashMap::new();
+                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
+                        meta.insert("error_type".to_string(), serde_json::Value::String("logs_retrieval_error".to_string()));
+                        meta
+                    },
+                })
+            }
+        }
+    }
+    
+    /// Execute the trace retrieval tool
+    async fn get_execution_trace_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
+        let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
+            method: "ratchet.get_execution_trace".to_string(),
+            details: "Missing arguments".to_string(),
+        })?;
+        
+        // Parse execution ID
+        let execution_id = args.get("execution_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| McpError::InvalidParams {
+                method: "ratchet.get_execution_trace".to_string(),
+                details: "Missing or invalid execution_id".to_string(),
+            })?;
+            
+        let include_http_calls = args.get("include_http_calls")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+            
+        let format = args.get("format")
+            .and_then(|v| v.as_str())
+            .unwrap_or("json");
+        
+        // Check if executor is configured
+        let executor = match self.task_executor.as_ref() {
+            Some(exec) => exec,
+            None => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: "Task executor not configured for MCP server".to_string(),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+        
+        // For now, return a structured trace response with placeholder data
+        // In a full implementation, this would query the tracing system
+        let trace_info = serde_json::json!({
+            "execution_id": execution_id,
+            "format": format,
+            "include_http_calls": include_http_calls,
+            "trace": {
+                "spans": [],
+                "timing": {
+                    "total_duration_ms": null,
+                    "initialization_ms": null,
+                    "execution_ms": null,
+                    "cleanup_ms": null
+                },
+                "http_calls": if include_http_calls { serde_json::json!([]) } else { serde_json::Value::Null },
+                "events": [],
+                "message": "Detailed execution tracing not yet fully implemented"
+            }
+        });
+        
         Ok(ToolsCallResult {
             content: vec![ToolContent::Text {
-                text: format!(
-                    "Log retrieval for execution {} (level: {}, limit: {}, format: {}) - Integration pending",
-                    execution_id, level, limit, format
-                ),
+                text: if format == "flamegraph" {
+                    "Flamegraph format not yet supported - returning JSON trace data".to_string()
+                } else {
+                    serde_json::to_string_pretty(&trace_info)
+                        .unwrap_or_else(|_| trace_info.to_string())
+                },
             }],
             is_error: false,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                meta.insert("level".to_string(), serde_json::Value::String(level.to_string()));
-                meta.insert("limit".to_string(), serde_json::Value::Number(serde_json::Number::from(limit)));
+                meta.insert("format".to_string(), serde_json::Value::String(format.to_string()));
+                meta.insert("include_http_calls".to_string(), serde_json::Value::Bool(include_http_calls));
+                meta.insert("trace_type".to_string(), serde_json::Value::String("placeholder".to_string()));
                 meta
             },
-        })
-    }
-    
-    /// Execute the trace retrieval tool
-    async fn get_execution_trace_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
-        let _args = context.arguments.unwrap_or_default();
-        
-        Ok(ToolsCallResult {
-            content: vec![ToolContent::Text {
-                text: "Execution tracing is not yet implemented in this MCP server foundation.".to_string(),
-            }],
-            is_error: false,
-            metadata: HashMap::new(),
         })
     }
     
@@ -677,14 +818,92 @@ impl RatchetToolRegistry {
     
     /// Execute the error analysis tool
     async fn analyze_execution_error_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
-        let _args = context.arguments.unwrap_or_default();
+        let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
+            method: "ratchet.analyze_execution_error".to_string(),
+            details: "Missing arguments".to_string(),
+        })?;
+        
+        // Parse execution ID
+        let execution_id = args.get("execution_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| McpError::InvalidParams {
+                method: "ratchet.analyze_execution_error".to_string(),
+                details: "Missing or invalid execution_id".to_string(),
+            })?;
+            
+        let include_suggestions = args.get("include_suggestions")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+            
+        let include_context = args.get("include_context")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        
+        // Check if executor is configured
+        let executor = match self.task_executor.as_ref() {
+            Some(exec) => exec,
+            None => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: "Task executor not configured for MCP server".to_string(),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+        
+        // For now, return a structured error analysis response with placeholder data
+        // In a full implementation, this would analyze actual execution errors
+        let error_analysis = serde_json::json!({
+            "execution_id": execution_id,
+            "analysis": {
+                "error_type": "unknown",
+                "root_cause": "Error analysis not yet fully implemented",
+                "impact": "unknown",
+                "severity": "unknown"
+            },
+            "context": if include_context {
+                serde_json::json!({
+                    "task_info": "Context retrieval pending",
+                    "input_data": "Not available",
+                    "environment": "Not analyzed",
+                    "dependencies": "Not checked"
+                })
+            } else {
+                serde_json::Value::Null
+            },
+            "suggestions": if include_suggestions {
+                vec![
+                    "Enable detailed logging for better error diagnostics".to_string(),
+                    "Verify task input schema compliance".to_string(),
+                    "Check task dependencies and resource availability".to_string(),
+                    "Review execution environment configuration".to_string()
+                ]
+            } else {
+                Vec::<String>::new()
+            },
+            "next_steps": vec![
+                "Collect detailed execution logs".to_string(),
+                "Reproduce error in isolated environment".to_string(),
+                "Contact support if issue persists".to_string()
+            ]
+        });
         
         Ok(ToolsCallResult {
             content: vec![ToolContent::Text {
-                text: "Error analysis is not yet implemented in this MCP server foundation.".to_string(),
+                text: serde_json::to_string_pretty(&error_analysis)
+                    .unwrap_or_else(|_| error_analysis.to_string()),
             }],
             is_error: false,
-            metadata: HashMap::new(),
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
+                meta.insert("include_suggestions".to_string(), serde_json::Value::Bool(include_suggestions));
+                meta.insert("include_context".to_string(), serde_json::Value::Bool(include_context));
+                meta.insert("analysis_type".to_string(), serde_json::Value::String("placeholder".to_string()));
+                meta
+            },
         })
     }
 }

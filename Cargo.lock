@@ -3691,6 +3691,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "clap",
  "humantime-serde",
  "ratchet-core",
  "ratchet-ipc",

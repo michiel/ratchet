@@ -80,3 +80,6 @@ pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 /// Maximum message size for MCP operations (in bytes)
 pub const MAX_MESSAGE_SIZE: usize = 1024 * 1024; // 1MB
+
+#[cfg(test)]
+mod tests;

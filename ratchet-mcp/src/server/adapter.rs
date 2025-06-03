@@ -116,12 +116,33 @@ impl McpTaskExecutor for RatchetMcpAdapter {
     }
     
     async fn get_execution_logs(&self, execution_id: &str, level: &str, limit: usize) -> Result<String, String> {
-        // For now, return a placeholder
-        // In a full implementation, this would query the logging system
-        Ok(format!(
-            "Logs for execution {} (level: {}, limit: {})",
-            execution_id, level, limit
-        ))
+        // Try to parse execution_id as UUID to query the execution repository
+        if let Ok(exec_uuid) = uuid::Uuid::parse_str(execution_id) {
+            match self.execution_repository.find_by_uuid(exec_uuid).await {
+                Ok(Some(execution)) => {
+                    // Return basic execution info with logs placeholder
+                    let log_info = serde_json::json!({
+                        "execution_id": execution_id,
+                        "task_id": execution.task_id,
+                        "status": execution.status,
+                        "started_at": execution.started_at,
+                        "completed_at": execution.completed_at,
+                        "error_message": execution.error_message,
+                        "logs": format!("Log level {} with limit {} - Full logging integration pending", level, limit)
+                    });
+                    Ok(serde_json::to_string_pretty(&log_info)
+                        .unwrap_or_else(|_| log_info.to_string()))
+                }
+                Ok(None) => Err(format!("Execution not found: {}", execution_id)),
+                Err(e) => Err(format!("Database error: {}", e)),
+            }
+        } else {
+            // For non-UUID execution IDs, return placeholder
+            Ok(format!(
+                "Logs for execution {} (level: {}, limit: {}) - UUID-based lookup required",
+                execution_id, level, limit
+            ))
+        }
     }
 }
 

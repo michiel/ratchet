@@ -15,9 +15,10 @@ use ratchet_lib::{
         repositories::{
             task_repository::TaskRepository,
             execution_repository::ExecutionRepository,
+            RepositoryFactory,
         },
     },
-    config::RatchetConfig,
+    config::{RatchetConfig, DatabaseConfig},
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -112,15 +113,17 @@ async fn serve_command(
     // Load configuration
     let config = load_config(config_path).await?;
     
-    // Initialize database connection
-    let db = DatabaseConnection::new(&config.database).await?;
+    // Initialize database connection (using default since RatchetConfig doesn't have database field)
+    let db_config = DatabaseConfig::default();
+    let db = DatabaseConnection::new(db_config).await?;
     
     // Initialize repositories
     let task_repository = Arc::new(TaskRepository::new(db.clone()));
     let execution_repository = Arc::new(ExecutionRepository::new(db.clone()));
     
     // Initialize task executor
-    let executor = Arc::new(ProcessTaskExecutor::new(config.execution.clone())?);
+    let repositories = RepositoryFactory::new(db.clone());
+    let executor = Arc::new(ProcessTaskExecutor::new(repositories, config.clone()).await?);
     
     // Create MCP adapter
     let adapter = RatchetMcpAdapter::new(
@@ -131,7 +134,7 @@ async fn serve_command(
     
     // Create MCP server
     let mcp_config = McpConfig {
-        transport_type: transport,
+        transport_type: transport.clone(),
         host: host.to_string(),
         port,
         ..Default::default()
@@ -199,7 +202,8 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     };
     
     // Test database connection
-    let db = match DatabaseConnection::new(&config.database).await {
+    let db_config = DatabaseConfig::default();
+    let db = match DatabaseConnection::new(db_config).await {
         Ok(db) => {
             tracing::info!("✓ Database connection successful");
             db
@@ -212,7 +216,7 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     
     // Test repository access
     let task_repository = TaskRepository::new(db.clone());
-    match task_repository.count_all().await {
+    match task_repository.count().await {
         Ok(count) => {
             tracing::info!("✓ Task repository accessible ({} tasks found)", count);
         }
@@ -223,7 +227,8 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     }
     
     // Test executor initialization
-    match ProcessTaskExecutor::new(config.execution.clone()) {
+    let repositories = RepositoryFactory::new(db.clone());
+    match ProcessTaskExecutor::new(repositories, config.clone()).await {
         Ok(_) => {
             tracing::info!("✓ Task executor initialized successfully");
         }
@@ -241,7 +246,7 @@ async fn load_config(config_path: Option<&str>) -> Result<RatchetConfig, Box<dyn
     match config_path {
         Some(path) => {
             tracing::info!("Loading configuration from: {}", path);
-            RatchetConfig::from_file(path).await.map_err(Into::into)
+            RatchetConfig::from_file(path).map_err(Into::into)
         }
         None => {
             tracing::info!("Using default configuration");
