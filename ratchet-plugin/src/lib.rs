@@ -25,7 +25,7 @@ pub use types::{PluginType, PluginVersion, PluginDependency};
 pub const PLUGIN_SYSTEM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Minimum supported plugin API version
-pub const MIN_PLUGIN_API_VERSION: &str = "0.1.0";
+pub const MIN_PLUGIN_API_VERSION: &str = "0.0.1";
 
 /// Plugin discovery macros
 pub mod macros {
