@@ -385,6 +385,115 @@ The Service Layer provides a clean abstraction between the API layer and the dat
   - GraphQL API integration
   - Lazy loading with caching
 
+## MCP (Model Context Protocol) Integration
+
+Ratchet includes a built-in MCP server that exposes task execution capabilities to Language Learning Models through a standardized protocol.
+
+### MCP Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     LLM/AI Agents                               │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │  Claude Desktop │  │    Other LLM    │  │  Custom Client  ││
+│  │   MCP Client    │  │   MCP Client    │  │  Implementation ││
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘│
+└───────────┼────────────────────┼────────────────────┼──────────┘
+            │                    │                    │
+            ▼                    ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    MCP Transport Layer                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                  Transport Options                       │   │
+│  │  ┌─────────────────┐     ┌────────────────────────┐   │   │
+│  │  │  STDIO Transport │     │   SSE Transport        │   │   │
+│  │  │                  │     │   (Server-Sent Events) │   │   │
+│  │  │  • Local process │     │   • HTTP-based        │   │   │
+│  │  │  • JSON-RPC 2.0  │     │   • Network access    │   │   │
+│  │  │  • Bidirectional │     │   • CORS support      │   │   │
+│  │  └─────────────────┘     └────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      MCP Server Layer                           │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │   MCP Server    │  │  Tool Registry  │  │  MCP Service    ││
+│  │                 │  │                 │  │  Integration    ││
+│  │ • Request       │  │ • Task Execute  │  │                 ││
+│  │   Handler       │  │ • List Tasks    │  │ • Health Check  ││
+│  │ • Auth Manager  │  │ • Get Logs      │  │ • Metrics       ││
+│  │ • Rate Limiting │  │ • Analyze Error │  │ • Lifecycle     ││
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘│
+└───────────┼────────────────────┼────────────────────┼──────────┘
+            │                    │                    │
+            ▼                    ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Ratchet Core Integration                     │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
+│  │   MCP Adapter   │  │ ProcessExecutor │  │  Repositories   ││
+│  │                 │  │                 │  │                 ││
+│  │ • Bridge MCP    │  │ • Task Execute  │  │ • Task Repo     ││
+│  │   to Ratchet    │  │ • Worker Pool   │  │ • Execution Repo││
+│  │ • Type Convert  │  │ • IPC Transport │  │ • Persistence   ││
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### MCP Components
+
+1. **MCP Server (`ratchet-mcp/src/server/`)**: Core server implementation
+   - Handles JSON-RPC 2.0 protocol
+   - Manages client sessions and authentication
+   - Routes tool calls to appropriate handlers
+
+2. **Tool Registry (`ratchet-mcp/src/server/tools.rs`)**: Available MCP tools
+   - `ratchet.execute_task`: Execute tasks with input
+   - `ratchet.list_available_tasks`: Discover tasks
+   - `ratchet.get_execution_status`: Monitor executions
+   - `ratchet.get_execution_logs`: Retrieve logs
+   - `ratchet.get_execution_trace`: Get execution traces
+   - `ratchet.analyze_execution_error`: Error analysis
+
+3. **MCP Adapter (`ratchet-mcp/src/server/adapter.rs`)**: Bridge to Ratchet
+   - Translates MCP requests to Ratchet operations
+   - Handles type conversions between protocols
+   - Manages execution context
+
+4. **MCP Service (`ratchet-mcp/src/server/service.rs`)**: Service integration
+   - Implements Ratchet's Service trait
+   - Manages server lifecycle
+   - Provides health checks and metrics
+
+### MCP Transport Flow
+
+```
+LLM Client                    MCP Server                    Ratchet Core
+    │                             │                             │
+    │ 1. Initialize Request       │                             │
+    ├────────────────────────────►│                             │
+    │                             │ 2. Validate Protocol        │
+    │◄────────────────────────────┤                             │
+    │ 3. Initialize Response      │                             │
+    │                             │                             │
+    │ 4. Tool Call Request        │                             │
+    ├────────────────────────────►│                             │
+    │                             │ 5. Authenticate Client      │
+    │                             │ 6. Validate Parameters      │
+    │                             │ 7. Execute via Adapter     │
+    │                             ├────────────────────────────►│
+    │                             │                             │ 8. Load Task
+    │                             │                             │ 9. Execute in Worker
+    │                             │◄────────────────────────────┤ 10. Return Result
+    │◄────────────────────────────┤                             │
+    │ 11. Tool Call Response      │                             │
+```
+
 ## Process Execution IPC Model
 
 ### Overview

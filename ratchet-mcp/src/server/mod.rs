@@ -4,18 +4,21 @@ pub mod config;
 pub mod tools;
 pub mod handler;
 pub mod adapter;
+pub mod service;
 
 pub use config::{McpServerConfig, McpServerTransport};
 pub use tools::{McpTool, ToolRegistry, RatchetToolRegistry, McpTaskExecutor, McpTaskInfo};
 pub use handler::McpRequestHandler;
 pub use adapter::{RatchetMcpAdapter, RatchetMcpAdapterBuilder};
+pub use service::{McpService, McpServiceConfig, McpServiceBuilder};
 
-use async_trait::async_trait;
+// Main server types are defined in this module, no need to re-export
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::{McpError, McpResult};
+use crate::{McpError, McpResult, McpAuth};
 use crate::protocol::{
     JsonRpcRequest, JsonRpcResponse, JsonRpcError,
     InitializeParams, InitializeResult, ServerInfo, ServerCapabilities,
@@ -121,6 +124,57 @@ impl McpServer {
                 message: "Server not configured for SSE transport".to_string(),
             }),
         }
+    }
+    
+    /// Run the server with a specific transport
+    pub async fn run(&self, mut transport: Box<dyn crate::transport::McpTransport>) -> McpResult<()> {
+        tracing::info!("Starting MCP server");
+        
+        loop {
+            match transport.receive().await {
+                Ok(request) => {
+                    // Process the request
+                    let request_str = serde_json::to_string(&request)?;
+                    match self.handle_message(&request_str, None).await {
+                        Ok(Some(response)) => {
+                            // Convert response to request format for sending
+                            // This is a workaround - ideally transport should accept JsonRpcResponse
+                            let response_request = JsonRpcRequest {
+                                jsonrpc: "2.0".to_string(),
+                                method: "response".to_string(),
+                                params: Some(serde_json::to_value(&response)?),
+                                id: response.id.clone(),
+                            };
+                            transport.send(response_request).await?;
+                        }
+                        Ok(None) => {
+                            // No response needed (notification)
+                        }
+                        Err(e) => {
+                            tracing::error!("Error handling MCP request: {}", e);
+                            // Send error response
+                            let error_response = JsonRpcResponse::error(
+                                JsonRpcError::internal_error(e.to_string()),
+                                request.id.clone(),
+                            );
+                            let error_request = JsonRpcRequest {
+                                jsonrpc: "2.0".to_string(),
+                                method: "error".to_string(),
+                                params: Some(serde_json::to_value(error_response)?),
+                                id: request.id,
+                            };
+                            transport.send(error_request).await?;
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Transport error: {}", e);
+                    break;
+                }
+            }
+        }
+        
+        Ok(())
     }
     
     /// Start the MCP server
@@ -405,6 +459,86 @@ impl McpServer {
         ).await;
         
         Ok(security_context)
+    }
+}
+
+/// Builder for creating MCP server with fluent API
+pub struct McpServerBuilder {
+    config: Option<McpServerConfig>,
+    tool_registry: Option<Arc<dyn ToolRegistry>>,
+    auth_manager: Option<Arc<McpAuthManager>>,
+    audit_logger: Option<Arc<AuditLogger>>,
+    security_config: Option<crate::security::SecurityConfig>,
+}
+
+impl McpServerBuilder {
+    /// Create a new builder
+    pub fn new() -> Self {
+        Self {
+            config: None,
+            tool_registry: None,
+            auth_manager: None,
+            audit_logger: None,
+            security_config: None,
+        }
+    }
+    
+    /// Set the server configuration
+    pub fn with_config(mut self, config: McpServerConfig) -> Self {
+        self.config = Some(config);
+        self
+    }
+    
+    /// Set the tool registry
+    pub fn with_tool_registry(mut self, registry: Arc<dyn ToolRegistry>) -> Self {
+        self.tool_registry = Some(registry);
+        self
+    }
+    
+    /// Set the authentication manager
+    pub fn with_auth_manager(mut self, auth_manager: Arc<McpAuthManager>) -> Self {
+        self.auth_manager = Some(auth_manager);
+        self
+    }
+    
+    /// Set the audit logger
+    pub fn with_audit_logger(mut self, audit_logger: Arc<AuditLogger>) -> Self {
+        self.audit_logger = Some(audit_logger);
+        self
+    }
+    
+    /// Set the security configuration
+    pub fn with_security(mut self, security: crate::security::SecurityConfig) -> Self {
+        self.security_config = Some(security);
+        self
+    }
+    
+    /// Build the MCP server
+    pub fn build(self) -> McpResult<McpServer> {
+        let config = self.config.unwrap_or_else(|| McpServerConfig {
+            transport: McpServerTransport::Stdio,
+            security: self.security_config.clone().unwrap_or_default(),
+            bind_address: None,
+        });
+        
+        let tool_registry = self.tool_registry
+            .ok_or_else(|| McpError::Configuration {
+                message: "Tool registry is required".to_string(),
+            })?;
+            
+        let auth_manager = self.auth_manager
+            .unwrap_or_else(|| Arc::new(McpAuthManager::new(McpAuth::None)));
+            
+        let audit_logger = self.audit_logger
+            .unwrap_or_else(|| Arc::new(AuditLogger::new(false)));
+        
+        Ok(McpServer::new(config, tool_registry, auth_manager, audit_logger))
+    }
+}
+
+impl Default for McpServerBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

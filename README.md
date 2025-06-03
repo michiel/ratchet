@@ -240,29 +240,42 @@ Ratchet includes a built-in MCP server that allows Language Learning Models (LLM
 
 ```bash
 # Start with stdio transport (for local LLM integration)
-ratchet mcp serve --transport stdio
+ratchet mcp-serve --transport stdio
 
-# Start with SSE transport (for network access) - coming soon
-ratchet mcp serve --transport sse --port 8090
+# Start with SSE transport (for network access)
+ratchet mcp-serve --transport sse --port 3001
+
+# Or configure in your config.yaml and start with the main server
+server:
+  # ... server config ...
+
+mcp:
+  enabled: true
+  transport: sse
+  host: localhost
+  port: 3001
+  auth_type: none
+  max_connections: 10
+  request_timeout: 30
+  rate_limit_per_minute: 100
 ```
 
 ### LLM Integration Example
 
-```python
-# Using an MCP client library
-import mcp_client
+For Claude Desktop, add to your config:
 
-client = mcp_client.StdioClient("ratchet mcp serve")
-await client.initialize()
-
-# Execute a task through LLM
-result = await client.call_tool("ratchet.execute_task", {
-    "task_id": "weather-api",
-    "input": {"city": "San Francisco"}
-})
+```json
+{
+  "mcpServers": {
+    "ratchet": {
+      "command": "ratchet",
+      "args": ["mcp-serve", "--config", "/path/to/config.yaml"]
+    }
+  }
+}
 ```
 
-See [MCP Server Documentation](docs/MCP_SERVER.md) for detailed configuration and usage.
+See [MCP User Guide](docs/MCP_USER_GUIDE.md) for detailed configuration and usage.
 
 ## 🔐 Configuration
 

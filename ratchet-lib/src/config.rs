@@ -47,6 +47,10 @@ pub struct RatchetConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<ServerConfig>,
     
+    /// MCP server configuration (optional, for LLM integration)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<McpServerConfig>,
+    
     /// Registry configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub registry: Option<RegistryConfig>,
@@ -291,6 +295,47 @@ pub struct AuthConfig {
     pub token_expiration: Duration,
 }
 
+/// MCP server configuration for LLM integration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpServerConfig {
+    /// Whether MCP server is enabled
+    #[serde(default = "default_false")]
+    pub enabled: bool,
+    
+    /// Transport type for MCP server
+    #[serde(default)]
+    pub transport: String,
+    
+    /// Host for SSE transport (ignored for stdio)
+    #[serde(default = "default_mcp_host")]
+    pub host: String,
+    
+    /// Port for SSE transport (ignored for stdio)
+    #[serde(default = "default_mcp_port")]
+    pub port: u16,
+    
+    /// Authentication type (none, api_key, jwt, oauth2)
+    #[serde(default)]
+    pub auth_type: String,
+    
+    /// API key for authentication (when auth_type = "api_key")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    
+    /// Maximum number of concurrent connections
+    #[serde(default = "default_mcp_max_connections")]
+    pub max_connections: u32,
+    
+    /// Request timeout in seconds
+    #[serde(default = "default_mcp_timeout")]
+    pub request_timeout: u64,
+    
+    /// Rate limit: requests per minute
+    #[serde(default = "default_mcp_rate_limit")]
+    pub rate_limit_per_minute: u32,
+}
+
 /// JavaScript fetch variables configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -421,6 +466,22 @@ impl Default for DatabaseConfig {
             url: default_database_url(),
             max_connections: default_max_connections(),
             connection_timeout: default_connection_timeout(),
+        }
+    }
+}
+
+impl Default for McpServerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            transport: "stdio".to_string(),
+            host: default_mcp_host(),
+            port: default_mcp_port(),
+            auth_type: "none".to_string(),
+            api_key: None,
+            max_connections: default_mcp_max_connections(),
+            request_timeout: default_mcp_timeout(),
+            rate_limit_per_minute: default_mcp_rate_limit(),
         }
     }
 }
@@ -891,4 +952,25 @@ fn default_max_delay_ms() -> u64 {
 
 fn default_backoff_multiplier() -> f64 {
     2.0
+}
+
+// MCP server default functions
+fn default_mcp_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_mcp_port() -> u16 {
+    3000
+}
+
+fn default_mcp_max_connections() -> u32 {
+    100
+}
+
+fn default_mcp_timeout() -> u64 {
+    30
+}
+
+fn default_mcp_rate_limit() -> u32 {
+    1000
 }

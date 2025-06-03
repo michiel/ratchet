@@ -300,12 +300,61 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     
     // Create the application
     let app = create_app(
-        repositories,
+        repositories.clone(),
         job_queue,
         task_executor.clone(),
         registry,
         sync_service,
     );
+    
+    // Start MCP service if configured
+    let mcp_service_handle = if let Some(mcp_config) = &config.mcp {
+        if mcp_config.enabled {
+            info!("Starting MCP service");
+            
+            use ratchet_mcp::server::McpService;
+            
+            // Determine log file path from logging config
+            let log_file_path = config.logging.sinks.iter()
+                .find_map(|sink| match sink {
+                    ratchet_lib::logging::config::SinkConfig::File { path, .. } => Some(path.clone()),
+                    _ => None,
+                });
+            
+            // Create MCP service
+            let mcp_service = match McpService::from_ratchet_config(
+                mcp_config,
+                task_executor.clone(),
+                Arc::new(repositories.task_repo.clone()),
+                Arc::new(repositories.execution_repo.clone()),
+                log_file_path,
+            ).await {
+                Ok(service) => Arc::new(service),
+                Err(e) => {
+                    error!("Failed to create MCP service: {}", e);
+                    return Err(anyhow::anyhow!("Failed to create MCP service: {}", e));
+                }
+            };
+            
+            // Start MCP service in background task if using SSE transport
+            if mcp_config.transport == "sse" {
+                let service = mcp_service.clone();
+                Some(tokio::spawn(async move {
+                    if let Err(e) = service.start().await {
+                        error!("MCP service error: {}", e);
+                    }
+                }))
+            } else {
+                // For stdio transport, we'll need to handle it differently
+                warn!("MCP stdio transport should be started separately using 'ratchet mcp-serve'");
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     
     // Create server address
     let addr = format!("{}:{}", server_config.bind_address, server_config.port);
@@ -316,6 +365,12 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     info!("📊 GraphQL playground available at http://{}/playground", addr);
     info!("🏥 Health check available at http://{}/health", addr);
     info!("📖 REST API documentation available at http://{}/api-docs", addr);
+    
+    if let Some(mcp_config) = &config.mcp {
+        if mcp_config.enabled && mcp_config.transport == "sse" {
+            info!("🤖 MCP server available at http://{}:{}", mcp_config.host, mcp_config.port);
+        }
+    }
     
     // Create shutdown signal
     let shutdown_signal = async {
@@ -358,6 +413,13 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
             error!("Server error: {}", e);
             return Err(e.into());
         }
+    }
+    
+    // Stop MCP service if running
+    if let Some(handle) = mcp_service_handle {
+        info!("Stopping MCP service");
+        handle.abort();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await;
     }
     
     // Stop worker processes
@@ -404,15 +466,27 @@ async fn mcp_serve_command(
     // Load configuration
     let ratchet_config = load_config(config_path)?;
     
-    // Get server configuration
-    let server_config = ratchet_config.server.as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Server configuration is required for MCP server"))?;
+    // Get MCP configuration (use dedicated MCP config if available, otherwise fall back to server config)
+    let (database_config, mcp_server_config) = if let Some(mcp_config) = &ratchet_config.mcp {
+        info!("Using dedicated MCP server configuration");
+        // Use server database config if available, otherwise default
+        let db_config = ratchet_config.server.as_ref()
+            .map(|s| s.database.clone())
+            .unwrap_or_else(|| ratchet_lib::config::DatabaseConfig::default());
+        (db_config, Some(mcp_config.clone()))
+    } else if let Some(server_config) = &ratchet_config.server {
+        info!("Using server configuration for MCP server");
+        (server_config.database.clone(), None)
+    } else {
+        info!("Using default configuration for MCP server");
+        (ratchet_lib::config::DatabaseConfig::default(), None)
+    };
 
     info!("MCP server configuration loaded");
 
     // Initialize database
-    info!("Connecting to database: {}", server_config.database.url);
-    let database = DatabaseConnection::new(server_config.database.clone()).await
+    info!("Connecting to database: {}", database_config.url);
+    let database = DatabaseConnection::new(database_config).await
         .context("Failed to connect to database")?;
     
     // Run migrations
@@ -443,13 +517,40 @@ async fn mcp_serve_command(
         execution_repository,
     );
     
-    // Create MCP server config
-    let mcp_config = McpConfig {
-        transport_type: transport_type.clone(),
-        host: host.to_string(),
-        port,
-        ..Default::default()
+    // Create MCP server config (prioritize file config, then CLI args, then defaults)
+    let mcp_config = if let Some(file_config) = mcp_server_config {
+        McpConfig {
+            transport_type: if file_config.enabled { 
+                match file_config.transport.as_str() {
+                    "sse" => SimpleTransportType::Sse,
+                    _ => SimpleTransportType::Stdio,
+                }
+            } else { 
+                transport_type.clone() 
+            },
+            host: if file_config.host != "127.0.0.1" { 
+                file_config.host 
+            } else { 
+                host.to_string() 
+            },
+            port: if file_config.port != 3000 { 
+                file_config.port 
+            } else { 
+                port 
+            },
+            ..Default::default()
+        }
+    } else {
+        McpConfig {
+            transport_type: transport_type.clone(),
+            host: host.to_string(),
+            port,
+            ..Default::default()
+        }
     };
+    
+    info!("MCP server starting with transport: {:?}, host: {}, port: {}", 
+          mcp_config.transport_type, mcp_config.host, mcp_config.port);
     
     // Create MCP server
     let mut server = McpServer::with_adapter(mcp_config, adapter).await

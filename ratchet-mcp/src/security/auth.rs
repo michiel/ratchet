@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
-use crate::{McpError, McpResult};
+use crate::McpError;
 use super::permissions::ClientPermissions;
 
 /// Authentication result
