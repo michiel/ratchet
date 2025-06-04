@@ -63,6 +63,40 @@ Comprehensive logging infrastructure with AI-powered error analysis:
 - Error pattern recognition and automated analysis
 - LLM-optimized export formats for AI debugging
 
+## AI Integration
+
+### [Claude MCP Setup Guide](CLAUDE_MCP_SETUP.md)
+Step-by-step guide for integrating Ratchet with Claude Desktop:
+- Quick setup for Claude Desktop
+- MCP server configuration and authentication
+- Available commands and workflows
+- Troubleshooting and debugging
+- Production deployment considerations
+
+### [Server Configuration Guide](SERVER_CONFIGURATION_GUIDE.md)
+Comprehensive guide for configuring Ratchet's different server modes:
+- Regular server vs MCP server comparison
+- Deployment scenarios and use cases
+- Production configuration examples
+- Load balancing and high availability
+- Security best practices
+
+### [MCP Server Documentation](MCP_SERVER.md)
+Technical documentation for the Model Context Protocol implementation:
+- Architecture and components
+- Available tools and capabilities
+- Security model and authentication
+- Integration patterns and examples
+- Development and testing guidelines
+
+### [MCP User Guide](MCP_USER_GUIDE.md)
+User-focused guide for working with the MCP server:
+- Configuration examples
+- Tool usage and workflows
+- Best practices and optimization
+- Integration with other tools
+- Advanced configuration options
+
 ## Planning Documents
 
 ### [DAG Workflow Engine Plan](plans/DAG_WORKFLOW_PLAN.md)

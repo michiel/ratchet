@@ -1,8 +1,23 @@
 # Ratchet CLI Usage Guide
 
-The `ratchet serve` command starts a full Ratchet server with GraphQL API, task execution, and worker processes.
+Ratchet provides multiple server modes for different use cases:
 
-## Usage
+- **`ratchet serve`** - Full HTTP/GraphQL API server for web applications
+- **`ratchet mcp-serve`** - MCP (Model Context Protocol) server for LLM integration
+- **`ratchet run-once`** - Execute single tasks without a server
+
+## Server Commands Overview
+
+### Regular Server (`ratchet serve`)
+Full-featured server with HTTP REST API, GraphQL API, and WebSocket support.
+
+### MCP Server (`ratchet mcp-serve`)
+Specialized server for AI/LLM integration using the Model Context Protocol.
+
+### Task Runner (`ratchet run-once`)
+Direct task execution without starting a persistent server.
+
+## Regular Server Usage (`ratchet serve`)
 
 ### Basic Usage (with defaults)
 ```bash
@@ -181,3 +196,205 @@ mutation ExecuteTask {
   }
 }
 ```
+
+## MCP Server Usage (`ratchet mcp-serve`)
+
+The MCP (Model Context Protocol) server is designed for AI/LLM integration, particularly with Claude Desktop and other MCP-compatible clients.
+
+### Basic Usage
+```bash
+# Start MCP server with stdio transport (for Claude Desktop)
+ratchet mcp-serve
+
+# With custom configuration
+ratchet mcp-serve --config config.yaml
+
+# With specific transport and port
+ratchet mcp-serve --transport sse --host 0.0.0.0 --port 8090
+```
+
+### Command Line Options
+| Option | Description | Default |
+|--------|-------------|--------|
+| `--config PATH` | Configuration file path | None |
+| `--transport TYPE` | Transport type (stdio, sse) | `stdio` |
+| `--host HOST` | Host to bind (SSE transport) | `127.0.0.1` |
+| `--port PORT` | Port to bind (SSE transport) | `8090` |
+
+### Transport Types
+
+#### STDIO Transport (Recommended for Claude)
+Direct process communication - ideal for desktop AI applications:
+
+```bash
+ratchet mcp-serve --transport stdio
+```
+
+**Claude Desktop Configuration:**
+```json
+{
+  "mcpServers": {
+    "ratchet": {
+      "command": "ratchet",
+      "args": ["mcp-serve", "--config", "/path/to/config.yaml"]
+    }
+  }
+}
+```
+
+#### SSE Transport (Future Web Integration)
+HTTP Server-Sent Events for web applications:
+
+```bash
+ratchet mcp-serve --transport sse --host 0.0.0.0 --port 8090
+```
+
+### Available MCP Tools
+
+When connected, LLMs can use these tools:
+
+1. **`ratchet.execute_task`** - Execute a Ratchet task
+2. **`ratchet.list_available_tasks`** - Discover available tasks
+3. **`ratchet.get_execution_status`** - Monitor task execution
+4. **`ratchet.get_execution_logs`** - Retrieve execution logs
+5. **`ratchet.get_execution_trace`** - Get detailed traces
+6. **`ratchet.analyze_execution_error`** - AI-powered error analysis
+
+### Example MCP Session
+
+```bash
+# Start MCP server
+ratchet mcp-serve --config config.yaml
+
+# Claude Desktop automatically connects and can now:
+# - "What tasks are available?"
+# - "Execute the weather task for London"
+# - "Show me the logs for the last execution"
+```
+
+### MCP Configuration
+
+Add MCP-specific settings to your config file:
+
+```yaml
+mcp:
+  enabled: true
+  transport: stdio
+  auth_type: none  # Development
+  max_connections: 10
+  rate_limit_per_minute: 100
+  
+  # Production security
+  auth_type: api_key
+  api_keys:
+    - key: "${MCP_API_KEY}"
+      name: "claude-desktop"
+      permissions:
+        can_execute_tasks: true
+        can_read_logs: true
+```
+
+## Task Runner Usage (`ratchet run-once`)
+
+Execute single tasks without starting a persistent server.
+
+### Basic Usage
+```bash
+# Execute a task from filesystem
+ratchet run-once --from-fs ./sample/js-tasks/addition --input-json '{"num1":5,"num2":10}'
+
+# With recording for debugging
+ratchet run-once --from-fs ./my-task --input-json '{"data":"test"}' --record ./debug-output
+```
+
+### Command Line Options
+| Option | Description |
+|--------|-------------|
+| `--from-fs PATH` | Path to task directory or ZIP file |
+| `--input-json JSON` | JSON input for the task |
+| `--record PATH` | Record execution to directory |
+
+### Example Session
+```bash
+# Execute addition task
+ratchet run-once --from-fs ./sample/js-tasks/addition --input-json '{"num1":15,"num2":25}'
+
+# Output:
+# Result: {
+#   "result": 40,
+#   "operation": "addition"
+# }
+```
+
+## Additional Commands
+
+### Validate Tasks
+```bash
+# Validate a task structure
+ratchet validate --from-fs ./my-task
+```
+
+### Test Tasks
+```bash
+# Run all tests for a task
+ratchet test --from-fs ./my-task
+```
+
+### Generate Task Templates
+```bash
+# Generate a new task template
+ratchet generate task --path ./new-task --label "My Task" --description "Task description"
+```
+
+## Configuration Integration
+
+Both `serve` and `mcp-serve` can use the same configuration file with different sections:
+
+```yaml
+# config.yaml - Works for both servers
+
+# Shared configuration
+database:
+  url: "sqlite:ratchet.db"
+
+logging:
+  level: info
+
+# Regular server settings (ratchet serve)
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+graphql:
+  enabled: true
+  playground: true
+
+# MCP server settings (ratchet mcp-serve)  
+mcp:
+  enabled: true
+  transport: stdio
+  auth_type: none
+```
+
+## Best Practices
+
+### Development
+- Use `ratchet serve` for web development and API testing
+- Use `ratchet mcp-serve` for AI assistant integration
+- Use `ratchet run-once` for quick task testing
+
+### Production
+- Run `ratchet serve` for web applications
+- Run `ratchet mcp-serve` separately for AI integrations
+- Use systemd or Docker for process management
+- Enable authentication and rate limiting
+
+### Debugging
+- Enable debug logging: `RUST_LOG=debug ratchet serve`
+- Use `--record` with `run-once` for execution analysis
+- Monitor logs: `tail -f ratchet.log`
+
+For detailed setup instructions, see:
+- [Claude MCP Setup Guide](CLAUDE_MCP_SETUP.md)
+- [Server Configuration Guide](SERVER_CONFIGURATION_GUIDE.md)
+- [MCP Server Documentation](MCP_SERVER.md)

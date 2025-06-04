@@ -1,0 +1,64 @@
+{
+  "mcpServers": {
+    "ratchet": {
+      "command": "ratchet",
+      "args": [
+        "mcp-serve", 
+        "--config", 
+        "/path/to/your/example-claude-config.yaml"
+      ],
+      "env": {
+        "RUST_LOG": "info"
+      }
+    }
+  }
+}
+
+// Instructions for using this file:
+//
+// 1. Update the config path to match your setup:
+//    Replace "/path/to/your/example-claude-config.yaml" with the actual path
+//
+// 2. Copy this file to the correct location:
+//    - macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+//    - Windows: %APPDATA%\Claude\claude_desktop_config.json
+//
+// 3. Make sure ratchet is in your PATH:
+//    which ratchet  # Should show the ratchet binary location
+//
+// 4. Test the configuration:
+//    ratchet mcp-serve --config /path/to/your/example-claude-config.yaml
+//
+// 5. Restart Claude Desktop
+//
+// 6. Verify connection in Claude:
+//    Ask: "What Ratchet tasks are available?"
+//
+// Alternative configuration without config file:
+// {
+//   "mcpServers": {
+//     "ratchet": {
+//       "command": "ratchet",
+//       "args": [
+//         "mcp-serve",
+//         "--transport", "stdio",
+//         "--host", "127.0.0.1", 
+//         "--port", "8090"
+//       ]
+//     }
+//   }
+// }
+//
+// For production with authentication:
+// {
+//   "mcpServers": {
+//     "ratchet": {
+//       "command": "ratchet",
+//       "args": ["mcp-serve", "--config", "/etc/ratchet/config.yaml"],
+//       "env": {
+//         "MCP_API_KEY_CLAUDE": "your-secret-api-key-here",
+//         "RUST_LOG": "info"
+//       }
+//     }
+//   }
+// }
