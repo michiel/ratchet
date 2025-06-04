@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
+#[cfg(feature = "rest")]
+use axum;
+
 /// Result type for API operations
 pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
@@ -160,6 +163,11 @@ impl ApiError {
             .with_suggestion("Try again later or contact support if the problem persists")
     }
     
+    /// Alias for internal_error
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::internal_error(message)
+    }
+    
     /// Service unavailable error (503)
     pub fn service_unavailable(service: impl Into<String>) -> Self {
         Self::new("SERVICE_UNAVAILABLE", format!("{} service is temporarily unavailable", service.into()))
@@ -172,6 +180,13 @@ impl ApiError {
         Self::new("TIMEOUT", format!("{} timed out", operation.into()))
             .with_status(504)
             .with_suggestion("Try again with a smaller request or contact support")
+    }
+    
+    /// Not implemented error (501)
+    pub fn not_implemented(feature: impl Into<String>) -> Self {
+        Self::new("NOT_IMPLEMENTED", format!("{} is not implemented", feature.into()))
+            .with_status(501)
+            .with_suggestion("This feature is under development")
     }
 }
 
@@ -312,19 +327,19 @@ impl ErrorResponse {
 //     }
 // }
 
-// Axum integration for REST API (disabled for now)
-// #[cfg(feature = "rest")]
-// impl axum::response::IntoResponse for ApiError {
-//     fn into_response(self) -> axum::response::Response {
-//         use axum::response::Json;
-//         use axum::http::StatusCode;
-//         
-//         let status = StatusCode::from_u16(self.status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-//         let response = ErrorResponse::new(self, None);
-//         
-//         (status, Json(response)).into_response()
-//     }
-// }
+// Axum integration for REST API
+#[cfg(feature = "rest")]
+impl axum::response::IntoResponse for ApiError {
+    fn into_response(self) -> axum::response::Response {
+        use axum::response::Json;
+        use axum::http::StatusCode;
+        
+        let status = StatusCode::from_u16(self.status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let response = ErrorResponse::new(self, None);
+        
+        (status, Json(response)).into_response()
+    }
+}
 
 #[cfg(test)]
 mod tests {

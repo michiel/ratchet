@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tracing::{debug, info, warn};
+#[cfg(feature = "output")]
 use zip::ZipArchive;
 
 /// Load a task from the filesystem or a ZIP file

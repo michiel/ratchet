@@ -18,7 +18,8 @@ resolver = "2"
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.45", features = ["full"] }
+# Reduce tokio feature overhead - specific crates can add features as needed
+tokio = { version = "1.45", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-util", "net", "fs", "signal", "process"] }
 clap = { version = "4.4", features = ["derive"] }
 thiserror = "1.0"
 anyhow = "1.0"
@@ -30,12 +31,27 @@ tracing-appender = "0.2"
 lazy_static = "1.4"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
-axum = "0.6"
-reqwest = { version = "0.11", features = ["json", "stream"] }
+# Reduce SQLx features to essentials
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"], default-features = false }
+axum = { version = "0.6", default-features = false, features = ["http1", "http2", "json", "original-uri", "form", "headers", "matched-path"] }
+tower = { version = "0.4", default-features = false, features = ["util", "timeout", "limit", "load-shed", "steer"] }
+tower-http = { version = "0.4", features = ["cors", "trace", "timeout", "limit", "fs"] }
+# GraphQL with essential features
+async-graphql = { version = "6.0", features = ["uuid", "chrono", "graphiql"], default-features = false }
+async-graphql-axum = "6.0"
+# Use reqwest 0.12 to consolidate versions
+reqwest = { version = "0.12", features = ["json", "stream"], default-features = false }
 url = "2.4"
 async-trait = "0.1"
 tokio-stream = "0.1"
+# Consolidate dependency versions
+jsonschema = "0.18"
+base64 = "0.22"
+http = "1.0"
+http-body = "1.0"
+hyper = "1.0"
+lru = "0.10"
+ahash = "0.8"
 
 # Workspace-level configuration for targets
 [workspace.package]
@@ -48,15 +64,21 @@ repository = "https://github.com/michiel/ratchet-workspace"
 
 # Speed up compilation in debug mode
 [profile.dev]
-opt-level = 0
-debug = true
-# Split debug information if possible (helps reduce binary size during development)
+opt-level = 1          # Slight optimization for dependencies
+debug = 1              # Reduced debug info for faster builds
 debug-assertions = true
 overflow-checks = true
 lto = false
 panic = 'unwind'
 incremental = true
-codegen-units = 256
+codegen-units = 512    # More parallelism for faster builds
+
+# Fast development profile for rapid iteration
+[profile.dev-fast]
+inherits = "dev"
+opt-level = 0
+debug = 0              # Minimal debug info
+codegen-units = 1024   # Maximum parallelism
 
 # Optimize for release builds
 [profile.release]
