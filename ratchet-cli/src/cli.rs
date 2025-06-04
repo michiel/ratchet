@@ -6,6 +6,10 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
+    /// Path to configuration file
+    #[arg(long, value_name = "PATH", global = true)]
+    pub config: Option<PathBuf>,
+
     /// Set the log level (trace, debug, info, warn, error)
     #[arg(long, value_name = "LEVEL", global = true)]
     pub log_level: Option<String>,

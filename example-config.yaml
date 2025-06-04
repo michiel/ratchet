@@ -27,12 +27,43 @@ cache:
   enabled: true                 # Enable/disable caching
 
 # Logging configuration
-# NOTE: Currently ratchet uses simple tracing and only respects the level setting
-# File logging and structured configuration are not yet implemented
 logging:
-  level: "info"           # Log level: trace, debug, info, warn, error
-  log_to_file: false      # Not currently implemented
-  log_file_path: null     # Not currently implemented
+  level: info                 # Global log level: trace, debug, info, warn, error
+  format: pretty              # Log format: pretty (human-readable) or json
+  
+  # Logging sinks - where logs are written
+  sinks:
+    # Console output (stdout/stderr)
+    - type: console
+      level: info
+      use_json: false         # Use JSON format for console output
+    
+    # File output with rotation (uncomment to enable)
+    # - type: file
+    #   path: "logs/ratchet.log"  # Log file path (directory will be created)
+    #   level: debug              # File-specific log level
+    #   rotation:
+    #     max_size: "100MB"       # Rotate when file reaches this size
+    #     max_age: "7d"           # Rotate files older than this
+    #     max_files: 5            # Keep this many rotated files
+    #   buffered:
+    #     size: 1000              # Buffer size (number of log entries)
+    #     flush_interval: "5s"    # How often to flush buffer to disk
+  
+  # Log enrichment - additional context added to log entries
+  enrichment:
+    system_info: true         # Include system information
+    process_info: true        # Include process information  
+    task_context: false       # Include task context (can be verbose)
+    execution_context: false  # Include execution context (can be verbose)
+  
+  # Sampling rates - reduce log volume by sampling (1.0 = 100%, 0.1 = 10%)
+  sampling:
+    error_rate: 1.0           # Always log errors
+    warn_rate: 1.0            # Always log warnings
+    info_rate: 1.0            # Always log info messages
+    debug_rate: 0.1           # Sample 10% of debug messages
+    trace_rate: 0.01          # Sample 1% of trace messages
 
 # Output destinations configuration
 output:

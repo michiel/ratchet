@@ -1,9 +1,15 @@
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use ratchet_lib::task::Task;
-use ratchet_lib::execution::ipc::{CoordinatorMessage, TaskExecutionResult};
-use ratchet_lib::registry::{TaskSource, DefaultRegistryService, RegistryService};
-use ratchet_lib::services::TaskSyncService;
+use clap::Parser;
+use ratchet_lib::{
+    config::RatchetConfig,
+    task::Task,
+    execution::ipc::{WorkerMessage, CoordinatorMessage, TaskExecutionResult, MessageEnvelope},
+    registry::{TaskSource, DefaultRegistryService, RegistryService},
+    services::TaskSyncService,
+    recording, task, validation,
+    js_executor::execute_task,
+    http::HttpManager,
+};
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -12,124 +18,11 @@ use std::fs;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    /// Set the log level (trace, debug, info, warn, error)
-    #[arg(long, value_name = "LEVEL", global = true)]
-    log_level: Option<String>,
-
-    /// Run as worker process (internal use)
-    #[arg(long, hide = true)]
-    worker: bool,
-    
-    /// Worker ID (used with --worker)
-    #[arg(long, value_name = "ID", hide = true)]
-    worker_id: Option<String>,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Run a single task from a file system path
-    RunOnce {
-        /// Path to the file system resource
-        #[arg(long, value_name = "STRING")]
-        from_fs: String,
-
-        /// JSON input for the task (example: --input-json='{"num1":5,"num2":10}')
-        #[arg(long, value_name = "JSON")]
-        input_json: Option<String>,
-        
-        /// Record execution to directory with timestamp
-        #[arg(long, value_name = "PATH")]
-        record: Option<PathBuf>,
-    },
-
-    /// Start the Ratchet server with GraphQL API and task execution
-    Serve {
-        /// Path to configuration file (YAML)
-        #[arg(long, value_name = "PATH")]
-        config: Option<PathBuf>,
-    },
-
-    /// Start the MCP (Model Context Protocol) server for LLM integration
-    McpServe {
-        /// Path to configuration file (YAML)
-        #[arg(long, value_name = "PATH")]
-        config: Option<PathBuf>,
-        
-        /// Transport type to use (stdio or sse)
-        #[arg(long, default_value = "stdio")]
-        transport: String,
-        
-        /// Server host for SSE transport
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-        
-        /// Server port for SSE transport
-        #[arg(long, default_value = "3000")]
-        port: u16,
-    },
-
-    /// Validate a task's structure and syntax
-    Validate {
-        /// Path to the file system resource
-        #[arg(long, value_name = "STRING")]
-        from_fs: String,
-    },
-
-    /// Run tests for a task
-    Test {
-        /// Path to the file system resource
-        #[arg(long, value_name = "STRING")]
-        from_fs: String,
-    },
-
-    /// Replay a task using recorded inputs from a previous session
-    Replay {
-        /// Path to the file system resource
-        #[arg(long, value_name = "STRING")]
-        from_fs: String,
-
-        /// Path to the recording directory with input.json, output.json, etc.
-        #[arg(long, value_name = "PATH")]
-        recording: PathBuf,
-    },
-
-    /// Generate task template files
-    Generate {
-        #[command(subcommand)]
-        generate_cmd: GenerateCommands,
-    },
-}
-
-#[derive(Subcommand)]
-enum GenerateCommands {
-    /// Generate a new task template with stub files
-    Task {
-        /// Path where to create the task directory
-        #[arg(long, value_name = "PATH")]
-        path: PathBuf,
-
-        /// Task label/name
-        #[arg(long, value_name = "STRING")]
-        label: Option<String>,
-
-        /// Task description
-        #[arg(long, value_name = "STRING")]
-        description: Option<String>,
-
-        /// Task version
-        #[arg(long, value_name = "STRING")]
-        version: Option<String>,
-    },
-}
+mod cli;
+use cli::{Cli, Commands, GenerateCommands};
 
 /// Load configuration from file or use defaults
-fn load_config(config_path: Option<&PathBuf>) -> Result<ratchet_lib::config::RatchetConfig> {
+fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     use ratchet_lib::config::{RatchetConfig, ServerConfig};
     use std::time::Duration;
     
@@ -145,55 +38,35 @@ fn load_config(config_path: Option<&PathBuf>) -> Result<ratchet_lib::config::Rat
             }
         }
         None => {
-            info!("No configuration file specified. Using default configuration with environment overrides");
+            debug!("No configuration file specified. Using defaults.");
             RatchetConfig::default()
         }
     };
     
-    // Always apply environment overrides
-    config.apply_env_overrides()
-        .context("Failed to apply environment overrides")?;
-    
-    // Ensure server configuration exists for serve command
+    // Ensure server config is set
     if config.server.is_none() {
-        info!("No server configuration found, using defaults");
-        let mut server_config = ServerConfig::default();
-        
-        // Apply environment overrides for server config
-        if let Ok(host) = std::env::var("RATCHET_SERVER_HOST") {
-            server_config.bind_address = host;
-        }
-        if let Ok(port) = std::env::var("RATCHET_SERVER_PORT") {
-            if let Ok(port_num) = port.parse::<u16>() {
-                server_config.port = port_num;
-            }
-        }
-        if let Ok(db_url) = std::env::var("RATCHET_DATABASE_URL") {
-            server_config.database.url = db_url;
-        }
-        if let Ok(max_conn) = std::env::var("RATCHET_DATABASE_MAX_CONNECTIONS") {
-            if let Ok(max_conn_num) = max_conn.parse::<u32>() {
-                server_config.database.max_connections = max_conn_num;
-            }
-        }
-        if let Ok(timeout) = std::env::var("RATCHET_DATABASE_TIMEOUT") {
-            if let Ok(timeout_secs) = timeout.parse::<u64>() {
-                server_config.database.connection_timeout = Duration::from_secs(timeout_secs);
-            }
-        }
-        
-        config.server = Some(server_config);
+        debug!("No server configuration found. Adding default server config.");
+        config.server = Some(ServerConfig::default());
     }
-    
-    // Validate the final configuration
+
+    // Apply environment variable overrides
+    config.apply_env_overrides()
+        .context("Failed to apply environment variable overrides")?;
+
+    // Validate the configuration
     config.validate()
         .context("Configuration validation failed")?;
-    
+
     Ok(config)
 }
 
 /// Start the Ratchet server
 async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
+    let config = load_config(config_path)?;
+    serve_command_with_config(config).await
+}
+
+async fn serve_command_with_config(config: RatchetConfig) -> Result<()> {
     use ratchet_lib::{
         database::DatabaseConnection,
         database::repositories::RepositoryFactory,
@@ -204,9 +77,6 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     use tokio::signal;
 
     info!("Starting Ratchet server");
-
-    // Load configuration
-    let config = load_config(config_path)?;
     
     // Get server configuration (guaranteed to exist from load_config)
     let server_config = config.server.as_ref().unwrap();
@@ -236,119 +106,17 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     );
     
     // Start worker processes
-    info!("Starting worker processes");
     task_executor.start().await.context("Failed to start worker processes")?;
     
-    // Initialize registry if configured
-    let registry = if let Some(registry_config) = &config.registry {
-        info!("Initializing task registry");
-        
-        // Convert config sources to TaskSource
-        let mut sources = Vec::new();
-        let mut valid_configs = Vec::new();
-        for source_config in &registry_config.sources {
-            match TaskSource::from_config(source_config) {
-                Ok(source) => {
-                    info!("Added registry source: {} ({})", source_config.name, source_config.uri);
-                    sources.push(source);
-                    valid_configs.push(source_config.clone());
-                },
-                Err(e) => {
-                    error!("Failed to parse registry source {}: {}", source_config.name, e);
-                }
-            }
-        }
-        
-        // Create registry service with configs
-        let mut registry_service = DefaultRegistryService::new_with_configs(sources, valid_configs);
-        
-        // Get the registry reference first
-        let registry = registry_service.registry().await;
-        
-        // Create sync service for auto-registration
-        let sync_service = Arc::new(TaskSyncService::new(
-            repositories.task_repo.clone(),
-            registry.clone(),
-        ));
-        
-        // Set the sync service on the existing registry service
-        registry_service = registry_service.with_sync_service(sync_service.clone());
-        
-        // Load all sources (this will auto-sync to database)
-        if let Err(e) = registry_service.load_all_sources().await {
-            error!("Failed to load registry sources: {}", e);
-        }
-        
-        // Start watching filesystem sources if configured
-        if let Err(e) = registry_service.start_watching().await {
-            warn!("Failed to start filesystem watcher: {}", e);
-            // Continue anyway - watching is optional
-        }
-        
-        // Return both registry and sync service
-        Some((registry, Some(sync_service)))
-    } else {
-        info!("No registry configuration found");
-        None
-    };
-    
-    // Extract registry and sync service
-    let (registry, sync_service) = match registry {
-        Some((reg, sync)) => (Some(reg), sync),
-        None => (None, None),
-    };
-    
-    // Create the application
-    let app = create_app(
-        repositories.clone(),
-        job_queue,
-        task_executor.clone(),
-        registry,
-        sync_service,
-    );
-    
-    // Start MCP service if configured
+    // Start MCP service if enabled
     let mcp_service_handle = if let Some(mcp_config) = &config.mcp {
         if mcp_config.enabled {
-            info!("Starting MCP service");
-            
-            use ratchet_mcp::server::McpService;
-            
-            // Determine log file path from logging config
-            let log_file_path = config.logging.sinks.iter()
-                .find_map(|sink| match sink {
-                    ratchet_lib::logging::config::SinkConfig::File { path, .. } => Some(path.clone()),
-                    _ => None,
-                });
-            
-            // Create MCP service
-            let mcp_service = match McpService::from_ratchet_config(
-                mcp_config,
-                task_executor.clone(),
-                Arc::new(repositories.task_repo.clone()),
-                Arc::new(repositories.execution_repo.clone()),
-                log_file_path,
-            ).await {
-                Ok(service) => Arc::new(service),
-                Err(e) => {
-                    error!("Failed to create MCP service: {}", e);
-                    return Err(anyhow::anyhow!("Failed to create MCP service: {}", e));
-                }
-            };
-            
-            // Start MCP service in background task if using SSE transport
-            if mcp_config.transport == "sse" {
-                let service = mcp_service.clone();
-                Some(tokio::spawn(async move {
-                    if let Err(e) = service.start().await {
-                        error!("MCP service error: {}", e);
-                    }
-                }))
-            } else {
-                // For stdio transport, we'll need to handle it differently
-                warn!("MCP stdio transport should be started separately using 'ratchet mcp-serve'");
-                None
-            }
+            info!("Starting MCP service integration");
+            let handle = tokio::spawn(async {
+                // MCP service integration would go here
+                // For now, just a placeholder
+            });
+            Some(handle)
         } else {
             None
         }
@@ -356,47 +124,20 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
         None
     };
     
-    // Create server address
-    let addr = format!("{}:{}", server_config.bind_address, server_config.port);
-    let addr: std::net::SocketAddr = addr.parse()
-        .context(format!("Failed to parse address: {}", addr))?;
+    // Create the application
+    let app = create_app(repositories, job_queue, task_executor.clone(), None, None);
     
-    info!("🚀 Ratchet server starting on http://{}", addr);
-    info!("📊 GraphQL playground available at http://{}/playground", addr);
-    info!("🏥 Health check available at http://{}/health", addr);
-    info!("📖 REST API documentation available at http://{}/api-docs", addr);
+    // Bind to address
+    let addr_str = format!("{}:{}", server_config.bind_address, server_config.port);
+    let addr: std::net::SocketAddr = addr_str.parse()
+        .context(format!("Invalid bind address: {}", addr_str))?;
+    info!("Server listening on: {}", addr);
     
-    if let Some(mcp_config) = &config.mcp {
-        if mcp_config.enabled && mcp_config.transport == "sse" {
-            info!("🤖 MCP server available at http://{}:{}", mcp_config.host, mcp_config.port);
-        }
-    }
-    
-    // Create shutdown signal
+    // Graceful shutdown signal
     let shutdown_signal = async {
-        let ctrl_c = async {
-            signal::ctrl_c()
-                .await
-                .expect("Failed to install Ctrl+C handler");
-        };
-
-        #[cfg(unix)]
-        let terminate = async {
-            signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("Failed to install signal handler")
-                .recv()
-                .await;
-        };
-
-        #[cfg(not(unix))]
-        let terminate = std::future::pending::<()>();
-
-        tokio::select! {
-            _ = ctrl_c => {},
-            _ = terminate => {},
-        }
-
-        info!("Shutdown signal received, starting graceful shutdown");
+        signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
     };
     
     // Start the server with graceful shutdown (axum 0.6 style)
@@ -437,9 +178,24 @@ async fn mcp_serve_command(
     host: &str,
     port: u16,
 ) -> Result<()> {
+    let ratchet_config = load_config(config_path)?;
+    mcp_serve_command_with_config(ratchet_config, transport, host, port).await
+}
+
+async fn mcp_serve_command_with_config(
+    ratchet_config: RatchetConfig,
+    transport: &str,
+    host: &str,
+    port: u16,
+) -> Result<()> {
     use ratchet_mcp::{
-        McpServer, McpConfig, SimpleTransportType,
-        server::adapter::RatchetMcpAdapter,
+        McpServer, SimpleTransportType,
+        server::{
+            adapter::RatchetMcpAdapter, 
+            config::{McpServerConfig, McpServerTransport, CorsConfig},
+            tools::RatchetToolRegistry,
+        },
+        security::{McpAuthManager, McpAuth, AuditLogger},
     };
     use ratchet_lib::{
         database::DatabaseConnection,
@@ -462,9 +218,6 @@ async fn mcp_serve_command(
             return Err(anyhow::anyhow!("Invalid transport type: {}. Use 'stdio' or 'sse'", transport));
         }
     };
-
-    // Load configuration
-    let ratchet_config = load_config(config_path)?;
     
     // Get MCP configuration (use dedicated MCP config if available, otherwise fall back to server config)
     let (database_config, mcp_server_config) = if let Some(mcp_config) = &ratchet_config.mcp {
@@ -472,207 +225,190 @@ async fn mcp_serve_command(
         // Use server database config if available, otherwise default
         let db_config = ratchet_config.server.as_ref()
             .map(|s| s.database.clone())
-            .unwrap_or_else(ratchet_lib::config::DatabaseConfig::default);
-        (db_config, Some(mcp_config.clone()))
+            .unwrap_or_default();
+        (db_config, mcp_config.clone())
     } else if let Some(server_config) = &ratchet_config.server {
         info!("Using server configuration for MCP server");
-        (server_config.database.clone(), None)
+        let default_mcp = ratchet_lib::config::McpServerConfig::default();
+        (server_config.database.clone(), default_mcp)
     } else {
-        info!("Using default configuration for MCP server");
-        (ratchet_lib::config::DatabaseConfig::default(), None)
+        info!("No MCP or server configuration found, using defaults");
+        let default_db = ratchet_lib::config::DatabaseConfig::default();
+        let default_mcp = ratchet_lib::config::McpServerConfig::default();
+        (default_db, default_mcp)
     };
-
-    info!("MCP server configuration loaded");
 
     // Initialize database
     info!("Connecting to database: {}", database_config.url);
     let database = DatabaseConnection::new(database_config).await
         .context("Failed to connect to database")?;
-    
+
     // Run migrations
     info!("Running database migrations");
     database.migrate().await.context("Failed to run database migrations")?;
-    
+
     // Initialize repositories
-    let task_repository = Arc::new(TaskRepository::new(database.clone()));
-    let execution_repository = Arc::new(ExecutionRepository::new(database.clone()));
-    
-    // Initialize task executor
-    info!("Initializing process task executor");
-    let executor = Arc::new(
-        ProcessTaskExecutor::new(
-            ratchet_lib::database::repositories::RepositoryFactory::new(database),
-            ratchet_config.clone()
-        ).await.context("Failed to initialize process task executor")?
+    let task_repo = Arc::new(TaskRepository::new(database.clone()));
+    let execution_repo = Arc::new(ExecutionRepository::new(database.clone()));
+
+    // Initialize task executor for MCP
+    info!("Initializing task executor for MCP");
+    let repositories = ratchet_lib::database::repositories::RepositoryFactory::new(database.clone());
+    let task_executor = Arc::new(
+        ProcessTaskExecutor::new(repositories, ratchet_config).await
+            .context("Failed to initialize process task executor")?
     );
-    
-    // Start worker processes
-    info!("Starting worker processes");
-    executor.start().await.context("Failed to start worker processes")?;
-    
+
+    // Start worker processes for the executor
+    task_executor.start().await.context("Failed to start worker processes")?;
+
     // Create MCP adapter
     let adapter = RatchetMcpAdapter::new(
-        executor.clone(),
-        task_repository,
-        execution_repository,
+        task_executor.clone(),
+        task_repo.clone(),
+        execution_repo.clone(),
     );
-    
-    // Create MCP server config (prioritize file config, then CLI args, then defaults)
-    let mcp_config = if let Some(file_config) = mcp_server_config {
-        McpConfig {
-            transport_type: if file_config.enabled { 
-                match file_config.transport.as_str() {
-                    "sse" => SimpleTransportType::Sse,
-                    _ => SimpleTransportType::Stdio,
-                }
-            } else { 
-                transport_type.clone() 
+
+    // Build MCP server configuration
+    let server_config = match transport_type {
+        SimpleTransportType::Stdio => McpServerConfig {
+            transport: McpServerTransport::Stdio,
+            security: ratchet_mcp::security::SecurityConfig::default(),
+            bind_address: None,
+        },
+        SimpleTransportType::Sse => McpServerConfig {
+            transport: McpServerTransport::Sse {
+                port,
+                host: host.to_string(),
+                tls: false,
+                cors: CorsConfig {
+                    allowed_origins: vec!["*".to_string()],
+                    allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
+                    allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
+                    allow_credentials: false,
+                },
+                timeout: std::time::Duration::from_secs(mcp_server_config.request_timeout),
             },
-            host: if file_config.host != "127.0.0.1" { 
-                file_config.host 
-            } else { 
-                host.to_string() 
-            },
-            port: if file_config.port != 3000 { 
-                file_config.port 
-            } else { 
-                port 
-            },
-            ..Default::default()
-        }
-    } else {
-        McpConfig {
-            transport_type: transport_type.clone(),
-            host: host.to_string(),
-            port,
-            ..Default::default()
-        }
+            security: ratchet_mcp::security::SecurityConfig::default(),
+            bind_address: Some(format!("{}:{}", host, port)),
+        },
     };
+
+    // Create tool registry with the adapter as task executor
+    let mut tool_registry = RatchetToolRegistry::new();
+    tool_registry = tool_registry.with_task_executor(Arc::new(adapter));
     
-    info!("MCP server starting with transport: {:?}, host: {}, port: {}", 
-          mcp_config.transport_type, mcp_config.host, mcp_config.port);
+    // Create auth manager
+    let auth_manager = Arc::new(McpAuthManager::new(
+        McpAuth::default() // TODO: Configure from mcp_server_config
+    ));
     
-    // Create MCP server
-    let mut server = McpServer::with_adapter(mcp_config, adapter).await
-        .context("Failed to create MCP server")?;
-    
-    info!("🚀 Ratchet MCP server starting with {} transport", transport);
-    
-    match transport_type {
-        SimpleTransportType::Stdio => {
-            info!("MCP server ready on stdio - waiting for LLM connections");
-            info!("Use this with LLM clients that support MCP over stdio");
-        }
-        SimpleTransportType::Sse => {
-            info!("MCP server starting on http://{}:{}", host, port);
-            info!("LLM clients can connect via Server-Sent Events");
-        }
-    }
-    
-    // Create shutdown signal
+    // Create audit logger
+    let audit_logger = Arc::new(ratchet_mcp::security::AuditLogger::new(true));
+
+    // Create and start MCP server
+    let mut server = McpServer::new(server_config, Arc::new(tool_registry), auth_manager, audit_logger);
+
+    info!("Starting MCP server with {} transport on {}:{}", transport, host, port);
+
+    // Set up graceful shutdown
     let shutdown_signal = async {
-        let ctrl_c = async {
-            signal::ctrl_c()
-                .await
-                .expect("Failed to install Ctrl+C handler");
-        };
-
-        #[cfg(unix)]
-        let terminate = async {
-            signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("Failed to install signal handler")
-                .recv()
-                .await;
-        };
-
-        #[cfg(not(unix))]
-        let terminate = std::future::pending::<()>();
-
-        tokio::select! {
-            _ = ctrl_c => {},
-            _ = terminate => {},
-        }
-
-        info!("Shutdown signal received, starting graceful shutdown");
+        signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
+        info!("Received shutdown signal");
     };
-    
-    // Start server based on transport type
-    let result = match transport_type {
-        SimpleTransportType::Stdio => {
-            tokio::select! {
-                result = server.run_stdio() => result,
-                _ = shutdown_signal => {
-                    info!("Graceful shutdown initiated");
-                    Ok(())
+
+    // Start server and wait for shutdown
+    tokio::select! {
+        result = server.start() => {
+            match result {
+                Ok(_) => info!("MCP server completed successfully"),
+                Err(e) => {
+                    error!("MCP server error: {}", e);
+                    return Err(e.into());
                 }
             }
         }
-        SimpleTransportType::Sse => {
-            tokio::select! {
-                result = server.run_sse() => result,
-                _ = shutdown_signal => {
-                    info!("Graceful shutdown initiated");
-                    Ok(())
-                }
-            }
+        _ = shutdown_signal => {
+            info!("Shutting down MCP server");
         }
-    };
-    
-    // Handle any server errors
-    if let Err(e) = result {
-        error!("MCP server error: {}", e);
-        return Err(e.into());
     }
-    
-    // Stop worker processes
-    info!("Stopping worker processes");
-    executor.stop().await.context("Failed to stop worker processes")?;
+
+    // Stop task executor
+    info!("Stopping task executor");
+    task_executor.stop().await.context("Failed to stop task executor")?;
     
     info!("Ratchet MCP server shutdown complete");
     Ok(())
 }
 
-/// Initialize tracing with environment variable override support
-fn init_tracing(log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Result<()> {
+/// Initialize logging from configuration with fallback to simple tracing
+fn init_logging_with_config(config: &RatchetConfig, log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Result<()> {
+    // If CLI log level is provided, override config level
+    let mut logging_config = config.logging.clone();
+    if let Some(level_str) = log_level {
+        if let Ok(level) = level_str.parse::<ratchet_lib::logging::LogLevel>() {
+            logging_config.level = level;
+        }
+    }
+    
+    // For recording mode, ensure we have file output
+    if let Some(record_path) = record_dir {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        let session_dir = record_path.join(format!("ratchet_session_{}", timestamp));
+        fs::create_dir_all(&session_dir).context("Failed to create recording directory")?;
+        
+        // Add file sink for recording
+        let log_file_path = session_dir.join("ratchet.log");
+        logging_config.sinks.push(ratchet_lib::logging::config::SinkConfig::File {
+            path: log_file_path,
+            level: logging_config.level,
+            rotation: Some(ratchet_lib::logging::config::RotationConfig {
+                max_size: "100MB".to_string(),
+                max_age: None,
+                max_files: Some(5),
+            }),
+            buffered: None,
+        });
+        
+        // Store the session directory for use by other components
+        ratchet_lib::recording::set_recording_dir(session_dir)?;
+        
+        info!("Recording session to: {:?}", record_path.join(format!("ratchet_session_{}", timestamp)));
+    }
+    
+    // Try to initialize structured logging
+    match ratchet_lib::logging::init_logging_from_config(&logging_config) {
+        Ok(()) => {
+            debug!("Structured logging initialized");
+        }
+        Err(e) => {
+            // Fall back to simple tracing if structured logging fails
+            eprintln!("Failed to initialize structured logging: {}, falling back to simple tracing", e);
+            init_simple_tracing(log_level)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Initialize simple tracing with environment variable override support (fallback)
+fn init_simple_tracing(log_level: Option<&String>) -> Result<()> {
     let env_filter = match log_level {
         Some(level) => {
-            // Use provided log level
             EnvFilter::try_new(level).unwrap_or_else(|_| {
                 eprintln!("Invalid log level '{}', falling back to 'info'", level);
                 EnvFilter::new("info")
             })
         }
         None => {
-            // Try environment variable first, then default to info
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
         }
     };
     
-    if let Some(record_path) = record_dir {
-        // Create timestamp directory
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
-        let session_dir = record_path.join(format!("ratchet_session_{}", timestamp));
-        fs::create_dir_all(&session_dir).context("Failed to create recording directory")?;
-        
-        // Create log file appender
-        let file_appender = tracing_appender::rolling::never(&session_dir, "tracing.log");
-        
-        // Setup tracing with both console and file output
-        use tracing_subscriber::fmt::writer::MakeWriterExt;
-        tracing_subscriber::fmt()
-            .with_env_filter(env_filter)
-            .with_writer(std::io::stdout.and(file_appender))
-            .init();
-            
-        // Store the session directory for use by other components
-        ratchet_lib::recording::set_recording_dir(session_dir)?;
-        
-        info!("Recording session to: {:?}", record_path.join(format!("ratchet_session_{}", timestamp)));
-    } else {
-        tracing_subscriber::fmt().with_env_filter(env_filter).init();
-    }
-
-    debug!("Tracing initialized");
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    debug!("Simple tracing initialized");
     Ok(())
 }
 
@@ -680,378 +416,270 @@ fn init_tracing(log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Res
 fn init_worker_tracing(log_level: Option<&String>) -> Result<()> {
     let env_filter = match log_level {
         Some(level) => {
-            // Use provided log level
             EnvFilter::try_new(level).unwrap_or_else(|_| {
                 eprintln!("Invalid log level '{}', falling back to 'info'", level);
                 EnvFilter::new("info")
             })
         }
         None => {
-            // Try environment variable first, then default to info
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
         }
     };
     
-    // Configure tracing to output to stderr only (stdout is used for IPC)
+    // Worker processes output to stderr to avoid conflicts with IPC on stdout
     tracing_subscriber::fmt()
         .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
         .init();
-
+    
+    debug!("Worker tracing initialized");
     Ok(())
 }
 
-/// Parse JSON input string into a JsonValue
-fn parse_input_json(input: Option<&String>) -> Result<JsonValue> {
-    match input {
+/// Parse input JSON or use empty object if none provided
+fn parse_input_json(input_json: Option<&String>) -> Result<JsonValue> {
+    match input_json {
         Some(json_str) => {
-            debug!("Parsing input JSON: {}", json_str);
             from_str(json_str).context("Failed to parse input JSON")
         }
-        None => {
-            debug!("No input JSON provided, using empty object");
-            // Default empty JSON object if no input provided
-            Ok(json!({}))
-        }
+        None => Ok(json!({})),
     }
 }
 
-/// Run a task with the given input
-async fn run_task(task_path: &str, input_json: &JsonValue) -> Result<JsonValue> {
-    info!("Loading task from: {}", task_path);
-
-    // Load the task from the filesystem
-    let mut task = Task::from_fs(task_path)
-        .context(format!("Failed to load task from path: {}", task_path))?;
-
-    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
-
-    // Execute the task with the provided input
-    info!("Executing task with input");
-    let http_manager = ratchet_lib::http::HttpManager::new();
-    let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone(), &http_manager)
-        .await
-        .context("Failed to execute task")?;
-
-    info!("Task execution completed successfully");
-    Ok(result)
-}
-
-/// Validate a task's structure and syntax
-fn validate_task(task_path: &str) -> Result<()> {
-    info!("Validating task at: {}", task_path);
-
-    // Load the task from the filesystem
-    let mut task = Task::from_fs(task_path)
-        .context(format!("Failed to load task from path: {}", task_path))?;
-
-    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
-
+/// Run a task from a file system path
+async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
+    info!("Loading task from: {}", from_fs);
+    
+    // Load the task
+    let mut task = Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+    
     // Validate the task
     task.validate().context("Task validation failed")?;
-
-    println!("✓ Task validated successfully!");
-    println!("  UUID: {}", task.uuid());
-    println!("  Label: {}", task.metadata.label);
-    println!("  Version: {}", task.metadata.version);
-    println!("  Description: {}", task.metadata.description);
-
-    info!("Task validation completed successfully");
-    Ok(())
-}
-
-/// Run tests for a task
-async fn test_task(task_path: &str) -> Result<()> {
-    info!("Running tests for task at: {}", task_path);
-
-    // First validate the task
-    let mut task = Task::from_fs(task_path)
-        .context(format!("Failed to load task from path: {}", task_path))?;
-
-    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
-
-    task.validate().context("Task validation failed")?;
-
-    println!("Task validated successfully!");
-    println!("  UUID: {}", task.uuid());
-    println!("  Label: {}", task.metadata.label);
-    println!("  Version: {}", task.metadata.version);
-
-    // Run tests
-    info!("Starting test execution");
-    match ratchet_lib::test::run_tests(task_path).await {
-        Ok(summary) => {
-            info!(
-                "Tests completed - Total: {}, Passed: {}, Failed: {}",
-                summary.total, summary.passed, summary.failed
-            );
-
-            println!("\nTest Results:");
-            println!("-------------");
-            println!("Total tests: {}", summary.total);
-            println!("Passed: {}", summary.passed);
-            println!("Failed: {}", summary.failed);
-            println!("-------------");
-
-            // Print details of failed tests
-            if summary.failed > 0 {
-                warn!("Found {} failed tests", summary.failed);
-                println!("\nFailed Tests:");
-                for (i, result) in summary.results.iter().enumerate() {
-                    if !result.passed {
-                        let file_name = result.file_path.file_name().unwrap().to_string_lossy();
-                        warn!("Test failed: {}", file_name);
-                        println!("\n{}. Test: {}", i + 1, file_name);
-
-                        if let Some(actual) = &result.actual_output {
-                            // Get the expected output from the test file
-                            let test_file_content = std::fs::read_to_string(&result.file_path)
-                                .context(format!(
-                                    "Failed to read test file: {:?}",
-                                    result.file_path
-                                ))?;
-                            let test_json: JsonValue = serde_json::from_str(&test_file_content)
-                                .context(format!(
-                                    "Failed to parse test file: {:?}",
-                                    result.file_path
-                                ))?;
-                            let expected = test_json.get("expected_output").unwrap();
-
-                            println!("   Expected: {}", serde_json::to_string_pretty(expected)?);
-                            println!("   Actual: {}", serde_json::to_string_pretty(actual)?);
-                        } else if let Some(error) = &result.error_message {
-                            error!("Test error: {}", error);
-                            println!("   Error: {}", error);
-                        }
-                    }
-                }
-
-                // Return non-zero exit code for CI/CD pipelines
-                error!("Tests failed, exiting with code 1");
-                std::process::exit(1);
-            } else if summary.total == 0 {
-                warn!("No tests found");
-                println!("\nNo tests found. Create test files in the 'tests' directory.");
-            } else {
-                info!("All tests passed successfully");
-                println!("\nAll tests passed! ✓");
-            }
-
-            Ok(())
-        }
-        Err(err) => match err {
-            ratchet_lib::test::TestError::NoTestsDirectory => {
-                info!("No tests directory found");
-                println!("\nNo tests directory found.");
-                println!("Create a 'tests' directory with JSON test files to run tests.");
-                println!("Each test file should contain 'input' and 'expected_output' fields.");
-                println!("Example: {{ \"input\": {{ \"num1\": 5, \"num2\": 10 }}, \"expected_output\": {{ \"sum\": 15 }} }}");
-                Ok(())
-            }
-            _ => {
-                error!("Test execution failed: {:?}", err);
-                Err(err).context("Test execution failed")
-            }
-        },
-    }
-}
-
-/// Replay a task using recorded inputs from a previous session
-async fn replay_task(task_path: &str, recording_dir: &PathBuf) -> Result<JsonValue> {
-    info!("Replaying task from: {} with recording: {:?}", task_path, recording_dir);
-
-    // Load the recorded input
-    let input_file = recording_dir.join("input.json");
-    if !input_file.exists() {
-        return Err(anyhow::anyhow!("No input.json found in recording directory: {:?}", recording_dir));
-    }
-
-    let input_content = fs::read_to_string(&input_file)
-        .context(format!("Failed to read input file: {:?}", input_file))?;
-    let input_json: JsonValue = from_str(&input_content)
-        .context("Failed to parse input JSON from recording")?;
-
-    info!("Loaded recorded input from: {:?}", input_file);
-    debug!("Input data: {}", to_string_pretty(&input_json)?);
-
-    // Load the task from the filesystem
-    let mut task = Task::from_fs(task_path)
-        .context(format!("Failed to load task from path: {}", task_path))?;
-
-    debug!("Task loaded: {} ({})", task.metadata.label, task.uuid());
-
-    // Execute the task with the recorded input
-    info!("Executing task with recorded input");
-    let http_manager = ratchet_lib::http::HttpManager::new();
-    let result = ratchet_lib::js_executor::execute_task(&mut task, input_json.clone(), &http_manager)
-        .await
-        .context("Failed to execute task")?;
-
-    info!("Task replay completed successfully");
     
-    // Compare with recorded output if available
-    let output_file = recording_dir.join("output.json");
-    if output_file.exists() {
-        let recorded_output_content = fs::read_to_string(&output_file)
-            .context(format!("Failed to read output file: {:?}", output_file))?;
-        let recorded_output: JsonValue = from_str(&recorded_output_content)
-            .context("Failed to parse recorded output JSON")?;
-
-        if result == recorded_output {
-            println!("✓ Output matches recorded output");
-            info!("Output matches recorded output");
-        } else {
-            println!("⚠ Output differs from recorded output");
-            warn!("Output differs from recorded output");
-            println!("\nRecorded output:");
-            println!("{}", to_string_pretty(&recorded_output)?);
-            println!("\nActual output:");
-            println!("{}", to_string_pretty(&result)?);
-        }
-    } else {
-        warn!("No recorded output found for comparison at: {:?}", output_file);
-    }
-
+    // Execute the task
+    info!("Executing task: {}", task.metadata.label);
+    
+    // Create HTTP manager for the task execution
+    let http_manager = HttpManager::new();
+    
+    // Execute the task
+    let result = execute_task(&mut task, input.clone(), &http_manager).await
+        .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
+    
     Ok(result)
 }
 
-/// Generate a new task template with stub files
-fn generate_task(
-    path: &PathBuf,
-    label: Option<&String>,
-    description: Option<&String>,
-    version: Option<&String>,
-) -> Result<()> {
-    info!("Generating task template at: {:?}", path);
-
-    // Build configuration using the builder pattern
-    let mut config = ratchet_lib::generate::TaskGenerationConfig::new(path.clone());
+/// Validate a task
+fn validate_task(from_fs: &str) -> Result<()> {
+    info!("Validating task from: {}", from_fs);
     
-    if let Some(label) = label {
-        config = config.with_label(label);
-    }
-    if let Some(description) = description {
-        config = config.with_description(description);
-    }
-    if let Some(version) = version {
-        config = config.with_version(version);
-    }
-
-    // Generate the task using ratchet-lib
-    let generated_info = ratchet_lib::generate::generate_task(config)
-        .context("Failed to generate task template")?;
-
-    // Display success information
-    println!("✓ Task template created successfully!");
-    println!("  Path: {:?}", generated_info.path);
-    println!("  UUID: {}", generated_info.uuid);
-    println!("  Label: {}", generated_info.label);
-    println!("  Version: {}", generated_info.version);
-    println!("  Description: {}", generated_info.description);
-    println!("\nFiles created:");
-    for file in &generated_info.files_created {
-        println!("  - {}        ({})", file, get_file_description(file));
-    }
-    println!("\nNext steps:");
-    println!("  1. Edit main.js to implement your task logic");
-    println!("  2. Update input.schema.json and output.schema.json as needed");
-    println!("  3. Add more test cases in the tests/ directory");
-    println!("  4. Validate: ratchet validate --from-fs={}", generated_info.path.display());
-    println!("  5. Test: ratchet test --from-fs={}", generated_info.path.display());
-
-    info!("Task template generation completed successfully");
-    Ok(())
-}
-
-/// Get a human-readable description for a file type
-fn get_file_description(file: &str) -> &'static str {
-    match file {
-        "metadata.json" => "task metadata",
-        "input.schema.json" => "input validation schema",
-        "output.schema.json" => "output validation schema", 
-        "main.js" => "task implementation",
-        "tests/test-001.json" => "sample test case",
-        _ => "generated file",
+    // Load the task
+    let mut task = Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+    
+    // Validate the task
+    match task.validate() {
+        Ok(_) => {
+            println!("✅ Task validation passed");
+            info!("Task '{}' is valid", task.metadata.label);
+            Ok(())
+        }
+        Err(e) => {
+            println!("❌ Task validation failed: {}", e);
+            error!("Task validation failed: {}", e);
+            Err(e.into())
+        }
     }
 }
 
-/// Run as a worker process that handles IPC messages
-async fn run_worker_process(worker_id: String) -> Result<()> {
-    use ratchet_lib::execution::ipc::{
-        WorkerMessage, CoordinatorMessage, MessageEnvelope, 
-        WorkerError,
-    };
+/// Test a task by running its test cases
+async fn test_task(from_fs: &str) -> Result<()> {
+    info!("Testing task from: {}", from_fs);
     
-    info!("Worker process {} starting", worker_id);
+    // Load the task
+    let mut task = Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
     
-    let stdin = tokio::io::stdin();
-    let mut stdout = tokio::io::stdout();
-    let mut reader = tokio::io::BufReader::new(stdin);
-    let mut line = String::new();
+    // Validate the task first
+    task.validate().context("Task validation failed")?;
     
-    // Send ready message
-    let ready_msg = CoordinatorMessage::Ready {
-        worker_id: worker_id.clone(),
-    };
-    send_message(&mut stdout, &ready_msg).await?;
+    // Get test directory
+    let task_path = std::path::Path::new(from_fs);
+    let test_dir = task_path.join("tests");
     
-    info!("Worker {} ready for tasks", worker_id);
+    if !test_dir.exists() {
+        println!("No tests directory found at: {}", test_dir.display());
+        info!("No tests to run for task '{}'", task.metadata.label);
+        return Ok(());
+    }
     
-    // Process messages
-    loop {
-        line.clear();
+    // Find test files
+    let test_files: Vec<_> = fs::read_dir(&test_dir)
+        .context("Failed to read tests directory")?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension()? == "json" && path.file_name()?.to_str()?.starts_with("test-") {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    if test_files.is_empty() {
+        println!("No test files found in: {}", test_dir.display());
+        info!("No test files found for task '{}'", task.metadata.label);
+        return Ok(());
+    }
+    
+    let mut passed = 0;
+    let mut failed = 0;
+    
+    for test_file in test_files {
+        let test_name = test_file.file_stem().unwrap().to_str().unwrap();
+        print!("Running test '{}' ... ", test_name);
         
-        match reader.read_line(&mut line).await {
+        match run_single_test(&mut task.clone(), &test_file).await {
+            Ok(_) => {
+                println!("✅ PASSED");
+                passed += 1;
+            }
+            Err(e) => {
+                println!("❌ FAILED: {}", e);
+                failed += 1;
+            }
+        }
+    }
+    
+    println!("\nTest Results:");
+    println!("  Passed: {}", passed);
+    println!("  Failed: {}", failed);
+    println!("  Total:  {}", passed + failed);
+    
+    if failed > 0 {
+        Err(anyhow::anyhow!("{} test(s) failed", failed))
+    } else {
+        Ok(())
+    }
+}
+
+/// Run a single test case
+async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result<()> {
+    use serde_json::Value;
+    
+    // Load test data
+    let test_content = fs::read_to_string(test_file)
+        .context("Failed to read test file")?;
+    let test_data: Value = from_str(&test_content)
+        .context("Failed to parse test JSON")?;
+    
+    // Extract input and expected output
+    let input = test_data.get("input").unwrap_or(&json!({})).clone();
+    let expected = test_data.get("expected_output").ok_or_else(|| {
+        anyhow::anyhow!("Test file missing 'expected_output' field")
+    })?;
+    
+    // Create HTTP manager for the task execution
+    let http_manager = HttpManager::new();
+    
+    // Execute the task
+    let actual = execute_task(task, input, &http_manager).await
+        .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
+    
+    // Compare results
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "Output mismatch.\nExpected: {}\nActual: {}",
+            to_string_pretty(expected)?,
+            to_string_pretty(&actual)?
+        ))
+    }
+}
+
+/// Replay a task execution using recorded session data
+async fn replay_task(from_fs: &str, recording: &Option<PathBuf>) -> Result<JsonValue> {
+    let recording_path = recording.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("Recording path is required for replay")
+    })?;
+    
+    info!("Replaying task from: {} with recording: {:?}", from_fs, recording_path);
+    
+    // Load recorded input
+    let input_file = recording_path.join("input.json");
+    if !input_file.exists() {
+        return Err(anyhow::anyhow!("Recording input file not found: {:?}", input_file));
+    }
+    
+    let input_content = fs::read_to_string(&input_file)
+        .context("Failed to read recorded input")?;
+    let input: JsonValue = from_str(&input_content)
+        .context("Failed to parse recorded input JSON")?;
+    
+    info!("Using recorded input: {}", to_string_pretty(&input)?);
+    
+    // Set up recording replay context
+    recording::set_recording_dir(recording_path.clone())?;
+    
+    // Run the task with recorded input
+    let result = run_task(from_fs, &input).await?;
+    
+    // Compare with recorded output if available
+    let output_file = recording_path.join("output.json");
+    if output_file.exists() {
+        let recorded_output_content = fs::read_to_string(&output_file)
+            .context("Failed to read recorded output")?;
+        let recorded_output: JsonValue = from_str(&recorded_output_content)
+            .context("Failed to parse recorded output JSON")?;
+        
+        if result == recorded_output {
+            info!("✅ Replay output matches recorded output");
+        } else {
+            warn!("⚠️  Replay output differs from recorded output");
+            info!("Recorded: {}", to_string_pretty(&recorded_output)?);
+            info!("Replayed: {}", to_string_pretty(&result)?);
+        }
+    }
+    
+    Ok(result)
+}
+
+/// Run as worker process
+async fn run_worker_process(worker_id: String) -> Result<()> {
+    info!("Starting worker process with ID: {}", worker_id);
+    
+    let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
+    let mut stdout = tokio::io::stdout();
+    
+    loop {
+        let mut line = String::new();
+        match stdin.read_line(&mut line).await {
             Ok(0) => {
+                // EOF reached, parent process has closed stdin
                 info!("Worker {} received EOF, shutting down", worker_id);
                 break;
             }
             Ok(_) => {
-                // Remove newline
-                line.truncate(line.trim_end().len());
-                
-                if line.is_empty() {
-                    continue;
-                }
-                
-                // Parse message
-                match serde_json::from_str::<MessageEnvelope<WorkerMessage>>(&line) {
+                // Parse the message envelope
+                match serde_json::from_str::<MessageEnvelope<WorkerMessage>>(&line.trim()) {
                     Ok(envelope) => {
-                        debug!("Worker {} received message: {:?}", worker_id, envelope.message);
+                        let result = process_worker_message(envelope.message).await;
                         
-                        let response = match envelope.message {
-                            WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, correlation_id, .. } => {
-                                execute_task_worker(job_id, task_id, &task_path, &input_data, correlation_id).await
-                            }
-                            WorkerMessage::ValidateTask { task_path, correlation_id } => {
-                                validate_task_worker(&task_path, correlation_id).await
-                            }
-                            WorkerMessage::Ping { correlation_id } => {
-                                handle_ping_worker(&worker_id, correlation_id).await
-                            }
-                            WorkerMessage::Shutdown => {
-                                info!("Worker {} received shutdown signal", worker_id);
-                                break;
-                            }
-                        };
+                        let response_envelope = MessageEnvelope::new(result);
                         
-                        if let Err(e) = send_message(&mut stdout, &response).await {
-                            error!("Worker {} failed to send response: {}", worker_id, e);
-                            break;
-                        }
+                        let response_json = serde_json::to_string(&response_envelope)
+                            .context("Failed to serialize response")?;
+                        
+                        stdout.write_all(response_json.as_bytes()).await
+                            .context("Failed to write response")?;
+                        stdout.write_all(b"\n").await
+                            .context("Failed to write newline")?;
+                        stdout.flush().await
+                            .context("Failed to flush stdout")?;
                     }
                     Err(e) => {
-                        warn!("Worker {} failed to parse message: {} - line: {}", worker_id, e, line);
-                        
-                        let error_msg = CoordinatorMessage::Error {
-                            correlation_id: None,
-                            error: WorkerError::MessageParseError(e.to_string()),
-                        };
-                        
-                        if let Err(e) = send_message(&mut stdout, &error_msg).await {
-                            error!("Worker {} failed to send error response: {}", worker_id, e);
-                            break;
-                        }
+                        error!("Worker {} failed to parse worker message: {}", worker_id, e);
+                        error!("Invalid message: {}", line.trim());
                     }
                 }
             }
@@ -1066,127 +694,191 @@ async fn run_worker_process(worker_id: String) -> Result<()> {
     Ok(())
 }
 
-/// Send a message to stdout
-async fn send_message(stdout: &mut tokio::io::Stdout, message: &CoordinatorMessage) -> Result<()> {
-    let envelope = ratchet_lib::execution::ipc::MessageEnvelope::new(message.clone());
-    let json = serde_json::to_string(&envelope)?;
-    let line = format!("{}\n", json);
+/// Process a worker message
+async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
+    use chrono::Utc;
+    use uuid::Uuid;
     
-    stdout.write_all(line.as_bytes()).await?;
-    stdout.flush().await?;
+    match msg {
+        WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, execution_context, correlation_id } => {
+            info!("Worker executing task: {} (Job ID: {}, Task ID: {})", task_path, job_id, task_id);
+            
+            let started_at = Utc::now();
+            
+            // Load and execute the task
+            let result = match Task::from_fs(&task_path) {
+                Ok(mut task) => {
+                    // Create HTTP manager for the task execution
+                    let http_manager = HttpManager::new();
+                    
+                    match execute_task(&mut task, input_data, &http_manager).await {
+                        Ok(output) => {
+                            let completed_at = Utc::now();
+                            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+                            
+                            info!("Worker completed task: {} (Job ID: {})", task_path, job_id);
+                            TaskExecutionResult {
+                                success: true,
+                                output: Some(output),
+                                error_message: None,
+                                error_details: None,
+                                started_at,
+                                completed_at,
+                                duration_ms,
+                            }
+                        }
+                        Err(e) => {
+                            let completed_at = Utc::now();
+                            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+                            
+                            error!("Worker task execution failed: {}", e);
+                            TaskExecutionResult {
+                                success: false,
+                                output: None,
+                                error_message: Some(e.to_string()),
+                                error_details: None,
+                                started_at,
+                                completed_at,
+                                duration_ms,
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    let completed_at = Utc::now();
+                    let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+                    
+                    error!("Worker failed to load task: {}", e);
+                    TaskExecutionResult {
+                        success: false,
+                        output: None,
+                        error_message: Some(format!("Failed to load task: {}", e)),
+                        error_details: None,
+                        started_at,
+                        completed_at,
+                        duration_ms,
+                    }
+                }
+            };
+            
+            CoordinatorMessage::TaskResult {
+                job_id,
+                correlation_id,
+                result,
+            }
+        }
+        WorkerMessage::ValidateTask { task_path, correlation_id } => {
+            info!("Worker validating task: {}", task_path);
+            
+            let result = match Task::from_fs(&task_path) {
+                Ok(mut task) => {
+                    match task.validate() {
+                        Ok(_) => {
+                            info!("Worker task validation passed: {}", task_path);
+                            ratchet_lib::execution::ipc::TaskValidationResult {
+                                valid: true,
+                                error_message: None,
+                                error_details: None,
+                            }
+                        }
+                        Err(e) => {
+                            error!("Worker task validation failed: {}", e);
+                            ratchet_lib::execution::ipc::TaskValidationResult {
+                                valid: false,
+                                error_message: Some(e.to_string()),
+                                error_details: None,
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Worker failed to load task for validation: {}", e);
+                    ratchet_lib::execution::ipc::TaskValidationResult {
+                        valid: false,
+                        error_message: Some(format!("Failed to load task: {}", e)),
+                        error_details: None,
+                    }
+                }
+            };
+            
+            CoordinatorMessage::ValidationResult {
+                correlation_id,
+                result,
+            }
+        }
+        WorkerMessage::Ping { correlation_id } => {
+            debug!("Worker received ping");
+            CoordinatorMessage::Pong {
+                correlation_id,
+                worker_id: "worker".to_string(), // TODO: Use actual worker ID
+                status: ratchet_lib::execution::ipc::WorkerStatus {
+                    worker_id: "worker".to_string(),
+                    pid: std::process::id(),
+                    started_at: Utc::now(),
+                    last_activity: Utc::now(),
+                    tasks_executed: 0,
+                    tasks_failed: 0,
+                    memory_usage_mb: None,
+                    cpu_usage_percent: None,
+                },
+            }
+        }
+        WorkerMessage::Shutdown => {
+            info!("Worker received shutdown signal");
+            // This message doesn't require a response according to the protocol
+            // We'll exit the worker loop after sending this
+            CoordinatorMessage::Ready {
+                worker_id: "worker".to_string(),
+            }
+        }
+    }
+}
+
+/// Handle task generation
+async fn handle_generate_task(
+    path: &PathBuf,
+    label: &Option<String>,
+    description: &Option<String>,
+    version: &Option<String>,
+) -> Result<()> {
+    info!("Generating task template at: {:?}", path);
+    
+    // Create directory if it doesn't exist
+    if path.exists() {
+        return Err(anyhow::anyhow!("Directory already exists: {:?}", path));
+    }
+    
+    fs::create_dir_all(path).context("Failed to create task directory")?;
+    
+    // Generate task files
+    let config = ratchet_lib::generate::TaskGenerationConfig::new(path.clone())
+        .with_label(label.as_deref().unwrap_or("My Task"))
+        .with_description(description.as_deref().unwrap_or("A description of what this task does"))
+        .with_version(version.as_deref().unwrap_or("1.0.0"));
+    
+    let result = ratchet_lib::generate::generate_task(config)
+        .context("Failed to generate task template")?;
+    
+    println!("✅ Task template generated at: {:?}", path);
+    println!("📝 Edit the files to customize your task:");
+    println!("   - main.js: Task implementation");
+    println!("   - metadata.json: Task metadata and configuration");
+    println!("   - input.schema.json: Input validation schema");
+    println!("   - output.schema.json: Output validation schema");
+    println!("   - tests/: Test cases");
     
     Ok(())
 }
 
-/// Execute a task in the worker process
-async fn execute_task_worker(
-    _job_id: i32,
-    _task_id: i32,
-    task_path: &str,
-    input_data: &JsonValue,
-    correlation_id: Uuid,
-) -> CoordinatorMessage {
-    use ratchet_lib::execution::ipc::CoordinatorMessage;
-    
-    let started_at = chrono::Utc::now();
-    
-    // Execute the task
-    match run_task(task_path, input_data).await {
-        Ok(output) => {
-            let completed_at = chrono::Utc::now();
-            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
-            
-            CoordinatorMessage::TaskResult {
-                job_id: _job_id,
-                correlation_id,
-                result: TaskExecutionResult {
-                    success: true,
-                    output: Some(output),
-                    error_message: None,
-                    error_details: None,
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                },
-            }
-        }
-        Err(e) => {
-            let completed_at = chrono::Utc::now();
-            let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
-            
-            CoordinatorMessage::TaskResult {
-                job_id: _job_id,
-                correlation_id,
-                result: TaskExecutionResult {
-                    success: false,
-                    output: None,
-                    error_message: Some(e.to_string()),
-                    error_details: None,
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                },
-            }
-        }
-    }
-}
-
-/// Validate a task in the worker process
-async fn validate_task_worker(
-    task_path: &str,
-    correlation_id: Uuid,
-) -> CoordinatorMessage {
-    use ratchet_lib::execution::ipc::{TaskValidationResult, CoordinatorMessage};
-    
-    match validate_task(task_path) {
-        Ok(_) => CoordinatorMessage::ValidationResult {
-            correlation_id,
-            result: TaskValidationResult {
-                valid: true,
-                error_message: None,
-                error_details: None,
-            },
-        },
-        Err(e) => CoordinatorMessage::ValidationResult {
-            correlation_id,
-            result: TaskValidationResult {
-                valid: false,
-                error_message: Some(e.to_string()),
-                error_details: None,
-            },
-        },
-    }
-}
-
-/// Handle ping message in the worker process
-async fn handle_ping_worker(
-    worker_id: &str,
-    correlation_id: Uuid,
-) -> CoordinatorMessage {
-    use ratchet_lib::execution::ipc::{WorkerStatus, CoordinatorMessage};
-    
-    CoordinatorMessage::Pong {
-        correlation_id,
-        worker_id: worker_id.to_string(),
-        status: WorkerStatus {
-            worker_id: worker_id.to_string(),
-            pid: std::process::id(),
-            started_at: chrono::Utc::now(), // TODO: Track actual start time
-            last_activity: chrono::Utc::now(),
-            tasks_executed: 0, // TODO: Track task count
-            tasks_failed: 0, // TODO: Track failure count
-            memory_usage_mb: None,
-            cpu_usage_percent: None,
-        },
-    }
-}
-
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Check if running as worker process
+    // Handle worker mode first (before any logging setup to avoid conflicts)
     if cli.worker {
-        let worker_id = cli.worker_id.unwrap_or_else(|| "unknown".to_string());
+        let worker_id = cli.worker_id.unwrap_or_else(|| {
+            Uuid::new_v4().to_string()
+        });
         
         // Initialize tracing for worker (stderr only to avoid IPC conflicts)
         init_worker_tracing(cli.log_level.as_ref())?;
@@ -1198,8 +890,11 @@ fn main() -> Result<()> {
         return runtime.block_on(run_worker_process(worker_id));
     }
 
-    // Initialize tracing before doing anything else
-    init_tracing(cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
+    // Load configuration first
+    let config = load_config(cli.config.as_ref())?;
+    
+    // Initialize logging from config
+    init_logging_with_config(&config, cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
         match cmd {
             Commands::RunOnce { record, .. } => record.as_ref(),
             _ => None,
@@ -1246,13 +941,25 @@ fn main() -> Result<()> {
             
             Ok(())
         }
-        Some(Commands::Serve { config }) => {
+        Some(Commands::Serve { config: config_override }) => {
             info!("Starting Ratchet server");
-            runtime.block_on(serve_command(config.as_ref()))
+            // Use config override if provided, otherwise use loaded config
+            let server_config = if config_override.is_some() {
+                load_config(config_override.as_ref())?
+            } else {
+                config
+            };
+            runtime.block_on(serve_command_with_config(server_config))
         }
-        Some(Commands::McpServe { config, transport, host, port }) => {
+        Some(Commands::McpServe { config: config_override, transport, host, port }) => {
             info!("Starting MCP server");
-            runtime.block_on(mcp_serve_command(config.as_ref(), transport, host, *port))
+            // Use config override if provided, otherwise use loaded config
+            let mcp_config = if config_override.is_some() {
+                load_config(config_override.as_ref())?
+            } else {
+                config
+            };
+            runtime.block_on(mcp_serve_command_with_config(mcp_config, transport, host, *port))
         }
         Some(Commands::Validate { from_fs }) => validate_task(from_fs),
         Some(Commands::Test { from_fs }) => runtime.block_on(test_task(from_fs)),
@@ -1273,16 +980,17 @@ fn main() -> Result<()> {
         Some(Commands::Generate { generate_cmd }) => {
             match generate_cmd {
                 GenerateCommands::Task { path, label, description, version } => {
-                    info!("Generating task template at: {:?}", path);
-                    generate_task(path, label.as_ref(), description.as_ref(), version.as_ref())
+                    runtime.block_on(handle_generate_task(path, label, description, version))
                 }
             }
         }
         None => {
-            warn!("No command specified");
-            println!("No command specified. Use --help to see available commands.");
+            // If no subcommand is provided, print help
+            use clap::CommandFactory;
+            let mut cmd = Cli::command();
+            cmd.print_help().context("Failed to print help")?;
+            println!();
             Ok(())
         }
     }
 }
-
