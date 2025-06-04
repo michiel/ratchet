@@ -30,11 +30,13 @@ logging:
     - type: console
       level: info
       colored: true
+      max_size: "1GB"
     
     # File logging for debugging
     - type: file
       path: "ratchet-claude.log"
       level: debug
+      max_size: "10MB"
       rotation:
         size: "10MB"
         keep: 5
