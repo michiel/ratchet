@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 async fn test_mcp_server_stdio_initialization_compatibility() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
-        .args(&["run", "--bin", "ratchet", "--", "mcp-serve"])
+        .args(&["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -164,7 +164,7 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
 async fn test_mcp_server_stdio_with_initialized_notification() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
-        .args(&["run", "--bin", "ratchet", "--", "mcp-serve"])
+        .args(&["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

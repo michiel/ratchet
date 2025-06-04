@@ -4,9 +4,7 @@ use ratchet_lib::{
     config::RatchetConfig,
     task::Task,
     execution::ipc::{WorkerMessage, CoordinatorMessage, TaskExecutionResult, MessageEnvelope},
-    registry::{TaskSource, DefaultRegistryService, RegistryService},
-    services::TaskSyncService,
-    recording, task, validation,
+    recording,
     js_executor::execute_task,
     http::HttpManager,
 };
@@ -24,7 +22,6 @@ use cli::{Cli, Commands, GenerateCommands};
 /// Load configuration from file or use defaults
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     use ratchet_lib::config::{RatchetConfig, ServerConfig};
-    use std::time::Duration;
     
     let mut config = match config_path {
         Some(path) => {
@@ -188,6 +185,7 @@ async fn mcp_serve_command_with_config(
     host: &str,
     port: u16,
 ) -> Result<()> {
+    let is_stdio = transport == "stdio";
     use ratchet_mcp::{
         McpServer, SimpleTransportType,
         server::{
@@ -195,7 +193,7 @@ async fn mcp_serve_command_with_config(
             config::{McpServerConfig, McpServerTransport, CorsConfig},
             tools::RatchetToolRegistry,
         },
-        security::{McpAuthManager, McpAuth, AuditLogger},
+        security::{McpAuthManager, McpAuth},
     };
     use ratchet_lib::{
         database::DatabaseConnection,
@@ -208,7 +206,9 @@ async fn mcp_serve_command_with_config(
     use std::sync::Arc;
     use tokio::signal;
 
-    info!("Starting Ratchet MCP server");
+    if !is_stdio {
+        info!("Starting Ratchet MCP server");
+    }
 
     // Parse transport type
     let transport_type = match transport.to_lowercase().as_str() {
@@ -221,30 +221,40 @@ async fn mcp_serve_command_with_config(
     
     // Get MCP configuration (use dedicated MCP config if available, otherwise fall back to server config)
     let (database_config, mcp_server_config) = if let Some(mcp_config) = &ratchet_config.mcp {
-        info!("Using dedicated MCP server configuration");
+        if !is_stdio {
+            info!("Using dedicated MCP server configuration");
+        }
         // Use server database config if available, otherwise default
         let db_config = ratchet_config.server.as_ref()
             .map(|s| s.database.clone())
             .unwrap_or_default();
         (db_config, mcp_config.clone())
     } else if let Some(server_config) = &ratchet_config.server {
-        info!("Using server configuration for MCP server");
+        if !is_stdio {
+            info!("Using server configuration for MCP server");
+        }
         let default_mcp = ratchet_lib::config::McpServerConfig::default();
         (server_config.database.clone(), default_mcp)
     } else {
-        info!("No MCP or server configuration found, using defaults");
+        if !is_stdio {
+            info!("No MCP or server configuration found, using defaults");
+        }
         let default_db = ratchet_lib::config::DatabaseConfig::default();
         let default_mcp = ratchet_lib::config::McpServerConfig::default();
         (default_db, default_mcp)
     };
 
     // Initialize database
-    info!("Connecting to database: {}", database_config.url);
+    if !is_stdio {
+        info!("Connecting to database: {}", database_config.url);
+    }
     let database = DatabaseConnection::new(database_config).await
         .context("Failed to connect to database")?;
 
     // Run migrations
-    info!("Running database migrations");
+    if !is_stdio {
+        info!("Running database migrations");
+    }
     database.migrate().await.context("Failed to run database migrations")?;
 
     // Initialize repositories
@@ -252,7 +262,9 @@ async fn mcp_serve_command_with_config(
     let execution_repo = Arc::new(ExecutionRepository::new(database.clone()));
 
     // Initialize task executor for MCP
-    info!("Initializing task executor for MCP");
+    if !is_stdio {
+        info!("Initializing task executor for MCP");
+    }
     let repositories = ratchet_lib::database::repositories::RepositoryFactory::new(database.clone());
     let task_executor = Arc::new(
         ProcessTaskExecutor::new(repositories, ratchet_config).await
@@ -260,7 +272,13 @@ async fn mcp_serve_command_with_config(
     );
 
     // Start worker processes for the executor
-    task_executor.start().await.context("Failed to start worker processes")?;
+    if !is_stdio {
+        // Only log worker startup for non-stdio modes to avoid stderr noise
+        task_executor.start().await.context("Failed to start worker processes")?;
+    } else {
+        // For stdio mode, start workers silently
+        task_executor.start().await.context("Failed to start worker processes")?;
+    }
 
     // Create MCP adapter
     let adapter = RatchetMcpAdapter::new(
@@ -307,23 +325,31 @@ async fn mcp_serve_command_with_config(
     let audit_logger = Arc::new(ratchet_mcp::security::AuditLogger::new(true));
 
     // Create and start MCP server
-    let mut server = McpServer::new(server_config, Arc::new(tool_registry), auth_manager, audit_logger);
+    let server = McpServer::new(server_config, Arc::new(tool_registry), auth_manager, audit_logger);
 
-    info!("Starting MCP server with {} transport on {}:{}", transport, host, port);
+    if !is_stdio {
+        info!("Starting MCP server with {} transport on {}:{}", transport, host, port);
+    }
 
     // Set up graceful shutdown
     let shutdown_signal = async {
         signal::ctrl_c()
             .await
             .expect("Failed to install Ctrl+C handler");
-        info!("Received shutdown signal");
+        if !is_stdio {
+            info!("Received shutdown signal");
+        }
     };
 
     // Start server and wait for shutdown
     tokio::select! {
         result = server.start() => {
             match result {
-                Ok(_) => info!("MCP server completed successfully"),
+                Ok(_) => {
+                    if !is_stdio {
+                        info!("MCP server completed successfully");
+                    }
+                }
                 Err(e) => {
                     error!("MCP server error: {}", e);
                     return Err(e.into());
@@ -331,15 +357,21 @@ async fn mcp_serve_command_with_config(
             }
         }
         _ = shutdown_signal => {
-            info!("Shutting down MCP server");
+            if !is_stdio {
+                info!("Shutting down MCP server");
+            }
         }
     }
 
     // Stop task executor
-    info!("Stopping task executor");
+    if !is_stdio {
+        info!("Stopping task executor");
+    }
     task_executor.stop().await.context("Failed to stop task executor")?;
     
-    info!("Ratchet MCP server shutdown complete");
+    if !is_stdio {
+        info!("Ratchet MCP server shutdown complete");
+    }
     Ok(())
 }
 
@@ -409,6 +441,27 @@ fn init_simple_tracing(log_level: Option<&String>) -> Result<()> {
     
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
     debug!("Simple tracing initialized");
+    Ok(())
+}
+
+/// Initialize minimal stderr-only logging for MCP stdio mode
+fn init_mcp_stdio_logging(log_level: Option<&String>) -> Result<()> {
+    // For MCP stdio mode, use error-level logging to stderr only
+    // This ensures stdout is reserved exclusively for JSON-RPC responses
+    let default_level = "error".to_string(); // Only show errors by default
+    let level_str = log_level.unwrap_or(&default_level);
+    
+    let env_filter = EnvFilter::try_new(level_str).unwrap_or_else(|_| {
+        eprintln!("Invalid log level '{}', falling back to 'error'", level_str);
+        EnvFilter::new("error")
+    });
+    
+    // Force output to stderr only for MCP stdio mode
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr)
+        .init();
+    
     Ok(())
 }
 
@@ -697,10 +750,9 @@ async fn run_worker_process(worker_id: String) -> Result<()> {
 /// Process a worker message
 async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
     use chrono::Utc;
-    use uuid::Uuid;
     
     match msg {
-        WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, execution_context, correlation_id } => {
+        WorkerMessage::ExecuteTask { job_id, task_id, task_path, input_data, execution_context: _, correlation_id } => {
             info!("Worker executing task: {} (Job ID: {}, Task ID: {})", task_path, job_id, task_id);
             
             let started_at = Utc::now();
@@ -856,7 +908,7 @@ async fn handle_generate_task(
         .with_description(description.as_deref().unwrap_or("A description of what this task does"))
         .with_version(version.as_deref().unwrap_or("1.0.0"));
     
-    let result = ratchet_lib::generate::generate_task(config)
+    let _result = ratchet_lib::generate::generate_task(config)
         .context("Failed to generate task template")?;
     
     println!("✅ Task template generated at: {:?}", path);
@@ -883,28 +935,33 @@ async fn main() -> Result<()> {
         // Initialize tracing for worker (stderr only to avoid IPC conflicts)
         init_worker_tracing(cli.log_level.as_ref())?;
         
-        // Create a tokio runtime for async operations
-        let runtime = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
-        
         // Run worker process
-        return runtime.block_on(run_worker_process(worker_id));
+        return run_worker_process(worker_id).await;
     }
 
+    // Check if this is MCP stdio mode - if so, use minimal stderr-only logging
+    let is_mcp_stdio = matches!(&cli.command, Some(Commands::McpServe { transport, .. }) if transport == "stdio");
+    
     // Load configuration first
     let config = load_config(cli.config.as_ref())?;
     
-    // Initialize logging from config
-    init_logging_with_config(&config, cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
-        match cmd {
-            Commands::RunOnce { record, .. } => record.as_ref(),
-            _ => None,
-        }
-    }))?;
+    // Initialize logging appropriately for the command
+    if is_mcp_stdio {
+        // For MCP stdio mode, use minimal stderr-only logging to avoid interfering with JSON-RPC on stdout
+        init_mcp_stdio_logging(cli.log_level.as_ref())?;
+    } else {
+        // Initialize logging from config
+        init_logging_with_config(&config, cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
+            match cmd {
+                Commands::RunOnce { record, .. } => record.as_ref(),
+                _ => None,
+            }
+        }))?;
+    }
 
-    info!("Ratchet CLI starting");
-
-    // Create a tokio runtime for async operations
-    let runtime = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+    if !is_mcp_stdio {
+        info!("Ratchet CLI starting");
+    }
 
     match &cli.command {
         Some(Commands::RunOnce {
@@ -922,7 +979,7 @@ async fn main() -> Result<()> {
             }
 
             // Run the task
-            let result = runtime.block_on(run_task(from_fs, &input))?;
+            let result = run_task(from_fs, &input).await?;
 
             // Pretty-print the result
             let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
@@ -949,25 +1006,27 @@ async fn main() -> Result<()> {
             } else {
                 config
             };
-            runtime.block_on(serve_command_with_config(server_config))
+            serve_command_with_config(server_config).await
         }
         Some(Commands::McpServe { config: config_override, transport, host, port }) => {
-            info!("Starting MCP server");
+            if !is_mcp_stdio {
+                info!("Starting MCP server");
+            }
             // Use config override if provided, otherwise use loaded config
             let mcp_config = if config_override.is_some() {
                 load_config(config_override.as_ref())?
             } else {
                 config
             };
-            runtime.block_on(mcp_serve_command_with_config(mcp_config, transport, host, *port))
+            mcp_serve_command_with_config(mcp_config, transport, host, *port).await
         }
         Some(Commands::Validate { from_fs }) => validate_task(from_fs),
-        Some(Commands::Test { from_fs }) => runtime.block_on(test_task(from_fs)),
+        Some(Commands::Test { from_fs }) => test_task(from_fs).await,
         Some(Commands::Replay { from_fs, recording }) => {
             info!("Replaying task from file system path: {} with recording: {:?}", from_fs, recording);
 
             // Run the replay
-            let result = runtime.block_on(replay_task(from_fs, recording))?;
+            let result = replay_task(from_fs, recording).await?;
 
             // Pretty-print the result
             let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
@@ -980,7 +1039,7 @@ async fn main() -> Result<()> {
         Some(Commands::Generate { generate_cmd }) => {
             match generate_cmd {
                 GenerateCommands::Task { path, label, description, version } => {
-                    runtime.block_on(handle_generate_task(path, label, description, version))
+                    handle_generate_task(path, label, description, version).await
                 }
             }
         }

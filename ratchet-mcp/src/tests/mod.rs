@@ -2,12 +2,10 @@
 
 use std::sync::Arc;
 use serde_json::json;
-use tokio::sync::mpsc;
 
 use crate::{
     McpServer, McpConfig, SimpleTransportType,
     server::adapter::RatchetMcpAdapter,
-    protocol::{InitializeParams, ClientInfo, ClientCapabilities},
 };
 
 // Stdio-specific integration tests
@@ -35,7 +33,7 @@ async fn test_mcp_server_initialization() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": "1.0.0",
+            "protocolVersion": "0.1.0",
             "capabilities": {},
             "clientInfo": {
                 "name": "Test Client",
@@ -139,7 +137,7 @@ async fn test_mcp_server_tools_list() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": "1.0.0",
+            "protocolVersion": "0.1.0",
             "capabilities": {},
             "clientInfo": {
                 "name": "Test Client",
@@ -273,7 +271,7 @@ async fn test_complete_mcp_session() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": "1.0.0",
+            "protocolVersion": "0.1.0",
             "capabilities": {},
             "clientInfo": {
                 "name": "Test LLM Client",
