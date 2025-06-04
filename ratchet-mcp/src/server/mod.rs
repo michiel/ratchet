@@ -193,6 +193,7 @@ impl McpServer {
     /// Start stdio-based MCP server
     async fn start_stdio_server(&self) -> McpResult<()> {
         tracing::info!("Starting MCP server with stdio transport");
+        tracing::info!("Server ready to accept MCP requests via stdin/stdout");
         
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
         
@@ -200,36 +201,45 @@ impl McpServer {
         let mut stdout = tokio::io::stdout();
         let mut reader = BufReader::new(stdin);
         let mut line = String::new();
+        let mut request_count = 0;
         
         loop {
             line.clear();
             match reader.read_line(&mut line).await {
-                Ok(0) => break, // EOF
-                Ok(_) => {
+                Ok(0) => {
+                    tracing::info!("Received EOF on stdin, shutting down MCP server");
+                    break; // EOF
+                }
+                Ok(bytes_read) => {
                     let line = line.trim();
                     if line.is_empty() {
                         continue;
                     }
                     
+                    request_count += 1;
+                    tracing::debug!("Received MCP request #{} ({} bytes): {}", request_count, bytes_read, line);
+                    
                     // Process the request
                     match self.handle_message(line, None).await {
                         Ok(Some(response)) => {
                             let response_json = serde_json::to_string(&response)?;
+                            tracing::debug!("Sending MCP response #{}: {}", request_count, response_json);
                             stdout.write_all(response_json.as_bytes()).await?;
                             stdout.write_all(b"\n").await?;
                             stdout.flush().await?;
                         }
                         Ok(None) => {
-                            // No response needed (notification)
+                            tracing::debug!("MCP request #{} was a notification, no response sent", request_count);
                         }
                         Err(e) => {
-                            tracing::error!("Error handling MCP request: {}", e);
+                            tracing::error!("Error handling MCP request #{}: {}", request_count, e);
                             // Send error response if possible
                             let error_response = JsonRpcResponse::error(
                                 JsonRpcError::internal_error(e.to_string()),
                                 None,
                             );
                             let response_json = serde_json::to_string(&error_response)?;
+                            tracing::debug!("Sending MCP error response #{}: {}", request_count, response_json);
                             stdout.write_all(response_json.as_bytes()).await?;
                             stdout.write_all(b"\n").await?;
                             stdout.flush().await?;
@@ -243,6 +253,7 @@ impl McpServer {
             }
         }
         
+        tracing::info!("MCP server stdio loop terminated after {} requests", request_count);
         Ok(())
     }
     
@@ -377,8 +388,12 @@ impl McpServer {
         match request.method.as_str() {
             "initialized" => {
                 let mut initialized = self.initialized.write().await;
-                *initialized = true;
-                tracing::info!("MCP server initialized");
+                if !*initialized {
+                    *initialized = true;
+                    tracing::info!("MCP server initialized via notification");
+                } else {
+                    tracing::debug!("Received initialized notification but server was already initialized");
+                }
                 Ok(())
             }
             "notifications/cancelled" => {
@@ -402,6 +417,14 @@ impl McpServer {
             return Err(McpError::Protocol {
                 message: format!("Unsupported protocol version: {}", params.protocol_version),
             });
+        }
+        
+        // Mark server as initialized immediately after successful initialize request
+        // This is more compatible with clients that don't send the initialized notification
+        {
+            let mut initialized = self.initialized.write().await;
+            *initialized = true;
+            tracing::info!("MCP server marked as initialized after initialize request");
         }
         
         // Build server capabilities
