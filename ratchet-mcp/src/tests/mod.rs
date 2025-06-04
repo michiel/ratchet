@@ -10,6 +10,9 @@ use crate::{
     protocol::{InitializeParams, ClientInfo, ClientCapabilities},
 };
 
+// Stdio-specific integration tests
+mod stdio_initialization_test;
+
 /// Test the MCP server initialization sequence
 #[tokio::test]
 async fn test_mcp_server_initialization() {
@@ -58,6 +61,69 @@ async fn test_mcp_server_initialization() {
     let result: serde_json::Value = response.result.unwrap();
     assert!(result["serverInfo"]["name"].as_str().unwrap().contains("Ratchet"));
     assert!(result["capabilities"]["tools"].is_object());
+}
+
+/// Test that tools/list works immediately after initialize without 'initialized' notification
+/// This test verifies the fix for Claude Code compatibility
+#[tokio::test]
+async fn test_mcp_server_tools_list_without_initialized_notification() {
+    let adapter = create_test_adapter().await;
+    let config = McpConfig::default();
+    let server = McpServer::with_adapter(config, adapter).await.unwrap();
+    
+    // Initialize server
+    let init_request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "0.1.0",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "Claude Code Test Client",
+                "version": "1.0.0"
+            }
+        }
+    });
+    
+    let init_response = server.handle_message(&serde_json::to_string(&init_request).unwrap(), None)
+        .await.unwrap();
+    assert!(init_response.is_some());
+    assert!(init_response.unwrap().error.is_none());
+    
+    // Send tools/list request immediately without 'initialized' notification
+    // This simulates Claude Code behavior
+    let tools_request = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+    });
+    
+    let response = server.handle_message(
+        &serde_json::to_string(&tools_request).unwrap(),
+        None
+    ).await.expect("Failed to handle tools/list request");
+    
+    assert!(response.is_some());
+    let response = response.unwrap();
+    
+    // Should NOT get "Server not initialized" error
+    assert!(response.error.is_none(), 
+        "Expected successful response but got error: {:?}", response.error);
+    assert_eq!(response.id, Some(json!(2)));
+    assert!(response.result.is_some());
+    
+    // Verify we get the expected tools
+    let result: serde_json::Value = response.result.unwrap();
+    let tools = result["tools"].as_array().unwrap();
+    assert!(!tools.is_empty());
+    
+    let tool_names: Vec<String> = tools.iter()
+        .map(|tool| tool["name"].as_str().unwrap().to_string())
+        .collect();
+    
+    assert!(tool_names.contains(&"ratchet.execute_task".to_string()));
+    assert!(tool_names.contains(&"ratchet.list_available_tasks".to_string()));
 }
 
 /// Test the tools/list request
