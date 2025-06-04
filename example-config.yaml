@@ -26,11 +26,13 @@ cache:
   task_content_cache_size: 100  # LRU cache size for task content
   enabled: true                 # Enable/disable caching
 
-# Logging configuration  
+# Logging configuration
+# NOTE: Currently ratchet uses simple tracing and only respects the level setting
+# File logging and structured configuration are not yet implemented
 logging:
   level: "info"           # Log level: trace, debug, info, warn, error
-  log_to_file: false      # Whether to write logs to file
-  log_file_path: null     # Log file path (if log_to_file is true)
+  log_to_file: false      # Not currently implemented
+  log_file_path: null     # Not currently implemented
 
 # Output destinations configuration
 output:
@@ -170,12 +172,17 @@ development:
 #
 # RATCHET_HTTP_TIMEOUT=60
 # RATCHET_CACHE_SIZE=200  
-# RATCHET_LOG_LEVEL=debug
+# RATCHET_LOG_LEVEL=debug  # Note: Currently not used, use RUST_LOG instead
 # RATCHET_MAX_EXECUTION_SECONDS=600
 # RATCHET_DATABASE_URL=sqlite://ratchet.db
 # RATCHET_SERVER_PORT=3000
 # RATCHET_JWT_SECRET=production-secret-key  # (Future feature)
 # RATCHET_RATE_LIMIT_REQUESTS_PER_MINUTE=120
+#
+# For logging, use standard Rust tracing environment variables:
+# RUST_LOG=debug                    # Set log level (overrides config)
+# RUST_LOG=ratchet=debug           # Set log level for ratchet modules only
+# RUST_LOG=ratchet=debug,hyper=info # Fine-grained control per module
 #
 # Output destination environment variables:
 # RATCHET_OUTPUT_MAX_CONCURRENT=15

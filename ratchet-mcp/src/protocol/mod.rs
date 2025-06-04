@@ -1,25 +1,24 @@
 //! MCP protocol implementation including JSON-RPC 2.0 and MCP-specific message types
 
+pub mod capabilities;
 pub mod jsonrpc;
 pub mod messages;
-pub mod capabilities;
 
-pub use jsonrpc::{JsonRpcRequest, JsonRpcResponse, JsonRpcError, JsonRpcErrorCode};
+pub use capabilities::{ClientCapabilities, McpCapabilities, ServerCapabilities, ToolsCapability};
+pub use jsonrpc::{JsonRpcError, JsonRpcErrorCode, JsonRpcRequest, JsonRpcResponse};
 pub use messages::{
-    McpMessage, McpMethod, McpRequest, McpResponse, McpNotification,
-    InitializeParams, InitializeResult, ServerInfo, ClientInfo,
-    ToolsListParams, ToolsListResult, ToolsCallParams, ToolsCallResult,
-    ResourcesListParams, ResourcesListResult, ResourcesReadParams, ResourcesReadResult,
-    Tool, ToolContent
+    ClientInfo, InitializeParams, InitializeResult, McpMessage, McpMethod, McpNotification,
+    McpRequest, McpResponse, ResourcesListParams, ResourcesListResult, ResourcesReadParams,
+    ResourcesReadResult, ServerInfo, Tool, ToolContent, ToolsCallParams, ToolsCallResult,
+    ToolsListParams, ToolsListResult,
 };
-pub use capabilities::{McpCapabilities, ServerCapabilities, ClientCapabilities, ToolsCapability};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
 /// MCP protocol version
-pub const MCP_PROTOCOL_VERSION: &str = "1.0.0";
+pub const MCP_PROTOCOL_VERSION: &str = "0.1.0";
 
 /// Generate a new request ID
 pub fn generate_request_id() -> Value {
@@ -39,19 +38,19 @@ pub enum StandardMethod {
     Initialize,
     #[serde(rename = "initialized")]
     Initialized,
-    
+
     // Ping/pong for connection health
     #[serde(rename = "ping")]
     Ping,
     #[serde(rename = "pong")]
     Pong,
-    
+
     // Tool methods
     #[serde(rename = "tools/list")]
     ToolsList,
     #[serde(rename = "tools/call")]
     ToolsCall,
-    
+
     // Resource methods
     #[serde(rename = "resources/list")]
     ResourcesList,
@@ -61,23 +60,23 @@ pub enum StandardMethod {
     ResourcesSubscribe,
     #[serde(rename = "resources/unsubscribe")]
     ResourcesUnsubscribe,
-    
+
     // Prompt methods
     #[serde(rename = "prompts/list")]
     PromptsList,
     #[serde(rename = "prompts/get")]
     PromptsGet,
-    
+
     // Completion/sampling methods
     #[serde(rename = "completion/complete")]
     CompletionComplete,
     #[serde(rename = "sampling/createMessage")]
     SamplingCreateMessage,
-    
+
     // Logging methods
     #[serde(rename = "logging/setLevel")]
     LoggingSetLevel,
-    
+
     // Notification methods
     #[serde(rename = "notifications/cancelled")]
     NotificationsCancelled,
@@ -101,18 +100,19 @@ impl StandardMethod {
             _ => true,
         }
     }
-    
+
     /// Check if this method is a notification (no response expected)
     pub fn is_notification(&self) -> bool {
         match self {
-            StandardMethod::Initialized |
-            StandardMethod::NotificationsCancelled |
-            StandardMethod::NotificationsProgress |
-            StandardMethod::NotificationsMessage |
-            StandardMethod::NotificationsResourcesUpdated |
-            StandardMethod::NotificationsResourcesListChanged |
-            StandardMethod::NotificationsToolsListChanged => true,
+            StandardMethod::Initialized
+            | StandardMethod::NotificationsCancelled
+            | StandardMethod::NotificationsProgress
+            | StandardMethod::NotificationsMessage
+            | StandardMethod::NotificationsResourcesUpdated
+            | StandardMethod::NotificationsResourcesListChanged
+            | StandardMethod::NotificationsToolsListChanged => true,
             _ => false,
         }
     }
 }
+
