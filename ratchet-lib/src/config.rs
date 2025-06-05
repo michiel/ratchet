@@ -164,9 +164,7 @@ pub struct ServerConfig {
     #[serde(default)]
     pub database: DatabaseConfig,
     
-    /// JWT authentication configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub jwt: Option<JwtConfig>,
+    // JWT configuration removed - not implemented
 }
 
 /// Database configuration
@@ -186,19 +184,9 @@ pub struct DatabaseConfig {
     pub connection_timeout: Duration,
 }
 
-/// JWT configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct JwtConfig {
-    /// JWT secret key
-    pub secret: String,
-    
-    /// Token expiration time
-    #[serde(with = "serde_duration_seconds", default = "default_jwt_expiration")]
-    pub token_expiration: Duration,
-}
+// JWT configuration removed - not implemented
 
-/// Simplified MCP server configuration for LLM integration
+/// Simple MCP server configuration - basic settings only
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct McpServerConfig {
@@ -217,171 +205,9 @@ pub struct McpServerConfig {
     /// Port for network transports (ignored for stdio)
     #[serde(default = "default_mcp_port")]
     pub port: u16,
-    
-    /// Database configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub database: Option<DatabaseConfig>,
-    
-    /// Authentication configuration
-    #[serde(default)]
-    pub authentication: McpAuthenticationConfig,
-    
-    /// Basic security settings
-    #[serde(default)]
-    pub security: McpSecurityConfig,
-    
-    /// Tool configuration
-    #[serde(default)]
-    pub tools: McpToolConfig,
 }
 
-/// MCP authentication configuration (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpAuthenticationConfig {
-    /// Primary authentication method (none, api_key)
-    #[serde(default = "default_auth_method")]
-    pub method: String,
-    
-    /// API key configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_key: Option<McpApiKeyConfig>,
-    
-    /// Session configuration
-    #[serde(default)]
-    pub session: McpSessionConfig,
-}
-
-/// API key authentication configuration (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpApiKeyConfig {
-    /// Valid API keys with basic info
-    pub keys: std::collections::HashMap<String, McpApiKeyInfo>,
-    
-    /// Header name for API key
-    #[serde(default = "default_auth_header")]
-    pub header_name: String,
-    
-    /// Prefix for API key
-    #[serde(default = "default_auth_prefix")]
-    pub prefix: String,
-}
-
-/// API key information (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpApiKeyInfo {
-    /// Human-readable name for this key
-    pub name: String,
-    
-    /// Description of this key's purpose
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    
-    /// Basic permissions
-    pub permissions: McpClientPermissions,
-    
-    /// When this key was created
-    pub created_at: String,
-    
-    /// Whether this key is active
-    #[serde(default = "default_true")]
-    pub active: bool,
-    
-    /// IP address restrictions
-    #[serde(default)]
-    pub allowed_ips: Vec<String>,
-}
-
-/// Session configuration (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpSessionConfig {
-    /// Session timeout in seconds
-    #[serde(default = "default_session_timeout")]
-    pub timeout_seconds: u64,
-    
-    /// Maximum sessions per client
-    #[serde(default = "default_max_sessions_per_client")]
-    pub max_sessions_per_client: u32,
-}
-
-/// MCP security configuration (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpSecurityConfig {
-    /// Rate limiting settings
-    #[serde(default)]
-    pub rate_limiting: McpRateLimitConfig,
-}
-
-/// Rate limiting configuration (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpRateLimitConfig {
-    /// Global requests per minute
-    #[serde(default = "default_global_rate_limit")]
-    pub global_per_minute: u32,
-    
-    /// Task execution requests per minute
-    #[serde(default = "default_execute_rate_limit")]
-    pub execute_task_per_minute: u32,
-}
-
-/// Tool configuration (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpToolConfig {
-    /// Enable task execution tool
-    #[serde(default = "default_true")]
-    pub enable_execution: bool,
-    
-    /// Enable logging tools
-    #[serde(default = "default_true")]
-    pub enable_logging: bool,
-    
-    /// Enable monitoring tools
-    #[serde(default = "default_false")]
-    pub enable_monitoring: bool,
-    
-    /// Enable debugging tools
-    #[serde(default = "default_false")]
-    pub enable_debugging: bool,
-    
-    /// Enable filesystem tools
-    #[serde(default = "default_false")]
-    pub enable_filesystem: bool,
-}
-
-/// Client permissions (simplified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct McpClientPermissions {
-    /// Can execute tasks
-    #[serde(default = "default_true")]
-    pub can_execute_tasks: bool,
-    
-    /// Can read logs
-    #[serde(default = "default_true")]
-    pub can_read_logs: bool,
-    
-    /// Can read traces
-    #[serde(default = "default_false")]
-    pub can_read_traces: bool,
-    
-    /// Can access system info
-    #[serde(default = "default_false")]
-    pub can_access_system_info: bool,
-    
-    /// Allowed task patterns
-    #[serde(default = "default_task_patterns")]
-    pub allowed_task_patterns: Vec<String>,
-    
-    /// Denied task patterns
-    #[serde(default)]
-    pub denied_task_patterns: Vec<String>,
-}
+// MCP authentication and complex configurations removed - use ratchet-mcp crate for full MCP configuration
 
 /// Registry configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -448,18 +274,11 @@ fn default_port() -> u16 { 8080 }
 fn default_database_url() -> String { "sqlite::memory:".to_string() }
 fn default_max_connections() -> u32 { 10 }
 fn default_connection_timeout_duration() -> Duration { Duration::from_secs(30) }
-fn default_jwt_expiration() -> Duration { Duration::from_secs(3600) }
+// JWT default function removed
 fn default_mcp_transport() -> String { "stdio".to_string() }
 fn default_mcp_host() -> String { "127.0.0.1".to_string() }
 fn default_mcp_port() -> u16 { 3000 }
-fn default_auth_method() -> String { "none".to_string() }
-fn default_auth_header() -> String { "Authorization".to_string() }
-fn default_auth_prefix() -> String { "Bearer".to_string() }
-fn default_session_timeout() -> u64 { 3600 }
-fn default_max_sessions_per_client() -> u32 { 10 }
-fn default_global_rate_limit() -> u32 { 500 }
-fn default_execute_rate_limit() -> u32 { 60 }
-fn default_task_patterns() -> Vec<String> { vec!["*".to_string()] }
+// Removed unused MCP default functions
 
 // Default implementations
 impl Default for ExecutionConfig {
@@ -509,19 +328,12 @@ impl Default for ServerConfig {
             bind_address: default_bind_address(),
             port: default_port(),
             database: DatabaseConfig::default(),
-            jwt: None,
+            // JWT removed
         }
     }
 }
 
-impl Default for JwtConfig {
-    fn default() -> Self {
-        Self {
-            secret: String::new(),
-            token_expiration: default_jwt_expiration(),
-        }
-    }
-}
+// JWT default implementation removed
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
@@ -540,94 +352,6 @@ impl Default for McpServerConfig {
             transport: default_mcp_transport(),
             host: default_mcp_host(),
             port: default_mcp_port(),
-            database: None,
-            authentication: McpAuthenticationConfig::default(),
-            security: McpSecurityConfig::default(),
-            tools: McpToolConfig::default(),
-        }
-    }
-}
-
-impl Default for McpApiKeyConfig {
-    fn default() -> Self {
-        Self {
-            keys: std::collections::HashMap::new(),
-            header_name: default_auth_header(),
-            prefix: default_auth_prefix(),
-        }
-    }
-}
-
-impl Default for McpApiKeyInfo {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            description: None,
-            permissions: McpClientPermissions::default(),
-            created_at: String::new(),
-            active: default_true(),
-            allowed_ips: Vec::new(),
-        }
-    }
-}
-
-impl Default for McpAuthenticationConfig {
-    fn default() -> Self {
-        Self {
-            method: default_auth_method(),
-            api_key: None,
-            session: McpSessionConfig::default(),
-        }
-    }
-}
-
-impl Default for McpSessionConfig {
-    fn default() -> Self {
-        Self {
-            timeout_seconds: default_session_timeout(),
-            max_sessions_per_client: default_max_sessions_per_client(),
-        }
-    }
-}
-
-impl Default for McpSecurityConfig {
-    fn default() -> Self {
-        Self {
-            rate_limiting: McpRateLimitConfig::default(),
-        }
-    }
-}
-
-impl Default for McpRateLimitConfig {
-    fn default() -> Self {
-        Self {
-            global_per_minute: default_global_rate_limit(),
-            execute_task_per_minute: default_execute_rate_limit(),
-        }
-    }
-}
-
-impl Default for McpToolConfig {
-    fn default() -> Self {
-        Self {
-            enable_execution: default_true(),
-            enable_logging: default_true(),
-            enable_monitoring: default_false(),
-            enable_debugging: default_false(),
-            enable_filesystem: default_false(),
-        }
-    }
-}
-
-impl Default for McpClientPermissions {
-    fn default() -> Self {
-        Self {
-            can_execute_tasks: default_true(),
-            can_read_logs: default_true(),
-            can_read_traces: default_false(),
-            can_access_system_info: default_false(),
-            allowed_task_patterns: default_task_patterns(),
-            denied_task_patterns: Vec::new(),
         }
     }
 }
@@ -715,17 +439,7 @@ impl RatchetConfig {
             }
         }
         
-        // MCP database URL override
-        if let Ok(url) = std::env::var("RATCHET_MCP_DATABASE_URL") {
-            if let Some(ref mut mcp) = self.mcp {
-                if mcp.database.is_none() {
-                    mcp.database = Some(DatabaseConfig::default());
-                }
-                if let Some(ref mut db) = mcp.database {
-                    db.url = url;
-                }
-            }
-        }
+        // MCP database configuration removed - database is managed centrally through server.database
         
         Ok(())
     }
@@ -807,7 +521,7 @@ impl RatchetConfig {
                 max_connections: 10,
                 connection_timeout: Duration::from_secs(30),
             },
-            jwt: None,
+            // JWT removed
         });
         
         // Enable MCP server for development
@@ -816,14 +530,6 @@ impl RatchetConfig {
             transport: "stdio".to_string(),
             host: "127.0.0.1".to_string(),
             port: 3000,
-            database: Some(DatabaseConfig {
-                url: "sqlite:./dev-mcp-ratchet.db".to_string(),
-                max_connections: 10,
-                connection_timeout: Duration::from_secs(30),
-            }),
-            authentication: McpAuthenticationConfig::default(),
-            security: McpSecurityConfig::default(),
-            tools: McpToolConfig::default(),
         });
         
         config

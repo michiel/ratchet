@@ -305,7 +305,7 @@ async fn mcp_serve_command_with_config(
                     allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
                     allow_credentials: false,
                 },
-                timeout: std::time::Duration::from_secs(mcp_server_config.authentication.session.timeout_seconds),
+                timeout: std::time::Duration::from_secs(300), // Default 5 minutes
             },
             security: ratchet_mcp::security::SecurityConfig::default(),
             bind_address: Some(format!("{}:{}", host, port)),

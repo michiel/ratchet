@@ -342,7 +342,7 @@ impl McpService {
                     allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
                     allow_credentials: false,
                 },
-                timeout: std::time::Duration::from_secs(mcp_config.authentication.session.timeout_seconds),
+                timeout: std::time::Duration::from_secs(300), // Default 5 minutes
             },
             _ => return Err(McpError::Configuration {
                 message: format!("Unknown transport: {}", mcp_config.transport),
@@ -352,12 +352,12 @@ impl McpService {
         let security = SecurityConfig {
             max_execution_time: std::time::Duration::from_secs(300), // Default 5 minutes
             max_log_entries: 1000, // Default limit
-            allow_dangerous_tasks: mcp_config.tools.enable_debugging,
+            allow_dangerous_tasks: false, // Default disabled for security
             audit_log_enabled: true, // Default enabled
             input_sanitization: true, // Default enabled
             max_request_size: 1048576, // Default 1MB
             max_response_size: 10485760, // Default 10MB
-            session_timeout: std::time::Duration::from_secs(mcp_config.authentication.session.timeout_seconds),
+            session_timeout: std::time::Duration::from_secs(3600), // Default 1 hour
             require_encryption: false, // Default disabled
         };
 
