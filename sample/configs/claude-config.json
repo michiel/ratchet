@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ratchet": {
+      "command": "/home/michiel/dev/ratchet/target/release/ratchet-mcp",
+      "args": [
+        "-c",
+        "/home/michiel/dev/ratchet/ratchet-mcp-config.yaml",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "RUST_LOG": "info",
+        "RATCHET_ENV": "production"
+      }
+    }
+  }
+}

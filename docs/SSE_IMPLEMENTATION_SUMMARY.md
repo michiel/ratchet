@@ -179,8 +179,8 @@ cargo test -p ratchet-mcp sse_transport_creation
 ## Files Modified/Added
 
 ### New Files:
-- `/example-sse-config.yaml` - Example SSE configuration
-- `/test_sse_server.sh` - Test script for SSE functionality
+- `/sample/configs/example-sse-config.yaml` - Example SSE configuration
+- `/docs/test-scripts/test_sse_server.sh` - Test script for SSE functionality
 - `/ratchet-mcp/src/tests/sse_integration_test.rs` - SSE integration tests
 
 ### Modified Files:

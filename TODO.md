@@ -923,7 +923,7 @@ Month 12: Documentation & developer tools
 ratchet serve
 
 # Start with custom configuration  
-ratchet serve --config=example-config.yaml
+ratchet serve --config=sample/configs/example-config.yaml
 
 # Access GraphQL playground
 open http://localhost:8080/playground

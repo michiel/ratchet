@@ -394,7 +394,7 @@ Each pattern provides:
 The logging system can be fully configured via YAML configuration files with environment variable overrides. Here's a comprehensive example:
 
 ```yaml
-# example-config.yaml - Complete logging configuration
+# sample/configs/example-config.yaml - Complete logging configuration
 logging:
   # Global logging level (trace, debug, info, warn, error)
   level: info
@@ -565,7 +565,7 @@ export RATCHET_LOGGING_LLM_EXPORT_INCLUDE_SYSTEM_STATE=false
 For local development, use this simpler configuration:
 
 ```yaml
-# dev-config.yaml
+# sample/configs/dev-config.yaml
 logging:
   level: debug
   sinks:
@@ -589,7 +589,7 @@ logging:
 For production environments:
 
 ```yaml
-# prod-config.yaml
+# sample/configs/prod-config.yaml
 logging:
   level: info
   sinks:
@@ -704,7 +704,7 @@ logging:
 For Docker/Kubernetes deployments:
 
 ```yaml
-# container-config.yaml
+# sample/configs/container-config.yaml
 logging:
   level: info
   sinks:

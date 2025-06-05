@@ -9,7 +9,7 @@ echo "======================================"
 
 # Test 1: Configuration validation
 echo "1. Testing configuration validation..."
-if cargo run -p ratchet-mcp --bin ratchet-mcp -- --config example-sse-config.yaml validate-config; then
+if cargo run -p ratchet-mcp --bin ratchet-mcp -- --config sample/configs/example-sse-config.yaml validate-config; then
     echo "   ✅ Configuration validation passed"
 else
     echo "   ❌ Configuration validation failed"
@@ -50,7 +50,7 @@ echo ""
 echo "Usage Examples:"
 echo "--------------"
 echo "# Start SSE server with config:"
-echo "cargo run -p ratchet-mcp --bin ratchet-mcp -- --config example-sse-config.yaml"
+echo "cargo run -p ratchet-mcp --bin ratchet-mcp -- --config sample/configs/example-sse-config.yaml"
 echo ""
 echo "# Connect to SSE endpoint (browser/client):"
 echo "GET http://localhost:3000/sse/YOUR_SESSION_ID"
