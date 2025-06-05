@@ -1,6 +1,80 @@
 # Changes
 
-## 0.2.0 (Unreleased)
+## 0.3.0 (Unreleased)
+
+Major MCP (Model Context Protocol) server implementation enabling AI assistant integration.
+
+### Features
+
+- **Complete MCP Server Implementation** with production-ready functionality
+  - Full JSON-RPC 2.0 protocol support with MCP extensions
+  - 6 fully implemented tools replacing all placeholder implementations:
+    - `ratchet.execute_task` - Execute tasks with streaming progress support
+    - `ratchet.list_available_tasks` - Discover available tasks with metadata
+    - `ratchet.get_execution_status` - Real-time execution status monitoring
+    - `ratchet.get_execution_logs` - Comprehensive log retrieval with search
+    - `ratchet.analyze_execution_error` - Intelligent error analysis with suggestions
+    - `ratchet.get_execution_trace` - Detailed execution traces for debugging
+  - **Dual Transport Support**:
+    - stdio transport for CLI and local integrations
+    - SSE (Server-Sent Events) transport for HTTP-based clients with CORS
+  - **Streaming Progress Notifications** for long-running tasks
+    - Real-time progress updates with configurable filtering
+    - Step-based progress tracking with custom data
+    - Frequency and delta-based filtering options
+  - **High-Performance Batch Processing**
+    - Parallel, sequential, and dependency-based execution modes
+    - Request deduplication and result caching
+    - Comprehensive error handling and timeout management
+  - **Enterprise Configuration System**
+    - Multiple authentication methods (API key, JWT, OAuth2)
+    - Granular security controls and rate limiting
+    - Connection pooling and performance optimization
+    - Audit logging with external destinations
+  - **Claude Desktop Integration** with ready-to-use configurations
+
+- **Enhanced Logging System** with hybrid tracing support
+  - Configuration-based logging initialization
+  - Multiple sinks (console, file) with rotation and buffering
+  - Structured logging with enrichment and sampling
+  - Fallback to simple tracing for compatibility
+  - Special handling for MCP stdio mode to preserve protocol integrity
+
+### Improvements
+
+- **Build System Fixes**
+  - Resolved tokio runtime panic during shutdown
+  - Fixed MCP test failures related to protocol version and stdio handling
+  - Updated dependencies for better compatibility
+  - Cleaned up unused imports and warnings
+
+- **Task Execution Enhancements**
+  - Fixed Task API usage (migrated from Task::execute to execute_task function)
+  - Added HttpManager integration for task execution context
+  - Improved error handling and mutable borrow patterns
+  - Enhanced worker process communication
+
+- **Documentation Updates**
+  - Comprehensive MCP configuration guide with examples
+  - SSE implementation documentation
+  - Streaming example task with progress reporting
+  - Updated TODO.md to reflect project milestones
+
+### Infrastructure
+
+- **MCP CLI Integration**
+  - Added `mcp-serve` command for starting MCP server
+  - Added `config validate` command for configuration validation
+  - Added `config generate` command for creating sample configurations
+  - Support for multiple transport types via CLI arguments
+
+- **Testing Infrastructure**
+  - Added comprehensive MCP integration tests
+  - SSE transport tests with end-to-end validation
+  - Streaming progress notification tests
+  - Batch processing tests with dependency resolution
+
+## 0.2.0 (2025-06-01)
 
 Major server implementation with GraphQL API and task registry.
 
