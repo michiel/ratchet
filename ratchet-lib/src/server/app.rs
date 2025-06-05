@@ -118,7 +118,7 @@ mod tests {
                 max_connections: 5,
                 connection_timeout: Duration::from_secs(10),
             },
-            auth: None,
+            jwt: None,
         });
 
         let db = DatabaseConnection::new(config.server.as_ref().unwrap().database.clone())
