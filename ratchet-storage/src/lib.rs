@@ -13,6 +13,14 @@ pub mod migrations;
 pub mod repositories;
 pub mod transaction;
 
+// SeaORM implementation (feature-gated)
+#[cfg(feature = "seaorm")]
+pub mod seaorm;
+
+// Database module (migration compatibility layer)
+#[cfg(feature = "seaorm")]
+pub mod database;
+
 // Re-export core types for convenience
 pub use config::StorageConfig;
 pub use connection::{Connection, ConnectionManager};

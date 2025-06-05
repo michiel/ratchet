@@ -24,15 +24,18 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 regex = "1.10"
 fastrand = "2.0"
+cron = "0.12"
 
 # Database dependencies (optional)
-sea-orm = { version = "1.1", optional = true }
+sea-orm = { version = "1.1", optional = true, features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { version = "1.1", optional = true }
 sea-query = { version = "0.32", optional = true }
 sqlx = { workspace = true, optional = true }
 
 [features]
 default = ["database"]
-database = ["sea-orm", "sea-query", "sqlx"]
+database = ["sea-orm", "sea-orm-migration", "sea-query", "sqlx"]
+seaorm = ["database"]  # Feature flag for SeaORM integration
 postgres = ["database"]
 mysql = ["database"]
 
