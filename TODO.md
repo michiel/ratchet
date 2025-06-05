@@ -346,6 +346,89 @@
 
 ---
 
+## ⚡ **Immediate: Configuration System Cleanup** (CRITICAL PRIORITY)
+
+### Configuration System Issues (Identified in Architecture Review)
+- [ ] **Consolidate Duplicate Configuration Systems**
+  - [ ] Merge `ratchet-config` and `ratchet-lib` configuration structs to eliminate duplication
+  - [ ] Standardize serde attributes usage across all config domains
+  - [ ] Ensure all config sections have proper `#[serde(default)]` attributes
+  - [ ] Consolidate inconsistent default values between the two systems
+  
+- [ ] **Remove Unused Configuration Elements**
+  - [ ] Remove extensive unused MCP configuration (2000+ lines with minimal usage)
+  - [ ] Remove or mark as experimental the unused advanced output destinations (S3, Database variants)
+  - [ ] Remove unimplemented security configurations (TLS, JWT/OAuth2 without implementation)
+  - [ ] Remove HTTP proxy configuration that's not consumed by HttpManager
+  - [ ] Clean up unused connection pool settings not consumed by application
+
+- [ ] **Implement Missing Features or Remove Config**
+  - [ ] Either implement TLS support or remove TLS configuration
+  - [ ] Either implement JWT/OAuth2 authentication or remove related config structs
+  - [ ] Either implement advanced caching strategies or simplify cache configuration
+  - [ ] Document which configuration options are implemented vs planned features
+
+- [ ] **Configuration Documentation & Validation**
+  - [ ] Update all sample configs to only include implemented features
+  - [ ] Add runtime validation to reject unknown/unimplemented config options
+  - [ ] Create configuration migration guides for users
+  - [ ] Document configuration hierarchy and precedence rules
+
+**Priority Rationale**: Configuration system has significant duplication and unused code that creates confusion for users and maintenance burden. Cleaning this up is critical before adding new features.
+
+## 🏗️ **Phase 1.5: Complete ratchet-lib Migration** (HIGH PRIORITY)
+
+### Migration Status: ~40% Complete (Identified in Architecture Review)
+**Problem**: Significant functionality still duplicated between monolithic `ratchet-lib` and new modular crates, creating maintenance burden and confusion.
+
+### Critical Migration Blockers (Must Address First)
+- [ ] **Database Layer Consolidation**
+  - [ ] Migrate complete Sea-ORM implementation from `ratchet-lib/src/database/` to `ratchet-storage/`
+  - [ ] Move migration scripts to ratchet-storage
+  - [ ] Update MCP server and tests to use ratchet-storage instead of ratchet-lib database layer
+  - [ ] Create compatibility layer for smooth transition
+
+- [ ] **Configuration System Unification** 
+  - [ ] Migrate CLI from `ratchet_lib::config::RatchetConfig` to `ratchet-config`
+  - [ ] Migrate MCP from `ratchet_lib::config::McpServerConfig` to `ratchet-config`
+  - [ ] Create config compatibility layer during transition
+  - [ ] Remove duplicate config structs in ratchet-lib
+
+- [ ] **API Implementation Decision**
+  - [ ] Choose primary API implementation: ratchet-lib vs ratchet-api
+  - [ ] Migrate REST handlers from `ratchet-lib/src/rest/` to `ratchet-api/src/rest/`
+  - [ ] Migrate GraphQL implementation from `ratchet-lib/src/graphql/` to `ratchet-api/src/graphql/`
+  - [ ] Update all 24 integration tests to use new API layer
+
+### Medium Priority Migration Tasks
+- [ ] **Execution Engine Completion**
+  - [ ] Move JavaScript execution engine (`js_executor/`) from ratchet-lib to ratchet-runtime
+  - [ ] Complete process management and worker coordination in ratchet-runtime
+  - [ ] Migrate execution logic from `ratchet-lib/src/execution/` to ratchet-runtime
+
+- [ ] **Business Logic Migration**
+  - [ ] Move HTTP management from ratchet-lib to appropriate crate
+  - [ ] Move task/registry/validation logic to ratchet-core
+  - [ ] Move service layer to ratchet-core
+
+### Final Cleanup Tasks
+- [ ] **Remove ratchet-lib Dependencies**
+  - [ ] Update ratchet-cli to use only modular crates
+  - [ ] Update ratchet-mcp to use only modular crates
+  - [ ] Migrate all integration tests away from ratchet-lib
+  - [ ] Remove or significantly reduce ratchet-lib crate
+
+**Migration Blockers**: 
+- ratchet-cli, ratchet-mcp, and 24 integration tests still depend on ratchet-lib
+- Database layer duplication prevents safe migration
+- Configuration system split creates confusion
+
+**Success Metrics**:
+- All crates use modular architecture (no ratchet-lib dependencies)
+- Single source of truth for database, config, and APIs
+- Clean build with no duplicated functionality
+- All tests pass with new architecture
+
 ## 🚀 **Phase 2: Security & Production Readiness** (HIGH PRIORITY)
 
 ### 2.1 Authentication & Authorization System

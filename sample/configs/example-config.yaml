@@ -1,235 +1,141 @@
-# Example Ratchet Server Configuration
-# This configuration file demonstrates all available options for the Ratchet task execution platform
+# Ratchet Configuration Example
+# This file demonstrates the main configuration options with accurate defaults
+# All sections are optional - the system will use sensible defaults if omitted
 
 # Task execution configuration
 execution:
-  max_execution_duration: 300  # Maximum execution time in seconds (5 minutes)
-  validate_schemas: true       # Enable JSON schema validation
+  max_execution_duration: 300  # Default: 300 seconds (5 minutes)
+  validate_schemas: true       # Default: true
+  max_concurrent_tasks: 10     # Default: 10
+  timeout_grace_period: 5      # Default: 5 seconds
   
-  # JavaScript variable names used for HTTP fetch operations
+  # JavaScript variable names for HTTP fetch operations
   fetch_variables:
-    url_var: "__fetch_url"           # Variable name for fetch URL
-    params_var: "__fetch_params"     # Variable name for fetch parameters  
-    body_var: "__fetch_body"         # Variable name for fetch body
-    result_var: "__http_result"      # Variable name for HTTP result
-    temp_result_var: "__temp_result" # Variable name for temporary result
+    url_var: "__fetch_url"           # Default: "__fetch_url"
+    params_var: "__fetch_params"     # Default: "__fetch_params"
+    body_var: "__fetch_body"         # Default: "__fetch_body"
+    result_var: "__http_result"      # Default: "__http_result"
+    temp_result_var: "__temp_result" # Default: "__temp_result"
 
 # HTTP client configuration
 http:
-  timeout: 30              # Request timeout in seconds
-  max_redirects: 10        # Maximum number of redirects to follow
-  user_agent: "Ratchet/1.0" # User agent string for HTTP requests
-  verify_ssl: true         # Whether to verify SSL certificates
+  timeout: 30                    # Default: 30 seconds
+  max_redirects: 10              # Default: 10
+  user_agent: "Ratchet/1.0"     # Default: "Ratchet/1.0"
+  verify_ssl: true               # Default: true
+  
+  # Connection pool settings
+  connection_pool:
+    max_idle_per_host: 10        # Default: 10
+    idle_timeout: 90             # Default: 90 seconds
+    connection_timeout: 10       # Default: 10 seconds
 
 # Caching configuration
 cache:
-  task_content_cache_size: 100  # LRU cache size for task content
-  enabled: true                 # Enable/disable caching
+  enabled: true                  # Default: true
+  
+  # Task content cache settings
+  task_cache:
+    cache_type: "lru"            # Default: "lru"
+    task_content_cache_size: 100 # Default: 100
+    memory_limit_bytes: 67108864 # Default: 64MB
+    ttl: 3600                    # Default: 3600 seconds (1 hour)
+  
+  # HTTP response cache settings
+  http_cache:
+    enabled: true                # Default: true
+    max_size_bytes: 10485760     # Default: 10MB
+    default_ttl: 300             # Default: 300 seconds (5 minutes)
+    respect_cache_control: true  # Default: true
+  
+  # Result cache settings
+  result_cache:
+    enabled: true                # Default: true
+    cache_only_success: true     # Default: true
+    max_entries: 1000           # Default: 1000
+    ttl: 1800                   # Default: 1800 seconds (30 minutes)
 
 # Logging configuration
 logging:
-  level: info                 # Global log level: trace, debug, info, warn, error
-  format: pretty              # Log format: pretty (human-readable) or json
+  level: info                    # Default: info (trace, debug, info, warn, error)
+  format: text                   # Default: text (text, json)
+  include_location: false        # Default: false
+  structured: true               # Default: true
   
-  # Logging sinks - where logs are written
-  sinks:
-    # Console output (stdout/stderr)
-    - type: console
-      level: info
-      use_json: false         # Use JSON format for console output
-    
-    # File output with rotation (uncomment to enable)
-    # - type: file
-    #   path: "logs/ratchet.log"  # Log file path (directory will be created)
-    #   level: debug              # File-specific log level
-    #   rotation:
-    #     max_size: "100MB"       # Rotate when file reaches this size
-    #     max_age: "7d"           # Rotate files older than this
-    #     max_files: 5            # Keep this many rotated files
-    #   buffered:
-    #     size: 1000              # Buffer size (number of log entries)
-    #     flush_interval: "5s"    # How often to flush buffer to disk
-  
-  # Log enrichment - additional context added to log entries
-  enrichment:
-    system_info: true         # Include system information
-    process_info: true        # Include process information  
-    task_context: false       # Include task context (can be verbose)
-    execution_context: false  # Include execution context (can be verbose)
-  
-  # Sampling rates - reduce log volume by sampling (1.0 = 100%, 0.1 = 10%)
-  sampling:
-    error_rate: 1.0           # Always log errors
-    warn_rate: 1.0            # Always log warnings
-    info_rate: 1.0            # Always log info messages
-    debug_rate: 0.1           # Sample 10% of debug messages
-    trace_rate: 0.01          # Sample 1% of trace messages
+  # Log targets (where logs are written)
+  targets:
+    - type: console              # Output to console
+      level: info                # Optional: override global level
 
 # Output destinations configuration
 output:
-  # Maximum number of concurrent deliveries
-  max_concurrent_deliveries: 10
-  
-  # Default timeout for all deliveries (in seconds)
-  default_timeout: 30
-  
-  # Validate destination configurations on startup
-  validate_on_startup: true
+  max_concurrent_deliveries: 10  # Default: 10
+  default_timeout: 30            # Default: 30 seconds
+  validate_on_startup: true      # Default: true
   
   # Default retry policy for failed deliveries
   default_retry_policy:
-    max_attempts: 3                # Maximum retry attempts
-    initial_delay_ms: 1000         # Initial delay between retries (1 second)
-    max_delay_ms: 30000           # Maximum delay between retries (30 seconds)
-    backoff_multiplier: 2.0        # Exponential backoff multiplier
-  
-  # Global destination templates for reuse across jobs
-  global_destinations:
-    # Filesystem destination for production logs
-    - name: "production_logs"
-      description: "Store task outputs in organized filesystem structure"
-      destination:
-        type: filesystem
-        path: "/var/log/ratchet/outputs/{{environment}}/{{year}}/{{month}}/{{day}}/{{task_name}}_{{job_uuid}}.json"
-        format: json
-        permissions: "644"
-        create_dirs: true
-        overwrite: true
-        backup_existing: false
-    
-    # Webhook destination for analytics
-    - name: "analytics_webhook"
-      description: "Send task completion events to analytics service"
-      destination:
-        type: webhook
-        url: "https://analytics.company.com/api/v1/task-events"
-        method: POST
-        headers:
-          "Content-Type": "application/json"
-          "X-Environment": "{{environment}}"
-          "X-Task-Name": "{{task_name}}"
-          "X-Source": "ratchet"
-        timeout_seconds: 30
-        content_type: "application/json"
-        auth:
-          type: bearer
-          token: "${ANALYTICS_WEBHOOK_TOKEN}"  # Use environment variable
-    
-    # Debug filesystem destination (development only)
-    - name: "debug_filesystem"
-      description: "Debug output storage for development"
-      destination:
-        type: filesystem
-        path: "/tmp/ratchet-debug/{{task_name}}/{{timestamp}}.yaml"
-        format: yaml
-        permissions: "644"
-        create_dirs: true
-        overwrite: true
+    max_attempts: 3              # Default: 3
+    initial_delay_ms: 1000       # Default: 1000ms (1 second)
+    max_delay_ms: 30000         # Default: 30000ms (30 seconds)
+    backoff_multiplier: 2.0      # Default: 2.0
 
-# Server configuration for REST API and GraphQL
+# Server configuration (optional)
 server:
-  bind_address: "127.0.0.1"  # Server bind address
-  port: 8080                 # Server port
+  bind_address: "127.0.0.1"      # Default: "127.0.0.1"
+  port: 8080                     # Default: 8080
   
   # Database configuration
   database:
-    url: "sqlite://data/ratchet.db"  # Database URL - file path (creates file and directory if needed)
-    # url: "sqlite::memory:"        # Alternative: in-memory database (default, loses data on restart)
-    max_connections: 10               # Maximum database connection pool size
-    connection_timeout: 30            # Connection timeout in seconds
+    url: "sqlite:./ratchet.db"   # Default: "sqlite::memory:"
+    max_connections: 10          # Default: 10
+    min_connections: 1           # Default: 1
+    connection_timeout: 30       # Default: 30 seconds
+    idle_timeout: 600           # Default: 600 seconds (10 minutes)
+    max_lifetime: 3600          # Default: 3600 seconds (1 hour)
   
-  # Authentication configuration (FUTURE FEATURE - Not yet implemented)
-  # auth:
-  #   jwt_secret: "your-secret-key-change-in-production"  # JWT signing secret
-  #   token_expiration: 3600  # Token expiration time in seconds (1 hour)
+  # CORS configuration
+  cors:
+    allowed_origins: ["*"]       # Default: ["*"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE"] # Default
+    allowed_headers: ["Content-Type", "Authorization", "X-Requested-With"] # Default
+    allow_credentials: false     # Default: false
+    max_age: 3600               # Default: 3600 seconds
   
-  # Rate limiting configuration for REST API (optional)
+  # Rate limiting configuration
   rate_limit:
-    requests_per_minute: 60      # Maximum requests per minute per client
-    burst_size: 10               # Burst allowance for sudden traffic spikes
-    window_size: 60              # Rate limit window size in seconds
-    cleanup_interval: 300        # Cleanup interval for rate limit data in seconds
-    
-    # Predefined rate limit profiles:
-    # "default" - 60 req/min, burst 10
-    # "permissive" - 1000 req/min, burst 100  
-    # "strict" - 30 req/min, burst 5
-    profile: "default"
+    enabled: true                # Default: true
+    requests_per_minute: 60      # Default: 60
+    burst_size: 10              # Default: 10
+    time_window: 60             # Default: 60 seconds
 
-  # Job queue configuration
-  job_queue:
-    max_dequeue_batch_size: 10   # Maximum jobs to dequeue at once
-    max_queue_size: 1000         # Maximum queue size (0 = unlimited)
-    default_retry_delay: 60      # Default retry delay in seconds
-    default_max_retries: 3       # Default maximum retry attempts
-
-  # Worker process configuration  
-  workers:
-    worker_count: 4                        # Number of worker processes
-    restart_on_crash: true                 # Restart workers on crash
-    max_restart_attempts: 5                # Maximum restart attempts
-    restart_delay_seconds: 10              # Delay between restart attempts
-    health_check_interval_seconds: 30      # Health check interval
-
-# Task registry configuration
+# Task registry configuration (optional)
 registry:
   sources:
-    - name: "local-tasks"            # Source identifier
-      uri: "file://./sample/js-tasks" # Local filesystem path
+    - name: "local-tasks"              # Source name
+      uri: "file://./sample/js-tasks"  # Local filesystem path
       config:
-        watch: true                  # Enable file watching for changes
-        debounce_ms: 1000           # Debounce delay for file changes
-        ignore_patterns:             # Patterns to ignore
-          - "*.tmp"
-          - "node_modules/**"
-          - ".git/**"
-    
-    # Example remote registry source
-    # - name: "company-tasks"
-    #   uri: "https://tasks.company.com/registry"
-    #   config:
-    #     auth_token: "your-auth-token"
-    #     sync_interval: 300  # Sync every 5 minutes
-
-# Development and testing overrides
-development:
-  # Enable more verbose logging in development
-  enable_debug_endpoints: true    # Enable /debug/* endpoints
-  mock_external_services: false   # Mock external HTTP calls
-  validate_on_startup: true       # Validate all tasks on startup
+        watch_for_changes: true        # Enable file watching
+        auto_reload: false             # Auto-reload on changes
   
-# Environment variable overrides (examples)
-# These can be set as environment variables to override config values:
+  default_polling_interval: 300        # Default: 300 seconds (5 minutes)
+  
+  # Registry cache settings
+  cache:
+    enabled: true                      # Default: true
+    ttl: 3600                         # Default: 3600 seconds (1 hour)
+    max_entries: 1000                 # Default: 1000
+
+# Environment variables that can override config values:
 #
 # RATCHET_HTTP_TIMEOUT=60
-# RATCHET_CACHE_SIZE=200  
-# RATCHET_LOG_LEVEL=debug  # Note: Currently not used, use RUST_LOG instead
-# RATCHET_MAX_EXECUTION_SECONDS=600
-# RATCHET_DATABASE_URL=sqlite://ratchet.db
+# RATCHET_CACHE_ENABLED=true
+# RATCHET_LOG_LEVEL=debug
+# RATCHET_MAX_EXECUTION_DURATION=600
+# RATCHET_DATABASE_URL=sqlite://./ratchet.db
 # RATCHET_SERVER_PORT=3000
-# RATCHET_JWT_SECRET=production-secret-key  # (Future feature)
-# RATCHET_RATE_LIMIT_REQUESTS_PER_MINUTE=120
+# RATCHET_BIND_ADDRESS=0.0.0.0
 #
-# For logging, use standard Rust tracing environment variables:
-# RUST_LOG=debug                    # Set log level (overrides config)
+# For logging, use standard Rust environment variables:
+# RUST_LOG=debug                    # Set global log level
 # RUST_LOG=ratchet=debug           # Set log level for ratchet modules only
-# RUST_LOG=ratchet=debug,hyper=info # Fine-grained control per module
-#
-# Output destination environment variables:
-# RATCHET_OUTPUT_MAX_CONCURRENT=15
-# RATCHET_OUTPUT_DEFAULT_TIMEOUT=60
-# RATCHET_OUTPUT_VALIDATE_STARTUP=true
-#
-# Authentication tokens for output destinations:
-# ANALYTICS_WEBHOOK_TOKEN=your-analytics-token
-# AWS_ACCESS_KEY_ID=your-aws-access-key
-# AWS_SECRET_ACCESS_KEY=your-aws-secret-key
-# DATABASE_CONNECTION_STRING=postgresql://user:pass@host:5432/db
-
-# Security considerations:
-# - JWT authentication is not yet implemented (planned for future release)
-# - Use strong database passwords
-# - Enable SSL/TLS in production (verify_ssl: true)
-# - Configure appropriate rate limits
-# - Restrict server bind_address in production (not 0.0.0.0)
-# - Use environment variables for sensitive values

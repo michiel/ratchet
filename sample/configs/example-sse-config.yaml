@@ -1,28 +1,107 @@
-# Example configuration for SSE-based MCP server
-transport_type: sse
-host: 127.0.0.1
-port: 3000
+# Ratchet MCP Server with SSE Transport Configuration
+# This configuration enables HTTP-based MCP connections using Server-Sent Events
 
-# Authentication (optional)
-auth:
-  type: none
+# Basic execution settings
+execution:
+  max_execution_duration: 300      # Default: 300 seconds
+  validate_schemas: true           # Default: true
 
-# Connection limits
-limits:
-  max_connections: 100
-  max_message_size: 1048576  # 1MB
-  rate_limit: 60  # requests per minute
+# HTTP client configuration
+http:
+  timeout: 30                      # Default: 30 seconds
+  verify_ssl: true                 # Default: true
 
-# Timeouts
-timeouts:
-  request_timeout: 30s
-  idle_timeout: 5m
-  health_check_interval: 30s
+# Enable caching
+cache:
+  enabled: true                    # Default: true
 
-# Tool configuration
-tools:
-  enable_execution: true
-  enable_logging: true
-  enable_monitoring: true
-  enable_debugging: false
-  max_execution_time: 5m
+# Logging configuration
+logging:
+  level: info                      # Default: info
+  format: json                     # JSON format for structured logs
+
+# MCP Server with SSE transport
+mcp:
+  enabled: true
+  
+  server:
+    transport: "sse"               # Enable SSE transport
+    host: "127.0.0.1"             # Default: "127.0.0.1"
+    port: 3000                     # Default: 3000 for SSE
+    
+    # Database for MCP operations
+    database:
+      url: "sqlite:./sse-ratchet.db"
+
+  # Authentication configuration (optional)
+  authentication:
+    method: "none"                 # Default: "none" (no auth)
+    # Uncomment for API key authentication:
+    # method: "api_key"
+    # api_key:
+    #   header_name: "Authorization"
+    #   prefix: "Bearer"
+    #   keys:
+    #     "your-api-key-here":
+    #       name: "SSE Client"
+    #       permissions:
+    #         can_execute_tasks: true
+
+  # Security settings
+  security:
+    rate_limiting:
+      global_per_minute: 500       # Default: 500
+      execute_task_per_minute: 60  # Default: 60
+    
+    request_limits:
+      max_request_size_bytes: 1048576    # Default: 1MB
+      max_response_size_bytes: 10485760  # Default: 10MB
+
+  # Connection limits for SSE
+  connection_limits:
+    max_connections: 100           # Maximum concurrent SSE connections
+    max_idle_time: 300            # Idle timeout in seconds (5 minutes)
+
+  # Timeouts
+  timeouts:
+    request_timeout: 30            # Request timeout in seconds
+    idle_timeout: 300             # Idle connection timeout in seconds
+    health_check_interval: 30      # Health check interval in seconds
+
+  # Tool configuration
+  tools:
+    enable_execution: true         # Default: true
+    enable_logging: true           # Default: true
+    enable_monitoring: true        # Enable for SSE debugging
+    enable_debugging: false        # Default: false
+    enable_filesystem: false       # Default: false
+
+# Task registry for SSE server
+registry:
+  sources:
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks"
+
+# Output configuration
+output:
+  max_concurrent_deliveries: 10   # Default: 10
+  default_timeout: 30             # Default: 30 seconds
+  validate_on_startup: true       # Default: true
+
+# CORS configuration for web clients (optional for SSE)
+cors:
+  allowed_origins: ["*"]          # Allow all origins for development
+  allowed_methods: ["GET", "POST"] # Required methods for SSE
+  allowed_headers: ["Content-Type", "Authorization", "Accept"]
+  allow_credentials: false        # Default: false
+
+# Example usage:
+# cargo run -p ratchet-mcp --bin ratchet-mcp -- --config sample/configs/example-sse-config.yaml serve
+#
+# Connect via SSE:
+# curl -N -H "Accept: text/event-stream" http://localhost:3000/sse/your-session-id
+#
+# Send MCP message:
+# curl -X POST http://localhost:3000/message/your-session-id \
+#   -H "Content-Type: application/json" \
+#   -d '{"jsonrpc":"2.0","method":"initialize","id":"1","params":{}}'

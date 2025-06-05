@@ -1,86 +1,64 @@
 # Ratchet MCP Minimal Configuration
 # This is a minimal configuration for basic MCP server functionality
-# Suitable for simple deployments or testing basic MCP capabilities
+# Only essential settings are included - all others use defaults
 
-# Basic execution settings
+# Basic execution settings (optional - defaults shown)
 execution:
-  max_execution_duration: 300
-  validate_schemas: true
+  max_execution_duration: 300  # Default: 300 seconds
+  validate_schemas: true       # Default: true
 
-# Simple HTTP configuration
+# HTTP settings (optional - defaults shown)
 http:
-  timeout: 30
-  verify_ssl: true
+  timeout: 30          # Default: 30 seconds
+  verify_ssl: true     # Default: true
 
-# Enable basic caching
+# Enable caching (optional - default is enabled)
 cache:
-  enabled: true
+  enabled: true        # Default: true
 
-# Console logging for simplicity
+# Basic logging (optional - defaults shown)
 logging:
-  level: info
-  destination: console
+  level: info          # Default: info
+  format: text         # Default: text
 
-# Minimal MCP configuration
+# MCP server configuration (required for MCP functionality)
 mcp:
   enabled: true
   
-  # Use stdio transport for simplicity (no network configuration needed)
+  # Use stdio transport (no network configuration needed)
   server:
     transport: "stdio"
+    
+    # Database for MCP operations (optional - uses memory by default)
+    database:
+      url: "sqlite:./mcp-ratchet.db"  # Default: "sqlite::memory:"
   
-  # No authentication (suitable for local/trusted environments only)
+  # No authentication for simplicity (default)
   authentication:
-    method: "none"
+    method: "none"     # Default: "none"
   
-  # Basic security with reasonable defaults
+  # Basic security settings (optional - these are defaults)
   security:
     rate_limiting:
-      global_per_minute: 100
-      execute_task_per_minute: 20
-      get_logs_per_minute: 50
-      get_traces_per_minute: 10
-    
-    request_limits:
-      max_request_size_bytes: 1048576    # 1MB
-      max_response_size_bytes: 10485760  # 10MB
-      max_concurrent_executions_per_client: 5
-      max_execution_time_seconds: 300
+      global_per_minute: 500           # Default
+      execute_task_per_minute: 60      # Default
   
-  # Standard performance settings
-  performance:
-    connection_pool:
-      max_connections: 50
-    
-    caching:
-      enabled: true
-      max_size_mb: 128
-      default_ttl_seconds: 3600
-  
-  # Enable core tools only
+  # Enable core tools only (optional - these are defaults)
   tools:
-    enable_execution: true
-    enable_logging: true
-    enable_monitoring: false
-    enable_debugging: false
-    enable_filesystem: false
-  
-  # Basic audit logging
-  audit:
-    enabled: true
-    level: "info"
-    log_auth_events: false
-    log_permission_checks: false
-    log_performance: false
+    enable_execution: true             # Default: true
+    enable_logging: true               # Default: true
+    enable_monitoring: false           # Default: false
+    enable_debugging: false            # Default: false
+    enable_filesystem: false           # Default: false
 
-# Basic output configuration
-output:
-  max_concurrent_deliveries: 5
-  default_timeout: 30
-  validate_on_startup: true
-
-# Simple local task registry
+# Basic task registry (required for task execution)
 registry:
   sources:
-    - name: "local"
+    - name: "local-tasks"
       uri: "file://./sample/js-tasks"
+
+# Output configuration (optional - defaults shown)
+output:
+  max_concurrent_deliveries: 10       # Default: 10
+  default_timeout: 30                 # Default: 30 seconds
+  validate_on_startup: true           # Default: true
