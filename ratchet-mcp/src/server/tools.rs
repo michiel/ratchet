@@ -1748,7 +1748,7 @@ mod tests {
         // Find the execute task tool
         let execute_tool = tools.iter().find(|t| t.name == "ratchet.execute_task");
         assert!(execute_tool.is_some());
-        assert_eq!(execute_tool.unwrap().description, "Execute a Ratchet task with given input");
+        assert_eq!(execute_tool.unwrap().description, "Execute a Ratchet task with given input and optional progress streaming");
         
         // Find the debugging tools
         let error_analysis_tool = tools.iter().find(|t| t.name == "ratchet.analyze_execution_error");

@@ -8,7 +8,6 @@ use serde_json::json;
 use ratchet_mcp::server::{
     progress::{ProgressNotificationManager, ProgressFilter, ProgressUpdate},
     tools::{RatchetToolRegistry, McpTaskExecutor, McpTaskInfo, McpExecutionStatus},
-    adapter::RatchetMcpAdapter,
 };
 use ratchet_mcp::transport::connection::TransportConnection;
 use ratchet_mcp::protocol::messages::McpNotification;
@@ -44,10 +43,19 @@ impl McpTaskExecutor for MockStreamingTaskExecutor {
         task_path: &str, 
         input: serde_json::Value,
         progress_manager: Option<Arc<ProgressNotificationManager>>,
-        _connection: Option<Arc<dyn TransportConnection>>,
-        _filter: Option<ProgressFilter>,
+        connection: Option<Arc<dyn TransportConnection>>,
+        filter: Option<ProgressFilter>,
     ) -> Result<(String, serde_json::Value), String> {
         let execution_id = uuid::Uuid::new_v4().to_string();
+        
+        // Subscribe the connection to receive progress updates
+        if let (Some(manager), Some(conn)) = (progress_manager.as_ref(), connection.as_ref()) {
+            manager.subscribe_to_execution(
+                execution_id.clone(),
+                conn.clone(),
+                filter,
+            ).await;
+        }
         
         // Simulate a long-running task with progress updates
         if let Some(manager) = progress_manager {
@@ -160,6 +168,7 @@ impl MockTransportConnection {
         self.notifications.read().await.clone()
     }
     
+    #[allow(dead_code)]
     async fn clear_notifications(&self) {
         self.notifications.write().await.clear();
     }
@@ -251,17 +260,12 @@ async fn test_streaming_task_execution() {
     let connection = Arc::new(MockTransportConnection::new());
     let executor = Arc::new(MockStreamingTaskExecutor::new().with_progress_manager(progress_manager.clone()));
     
-    let execution_id = "streaming-test-execution";
-    
-    // Subscribe to progress updates
-    let _subscription_id = progress_manager.subscribe_to_execution(
-        execution_id.to_string(),
-        connection.clone(),
-        None,
-    ).await;
+    // The actual implementation would generate an execution ID and subscribe before execution
+    // For this test, we'll execute the task which will send progress notifications
+    // The mock executor subscribes the connection internally during execution
     
     // Execute task with progress streaming
-    let (returned_execution_id, result) = executor.execute_task_with_progress(
+    let (execution_id, result) = executor.execute_task_with_progress(
         "test-streaming-task",
         json!({"input": "test"}),
         Some(progress_manager.clone()),
@@ -270,7 +274,7 @@ async fn test_streaming_task_execution() {
     ).await.unwrap();
     
     // Verify execution completed
-    assert!(!returned_execution_id.is_empty());
+    assert!(!execution_id.is_empty());
     assert_eq!(result["result"], "streaming_execution");
     
     // Give time for all progress notifications to be processed
