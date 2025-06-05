@@ -18,7 +18,7 @@ resolver = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # Reduce tokio feature overhead - specific crates can add features as needed
-tokio = { version = "1.45", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-util", "net", "fs", "signal", "process"] }
+tokio = { version = "1.45", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-util", "io-std", "net", "fs", "signal", "process"] }
 clap = { version = "4.4", features = ["derive"] }
 thiserror = "1.0"
 anyhow = "1.0"
