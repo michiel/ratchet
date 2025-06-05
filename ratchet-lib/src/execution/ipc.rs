@@ -67,6 +67,13 @@ pub enum CoordinatorMessage {
         result: TaskValidationResult,
     },
     
+    /// Task progress update
+    TaskProgress {
+        job_id: i32,
+        correlation_id: Uuid,
+        progress: TaskProgressUpdate,
+    },
+    
     /// Health check response
     Pong {
         correlation_id: Uuid,
@@ -104,6 +111,31 @@ pub struct TaskValidationResult {
     pub valid: bool,
     pub error_message: Option<String>,
     pub error_details: Option<JsonValue>,
+}
+
+/// Task progress update
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskProgressUpdate {
+    /// Progress value (0.0 to 1.0)
+    pub progress: f32,
+    
+    /// Current step description
+    pub step: Option<String>,
+    
+    /// Step number (current step)
+    pub step_number: Option<u32>,
+    
+    /// Total steps
+    pub total_steps: Option<u32>,
+    
+    /// Custom status message
+    pub message: Option<String>,
+    
+    /// Progress data
+    pub data: Option<JsonValue>,
+    
+    /// Timestamp of progress update
+    pub timestamp: DateTime<Utc>,
 }
 
 /// Worker status information

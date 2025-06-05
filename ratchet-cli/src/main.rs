@@ -17,7 +17,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
 mod cli;
-use cli::{Cli, Commands, GenerateCommands};
+use cli::{Cli, Commands, GenerateCommands, ConfigCommands};
 
 /// Load configuration from file or use defaults
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
@@ -305,7 +305,7 @@ async fn mcp_serve_command_with_config(
                     allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
                     allow_credentials: false,
                 },
-                timeout: std::time::Duration::from_secs(mcp_server_config.request_timeout),
+                timeout: std::time::Duration::from_secs(mcp_server_config.authentication.session.timeout_seconds),
             },
             security: ratchet_mcp::security::SecurityConfig::default(),
             bind_address: Some(format!("{}:{}", host, port)),
@@ -922,6 +922,133 @@ async fn handle_generate_task(
     Ok(())
 }
 
+/// Handle configuration validation
+fn handle_config_validate(config_file: &PathBuf) -> Result<()> {
+    info!("Validating configuration file: {:?}", config_file);
+    
+    // Check if file exists
+    if !config_file.exists() {
+        return Err(anyhow::anyhow!("Configuration file not found: {:?}", config_file));
+    }
+    
+    // Try to load and validate configuration
+    match RatchetConfig::from_file(config_file) {
+        Ok(_config) => {
+            println!("✅ Configuration file is valid");
+            info!("Configuration validation passed");
+            Ok(())
+        }
+        Err(e) => {
+            println!("❌ Configuration validation failed: {}", e);
+            error!("Configuration validation failed: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+/// Handle configuration generation
+fn handle_config_generate(config_type: &str, output: &PathBuf, force: bool) -> Result<()> {
+    info!("Generating {} configuration at: {:?}", config_type, output);
+    
+    // Check if file exists and force is not set
+    if output.exists() && !force {
+        return Err(anyhow::anyhow!(
+            "Output file already exists: {:?}. Use --force to overwrite.", 
+            output
+        ));
+    }
+    
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent).context("Failed to create output directory")?;
+    }
+    
+    // Get the appropriate configuration content
+    let config_content = match config_type.to_lowercase().as_str() {
+        "dev" | "development" => {
+            info!("Generating development configuration");
+            include_str!("../../example-mcp-dev.yaml")
+        }
+        "prod" | "production" => {
+            info!("Generating production configuration");
+            include_str!("../../example-mcp-production.yaml")
+        }
+        "enterprise" => {
+            info!("Generating enterprise configuration");
+            include_str!("../../example-mcp-enterprise.yaml")
+        }
+        "minimal" => {
+            info!("Generating minimal configuration");
+            include_str!("../../example-mcp-minimal.yaml")
+        }
+        "claude" => {
+            info!("Generating Claude integration configuration");
+            include_str!("../../example-mcp-claude-integration.yaml")
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unknown configuration type: {}. Valid types: dev, production, enterprise, minimal, claude",
+                config_type
+            ));
+        }
+    };
+    
+    // Write configuration to file
+    fs::write(output, config_content).context("Failed to write configuration file")?;
+    
+    println!("✅ {} configuration generated at: {:?}", config_type, output);
+    println!("📝 Edit the file to customize settings for your environment");
+    println!("🔧 Validate with: ratchet config validate --config-file {:?}", output);
+    
+    Ok(())
+}
+
+/// Handle configuration display
+fn handle_config_show(config_file: Option<&PathBuf>, mcp_only: bool, format: &str) -> Result<()> {
+    info!("Showing configuration (MCP only: {}, format: {})", mcp_only, format);
+    
+    // Load configuration
+    let config = load_config(config_file)?;
+    
+    // Prepare output based on what to show
+    let output_value = if mcp_only {
+        // Show only MCP configuration
+        if let Some(mcp_config) = &config.mcp {
+            serde_json::to_value(mcp_config).context("Failed to serialize MCP config")?
+        } else {
+            serde_json::json!({
+                "mcp": null,
+                "note": "No MCP configuration found"
+            })
+        }
+    } else {
+        // Show full configuration
+        serde_json::to_value(&config).context("Failed to serialize config")?
+    };
+    
+    // Format and print output
+    match format.to_lowercase().as_str() {
+        "yaml" | "yml" => {
+            let yaml_output = serde_yaml::to_string(&output_value)
+                .context("Failed to serialize to YAML")?;
+            println!("{}", yaml_output);
+        }
+        "json" => {
+            let json_output = serde_json::to_string_pretty(&output_value)
+                .context("Failed to serialize to JSON")?;
+            println!("{}", json_output);
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unknown output format: {}. Valid formats: yaml, json",
+                format
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -1040,6 +1167,19 @@ async fn main() -> Result<()> {
             match generate_cmd {
                 GenerateCommands::Task { path, label, description, version } => {
                     handle_generate_task(path, label, description, version).await
+                }
+            }
+        }
+        Some(Commands::Config { config_cmd }) => {
+            match config_cmd {
+                ConfigCommands::Validate { config_file } => {
+                    handle_config_validate(config_file)
+                }
+                ConfigCommands::Generate { config_type, output, force } => {
+                    handle_config_generate(config_type, output, *force)
+                }
+                ConfigCommands::Show { config_file, mcp_only, format } => {
+                    handle_config_show(config_file.as_ref(), *mcp_only, format)
                 }
             }
         }

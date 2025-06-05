@@ -112,6 +112,17 @@ impl Default for ServerCapabilities {
                 list_changed: false 
             }),
             tools: Some(ToolsCapability { list_changed: false }),
+            batch: Some(crate::protocol::BatchCapability {
+                max_batch_size: 50,
+                max_parallel: 5,
+                supports_dependencies: true,
+                supports_progress: true,
+                supported_execution_modes: vec![
+                    crate::protocol::BatchExecutionMode::Parallel,
+                    crate::protocol::BatchExecutionMode::Sequential,
+                    crate::protocol::BatchExecutionMode::Dependency,
+                ],
+            }),
         }
     }
 }

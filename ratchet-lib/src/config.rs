@@ -295,7 +295,7 @@ pub struct AuthConfig {
     pub token_expiration: Duration,
 }
 
-/// MCP server configuration for LLM integration
+/// Enhanced MCP server configuration for LLM integration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct McpServerConfig {
@@ -303,37 +303,668 @@ pub struct McpServerConfig {
     #[serde(default = "default_false")]
     pub enabled: bool,
     
-    /// Transport type for MCP server
+    /// Server settings
     #[serde(default)]
+    pub server: McpServerSettings,
+    
+    /// Authentication configuration
+    #[serde(default)]
+    pub authentication: McpAuthenticationConfig,
+    
+    /// Security settings
+    #[serde(default)]
+    pub security: McpSecurityConfig,
+    
+    /// Performance settings
+    #[serde(default)]
+    pub performance: McpPerformanceConfig,
+    
+    /// Tool configuration
+    #[serde(default)]
+    pub tools: McpToolConfig,
+    
+    /// Audit and logging settings
+    #[serde(default)]
+    pub audit: McpAuditConfig,
+}
+
+/// MCP server settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpServerSettings {
+    /// Transport type (stdio, sse, websocket)
+    #[serde(default = "default_mcp_transport")]
     pub transport: String,
     
-    /// Host for SSE transport (ignored for stdio)
+    /// Host for network transports (ignored for stdio)
     #[serde(default = "default_mcp_host")]
     pub host: String,
     
-    /// Port for SSE transport (ignored for stdio)
+    /// Port for network transports (ignored for stdio)
     #[serde(default = "default_mcp_port")]
     pub port: u16,
     
-    /// Authentication type (none, api_key, jwt, oauth2)
-    #[serde(default)]
-    pub auth_type: String,
-    
-    /// API key for authentication (when auth_type = "api_key")
+    /// Alternative ports for different services
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_key: Option<String>,
+    pub metrics_port: Option<u16>,
     
+    /// TLS configuration for secure connections
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls: Option<McpTlsConfig>,
+    
+    /// Whether to enable CORS for web-based connections
+    #[serde(default = "default_false")]
+    pub enable_cors: bool,
+    
+    /// Allowed origins for CORS
+    #[serde(default)]
+    pub cors_origins: Vec<String>,
+}
+
+/// TLS configuration for MCP server
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpTlsConfig {
+    /// Path to TLS certificate file
+    pub cert_file: String,
+    
+    /// Path to TLS private key file
+    pub key_file: String,
+    
+    /// Path to CA certificate file (for client authentication)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ca_file: Option<String>,
+    
+    /// Whether to require client certificates
+    #[serde(default = "default_false")]
+    pub require_client_cert: bool,
+}
+
+/// MCP authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpAuthenticationConfig {
+    /// Primary authentication method
+    #[serde(default = "default_auth_method")]
+    pub method: String,
+    
+    /// API key authentication settings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<McpApiKeyConfig>,
+    
+    /// JWT authentication settings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jwt: Option<McpJwtConfig>,
+    
+    /// OAuth2 authentication settings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oauth2: Option<McpOAuth2Config>,
+    
+    /// Session configuration
+    #[serde(default)]
+    pub session: McpSessionConfig,
+}
+
+/// API key authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpApiKeyConfig {
+    /// List of valid API keys with metadata
+    pub keys: std::collections::HashMap<String, McpApiKeyInfo>,
+    
+    /// Header name for API key (default: "Authorization")
+    #[serde(default = "default_auth_header")]
+    pub header_name: String,
+    
+    /// Prefix for API key (e.g., "Bearer", "ApiKey")
+    #[serde(default = "default_auth_prefix")]
+    pub prefix: String,
+}
+
+/// API key information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpApiKeyInfo {
+    /// Human-readable name for this key
+    pub name: String,
+    
+    /// Description of this key's purpose
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    
+    /// Client permissions
+    pub permissions: McpClientPermissions,
+    
+    /// When this key was created (ISO 8601 format)
+    pub created_at: String,
+    
+    /// When this key expires (ISO 8601 format, optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    
+    /// Whether this key is currently active
+    #[serde(default = "default_true")]
+    pub active: bool,
+    
+    /// IP address restrictions (CIDR notation)
+    #[serde(default)]
+    pub allowed_ips: Vec<String>,
+}
+
+/// JWT authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpJwtConfig {
+    /// JWT signing secret or path to public key file
+    pub secret_or_key_file: String,
+    
+    /// JWT signing algorithm (HS256, RS256, etc.)
+    #[serde(default = "default_jwt_algorithm")]
+    pub algorithm: String,
+    
+    /// Token issuer to validate
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub issuer: Option<String>,
+    
+    /// Audience to validate
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
+    
+    /// Token expiration time in seconds
+    #[serde(default = "default_jwt_expiration")]
+    pub expiration_seconds: u64,
+    
+    /// Clock skew tolerance in seconds
+    #[serde(default = "default_jwt_clock_skew")]
+    pub clock_skew_seconds: u64,
+}
+
+/// OAuth2 authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpOAuth2Config {
+    /// OAuth2 provider issuer URL
+    pub issuer_url: String,
+    
+    /// Client ID for OAuth2
+    pub client_id: String,
+    
+    /// Client secret for OAuth2
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_secret: Option<String>,
+    
+    /// Required scopes
+    #[serde(default)]
+    pub required_scopes: Vec<String>,
+    
+    /// JWKS URI for token validation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jwks_uri: Option<String>,
+    
+    /// Token introspection endpoint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub introspection_endpoint: Option<String>,
+}
+
+/// Session configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpSessionConfig {
+    /// Session timeout in seconds
+    #[serde(default = "default_session_timeout")]
+    pub timeout_seconds: u64,
+    
+    /// Maximum number of active sessions per client
+    #[serde(default = "default_max_sessions_per_client")]
+    pub max_sessions_per_client: u32,
+    
+    /// Session cleanup interval in seconds
+    #[serde(default = "default_session_cleanup_interval")]
+    pub cleanup_interval_seconds: u64,
+    
+    /// Whether to persist sessions across server restarts
+    #[serde(default = "default_false")]
+    pub persistent: bool,
+}
+
+/// MCP security configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpSecurityConfig {
+    /// Rate limiting configuration
+    #[serde(default)]
+    pub rate_limiting: McpRateLimitConfig,
+    
+    /// Request size limits
+    #[serde(default)]
+    pub request_limits: McpRequestLimitsConfig,
+    
+    /// IP-based access control
+    #[serde(default)]
+    pub ip_filtering: McpIpFilterConfig,
+    
+    /// Security headers configuration
+    #[serde(default)]
+    pub headers: McpSecurityHeadersConfig,
+    
+    /// Input validation settings
+    #[serde(default)]
+    pub validation: McpValidationConfig,
+}
+
+/// Rate limiting configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpRateLimitConfig {
+    /// Overall requests per minute per client
+    #[serde(default = "default_rate_limit_global")]
+    pub global_per_minute: u32,
+    
+    /// Task execution requests per minute per client
+    #[serde(default = "default_rate_limit_execute")]
+    pub execute_task_per_minute: u32,
+    
+    /// Log reading requests per minute per client
+    #[serde(default = "default_rate_limit_logs")]
+    pub get_logs_per_minute: u32,
+    
+    /// Trace reading requests per minute per client
+    #[serde(default = "default_rate_limit_traces")]
+    pub get_traces_per_minute: u32,
+    
+    /// Rate limiting algorithm (token_bucket, sliding_window)
+    #[serde(default = "default_rate_limit_algorithm")]
+    pub algorithm: String,
+    
+    /// Burst allowance for rate limiting
+    #[serde(default = "default_rate_limit_burst")]
+    pub burst_allowance: u32,
+}
+
+/// Request size and complexity limits
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpRequestLimitsConfig {
+    /// Maximum request size in bytes
+    #[serde(default = "default_max_request_size")]
+    pub max_request_size_bytes: u64,
+    
+    /// Maximum response size in bytes
+    #[serde(default = "default_max_response_size")]
+    pub max_response_size_bytes: u64,
+    
+    /// Maximum number of concurrent connections per IP
+    #[serde(default = "default_max_connections_per_ip")]
+    pub max_connections_per_ip: u32,
+    
+    /// Maximum number of concurrent executions per client
+    #[serde(default = "default_max_concurrent_executions")]
+    pub max_concurrent_executions_per_client: u32,
+    
+    /// Maximum execution time per task in seconds
+    #[serde(default = "default_max_execution_time")]
+    pub max_execution_time_seconds: u64,
+}
+
+/// IP filtering configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpIpFilterConfig {
+    /// Whether IP filtering is enabled
+    #[serde(default = "default_false")]
+    pub enabled: bool,
+    
+    /// Default policy (allow, deny)
+    #[serde(default = "default_ip_policy")]
+    pub default_policy: String,
+    
+    /// Allowed IP ranges (CIDR notation)
+    #[serde(default)]
+    pub allowed_ranges: Vec<String>,
+    
+    /// Blocked IP ranges (CIDR notation)
+    #[serde(default)]
+    pub blocked_ranges: Vec<String>,
+    
+    /// Trusted proxy IPs for X-Forwarded-For handling
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
+}
+
+/// Security headers configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpSecurityHeadersConfig {
+    /// Whether to add security headers
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    
+    /// Content Security Policy
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_security_policy: Option<String>,
+    
+    /// X-Frame-Options header value
+    #[serde(default = "default_frame_options")]
+    pub x_frame_options: String,
+    
+    /// X-Content-Type-Options header value
+    #[serde(default = "default_content_type_options")]
+    pub x_content_type_options: String,
+    
+    /// Strict-Transport-Security header value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strict_transport_security: Option<String>,
+}
+
+/// Input validation configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpValidationConfig {
+    /// Whether to validate JSON schemas strictly
+    #[serde(default = "default_true")]
+    pub strict_schema_validation: bool,
+    
+    /// Whether to sanitize string inputs
+    #[serde(default = "default_true")]
+    pub sanitize_strings: bool,
+    
+    /// Maximum string length for inputs
+    #[serde(default = "default_max_string_length")]
+    pub max_string_length: usize,
+    
+    /// Maximum array length for inputs
+    #[serde(default = "default_max_array_length")]
+    pub max_array_length: usize,
+    
+    /// Maximum object depth for nested inputs
+    #[serde(default = "default_max_object_depth")]
+    pub max_object_depth: usize,
+}
+
+/// MCP performance configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpPerformanceConfig {
+    /// Connection pooling settings
+    #[serde(default)]
+    pub connection_pool: McpConnectionPoolConfig,
+    
+    /// Caching configuration
+    #[serde(default)]
+    pub caching: McpCachingConfig,
+    
+    /// Background task settings
+    #[serde(default)]
+    pub background_tasks: McpBackgroundTaskConfig,
+    
+    /// Resource monitoring
+    #[serde(default)]
+    pub monitoring: McpMonitoringConfig,
+}
+
+/// Connection pooling configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpConnectionPoolConfig {
     /// Maximum number of concurrent connections
-    #[serde(default = "default_mcp_max_connections")]
+    #[serde(default = "default_max_connections")]
     pub max_connections: u32,
     
-    /// Request timeout in seconds
-    #[serde(default = "default_mcp_timeout")]
-    pub request_timeout: u64,
+    /// Minimum number of idle connections to maintain
+    #[serde(default = "default_min_idle_connections")]
+    pub min_idle_connections: u32,
     
-    /// Rate limit: requests per minute
-    #[serde(default = "default_mcp_rate_limit")]
-    pub rate_limit_per_minute: u32,
+    /// Connection timeout in seconds
+    #[serde(default = "default_connection_timeout_seconds")]
+    pub connection_timeout_seconds: u64,
+    
+    /// Idle connection timeout in seconds
+    #[serde(default = "default_idle_timeout")]
+    pub idle_timeout_seconds: u64,
+    
+    /// Maximum connection lifetime in seconds
+    #[serde(default = "default_max_connection_lifetime")]
+    pub max_lifetime_seconds: u64,
+}
+
+/// Caching configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpCachingConfig {
+    /// Whether to enable response caching
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    
+    /// Cache size limit in megabytes
+    #[serde(default = "default_cache_size_mb")]
+    pub max_size_mb: u64,
+    
+    /// Default cache TTL in seconds
+    #[serde(default = "default_cache_ttl")]
+    pub default_ttl_seconds: u64,
+    
+    /// Whether to cache task execution results
+    #[serde(default = "default_true")]
+    pub cache_execution_results: bool,
+    
+    /// Whether to cache log queries
+    #[serde(default = "default_true")]
+    pub cache_log_queries: bool,
+}
+
+/// Background task configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpBackgroundTaskConfig {
+    /// Number of worker threads for background tasks
+    #[serde(default = "default_worker_threads")]
+    pub worker_threads: u32,
+    
+    /// Queue size for background tasks
+    #[serde(default = "default_task_queue_size")]
+    pub queue_size: u32,
+    
+    /// Health check interval in seconds
+    #[serde(default = "default_health_check_interval")]
+    pub health_check_interval_seconds: u64,
+    
+    /// Cleanup task interval in seconds
+    #[serde(default = "default_cleanup_interval")]
+    pub cleanup_interval_seconds: u64,
+}
+
+/// Monitoring configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpMonitoringConfig {
+    /// Whether to enable metrics collection
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    
+    /// Metrics collection interval in seconds
+    #[serde(default = "default_metrics_interval")]
+    pub collection_interval_seconds: u64,
+    
+    /// Whether to export metrics to external systems
+    #[serde(default = "default_false")]
+    pub export_enabled: bool,
+    
+    /// Metrics export endpoint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub export_endpoint: Option<String>,
+    
+    /// Resource usage alerting thresholds
+    #[serde(default)]
+    pub alerts: McpAlertConfig,
+}
+
+/// Alert configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpAlertConfig {
+    /// CPU usage threshold (percentage)
+    #[serde(default = "default_cpu_threshold")]
+    pub cpu_threshold: f64,
+    
+    /// Memory usage threshold (percentage)
+    #[serde(default = "default_memory_threshold")]
+    pub memory_threshold: f64,
+    
+    /// Connection count threshold
+    #[serde(default = "default_connection_threshold")]
+    pub connection_threshold: u32,
+    
+    /// Error rate threshold (percentage)
+    #[serde(default = "default_error_rate_threshold")]
+    pub error_rate_threshold: f64,
+}
+
+/// MCP tool configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpToolConfig {
+    /// Whether to enable task execution tools
+    #[serde(default = "default_true")]
+    pub enable_execution: bool,
+    
+    /// Whether to enable logging and monitoring tools
+    #[serde(default = "default_true")]
+    pub enable_logging: bool,
+    
+    /// Whether to enable system monitoring tools
+    #[serde(default = "default_true")]
+    pub enable_monitoring: bool,
+    
+    /// Whether to enable debugging tools
+    #[serde(default = "default_false")]
+    pub enable_debugging: bool,
+    
+    /// Whether to enable file system access tools
+    #[serde(default = "default_false")]
+    pub enable_filesystem: bool,
+    
+    /// Custom tool configurations
+    #[serde(default)]
+    pub custom_tools: std::collections::HashMap<String, serde_json::Value>,
+    
+    /// Tool-specific rate limits
+    #[serde(default)]
+    pub tool_rate_limits: std::collections::HashMap<String, u32>,
+}
+
+/// MCP audit and logging configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpAuditConfig {
+    /// Whether to enable audit logging
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    
+    /// Audit log level (info, warn, error)
+    #[serde(default = "default_audit_level")]
+    pub level: String,
+    
+    /// Whether to log all requests and responses
+    #[serde(default = "default_false")]
+    pub log_all_requests: bool,
+    
+    /// Whether to log authentication events
+    #[serde(default = "default_true")]
+    pub log_auth_events: bool,
+    
+    /// Whether to log permission checks
+    #[serde(default = "default_false")]
+    pub log_permission_checks: bool,
+    
+    /// Whether to log performance metrics
+    #[serde(default = "default_true")]
+    pub log_performance: bool,
+    
+    /// Audit log rotation settings
+    #[serde(default)]
+    pub rotation: McpLogRotationConfig,
+    
+    /// External audit destinations
+    #[serde(default)]
+    pub external_destinations: Vec<McpAuditDestination>,
+}
+
+/// Log rotation configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpLogRotationConfig {
+    /// Maximum log file size in megabytes
+    #[serde(default = "default_log_max_size")]
+    pub max_size_mb: u64,
+    
+    /// Maximum number of rotated files to keep
+    #[serde(default = "default_log_max_files")]
+    pub max_files: u32,
+    
+    /// Whether to compress rotated logs
+    #[serde(default = "default_true")]
+    pub compress: bool,
+}
+
+/// External audit destination
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum McpAuditDestination {
+    #[serde(rename = "syslog")]
+    Syslog {
+        /// Syslog server address
+        address: String,
+        /// Syslog facility
+        facility: String,
+    },
+    #[serde(rename = "webhook")]
+    Webhook {
+        /// Webhook URL
+        url: String,
+        /// HTTP headers
+        headers: std::collections::HashMap<String, String>,
+        /// Authentication
+        auth: Option<WebhookAuthConfig>,
+    },
+    #[serde(rename = "database")]
+    Database {
+        /// Database connection string
+        connection_string: String,
+        /// Table name for audit logs
+        table_name: String,
+    },
+}
+
+/// Client permissions for MCP operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpClientPermissions {
+    /// Whether client can execute tasks
+    #[serde(default = "default_true")]
+    pub can_execute_tasks: bool,
+    
+    /// Whether client can read logs
+    #[serde(default = "default_true")]
+    pub can_read_logs: bool,
+    
+    /// Whether client can read execution traces
+    #[serde(default = "default_false")]
+    pub can_read_traces: bool,
+    
+    /// Whether client can access system information
+    #[serde(default = "default_false")]
+    pub can_access_system_info: bool,
+    
+    /// Task name patterns this client can execute (glob patterns)
+    #[serde(default)]
+    pub allowed_task_patterns: Vec<String>,
+    
+    /// Task name patterns this client cannot execute (glob patterns)
+    #[serde(default)]
+    pub denied_task_patterns: Vec<String>,
+    
+    /// Custom rate limits for this client
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_rate_limits: Option<McpRateLimitConfig>,
+    
+    /// Resource quotas for this client
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_quotas: Option<McpRequestLimitsConfig>,
 }
 
 /// JavaScript fetch variables configuration
@@ -474,14 +1105,245 @@ impl Default for McpServerConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            transport: "stdio".to_string(),
+            server: McpServerSettings::default(),
+            authentication: McpAuthenticationConfig::default(),
+            security: McpSecurityConfig::default(),
+            performance: McpPerformanceConfig::default(),
+            tools: McpToolConfig::default(),
+            audit: McpAuditConfig::default(),
+        }
+    }
+}
+
+impl Default for McpServerSettings {
+    fn default() -> Self {
+        Self {
+            transport: default_mcp_transport(),
             host: default_mcp_host(),
             port: default_mcp_port(),
-            auth_type: "none".to_string(),
+            metrics_port: None,
+            tls: None,
+            enable_cors: false,
+            cors_origins: Vec::new(),
+        }
+    }
+}
+
+impl Default for McpAuthenticationConfig {
+    fn default() -> Self {
+        Self {
+            method: default_auth_method(),
             api_key: None,
-            max_connections: default_mcp_max_connections(),
-            request_timeout: default_mcp_timeout(),
-            rate_limit_per_minute: default_mcp_rate_limit(),
+            jwt: None,
+            oauth2: None,
+            session: McpSessionConfig::default(),
+        }
+    }
+}
+
+impl Default for McpSessionConfig {
+    fn default() -> Self {
+        Self {
+            timeout_seconds: default_session_timeout(),
+            max_sessions_per_client: default_max_sessions_per_client(),
+            cleanup_interval_seconds: default_session_cleanup_interval(),
+            persistent: false,
+        }
+    }
+}
+
+impl Default for McpSecurityConfig {
+    fn default() -> Self {
+        Self {
+            rate_limiting: McpRateLimitConfig::default(),
+            request_limits: McpRequestLimitsConfig::default(),
+            ip_filtering: McpIpFilterConfig::default(),
+            headers: McpSecurityHeadersConfig::default(),
+            validation: McpValidationConfig::default(),
+        }
+    }
+}
+
+impl Default for McpRateLimitConfig {
+    fn default() -> Self {
+        Self {
+            global_per_minute: default_rate_limit_global(),
+            execute_task_per_minute: default_rate_limit_execute(),
+            get_logs_per_minute: default_rate_limit_logs(),
+            get_traces_per_minute: default_rate_limit_traces(),
+            algorithm: default_rate_limit_algorithm(),
+            burst_allowance: default_rate_limit_burst(),
+        }
+    }
+}
+
+impl Default for McpRequestLimitsConfig {
+    fn default() -> Self {
+        Self {
+            max_request_size_bytes: default_max_request_size(),
+            max_response_size_bytes: default_max_response_size(),
+            max_connections_per_ip: default_max_connections_per_ip(),
+            max_concurrent_executions_per_client: default_max_concurrent_executions(),
+            max_execution_time_seconds: default_max_execution_time(),
+        }
+    }
+}
+
+impl Default for McpIpFilterConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            default_policy: default_ip_policy(),
+            allowed_ranges: Vec::new(),
+            blocked_ranges: Vec::new(),
+            trusted_proxies: Vec::new(),
+        }
+    }
+}
+
+impl Default for McpSecurityHeadersConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            content_security_policy: None,
+            x_frame_options: default_frame_options(),
+            x_content_type_options: default_content_type_options(),
+            strict_transport_security: None,
+        }
+    }
+}
+
+impl Default for McpValidationConfig {
+    fn default() -> Self {
+        Self {
+            strict_schema_validation: true,
+            sanitize_strings: true,
+            max_string_length: default_max_string_length(),
+            max_array_length: default_max_array_length(),
+            max_object_depth: default_max_object_depth(),
+        }
+    }
+}
+
+impl Default for McpPerformanceConfig {
+    fn default() -> Self {
+        Self {
+            connection_pool: McpConnectionPoolConfig::default(),
+            caching: McpCachingConfig::default(),
+            background_tasks: McpBackgroundTaskConfig::default(),
+            monitoring: McpMonitoringConfig::default(),
+        }
+    }
+}
+
+impl Default for McpConnectionPoolConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: default_max_connections(),
+            min_idle_connections: default_min_idle_connections(),
+            connection_timeout_seconds: default_connection_timeout_seconds(),
+            idle_timeout_seconds: default_idle_timeout(),
+            max_lifetime_seconds: default_max_connection_lifetime(),
+        }
+    }
+}
+
+impl Default for McpCachingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_size_mb: default_cache_size_mb(),
+            default_ttl_seconds: default_cache_ttl(),
+            cache_execution_results: true,
+            cache_log_queries: true,
+        }
+    }
+}
+
+impl Default for McpBackgroundTaskConfig {
+    fn default() -> Self {
+        Self {
+            worker_threads: default_worker_threads(),
+            queue_size: default_task_queue_size(),
+            health_check_interval_seconds: default_health_check_interval(),
+            cleanup_interval_seconds: default_cleanup_interval(),
+        }
+    }
+}
+
+impl Default for McpMonitoringConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            collection_interval_seconds: default_metrics_interval(),
+            export_enabled: false,
+            export_endpoint: None,
+            alerts: McpAlertConfig::default(),
+        }
+    }
+}
+
+impl Default for McpAlertConfig {
+    fn default() -> Self {
+        Self {
+            cpu_threshold: default_cpu_threshold(),
+            memory_threshold: default_memory_threshold(),
+            connection_threshold: default_connection_threshold(),
+            error_rate_threshold: default_error_rate_threshold(),
+        }
+    }
+}
+
+impl Default for McpToolConfig {
+    fn default() -> Self {
+        Self {
+            enable_execution: true,
+            enable_logging: true,
+            enable_monitoring: true,
+            enable_debugging: false,
+            enable_filesystem: false,
+            custom_tools: std::collections::HashMap::new(),
+            tool_rate_limits: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl Default for McpAuditConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            level: default_audit_level(),
+            log_all_requests: false,
+            log_auth_events: true,
+            log_permission_checks: false,
+            log_performance: true,
+            rotation: McpLogRotationConfig::default(),
+            external_destinations: Vec::new(),
+        }
+    }
+}
+
+impl Default for McpLogRotationConfig {
+    fn default() -> Self {
+        Self {
+            max_size_mb: default_log_max_size(),
+            max_files: default_log_max_files(),
+            compress: true,
+        }
+    }
+}
+
+impl Default for McpClientPermissions {
+    fn default() -> Self {
+        Self {
+            can_execute_tasks: true,
+            can_read_logs: true,
+            can_read_traces: false,
+            can_access_system_info: false,
+            allowed_task_patterns: vec!["*".to_string()],
+            denied_task_patterns: Vec::new(),
+            custom_rate_limits: None,
+            resource_quotas: None,
         }
     }
 }
@@ -585,6 +1447,11 @@ impl RatchetConfig {
         
         // Validate output configuration
         self.validate_output_config()?;
+        
+        // Validate MCP configuration
+        if let Some(mcp) = &self.mcp {
+            self.validate_mcp_config(mcp)?;
+        }
         
         Ok(())
     }
@@ -727,6 +1594,401 @@ impl RatchetConfig {
         Ok(())
     }
     
+    /// Validate MCP configuration
+    fn validate_mcp_config(&self, mcp: &McpServerConfig) -> Result<(), ConfigError> {
+        if !mcp.enabled {
+            return Ok(());
+        }
+        
+        // Validate server settings
+        self.validate_mcp_server_settings(&mcp.server)?;
+        
+        // Validate authentication configuration
+        self.validate_mcp_authentication(&mcp.authentication)?;
+        
+        // Validate security configuration
+        self.validate_mcp_security(&mcp.security)?;
+        
+        // Validate performance configuration
+        self.validate_mcp_performance(&mcp.performance)?;
+        
+        // Validate audit configuration
+        self.validate_mcp_audit(&mcp.audit)?;
+        
+        Ok(())
+    }
+    
+    /// Validate MCP server settings
+    fn validate_mcp_server_settings(&self, settings: &McpServerSettings) -> Result<(), ConfigError> {
+        // Validate transport type
+        let valid_transports = ["stdio", "sse", "websocket"];
+        if !valid_transports.contains(&settings.transport.as_str()) {
+            return Err(ConfigError::ValidationError(
+                format!("Invalid MCP transport '{}'. Valid options: {}", 
+                    settings.transport, valid_transports.join(", "))
+            ));
+        }
+        
+        // Validate port for network transports
+        if settings.transport != "stdio" && settings.port == 0 {
+            return Err(ConfigError::ValidationError(
+                "MCP port cannot be 0 for network transports".to_string()
+            ));
+        }
+        
+        // Validate host for network transports
+        if settings.transport != "stdio" && settings.host.is_empty() {
+            return Err(ConfigError::ValidationError(
+                "MCP host cannot be empty for network transports".to_string()
+            ));
+        }
+        
+        // Validate TLS configuration if present
+        if let Some(tls) = &settings.tls {
+            if tls.cert_file.is_empty() {
+                return Err(ConfigError::ValidationError(
+                    "TLS certificate file path cannot be empty".to_string()
+                ));
+            }
+            if tls.key_file.is_empty() {
+                return Err(ConfigError::ValidationError(
+                    "TLS private key file path cannot be empty".to_string()
+                ));
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Validate MCP authentication configuration
+    fn validate_mcp_authentication(&self, auth: &McpAuthenticationConfig) -> Result<(), ConfigError> {
+        let valid_methods = ["none", "api_key", "jwt", "oauth2", "certificate"];
+        if !valid_methods.contains(&auth.method.as_str()) {
+            return Err(ConfigError::ValidationError(
+                format!("Invalid MCP authentication method '{}'. Valid options: {}", 
+                    auth.method, valid_methods.join(", "))
+            ));
+        }
+        
+        // Validate configuration based on method
+        match auth.method.as_str() {
+            "api_key" => {
+                if auth.api_key.is_none() {
+                    return Err(ConfigError::ValidationError(
+                        "API key configuration required when auth method is 'api_key'".to_string()
+                    ));
+                }
+                if let Some(api_key_config) = &auth.api_key {
+                    if api_key_config.keys.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "At least one API key must be configured".to_string()
+                        ));
+                    }
+                    // Validate each API key
+                    for (key, info) in &api_key_config.keys {
+                        if key.len() < 16 {
+                            return Err(ConfigError::ValidationError(
+                                "API keys must be at least 16 characters long".to_string()
+                            ));
+                        }
+                        if info.name.is_empty() {
+                            return Err(ConfigError::ValidationError(
+                                "API key name cannot be empty".to_string()
+                            ));
+                        }
+                        // Validate date formats if provided
+                        if let Some(expires_at) = &info.expires_at {
+                            if chrono::DateTime::parse_from_rfc3339(expires_at).is_err() {
+                                return Err(ConfigError::ValidationError(
+                                    format!("Invalid expiration date format for API key '{}'. Use ISO 8601 format.", info.name)
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            "jwt" => {
+                if auth.jwt.is_none() {
+                    return Err(ConfigError::ValidationError(
+                        "JWT configuration required when auth method is 'jwt'".to_string()
+                    ));
+                }
+                if let Some(jwt_config) = &auth.jwt {
+                    if jwt_config.secret_or_key_file.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "JWT secret or key file path cannot be empty".to_string()
+                        ));
+                    }
+                    let valid_algorithms = ["HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
+                    if !valid_algorithms.contains(&jwt_config.algorithm.as_str()) {
+                        return Err(ConfigError::ValidationError(
+                            format!("Invalid JWT algorithm '{}'. Valid options: {}", 
+                                jwt_config.algorithm, valid_algorithms.join(", "))
+                        ));
+                    }
+                }
+            }
+            "oauth2" => {
+                if auth.oauth2.is_none() {
+                    return Err(ConfigError::ValidationError(
+                        "OAuth2 configuration required when auth method is 'oauth2'".to_string()
+                    ));
+                }
+                if let Some(oauth2_config) = &auth.oauth2 {
+                    if oauth2_config.issuer_url.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "OAuth2 issuer URL cannot be empty".to_string()
+                        ));
+                    }
+                    if oauth2_config.client_id.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "OAuth2 client ID cannot be empty".to_string()
+                        ));
+                    }
+                    // Basic URL validation
+                    if !oauth2_config.issuer_url.starts_with("https://") {
+                        return Err(ConfigError::ValidationError(
+                            "OAuth2 issuer URL must use HTTPS".to_string()
+                        ));
+                    }
+                }
+            }
+            _ => {} // "none" and "certificate" don't require additional validation
+        }
+        
+        // Validate session configuration
+        if auth.session.timeout_seconds == 0 {
+            return Err(ConfigError::ValidationError(
+                "Session timeout must be greater than 0".to_string()
+            ));
+        }
+        
+        if auth.session.max_sessions_per_client == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max sessions per client must be greater than 0".to_string()
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    /// Validate MCP security configuration
+    fn validate_mcp_security(&self, security: &McpSecurityConfig) -> Result<(), ConfigError> {
+        // Validate rate limiting
+        let rate_limits = &security.rate_limiting;
+        if rate_limits.global_per_minute == 0 {
+            return Err(ConfigError::ValidationError(
+                "Global rate limit must be greater than 0".to_string()
+            ));
+        }
+        
+        let valid_algorithms = ["token_bucket", "sliding_window", "fixed_window"];
+        if !valid_algorithms.contains(&rate_limits.algorithm.as_str()) {
+            return Err(ConfigError::ValidationError(
+                format!("Invalid rate limiting algorithm '{}'. Valid options: {}", 
+                    rate_limits.algorithm, valid_algorithms.join(", "))
+            ));
+        }
+        
+        // Validate request limits
+        let limits = &security.request_limits;
+        if limits.max_request_size_bytes == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max request size must be greater than 0".to_string()
+            ));
+        }
+        
+        if limits.max_response_size_bytes == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max response size must be greater than 0".to_string()
+            ));
+        }
+        
+        if limits.max_connections_per_ip == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max connections per IP must be greater than 0".to_string()
+            ));
+        }
+        
+        // Validate IP filtering if enabled
+        if security.ip_filtering.enabled {
+            let valid_policies = ["allow", "deny"];
+            if !valid_policies.contains(&security.ip_filtering.default_policy.as_str()) {
+                return Err(ConfigError::ValidationError(
+                    format!("Invalid IP filtering policy '{}'. Valid options: {}", 
+                        security.ip_filtering.default_policy, valid_policies.join(", "))
+                ));
+            }
+        }
+        
+        // Validate input validation settings
+        let validation = &security.validation;
+        if validation.max_string_length == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max string length must be greater than 0".to_string()
+            ));
+        }
+        
+        if validation.max_array_length == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max array length must be greater than 0".to_string()
+            ));
+        }
+        
+        if validation.max_object_depth == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max object depth must be greater than 0".to_string()
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    /// Validate MCP performance configuration
+    fn validate_mcp_performance(&self, performance: &McpPerformanceConfig) -> Result<(), ConfigError> {
+        // Validate connection pool
+        let pool = &performance.connection_pool;
+        if pool.max_connections == 0 {
+            return Err(ConfigError::ValidationError(
+                "Max connections must be greater than 0".to_string()
+            ));
+        }
+        
+        if pool.min_idle_connections > pool.max_connections {
+            return Err(ConfigError::ValidationError(
+                "Min idle connections cannot exceed max connections".to_string()
+            ));
+        }
+        
+        if pool.connection_timeout_seconds == 0 {
+            return Err(ConfigError::ValidationError(
+                "Connection timeout must be greater than 0".to_string()
+            ));
+        }
+        
+        // Validate caching
+        let caching = &performance.caching;
+        if caching.enabled && caching.max_size_mb == 0 {
+            return Err(ConfigError::ValidationError(
+                "Cache size must be greater than 0 when caching is enabled".to_string()
+            ));
+        }
+        
+        if caching.enabled && caching.default_ttl_seconds == 0 {
+            return Err(ConfigError::ValidationError(
+                "Cache TTL must be greater than 0 when caching is enabled".to_string()
+            ));
+        }
+        
+        // Validate background tasks
+        let bg_tasks = &performance.background_tasks;
+        if bg_tasks.worker_threads == 0 {
+            return Err(ConfigError::ValidationError(
+                "Worker threads must be greater than 0".to_string()
+            ));
+        }
+        
+        if bg_tasks.queue_size == 0 {
+            return Err(ConfigError::ValidationError(
+                "Task queue size must be greater than 0".to_string()
+            ));
+        }
+        
+        // Validate monitoring thresholds
+        let alerts = &performance.monitoring.alerts;
+        if alerts.cpu_threshold <= 0.0 || alerts.cpu_threshold > 100.0 {
+            return Err(ConfigError::ValidationError(
+                "CPU threshold must be between 0 and 100".to_string()
+            ));
+        }
+        
+        if alerts.memory_threshold <= 0.0 || alerts.memory_threshold > 100.0 {
+            return Err(ConfigError::ValidationError(
+                "Memory threshold must be between 0 and 100".to_string()
+            ));
+        }
+        
+        if alerts.error_rate_threshold < 0.0 || alerts.error_rate_threshold > 100.0 {
+            return Err(ConfigError::ValidationError(
+                "Error rate threshold must be between 0 and 100".to_string()
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    /// Validate MCP audit configuration
+    fn validate_mcp_audit(&self, audit: &McpAuditConfig) -> Result<(), ConfigError> {
+        if !audit.enabled {
+            return Ok(());
+        }
+        
+        let valid_levels = ["debug", "info", "warn", "error"];
+        if !valid_levels.contains(&audit.level.as_str()) {
+            return Err(ConfigError::ValidationError(
+                format!("Invalid audit log level '{}'. Valid options: {}", 
+                    audit.level, valid_levels.join(", "))
+            ));
+        }
+        
+        // Validate log rotation
+        if audit.rotation.max_size_mb == 0 {
+            return Err(ConfigError::ValidationError(
+                "Log rotation max size must be greater than 0".to_string()
+            ));
+        }
+        
+        if audit.rotation.max_files == 0 {
+            return Err(ConfigError::ValidationError(
+                "Log rotation max files must be greater than 0".to_string()
+            ));
+        }
+        
+        // Validate external destinations
+        for destination in &audit.external_destinations {
+            match destination {
+                McpAuditDestination::Syslog { address, facility } => {
+                    if address.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "Syslog server address cannot be empty".to_string()
+                        ));
+                    }
+                    if facility.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "Syslog facility cannot be empty".to_string()
+                        ));
+                    }
+                }
+                McpAuditDestination::Webhook { url, .. } => {
+                    if url.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "Webhook URL cannot be empty".to_string()
+                        ));
+                    }
+                    if !url.starts_with("http://") && !url.starts_with("https://") {
+                        return Err(ConfigError::ValidationError(
+                            "Webhook URL must be a valid HTTP/HTTPS URL".to_string()
+                        ));
+                    }
+                }
+                McpAuditDestination::Database { connection_string, table_name } => {
+                    if connection_string.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "Database connection string cannot be empty".to_string()
+                        ));
+                    }
+                    if table_name.is_empty() {
+                        return Err(ConfigError::ValidationError(
+                            "Database table name cannot be empty".to_string()
+                        ));
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
     /// Generate a sample configuration file
     pub fn generate_sample() -> String {
         let config = RatchetConfig::default();
@@ -820,6 +2082,254 @@ logging:
         assert_eq!(config.http.timeout, Duration::from_secs(30));
         assert_eq!(config.cache.task_content_cache_size, 100);
         assert!(config.execution.validate_schemas);
+    }
+    
+    #[test]
+    fn test_mcp_config_defaults() {
+        let config = RatchetConfig::default();
+        
+        // MCP should be None by default
+        assert!(config.mcp.is_none());
+        
+        // Test MCP config with defaults
+        let mcp_config = McpServerConfig::default();
+        assert!(!mcp_config.enabled);
+        assert_eq!(mcp_config.server.transport, "stdio");
+        assert_eq!(mcp_config.authentication.method, "none");
+        assert!(mcp_config.tools.enable_execution);
+        assert!(!mcp_config.tools.enable_debugging);
+    }
+    
+    #[test]
+    fn test_mcp_config_validation() {
+        let mut config = RatchetConfig::default();
+        
+        // Test with disabled MCP - should validate
+        let mut mcp_config = McpServerConfig::default();
+        mcp_config.enabled = false;
+        config.mcp = Some(mcp_config);
+        assert!(config.validate().is_ok());
+        
+        // Test with enabled MCP and valid stdio transport
+        let mut mcp_config = McpServerConfig::default();
+        mcp_config.enabled = true;
+        mcp_config.server.transport = "stdio".to_string();
+        config.mcp = Some(mcp_config);
+        assert!(config.validate().is_ok());
+        
+        // Test with invalid transport
+        let mut mcp_config = McpServerConfig::default();
+        mcp_config.enabled = true;
+        mcp_config.server.transport = "invalid".to_string();
+        config.mcp = Some(mcp_config);
+        assert!(config.validate().is_err());
+    }
+    
+    #[test]
+    fn test_mcp_auth_validation() {
+        let mut config = RatchetConfig::default();
+        let mut mcp_config = McpServerConfig::default();
+        mcp_config.enabled = true;
+        
+        // Test invalid auth method
+        mcp_config.authentication.method = "invalid".to_string();
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test API key auth without keys
+        mcp_config.authentication.method = "api_key".to_string();
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test JWT auth without config
+        mcp_config.authentication.method = "jwt".to_string();
+        mcp_config.authentication.api_key = None;
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test OAuth2 auth without config
+        mcp_config.authentication.method = "oauth2".to_string();
+        mcp_config.authentication.jwt = None;
+        config.mcp = Some(mcp_config);
+        assert!(config.validate().is_err());
+    }
+    
+    #[test]
+    fn test_mcp_security_validation() {
+        let mut config = RatchetConfig::default();
+        let mut mcp_config = McpServerConfig::default();
+        mcp_config.enabled = true;
+        
+        // Test invalid rate limiting algorithm
+        mcp_config.security.rate_limiting.algorithm = "invalid".to_string();
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test zero rate limit
+        mcp_config.security.rate_limiting.algorithm = "token_bucket".to_string();
+        mcp_config.security.rate_limiting.global_per_minute = 0;
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test zero request size limit
+        mcp_config.security.rate_limiting.global_per_minute = 100;
+        mcp_config.security.request_limits.max_request_size_bytes = 0;
+        config.mcp = Some(mcp_config);
+        assert!(config.validate().is_err());
+    }
+    
+    #[test]
+    fn test_mcp_performance_validation() {
+        let mut config = RatchetConfig::default();
+        let mut mcp_config = McpServerConfig::default();
+        mcp_config.enabled = true;
+        
+        // Test invalid connection pool settings
+        mcp_config.performance.connection_pool.max_connections = 0;
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test min_idle > max_connections
+        mcp_config.performance.connection_pool.max_connections = 10;
+        mcp_config.performance.connection_pool.min_idle_connections = 20;
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test invalid cache settings when enabled
+        mcp_config.performance.connection_pool.min_idle_connections = 5;
+        mcp_config.performance.caching.enabled = true;
+        mcp_config.performance.caching.max_size_mb = 0;
+        config.mcp = Some(mcp_config);
+        assert!(config.validate().is_err());
+    }
+    
+    #[test]
+    fn test_mcp_audit_validation() {
+        let mut config = RatchetConfig::default();
+        let mut mcp_config = McpServerConfig::default();
+        mcp_config.enabled = true;
+        mcp_config.audit.enabled = true;
+        
+        // Test invalid audit level
+        mcp_config.audit.level = "invalid".to_string();
+        config.mcp = Some(mcp_config.clone());
+        assert!(config.validate().is_err());
+        
+        // Test invalid log rotation settings
+        mcp_config.audit.level = "info".to_string();
+        mcp_config.audit.rotation.max_size_mb = 0;
+        config.mcp = Some(mcp_config);
+        assert!(config.validate().is_err());
+    }
+    
+    #[test]
+    fn test_mcp_config_serialization() {
+        // Test that MCP config can be serialized and deserialized
+        let mcp_config = McpServerConfig::default();
+        let yaml = serde_yaml::to_string(&mcp_config).unwrap();
+        let deserialized: McpServerConfig = serde_yaml::from_str(&yaml).unwrap();
+        
+        assert_eq!(mcp_config.enabled, deserialized.enabled);
+        assert_eq!(mcp_config.server.transport, deserialized.server.transport);
+        assert_eq!(mcp_config.authentication.method, deserialized.authentication.method);
+    }
+    
+    #[test]
+    fn test_mcp_config_with_api_keys() {
+        let yaml = r#"
+mcp:
+  enabled: true
+  server:
+    transport: "stdio"
+  authentication:
+    method: "api_key"
+    api_key:
+      keys:
+        "test-key-1234567890123456":
+          name: "Test Key"
+          permissions:
+            can_execute_tasks: true
+            can_read_logs: true
+            allowed_task_patterns:
+              - "test-*"
+          created_at: "2024-01-01T00:00:00Z"
+          active: true
+"#;
+        
+        let config: RatchetConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.validate().is_ok());
+        
+        let mcp = config.mcp.unwrap();
+        assert!(mcp.enabled);
+        assert_eq!(mcp.authentication.method, "api_key");
+        assert!(mcp.authentication.api_key.is_some());
+        
+        let api_key_config = mcp.authentication.api_key.unwrap();
+        assert!(!api_key_config.keys.is_empty());
+        assert!(api_key_config.keys.contains_key("test-key-1234567890123456"));
+    }
+    
+    #[test]
+    fn test_mcp_config_production_example() {
+        // Test a production-like configuration
+        let yaml = r#"
+mcp:
+  enabled: true
+  server:
+    transport: "sse"
+    host: "0.0.0.0"
+    port: 8443
+    enable_cors: true
+    cors_origins:
+      - "https://example.com"
+  authentication:
+    method: "api_key"
+    api_key:
+      keys:
+        "prod-key-abcdef1234567890abcdef12":
+          name: "Production Client"
+          permissions:
+            can_execute_tasks: true
+            can_read_logs: true
+            can_read_traces: false
+            allowed_task_patterns:
+              - "approved-*"
+          created_at: "2024-01-01T00:00:00Z"
+          active: true
+          allowed_ips:
+            - "10.0.0.0/8"
+  security:
+    rate_limiting:
+      global_per_minute: 1000
+      algorithm: "sliding_window"
+    ip_filtering:
+      enabled: true
+      default_policy: "deny"
+      allowed_ranges:
+        - "10.0.0.0/8"
+  performance:
+    connection_pool:
+      max_connections: 100
+    caching:
+      enabled: true
+      max_size_mb: 512
+  tools:
+    enable_execution: true
+    enable_debugging: false
+  audit:
+    enabled: true
+    level: "info"
+"#;
+        
+        let config: RatchetConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.validate().is_ok());
+        
+        let mcp = config.mcp.unwrap();
+        assert!(mcp.enabled);
+        assert_eq!(mcp.server.transport, "sse");
+        assert_eq!(mcp.server.port, 8443);
+        assert!(mcp.security.ip_filtering.enabled);
+        assert!(!mcp.tools.enable_debugging);
     }
 }
 
@@ -973,4 +2483,186 @@ fn default_mcp_timeout() -> u64 {
 
 fn default_mcp_rate_limit() -> u32 {
     1000
+}
+
+// Enhanced MCP configuration default functions
+
+fn default_mcp_transport() -> String {
+    "stdio".to_string()
+}
+
+fn default_auth_method() -> String {
+    "none".to_string()
+}
+
+fn default_auth_header() -> String {
+    "Authorization".to_string()
+}
+
+fn default_auth_prefix() -> String {
+    "Bearer".to_string()
+}
+
+fn default_jwt_algorithm() -> String {
+    "HS256".to_string()
+}
+
+fn default_jwt_expiration() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_jwt_clock_skew() -> u64 {
+    60 // 1 minute
+}
+
+fn default_session_timeout() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_max_sessions_per_client() -> u32 {
+    10
+}
+
+fn default_session_cleanup_interval() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_rate_limit_global() -> u32 {
+    1000
+}
+
+fn default_rate_limit_execute() -> u32 {
+    100
+}
+
+fn default_rate_limit_logs() -> u32 {
+    500
+}
+
+fn default_rate_limit_traces() -> u32 {
+    200
+}
+
+fn default_rate_limit_algorithm() -> String {
+    "token_bucket".to_string()
+}
+
+fn default_rate_limit_burst() -> u32 {
+    50
+}
+
+fn default_max_request_size() -> u64 {
+    10 * 1024 * 1024 // 10MB
+}
+
+fn default_max_response_size() -> u64 {
+    50 * 1024 * 1024 // 50MB
+}
+
+fn default_max_connections_per_ip() -> u32 {
+    100
+}
+
+fn default_max_concurrent_executions() -> u32 {
+    10
+}
+
+fn default_max_execution_time() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_ip_policy() -> String {
+    "allow".to_string()
+}
+
+fn default_frame_options() -> String {
+    "DENY".to_string()
+}
+
+fn default_content_type_options() -> String {
+    "nosniff".to_string()
+}
+
+fn default_max_string_length() -> usize {
+    1024 * 1024 // 1MB
+}
+
+fn default_max_array_length() -> usize {
+    10000
+}
+
+fn default_max_object_depth() -> usize {
+    32
+}
+
+fn default_min_idle_connections() -> u32 {
+    5
+}
+
+fn default_connection_timeout_seconds() -> u64 {
+    30
+}
+
+fn default_idle_timeout() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_max_connection_lifetime() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_cache_size_mb() -> u64 {
+    256
+}
+
+fn default_cache_ttl() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_worker_threads() -> u32 {
+    4
+}
+
+fn default_task_queue_size() -> u32 {
+    10000
+}
+
+fn default_health_check_interval() -> u64 {
+    30
+}
+
+fn default_cleanup_interval() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_metrics_interval() -> u64 {
+    60 // 1 minute
+}
+
+fn default_cpu_threshold() -> f64 {
+    80.0
+}
+
+fn default_memory_threshold() -> f64 {
+    90.0
+}
+
+fn default_connection_threshold() -> u32 {
+    1000
+}
+
+fn default_error_rate_threshold() -> f64 {
+    5.0
+}
+
+fn default_audit_level() -> String {
+    "info".to_string()
+}
+
+fn default_log_max_size() -> u64 {
+    100 // 100MB
+}
+
+fn default_log_max_files() -> u32 {
+    10
 }

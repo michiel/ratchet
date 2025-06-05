@@ -4,13 +4,16 @@ pub mod config;
 pub mod tools;
 pub mod handler;
 pub mod adapter;
+pub mod progress;
 pub mod service;
+pub mod batch;
 
 pub use config::{McpServerConfig, McpServerTransport};
 pub use tools::{McpTool, ToolRegistry, RatchetToolRegistry, McpTaskExecutor, McpTaskInfo};
 pub use handler::McpRequestHandler;
 pub use adapter::{RatchetMcpAdapter, RatchetMcpAdapterBuilder};
 pub use service::{McpService, McpServiceConfig, McpServiceBuilder};
+pub use batch::{BatchProcessor};
 
 // Main server types are defined in this module, no need to re-export
 
@@ -26,6 +29,7 @@ use crate::protocol::{
 use crate::security::{McpAuthManager, SecurityContext, AuditLogger};
 
 /// MCP server for exposing Ratchet capabilities to LLMs
+#[derive(Clone)]
 pub struct McpServer {
     /// Server configuration
     config: McpServerConfig,
@@ -40,10 +44,10 @@ pub struct McpServer {
     audit_logger: Arc<AuditLogger>,
     
     /// Active client sessions
-    _sessions: RwLock<HashMap<String, SecurityContext>>,
+    _sessions: Arc<RwLock<HashMap<String, SecurityContext>>>,
     
     /// Whether the server is initialized
-    initialized: RwLock<bool>,
+    initialized: Arc<RwLock<bool>>,
 }
 
 impl McpServer {
@@ -59,8 +63,8 @@ impl McpServer {
             tool_registry,
             auth_manager,
             audit_logger,
-            _sessions: RwLock::new(HashMap::new()),
-            initialized: RwLock::new(false),
+            _sessions: Arc::new(RwLock::new(HashMap::new())),
+            initialized: Arc::new(RwLock::new(false)),
         }
     }
     
@@ -103,8 +107,8 @@ impl McpServer {
             tool_registry: Arc::new(tool_registry),
             auth_manager,
             audit_logger,
-            _sessions: RwLock::new(HashMap::new()),
-            initialized: RwLock::new(false),
+            _sessions: Arc::new(RwLock::new(HashMap::new())),
+            initialized: Arc::new(RwLock::new(false)),
         })
     }
     
@@ -261,11 +265,177 @@ impl McpServer {
     async fn start_sse_server(&self, bind_address: &str) -> McpResult<()> {
         tracing::info!("Starting MCP server with SSE transport on {}", bind_address);
         
-        // This would be implemented with full SSE support
-        // For now, return an error indicating it's not yet implemented
-        Err(McpError::Generic {
-            message: "SSE transport not yet implemented. Use stdio transport instead.".to_string(),
-        })
+        use axum::{
+            extract::{Path, State},
+            http::{StatusCode, HeaderMap, header::CONTENT_TYPE},
+            response::{Sse, sse::Event},
+            routing::{get, post},
+            Json, Router,
+        };
+        use tower_http::cors::{CorsLayer, Any};
+        use std::convert::Infallible;
+        use std::sync::Arc;
+        use tokio::sync::{RwLock, mpsc};
+        use std::collections::HashMap;
+        use serde_json::Value;
+        
+        // Server state for managing SSE connections
+        #[derive(Clone)]
+        struct SseServerState {
+            server: Arc<McpServer>,
+            connections: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<String>>>>,
+        }
+        
+        impl SseServerState {
+            fn new(server: Arc<McpServer>) -> Self {
+                Self {
+                    server,
+                    connections: Arc::new(RwLock::new(HashMap::new())),
+                }
+            }
+        }
+        
+        let state = SseServerState::new(Arc::new(self.clone()));
+        
+        // Create SSE endpoint handler
+        async fn sse_handler(
+            Path(session_id): Path<String>,
+            State(state): State<SseServerState>,
+        ) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+            tracing::info!("New SSE connection established for session: {}", session_id);
+            
+            let (tx, mut rx) = mpsc::unbounded_channel();
+            
+            // Store connection
+            {
+                let mut connections = state.connections.write().await;
+                connections.insert(session_id.clone(), tx.clone());
+            }
+            
+            // Send initial connection event
+            let _ = tx.send("data: {\"type\":\"connection\",\"status\":\"connected\"}\n\n".to_string());
+            
+            let stream = async_stream::stream! {
+                while let Some(data) = rx.recv().await {
+                    yield Ok(Event::default().data(data));
+                }
+            };
+            
+            Sse::new(stream)
+                .keep_alive(
+                    axum::response::sse::KeepAlive::new()
+                        .interval(std::time::Duration::from_secs(30))
+                        .text("keep-alive")
+                )
+        }
+        
+        // Create message posting endpoint
+        async fn post_message_handler(
+            Path(session_id): Path<String>,
+            State(state): State<SseServerState>,
+            headers: HeaderMap,
+            Json(payload): Json<Value>,
+        ) -> Result<Json<Value>, StatusCode> {
+            tracing::debug!("Received MCP message for session {}: {:?}", session_id, payload);
+            
+            // Extract auth header
+            let auth_header = headers.get("authorization")
+                .and_then(|h| h.to_str().ok());
+            
+            // Process the MCP request
+            let message_str = serde_json::to_string(&payload)
+                .map_err(|_| StatusCode::BAD_REQUEST)?;
+            
+            match state.server.handle_message(&message_str, auth_header).await {
+                Ok(Some(response)) => {
+                    // Send response via SSE
+                    let response_data = serde_json::to_string(&response)
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    
+                    let connections = state.connections.read().await;
+                    if let Some(tx) = connections.get(&session_id) {
+                        let sse_data = format!("data: {}\n\n", response_data);
+                        if tx.send(sse_data).is_err() {
+                            tracing::warn!("Failed to send SSE response for session: {}", session_id);
+                        }
+                    }
+                    
+                    Ok(Json(serde_json::json!({"status": "sent"})))
+                }
+                Ok(None) => {
+                    // Notification, no response needed
+                    Ok(Json(serde_json::json!({"status": "processed"})))
+                }
+                Err(e) => {
+                    tracing::error!("Error processing MCP request: {}", e);
+                    
+                    // Send error via SSE
+                    let error_response = crate::protocol::JsonRpcResponse::error(
+                        crate::protocol::JsonRpcError::internal_error(e.to_string()),
+                        None,
+                    );
+                    
+                    let error_data = serde_json::to_string(&error_response)
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    
+                    let connections = state.connections.read().await;
+                    if let Some(tx) = connections.get(&session_id) {
+                        let sse_data = format!("data: {}\n\n", error_data);
+                        let _ = tx.send(sse_data);
+                    }
+                    
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
+        
+        // Health check endpoint
+        async fn health_handler() -> Json<Value> {
+            Json(serde_json::json!({
+                "status": "healthy",
+                "service": "ratchet-mcp-server",
+                "version": env!("CARGO_PKG_VERSION"),
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }))
+        }
+        
+        // CORS configuration
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods([axum::http::Method::GET, axum::http::Method::POST, axum::http::Method::OPTIONS])
+            .allow_headers([CONTENT_TYPE, axum::http::header::AUTHORIZATION])
+            .allow_credentials(false);
+        
+        // Build the app
+        let app = Router::new()
+            .route("/sse/:session_id", get(sse_handler))
+            .route("/message/:session_id", post(post_message_handler))
+            .route("/health", get(health_handler))
+            .layer(cors)
+            .with_state(state);
+        
+        // Start the server
+        tracing::info!("SSE MCP server listening on {}", bind_address);
+        
+        let listener = tokio::net::TcpListener::bind(bind_address).await
+            .map_err(|e| McpError::ConnectionFailed {
+                reason: format!("Failed to bind to {}: {}", bind_address, e),
+            })?;
+        
+        // Axum 0.6 API for serving
+        axum::Server::from_tcp(listener.into_std().map_err(|e| McpError::ServerError {
+            message: format!("Failed to convert listener: {}", e),
+        })?)
+        .map_err(|e| McpError::ServerError {
+            message: format!("Failed to create server: {}", e),
+        })?
+        .serve(app.into_make_service())
+        .await
+        .map_err(|e| McpError::ServerError {
+            message: format!("SSE server error: {}", e),
+        })?;
+        
+        Ok(())
     }
     
     /// Handle an incoming message
@@ -435,6 +605,18 @@ impl McpServer {
             resources: None, // TODO: Add resources capability
             tools: Some(crate::protocol::ToolsCapability {
                 list_changed: false,
+            }),
+            batch: Some(crate::protocol::BatchCapability {
+                max_batch_size: 100,
+                max_parallel: 10,
+                supports_dependencies: true,
+                supports_progress: true,
+                supported_execution_modes: vec![
+                    crate::protocol::BatchExecutionMode::Parallel,
+                    crate::protocol::BatchExecutionMode::Sequential,
+                    crate::protocol::BatchExecutionMode::Dependency,
+                    crate::protocol::BatchExecutionMode::PriorityDependency,
+                ],
             }),
         };
         

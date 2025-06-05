@@ -7,10 +7,11 @@ pub mod messages;
 pub use capabilities::{ClientCapabilities, McpCapabilities, ServerCapabilities, ToolsCapability};
 pub use jsonrpc::{JsonRpcError, JsonRpcErrorCode, JsonRpcRequest, JsonRpcResponse};
 pub use messages::{
-    ClientInfo, InitializeParams, InitializeResult, McpMessage, McpMethod, McpNotification,
-    McpRequest, McpResponse, ResourcesListParams, ResourcesListResult, ResourcesReadParams,
-    ResourcesReadResult, ServerInfo, Tool, ToolContent, ToolsCallParams, ToolsCallResult,
-    ToolsListParams, ToolsListResult,
+    BatchCapability, BatchExecutionMode, BatchItemResult, BatchParams, BatchProgressNotification,
+    BatchRequest, BatchResult, BatchStats, ClientInfo, InitializeParams, InitializeResult,
+    McpMessage, McpMethod, McpNotification, McpRequest, McpResponse, ResourcesListParams,
+    ResourcesListResult, ResourcesReadParams, ResourcesReadResult, ServerInfo, Tool, ToolContent,
+    ToolsCallParams, ToolsCallResult, ToolsListParams, ToolsListResult,
 };
 
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,10 @@ pub enum StandardMethod {
     ToolsList,
     #[serde(rename = "tools/call")]
     ToolsCall,
+    
+    // Batch methods
+    #[serde(rename = "batch")]
+    Batch,
 
     // Resource methods
     #[serde(rename = "resources/list")]
@@ -90,6 +95,8 @@ pub enum StandardMethod {
     NotificationsResourcesListChanged,
     #[serde(rename = "notifications/tools/list_changed")]
     NotificationsToolsListChanged,
+    #[serde(rename = "notifications/batch_progress")]
+    NotificationsBatchProgress,
 }
 
 impl StandardMethod {
@@ -110,7 +117,8 @@ impl StandardMethod {
             | StandardMethod::NotificationsMessage
             | StandardMethod::NotificationsResourcesUpdated
             | StandardMethod::NotificationsResourcesListChanged
-            | StandardMethod::NotificationsToolsListChanged => true,
+            | StandardMethod::NotificationsToolsListChanged
+            | StandardMethod::NotificationsBatchProgress => true,
             _ => false,
         }
     }

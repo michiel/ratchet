@@ -6,8 +6,10 @@ use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
 use uuid::Uuid;
+use async_trait::async_trait;
 
 use crate::{McpError, McpResult};
+use crate::protocol::messages::McpNotification;
 use super::{McpTransport, TransportHealth, TransportType, TransportFactory};
 
 /// Connection identifier
@@ -15,6 +17,16 @@ pub type ConnectionId = String;
 
 /// Server identifier  
 pub type ServerId = String;
+
+/// Transport connection trait for different connection types (stdio, SSE, etc)
+#[async_trait]
+pub trait TransportConnection: Send + Sync {
+    /// Send a notification to the client
+    async fn send_notification(&self, notification: McpNotification) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    
+    /// Close the connection
+    async fn close(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
 
 /// Connection wrapper with metadata
 pub struct ConnectionWrapper {

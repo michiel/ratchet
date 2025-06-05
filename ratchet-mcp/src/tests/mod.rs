@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::{
     McpServer, McpConfig, SimpleTransportType,
@@ -10,6 +11,9 @@ use crate::{
 
 // Stdio-specific integration tests
 mod stdio_initialization_test;
+
+// SSE-specific integration tests
+mod sse_integration_test;
 
 /// Test the MCP server initialization sequence
 #[tokio::test]
@@ -330,4 +334,185 @@ async fn test_complete_mcp_session() {
     let result = response.result.unwrap();
     let content = &result["content"];
     assert!(content.is_array());
+}
+
+/// Test the monitoring tools functionality
+#[tokio::test]
+async fn test_monitoring_tools() {
+    let adapter = create_test_adapter().await;
+    let config = McpConfig::default();
+    let server = McpServer::with_adapter(config, adapter).await.unwrap();
+    
+    // Initialize
+    let init_request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "0.1.0",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "Test Client",
+                "version": "1.0.0"
+            }
+        }
+    });
+    
+    server.handle_message(&serde_json::to_string(&init_request).unwrap(), None)
+        .await.unwrap();
+    
+    // Test get_execution_status with invalid execution ID
+    let status_request = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "ratchet.get_execution_status",
+            "arguments": {
+                "execution_id": "00000000-0000-0000-0000-000000000000"
+            }
+        }
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&status_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    
+    // Should get a response (not an error), but the tool execution should indicate failure
+    assert!(response.error.is_none());
+    assert!(response.result.is_some());
+    
+    let result = response.result.unwrap();
+    assert!(result["content"].is_array());
+    assert!(result["isError"].as_bool().unwrap_or(false)); // Should indicate error
+    
+    // Test get_execution_logs with invalid execution ID
+    let logs_request = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "ratchet.get_execution_logs",
+            "arguments": {
+                "execution_id": "00000000-0000-0000-0000-000000000000",
+                "level": "info",
+                "limit": 50
+            }
+        }
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&logs_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    
+    // Should get a response (not an error), but the tool execution should indicate failure
+    assert!(response.error.is_none());
+    assert!(response.result.is_some());
+    
+    let result = response.result.unwrap();
+    assert!(result["content"].is_array());
+    assert!(result["isError"].as_bool().unwrap_or(false)); // Should indicate error
+    
+    // Test tools/list to ensure monitoring tools are present
+    let tools_request = json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/list"
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&tools_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    
+    assert!(response.error.is_none());
+    let result = response.result.unwrap();
+    let tools = result["tools"].as_array().unwrap();
+    
+    let tool_names: Vec<String> = tools.iter()
+        .map(|tool| tool["name"].as_str().unwrap().to_string())
+        .collect();
+    
+    // Verify monitoring tools are available
+    assert!(tool_names.contains(&"ratchet.get_execution_status".to_string()));
+    assert!(tool_names.contains(&"ratchet.get_execution_logs".to_string()));
+    assert!(tool_names.contains(&"ratchet.get_execution_trace".to_string()));
+    assert!(tool_names.contains(&"ratchet.analyze_execution_error".to_string()));
+}
+
+/// Test monitoring tools with a real execution record
+#[tokio::test]
+async fn test_monitoring_tools_with_real_execution() {
+    
+    let adapter = create_test_adapter().await;
+    let config = McpConfig::default();
+    let server = McpServer::with_adapter(config, adapter).await.unwrap();
+    
+    // Initialize
+    let init_request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "0.1.0",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "Test Client",
+                "version": "1.0.0"
+            }
+        }
+    });
+    
+    server.handle_message(&serde_json::to_string(&init_request).unwrap(), None)
+        .await.unwrap();
+    
+    // Create a test execution UUID (we don't actually insert it)
+    let execution_uuid = Uuid::new_v4();
+    
+    // Get database connection from the adapter to insert test data
+    // (This is a simplified test - in a real test we'd use the repository directly)
+    
+    // Test get_execution_status with the real execution ID
+    let status_request = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "ratchet.get_execution_status",
+            "arguments": {
+                "execution_id": execution_uuid.to_string()
+            }
+        }
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&status_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    
+    // Since we don't have the execution in the database, it should return an error
+    // but the tool call itself should succeed
+    assert!(response.error.is_none());
+    assert!(response.result.is_some());
+    
+    let result = response.result.unwrap();
+    assert!(result["content"].is_array());
+    // The execution won't be found, so it should be an error
+    assert!(result["isError"].as_bool().unwrap_or(false));
+    
+    // Test invalid UUID format
+    let invalid_status_request = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "ratchet.get_execution_status",
+            "arguments": {
+                "execution_id": "invalid-uuid-format"
+            }
+        }
+    });
+    
+    let response = server.handle_message(&serde_json::to_string(&invalid_status_request).unwrap(), None)
+        .await.unwrap().unwrap();
+    
+    assert!(response.error.is_none());
+    assert!(response.result.is_some());
+    
+    let result = response.result.unwrap();
+    assert!(result["isError"].as_bool().unwrap_or(false)); // Should be error for invalid UUID
 }

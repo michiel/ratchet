@@ -1,0 +1,187 @@
+# Ratchet MCP Development Configuration
+# This configuration is designed for local development and testing
+# with minimal security constraints and maximum debugging capabilities
+
+# Basic execution and HTTP settings
+execution:
+  max_execution_duration: 300
+  validate_schemas: true
+  fetch_variables:
+    url_var: "__fetch_url"
+    params_var: "__fetch_params"
+    body_var: "__fetch_body"
+    result_var: "__http_result"
+    temp_result_var: "__temp_result"
+
+http:
+  timeout: 30
+  max_redirects: 10
+  user_agent: "Ratchet-Dev/1.0"
+  verify_ssl: true
+
+cache:
+  task_content_cache_size: 100
+  enabled: true
+
+# Logging configuration with debug level for development
+logging:
+  level: debug
+  format: pretty
+  structured: false
+  destination: console
+  context:
+    enabled: true
+    include_file_location: true
+    include_thread: true
+    include_target: true
+    max_context_size: 1000
+  filter_patterns: []
+  enrichment:
+    enabled: true
+    include_hostname: true
+    include_process_id: true
+    include_thread_id: true
+    include_session_id: true
+    include_task_metadata: true
+    include_execution_context: true
+
+# MCP Server Configuration for Development
+mcp:
+  enabled: true
+  
+  # Basic server settings using stdio transport for simplicity
+  server:
+    transport: "stdio"
+    host: "127.0.0.1"
+    port: 3000
+    enable_cors: true
+    cors_origins:
+      - "http://localhost:3000"
+      - "http://127.0.0.1:3000"
+  
+  # No authentication for development - WARNING: Not suitable for production
+  authentication:
+    method: "none"
+    session:
+      timeout_seconds: 7200  # 2 hours for long dev sessions
+      max_sessions_per_client: 20
+      cleanup_interval_seconds: 300
+      persistent: false
+  
+  # Relaxed security settings for development
+  security:
+    rate_limiting:
+      global_per_minute: 10000  # Very high limits for dev
+      execute_task_per_minute: 1000
+      get_logs_per_minute: 5000
+      get_traces_per_minute: 2000
+      algorithm: "token_bucket"
+      burst_allowance: 500
+    
+    request_limits:
+      max_request_size_bytes: 104857600  # 100MB
+      max_response_size_bytes: 524288000 # 500MB
+      max_connections_per_ip: 1000
+      max_concurrent_executions_per_client: 50
+      max_execution_time_seconds: 600  # 10 minutes
+    
+    ip_filtering:
+      enabled: false  # Disabled for development
+      default_policy: "allow"
+      allowed_ranges: []
+      blocked_ranges: []
+      trusted_proxies: []
+    
+    headers:
+      enabled: true
+      x_frame_options: "SAMEORIGIN"  # Less restrictive for dev tools
+      x_content_type_options: "nosniff"
+    
+    validation:
+      strict_schema_validation: true
+      sanitize_strings: true
+      max_string_length: 1048576  # 1MB
+      max_array_length: 100000
+      max_object_depth: 64  # Deep nesting for complex dev scenarios
+  
+  # Performance settings optimized for development
+  performance:
+    connection_pool:
+      max_connections: 100
+      min_idle_connections: 10
+      connection_timeout_seconds: 30
+      idle_timeout_seconds: 600
+      max_lifetime_seconds: 7200
+    
+    caching:
+      enabled: true
+      max_size_mb: 512  # 512MB cache for development
+      default_ttl_seconds: 1800  # 30 minutes
+      cache_execution_results: true
+      cache_log_queries: true
+    
+    background_tasks:
+      worker_threads: 8  # More threads for dev machine
+      queue_size: 50000
+      health_check_interval_seconds: 30
+      cleanup_interval_seconds: 300
+    
+    monitoring:
+      enabled: true
+      collection_interval_seconds: 30
+      export_enabled: false
+      alerts:
+        cpu_threshold: 95.0  # High thresholds for dev
+        memory_threshold: 95.0
+        connection_threshold: 5000
+        error_rate_threshold: 20.0  # Allow higher error rates in dev
+  
+  # Enable all tools for development and debugging
+  tools:
+    enable_execution: true
+    enable_logging: true
+    enable_monitoring: true
+    enable_debugging: true  # Enable debugging tools
+    enable_filesystem: true # Enable filesystem tools for dev
+    custom_tools: {}
+    tool_rate_limits: {}
+  
+  # Comprehensive audit logging for development
+  audit:
+    enabled: true
+    level: "debug"
+    log_all_requests: true   # Log everything for development
+    log_auth_events: true
+    log_permission_checks: true
+    log_performance: true
+    
+    rotation:
+      max_size_mb: 50  # Smaller files for easier viewing
+      max_files: 20
+      compress: false  # Don't compress for easier access
+    
+    external_destinations: []
+
+# Output destinations for development
+output:
+  max_concurrent_deliveries: 20
+  default_timeout: 60
+  validate_on_startup: true
+  global_destinations: []
+  default_retry_policy:
+    max_attempts: 3
+    initial_delay_ms: 1000
+    max_delay_ms: 10000
+    backoff_multiplier: 2.0
+
+# Registry for task discovery
+registry:
+  sources:
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks"
+      config: null
+    - name: "dev-tasks"
+      uri: "file://./dev-tasks"
+      config:
+        watch_for_changes: true
+        auto_reload: true

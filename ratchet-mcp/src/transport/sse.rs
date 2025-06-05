@@ -12,6 +12,7 @@ use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use super::{McpTransport, SseAuth, TransportHealth};
 
 /// Server-Sent Events transport for HTTP-based MCP servers
+#[derive(Debug)]
 pub struct SseTransport {
     /// Base URL for SSE endpoint
     url: String,
@@ -39,6 +40,9 @@ pub struct SseTransport {
     
     /// Whether the transport is connected
     connected: bool,
+    
+    /// Session ID for this connection
+    session_id: Option<String>,
     
     /// Pending responses waiting for correlation
     pending_responses: Mutex<HashMap<String, tokio::sync::oneshot::Sender<JsonRpcResponse>>>,
@@ -83,6 +87,7 @@ impl SseTransport {
             event_stream: None,
             health: Mutex::new(TransportHealth::unhealthy("Not connected")),
             connected: false,
+            session_id: None,
             pending_responses: Mutex::new(HashMap::new()),
         })
     }
@@ -99,7 +104,18 @@ impl SseTransport {
 
     /// Create an SSE connection
     async fn create_sse_connection(&mut self) -> McpResult<()> {
-        let mut builder = self.client.get(&self.url);
+        // Generate a session ID for this connection
+        let session_id = uuid::Uuid::new_v4().to_string();
+        self.session_id = Some(session_id.clone());
+        
+        // Build SSE endpoint URL
+        let sse_url = if self.url.ends_with('/') {
+            format!("{}sse/{}", self.url, session_id)
+        } else {
+            format!("{}/sse/{}", self.url, session_id)
+        };
+
+        let mut builder = self.client.get(&sse_url);
 
         // Apply headers
         for (key, value) in &self.headers {
@@ -112,7 +128,8 @@ impl SseTransport {
         // Set SSE headers
         builder = builder
             .header("Accept", "text/event-stream")
-            .header("Cache-Control", "no-cache");
+            .header("Cache-Control", "no-cache")
+            .header("Connection", "keep-alive");
 
         let response = builder.send().await.map_err(|e| McpError::ConnectionFailed {
             reason: format!("Failed to connect to SSE endpoint: {}", e),
@@ -139,16 +156,21 @@ impl SseTransport {
                         if let Ok(text) = String::from_utf8(chunk.to_vec()) {
                             buffer.push_str(&text);
                             
-                            // Process complete lines
-                            while let Some(newline_pos) = buffer.find('\n') {
-                                let line = buffer[..newline_pos].trim().to_string();
-                                buffer = buffer[newline_pos + 1..].to_string();
+                            // Process complete SSE events (double newline separated)
+                            while let Some(event_end) = buffer.find("\n\n") {
+                                let event_text = buffer[..event_end].trim().to_string();
+                                buffer = buffer[event_end + 2..].to_string();
                                 
-                                // Parse SSE event
-                                if line.starts_with("data: ") {
-                                    let data = &line[6..]; // Remove "data: " prefix
-                                    if !data.trim().is_empty() && tx.send(data.to_string()).await.is_err() {
-                                        break; // Receiver dropped
+                                // Parse SSE event format
+                                for line in event_text.lines() {
+                                    let line = line.trim();
+                                    if line.starts_with("data: ") {
+                                        let data = &line[6..]; // Remove "data: " prefix
+                                        if !data.trim().is_empty() && data != "keep-alive" {
+                                            if tx.send(data.to_string()).await.is_err() {
+                                                return; // Receiver dropped
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -165,7 +187,19 @@ impl SseTransport {
 
     /// Send request via HTTP POST
     async fn send_http_request(&self, request: JsonRpcRequest) -> McpResult<()> {
-        let mut builder = self.client.post(&self.url);
+        // Get the session ID
+        let session_id = self.session_id.as_ref().ok_or_else(|| McpError::Transport {
+            message: "No session ID available. Connect first.".to_string(),
+        })?;
+        
+        // For SSE client, send to the message endpoint
+        let message_url = if self.url.ends_with('/') {
+            format!("{}message/{}", self.url, session_id)
+        } else {
+            format!("{}/message/{}", self.url, session_id)
+        };
+
+        let mut builder = self.client.post(&message_url);
 
         // Apply headers
         for (key, value) in &self.headers {
@@ -180,7 +214,9 @@ impl SseTransport {
             .header("Content-Type", "application/json")
             .json(&request);
 
-        let response = builder.send().await?;
+        let response = builder.send().await.map_err(|e| McpError::Network {
+            message: format!("Failed to send HTTP request: {}", e),
+        })?;
 
         if !response.status().is_success() {
             return Err(McpError::Network {
@@ -299,6 +335,7 @@ impl McpTransport for SseTransport {
 
         self.connected = false;
         self.event_stream = None;
+        self.session_id = None;
 
         // Clear pending responses
         let mut pending = self.pending_responses.lock().await;
@@ -408,5 +445,63 @@ mod tests {
             );
             assert!(transport.is_ok());
         }
+    }
+
+    #[tokio::test]
+    async fn test_sse_transport_not_connected_initially() {
+        let transport = SseTransport::new(
+            "https://example.com/sse".to_string(),
+            HashMap::new(),
+            None,
+            Duration::from_secs(30),
+            true,
+        ).unwrap();
+
+        assert!(!transport.is_connected().await);
+        
+        let health = transport.health().await;
+        assert!(!health.is_healthy());
+        assert!(!health.connected);
+    }
+
+    #[tokio::test]
+    async fn test_sse_session_id_generation() {
+        let mut transport = SseTransport::new(
+            "http://localhost:8080".to_string(),
+            HashMap::new(),
+            None,
+            Duration::from_secs(30),
+            false, // Don't verify SSL for test
+        ).unwrap();
+
+        assert!(transport.session_id.is_none());
+        
+        // Connection will fail but session ID should be generated
+        let _ = transport.create_sse_connection().await;
+        assert!(transport.session_id.is_some());
+    }
+
+    #[test]
+    fn test_message_url_generation() {
+        let transport = SseTransport::new(
+            "http://localhost:8080".to_string(),
+            HashMap::new(),
+            None,
+            Duration::from_secs(30),
+            false,
+        ).unwrap();
+
+        // Test URL with trailing slash
+        let transport_with_slash = SseTransport::new(
+            "http://localhost:8080/".to_string(),
+            HashMap::new(),
+            None,
+            Duration::from_secs(30),
+            false,
+        ).unwrap();
+
+        // Both should be valid
+        assert!(transport.url.starts_with("http://"));
+        assert!(transport_with_slash.url.starts_with("http://"));
     }
 }

@@ -477,6 +477,10 @@ impl WorkerProcessManager {
                             debug!("Worker {} completed task", worker.id);
                             worker.status = WorkerProcessStatus::Ready;
                         }
+                        CoordinatorMessage::TaskProgress { .. } => {
+                            debug!("Worker {} sent progress update", worker.id);
+                            // Progress updates don't change worker status
+                        }
                         CoordinatorMessage::Error { .. } => {
                             debug!("Worker {} reported error", worker.id);
                             worker.status = WorkerProcessStatus::Ready;
@@ -501,6 +505,11 @@ impl WorkerProcessManager {
                             warn!("Received TaskResult for unknown correlation_id: {}", correlation_id);
                         }
                     }
+                }
+                CoordinatorMessage::TaskProgress { correlation_id, progress, .. } => {
+                    debug!("Received progress update for correlation_id: {} - {:?}", correlation_id, progress);
+                    // TODO: Forward progress updates to MCP progress manager
+                    // For now, just log the progress
                 }
                 CoordinatorMessage::ValidationResult { correlation_id, result } => {
                     if let Ok(mut pending) = pending_validations.try_lock() {

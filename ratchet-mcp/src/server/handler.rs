@@ -1,18 +1,22 @@
 //! Request handler for MCP server operations
 
 use std::sync::Arc;
+use std::future::Future;
+use std::pin::Pin;
 use serde_json::Value;
 
 use crate::{McpError, McpResult};
 use crate::protocol::{
     ToolsListParams, ToolsListResult, ToolsCallParams,
     ResourcesListParams, ResourcesListResult, ResourcesReadParams, ResourcesReadResult,
+    BatchParams, JsonRpcRequest, JsonRpcResponse, JsonRpcError,
 };
 use crate::security::{SecurityContext, AuditLogger, McpAuthManager, PermissionChecker};
-use super::{ToolRegistry, McpServerConfig};
+use super::{ToolRegistry, McpServerConfig, BatchProcessor};
 use super::tools::ToolExecutionContext;
 
 /// Request handler for MCP operations
+#[derive(Clone)]
 pub struct McpRequestHandler {
     /// Tool registry for executing tools
     tool_registry: Arc<dyn ToolRegistry>,
@@ -25,6 +29,9 @@ pub struct McpRequestHandler {
     
     /// Server configuration
     _config: McpServerConfig,
+    
+    /// Batch processor for handling batch requests
+    batch_processor: Option<Arc<BatchProcessor>>,
 }
 
 impl McpRequestHandler {
@@ -40,6 +47,24 @@ impl McpRequestHandler {
             _auth_manager: auth_manager,
             audit_logger,
             _config: config.clone(),
+            batch_processor: None,
+        }
+    }
+    
+    /// Create a new request handler with batch processing
+    pub fn with_batch_processor(
+        tool_registry: Arc<dyn ToolRegistry>,
+        auth_manager: Arc<McpAuthManager>,
+        audit_logger: Arc<AuditLogger>,
+        config: &McpServerConfig,
+        batch_processor: Arc<BatchProcessor>,
+    ) -> Self {
+        Self {
+            tool_registry,
+            _auth_manager: auth_manager,
+            audit_logger,
+            _config: config.clone(),
+            batch_processor: Some(batch_processor),
         }
     }
     
@@ -204,6 +229,100 @@ impl McpRequestHandler {
         Ok(serde_json::to_value(result)?)
     }
     
+    /// Handle batch request
+    pub async fn handle_batch(
+        &self,
+        params: Option<Value>,
+        security_ctx: &SecurityContext,
+    ) -> McpResult<Value> {
+        // Check if batch processing is enabled
+        let batch_processor = self.batch_processor.as_ref()
+            .ok_or_else(|| McpError::MethodNotFound {
+                method: "batch".to_string(),
+            })?;
+
+        let params: BatchParams = TryFromValue::try_into(params
+            .ok_or_else(|| McpError::InvalidParams {
+                method: "batch".to_string(),
+                details: "Missing parameters".to_string(),
+            })?)
+            .map_err(|e: serde_json::Error| McpError::InvalidParams {
+                method: "batch".to_string(),
+                details: e.to_string(),
+            })?;
+
+        // Validate batch size against client permissions
+        let batch_size = params.requests.len() as u64;
+        PermissionChecker::validate_request_size(&security_ctx.client.permissions, batch_size)
+            .map_err(|msg| McpError::Validation {
+                field: "batch_size".to_string(),
+                message: msg,
+            })?;
+
+        // Create a request handler for the batch processor  
+        let handler = self.clone();
+        let security_ctx_clone = security_ctx.clone();
+        
+        let handler_fn: Arc<super::batch::BatchRequestHandler> = Arc::new(move |request: JsonRpcRequest| {
+            let handler = handler.clone();
+            let security_ctx = security_ctx_clone.clone();
+            Box::pin(async move {
+                match handler.handle_single_request(&request, &security_ctx).await {
+                    Ok(result) => JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        result: Some(result),
+                        error: None,
+                        id: request.id,
+                    },
+                    Err(e) => JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        result: None,
+                        error: Some(e.into()),
+                        id: request.id,
+                    },
+                }
+            }) as Pin<Box<dyn Future<Output = JsonRpcResponse> + Send>>
+        });
+
+        // Process the batch
+        let result = batch_processor.process_batch_with_handler(params, &handler_fn).await
+            .map_err(|e| McpError::Internal {
+                message: format!("Batch processing failed: {}", e),
+            })?;
+
+        // Log batch completion
+        self.audit_logger.log_authorization(
+            &security_ctx.client.id,
+            &format!("batch:{}", result.stats.total_requests),
+            "batch_execute",
+            result.stats.failed_requests == 0,
+            Some(format!("success:{}, failed:{}, skipped:{}", 
+                result.stats.successful_requests,
+                result.stats.failed_requests,
+                result.stats.skipped_requests
+            )),
+        ).await;
+
+        Ok(serde_json::to_value(result)?)
+    }
+
+    /// Handle a single request within a batch
+    async fn handle_single_request(
+        &self,
+        request: &JsonRpcRequest,
+        security_ctx: &SecurityContext,
+    ) -> McpResult<Value> {
+        match request.method.as_str() {
+            "tools/list" => self.handle_tools_list(request.params.clone(), security_ctx).await,
+            "tools/call" => self.handle_tools_call(request.params.clone(), security_ctx).await,
+            "resources/list" => self.handle_resources_list(request.params.clone(), security_ctx).await,
+            "resources/read" => self.handle_resources_read(request.params.clone(), security_ctx).await,
+            _ => Err(McpError::MethodNotFound {
+                method: request.method.clone(),
+            }),
+        }
+    }
+    
     /// Validate request size against quotas
     #[allow(dead_code)]
     fn validate_request_size(&self, security_ctx: &SecurityContext, params: &Value) -> McpResult<()> {
@@ -231,6 +350,32 @@ impl McpRequestHandler {
     }
 }
 
+// Conversion from McpError to JsonRpcError
+impl From<McpError> for JsonRpcError {
+    fn from(err: McpError) -> Self {
+        match err {
+            McpError::MethodNotFound { method } => {
+                JsonRpcError::method_not_found(&method)
+            }
+            McpError::InvalidParams { method: _, details } => {
+                JsonRpcError::invalid_params(details)
+            }
+            McpError::Validation { field: _, message } => {
+                JsonRpcError::invalid_params(message)
+            }
+            McpError::ServerTimeout { timeout: _ } => {
+                JsonRpcError::server_error(-32001, "Request timeout", None)
+            }
+            McpError::Internal { message } => {
+                JsonRpcError::internal_error(message)
+            }
+            _ => {
+                JsonRpcError::internal_error(err.to_string())
+            }
+        }
+    }
+}
+
 // Helper trait for converting serde_json::Value to specific types
 trait TryFromValue<T> {
     type Error;
@@ -241,6 +386,14 @@ impl TryFromValue<ToolsCallParams> for Value {
     type Error = serde_json::Error;
     
     fn try_into(self) -> Result<ToolsCallParams, Self::Error> {
+        serde_json::from_value(self)
+    }
+}
+
+impl TryFromValue<BatchParams> for Value {
+    type Error = serde_json::Error;
+    
+    fn try_into(self) -> Result<BatchParams, Self::Error> {
         serde_json::from_value(self)
     }
 }

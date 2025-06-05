@@ -15,6 +15,7 @@ description = "Ratchet CLI app"
 # Use workspace-level dependencies
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml = "0.9"
 thiserror.workspace = true
 anyhow.workspace = true
 log.workspace = true

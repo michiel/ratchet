@@ -1,0 +1,252 @@
+# Ratchet MCP Configuration for Claude Integration
+# This configuration is optimized for use with Claude and other LLM clients
+# Following best practices for MCP server deployment with Claude Desktop
+
+# Task execution optimized for LLM interactions
+execution:
+  max_execution_duration: 180  # 3 minutes - reasonable for LLM interactions
+  validate_schemas: true
+  fetch_variables:
+    url_var: "__fetch_url"
+    params_var: "__fetch_params"
+    body_var: "__fetch_body"
+    result_var: "__http_result"
+    temp_result_var: "__temp_result"
+
+# HTTP settings optimized for AI tool usage
+http:
+  timeout: 30
+  max_redirects: 5
+  user_agent: "Ratchet-Claude-MCP/1.0"
+  verify_ssl: true
+
+# Enable caching for better LLM response times
+cache:
+  task_content_cache_size: 500
+  enabled: true
+
+# Structured logging for better observability with LLM interactions
+logging:
+  level: info
+  format: json
+  structured: true
+  destination: file
+  file_path: "/var/log/ratchet/claude-mcp.log"
+  context:
+    enabled: true
+    include_file_location: false
+    include_thread: false
+    include_target: true
+    max_context_size: 1000
+  filter_patterns:
+    - "password"
+    - "secret"
+    - "token"
+    - "api_key"
+  enrichment:
+    enabled: true
+    include_hostname: true
+    include_process_id: true
+    include_session_id: true
+    include_task_metadata: true
+    include_execution_context: true
+
+# MCP Server Configuration optimized for Claude
+mcp:
+  enabled: true
+  
+  # Server settings - using stdio for direct Claude integration
+  server:
+    transport: "stdio"  # Required for Claude Desktop integration
+    # Note: host and port are ignored for stdio transport
+    host: "127.0.0.1"
+    port: 3000
+    enable_cors: false  # Not applicable for stdio
+    cors_origins: []
+  
+  # Authentication appropriate for LLM usage
+  authentication:
+    method: "api_key"  # Simple but secure for LLM integration
+    api_key:
+      header_name: "Authorization"
+      prefix: "Bearer"
+      keys:
+        # Claude client API key - replace with actual secure key
+        "claude-client-key-abcdef123456789012345678":
+          name: "Claude Desktop Client"
+          description: "Claude Desktop application access"
+          permissions:
+            can_execute_tasks: true
+            can_read_logs: true
+            can_read_traces: false  # Simplified for LLM usage
+            can_access_system_info: false
+            allowed_task_patterns:
+              - "*"  # Allow all tasks - adjust based on your needs
+            denied_task_patterns:
+              - "system-*"     # Restrict system-level tasks
+              - "admin-*"      # Restrict admin tasks
+              - "delete-*"     # Restrict destructive operations
+          created_at: "2024-01-01T00:00:00Z"
+          active: true
+          allowed_ips: []  # No IP restrictions for local usage
+        
+        # Optional: Read-only key for monitoring/debugging
+        "claude-readonly-key-987654321098765432109876":
+          name: "Claude Read-Only Access"
+          description: "Read-only access for debugging and monitoring"
+          permissions:
+            can_execute_tasks: false
+            can_read_logs: true
+            can_read_traces: true
+            can_access_system_info: true
+            allowed_task_patterns: []
+            denied_task_patterns: ["*"]
+          created_at: "2024-01-01T00:00:00Z"
+          active: true
+          allowed_ips: []
+    
+    session:
+      timeout_seconds: 1800  # 30 minutes for Claude sessions
+      max_sessions_per_client: 3
+      cleanup_interval_seconds: 300
+      persistent: false  # Don't persist sessions for simplicity
+  
+  # Security settings appropriate for LLM usage
+  security:
+    rate_limiting:
+      global_per_minute: 500   # Reasonable for Claude interactions
+      execute_task_per_minute: 60   # 1 per second average
+      get_logs_per_minute: 200
+      get_traces_per_minute: 50
+      algorithm: "token_bucket"
+      burst_allowance: 10
+    
+    request_limits:
+      max_request_size_bytes: 5242880     # 5MB for LLM data
+      max_response_size_bytes: 20971520   # 20MB for outputs
+      max_connections_per_ip: 10  # Low for local usage
+      max_concurrent_executions_per_client: 5
+      max_execution_time_seconds: 180
+    
+    ip_filtering:
+      enabled: false  # Disabled for local Claude usage
+      default_policy: "allow"
+      allowed_ranges: []
+      blocked_ranges: []
+      trusted_proxies: []
+    
+    headers:
+      enabled: true
+      x_frame_options: "SAMEORIGIN"
+      x_content_type_options: "nosniff"
+    
+    validation:
+      strict_schema_validation: true
+      sanitize_strings: true
+      max_string_length: 262144  # 256KB for LLM content
+      max_array_length: 10000
+      max_object_depth: 20  # Allow deep nesting for complex LLM data
+  
+  # Performance settings optimized for responsiveness
+  performance:
+    connection_pool:
+      max_connections: 50
+      min_idle_connections: 5
+      connection_timeout_seconds: 10
+      idle_timeout_seconds: 300
+      max_lifetime_seconds: 1800
+    
+    caching:
+      enabled: true
+      max_size_mb: 512  # 512MB cache for task results
+      default_ttl_seconds: 1800  # 30 minutes
+      cache_execution_results: true
+      cache_log_queries: true
+    
+    background_tasks:
+      worker_threads: 4
+      queue_size: 1000
+      health_check_interval_seconds: 60
+      cleanup_interval_seconds: 300
+    
+    monitoring:
+      enabled: true
+      collection_interval_seconds: 60
+      export_enabled: false  # Keep simple for Claude usage
+      alerts:
+        cpu_threshold: 85.0
+        memory_threshold: 90.0
+        connection_threshold: 40
+        error_rate_threshold: 10.0
+  
+  # Tool configuration for LLM usage
+  tools:
+    enable_execution: true
+    enable_logging: true
+    enable_monitoring: true
+    enable_debugging: false  # Disable for security in LLM context
+    enable_filesystem: false # Disable for security in LLM context
+    custom_tools: {}
+    tool_rate_limits:
+      execute_task: 30        # Per minute
+      get_logs: 100          # Per minute
+      get_system_info: 5     # Per minute
+  
+  # Audit configuration for LLM interactions
+  audit:
+    enabled: true
+    level: "info"
+    log_all_requests: false  # Keep logs manageable
+    log_auth_events: true
+    log_permission_checks: false
+    log_performance: true
+    
+    rotation:
+      max_size_mb: 100
+      max_files: 10
+      compress: true
+    
+    external_destinations: []  # Keep simple for local usage
+
+# Output configuration for Claude interactions
+output:
+  max_concurrent_deliveries: 10
+  default_timeout: 45
+  validate_on_startup: true
+  
+  global_destinations:
+    # Optional: Log all Claude interactions for analysis
+    - name: "claude-interactions"
+      description: "Log of all Claude MCP interactions"
+      destination:
+        type: "filesystem"
+        path: "/var/log/ratchet/claude-interactions/{date}.jsonl"
+        format: "json"
+        permissions: "644"
+        create_dirs: true
+        overwrite: false
+        backup_existing: false
+  
+  default_retry_policy:
+    max_attempts: 3
+    initial_delay_ms: 1000
+    max_delay_ms: 10000
+    backoff_multiplier: 2.0
+
+# Registry optimized for LLM tasks
+registry:
+  sources:
+    # Local tasks optimized for Claude
+    - name: "claude-tasks"
+      uri: "file://./sample/js-tasks"
+      config:
+        watch_for_changes: true
+        auto_reload: false  # Manual reload for stability
+    
+    # Optional: Remote registry for shared Claude tasks
+    - name: "shared-claude-tasks"
+      uri: "https://claude-tasks.example.com/registry"
+      config:
+        auth_token: "${CLAUDE_TASKS_TOKEN}"
+        cache_ttl: 3600
+        verify_signatures: false  # Simplified for Claude usage

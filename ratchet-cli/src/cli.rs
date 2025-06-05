@@ -99,6 +99,12 @@ pub enum Commands {
         #[command(subcommand)]
         generate_cmd: GenerateCommands,
     },
+    
+    /// Configuration management commands
+    Config {
+        #[command(subcommand)]
+        config_cmd: ConfigCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -120,5 +126,45 @@ pub enum GenerateCommands {
         /// Task version
         #[arg(long, value_name = "STRING", default_value = "1.0.0")]
         version: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ConfigCommands {
+    /// Validate a configuration file
+    Validate {
+        /// Path to the configuration file
+        #[arg(long, value_name = "PATH")]
+        config_file: PathBuf,
+    },
+    
+    /// Generate sample configuration files
+    Generate {
+        /// Configuration type: dev, production, enterprise, minimal, claude
+        #[arg(long, value_name = "TYPE", default_value = "dev")]
+        config_type: String,
+        
+        /// Output file path
+        #[arg(long, value_name = "PATH")]
+        output: PathBuf,
+        
+        /// Overwrite existing file
+        #[arg(long)]
+        force: bool,
+    },
+    
+    /// Show current configuration in use
+    Show {
+        /// Path to configuration file (optional, uses default loading logic)
+        #[arg(long, value_name = "PATH")]
+        config_file: Option<PathBuf>,
+        
+        /// Show MCP configuration only
+        #[arg(long)]
+        mcp_only: bool,
+        
+        /// Output format: yaml, json
+        #[arg(long, value_name = "FORMAT", default_value = "yaml")]
+        format: String,
     },
 }

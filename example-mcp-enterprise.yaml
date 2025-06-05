@@ -1,0 +1,411 @@
+# Ratchet MCP Enterprise Configuration
+# This configuration demonstrates advanced enterprise features including
+# multi-tenant support, comprehensive compliance, and high availability
+
+# Enterprise execution settings
+execution:
+  max_execution_duration: 600  # 10 minutes for complex enterprise tasks
+  validate_schemas: true
+  fetch_variables:
+    url_var: "__fetch_url"
+    params_var: "__fetch_params"
+    body_var: "__fetch_body"
+    result_var: "__http_result"
+    temp_result_var: "__temp_result"
+
+http:
+  timeout: 45
+  max_redirects: 3
+  user_agent: "Ratchet-Enterprise/1.0"
+  verify_ssl: true
+
+cache:
+  task_content_cache_size: 5000
+  enabled: true
+
+# Enterprise logging with compliance requirements
+logging:
+  level: info
+  format: json
+  structured: true
+  destination: file
+  file_path: "/var/log/ratchet/ratchet.log"
+  context:
+    enabled: true
+    include_file_location: true
+    include_thread: false
+    include_target: true
+    max_context_size: 2000
+  filter_patterns:
+    - "password"
+    - "secret"
+    - "token"
+    - "key"
+    - "ssn"
+    - "social_security"
+    - "credit_card"
+    - "api_key"
+  enrichment:
+    enabled: true
+    include_hostname: true
+    include_process_id: true
+    include_thread_id: true
+    include_session_id: true
+    include_task_metadata: true
+    include_execution_context: true
+
+# MCP Server Configuration for Enterprise
+mcp:
+  enabled: true
+  
+  # Enterprise server settings with high availability
+  server:
+    transport: "sse"
+    host: "0.0.0.0"
+    port: 8443
+    metrics_port: 9090
+    enable_cors: true
+    cors_origins:
+      - "https://ratchet.enterprise.com"
+      - "https://api.enterprise.com"
+      - "https://dashboard.enterprise.com"
+    tls:
+      cert_file: "/etc/ratchet/tls/enterprise.crt"
+      key_file: "/etc/ratchet/tls/enterprise.key"
+      ca_file: "/etc/ratchet/tls/enterprise-ca.crt"
+      require_client_cert: true  # Mutual TLS for enterprise
+  
+  # Multi-method authentication for different client types
+  authentication:
+    method: "jwt"  # Primary method for enterprise SSO integration
+    
+    # JWT configuration for enterprise SSO
+    jwt:
+      secret_or_key_file: "/etc/ratchet/jwt/public.pem"
+      algorithm: "RS256"
+      issuer: "https://sso.enterprise.com"
+      audience: "ratchet-mcp"
+      expiration_seconds: 3600
+      clock_skew_seconds: 60
+    
+    # OAuth2 configuration for cloud identity providers
+    oauth2:
+      issuer_url: "https://login.microsoftonline.com/tenant-id/v2.0"
+      client_id: "${AZURE_CLIENT_ID}"
+      client_secret: "${AZURE_CLIENT_SECRET}"
+      required_scopes:
+        - "openid"
+        - "profile"
+        - "ratchet.execute"
+      jwks_uri: "https://login.microsoftonline.com/tenant-id/discovery/v2.0/keys"
+    
+    # API key configuration for service accounts
+    api_key:
+      header_name: "Authorization"
+      prefix: "Bearer"
+      keys:
+        # Service account for CI/CD pipeline
+        "enterprise-cicd-service-key-a1b2c3d4e5f6g7h8i9j0":
+          name: "CI/CD Pipeline Service"
+          description: "Automated deployment and testing service"
+          permissions:
+            can_execute_tasks: true
+            can_read_logs: true
+            can_read_traces: false
+            can_access_system_info: false
+            allowed_task_patterns:
+              - "deploy-*"
+              - "test-*"
+              - "build-*"
+            denied_task_patterns:
+              - "*-production"  # Restricted from prod deployments
+          created_at: "2024-01-01T00:00:00Z"
+          expires_at: "2024-12-31T23:59:59Z"
+          active: true
+          allowed_ips:
+            - "10.100.0.0/16"  # CI/CD network
+        
+        # Service account for monitoring and observability
+        "enterprise-monitoring-readonly-k9l8m7n6o5p4q3r2s1t0":
+          name: "Enterprise Monitoring"
+          description: "Comprehensive monitoring and alerting system"
+          permissions:
+            can_execute_tasks: false
+            can_read_logs: true
+            can_read_traces: true
+            can_access_system_info: true
+            allowed_task_patterns: []
+            denied_task_patterns: ["*"]
+            custom_rate_limits:
+              global_per_minute: 10000  # High limits for monitoring
+              get_logs_per_minute: 5000
+              get_traces_per_minute: 2000
+          created_at: "2024-01-01T00:00:00Z"
+          active: true
+          allowed_ips:
+            - "10.200.0.0/16"  # Monitoring network
+        
+        # Emergency access key for incident response
+        "enterprise-emergency-access-u9v8w7x6y5z4a3b2c1d0":
+          name: "Emergency Response Team"
+          description: "Break-glass access for critical incidents"
+          permissions:
+            can_execute_tasks: true
+            can_read_logs: true
+            can_read_traces: true
+            can_access_system_info: true
+            allowed_task_patterns: ["*"]
+            denied_task_patterns: []
+          created_at: "2024-01-01T00:00:00Z"
+          expires_at: "2024-06-30T23:59:59Z"  # Shorter expiry for security
+          active: true
+          allowed_ips: []  # No IP restrictions for emergency access
+    
+    session:
+      timeout_seconds: 7200  # 2 hours for enterprise users
+      max_sessions_per_client: 10
+      cleanup_interval_seconds: 300
+      persistent: true
+  
+  # Enterprise-grade security configuration
+  security:
+    rate_limiting:
+      global_per_minute: 5000  # Higher limits for enterprise
+      execute_task_per_minute: 500
+      get_logs_per_minute: 2000
+      get_traces_per_minute: 500
+      algorithm: "sliding_window"
+      burst_allowance: 100
+    
+    request_limits:
+      max_request_size_bytes: 52428800    # 50MB for enterprise data
+      max_response_size_bytes: 104857600  # 100MB responses
+      max_connections_per_ip: 200
+      max_concurrent_executions_per_client: 25
+      max_execution_time_seconds: 600
+    
+    ip_filtering:
+      enabled: true
+      default_policy: "deny"
+      allowed_ranges:
+        - "10.0.0.0/8"         # Corporate network
+        - "172.16.0.0/12"      # Private subnets
+        - "192.168.0.0/16"     # Local networks
+        - "203.0.113.0/24"     # Enterprise public IPs
+      blocked_ranges:
+        - "169.254.0.0/16"     # Link-local
+        - "224.0.0.0/4"        # Multicast
+        - "240.0.0.0/4"        # Reserved
+      trusted_proxies:
+        - "10.0.1.0/24"        # Load balancer subnet
+        - "10.0.2.0/24"        # Reverse proxy subnet
+    
+    headers:
+      enabled: true
+      content_security_policy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:; font-src 'self'"
+      x_frame_options: "DENY"
+      x_content_type_options: "nosniff"
+      strict_transport_security: "max-age=63072000; includeSubDomains; preload"
+    
+    validation:
+      strict_schema_validation: true
+      sanitize_strings: true
+      max_string_length: 131072  # 128KB
+      max_array_length: 50000
+      max_object_depth: 32
+  
+  # High-performance configuration for enterprise scale
+  performance:
+    connection_pool:
+      max_connections: 2000
+      min_idle_connections: 200
+      connection_timeout_seconds: 15
+      idle_timeout_seconds: 600
+      max_lifetime_seconds: 7200
+    
+    caching:
+      enabled: true
+      max_size_mb: 8192  # 8GB cache for enterprise
+      default_ttl_seconds: 7200
+      cache_execution_results: true
+      cache_log_queries: true
+    
+    background_tasks:
+      worker_threads: 32  # Scale for enterprise workload
+      queue_size: 500000
+      health_check_interval_seconds: 15
+      cleanup_interval_seconds: 180
+    
+    monitoring:
+      enabled: true
+      collection_interval_seconds: 30
+      export_enabled: true
+      export_endpoint: "http://prometheus.monitoring.svc.cluster.local:9090/metrics"
+      alerts:
+        cpu_threshold: 75.0
+        memory_threshold: 80.0
+        connection_threshold: 1500
+        error_rate_threshold: 2.0
+  
+  # Enterprise tool configuration with granular control
+  tools:
+    enable_execution: true
+    enable_logging: true
+    enable_monitoring: true
+    enable_debugging: true   # Available but permission-controlled
+    enable_filesystem: true  # Available with strict permissions
+    custom_tools:
+      "enterprise_compliance":
+        enabled: true
+        audit_all_calls: true
+        require_justification: true
+      "data_classification":
+        enabled: true
+        scan_for_pii: true
+        encrypt_sensitive_data: true
+    tool_rate_limits:
+      execute_task: 200
+      get_logs: 1000
+      get_traces: 200
+      get_system_info: 50
+      enterprise_compliance: 10
+      data_classification: 20
+  
+  # Comprehensive enterprise audit configuration
+  audit:
+    enabled: true
+    level: "info"
+    log_all_requests: true   # Full audit trail for compliance
+    log_auth_events: true
+    log_permission_checks: true
+    log_performance: true
+    
+    rotation:
+      max_size_mb: 1024
+      max_files: 90  # 90 days retention
+      compress: true
+    
+    external_destinations:
+      # Enterprise SIEM integration
+      - type: "syslog"
+        address: "siem.enterprise.com:514"
+        facility: "local1"
+      
+      # Compliance database
+      - type: "database"
+        connection_string: "postgresql://audit:${AUDIT_DB_PASSWORD}@audit-db.enterprise.com:5432/compliance"
+        table_name: "ratchet_audit_log"
+      
+      # Real-time alerting webhook
+      - type: "webhook"
+        url: "https://alerts.enterprise.com/api/security-events"
+        headers:
+          "Content-Type": "application/json"
+          "X-Service": "ratchet-mcp"
+          "X-Environment": "production"
+          "X-Compliance-Required": "true"
+        auth:
+          type: "bearer"
+          token: "${SECURITY_WEBHOOK_TOKEN}"
+
+# Enterprise output destinations with compliance features
+output:
+  max_concurrent_deliveries: 100
+  default_timeout: 60
+  validate_on_startup: true
+  
+  global_destinations:
+    # Immutable audit logs for compliance
+    - name: "compliance-audit"
+      description: "Immutable audit trail for regulatory compliance"
+      destination:
+        type: "s3"
+        bucket: "enterprise-compliance-audit"
+        key_template: "ratchet/audit/{year}/{month}/{day}/{task_name}-{execution_id}.json"
+        region: "us-east-1"
+        access_key_id: "${AWS_ACCESS_KEY_ID}"
+        secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+    
+    # Real-time execution monitoring
+    - name: "execution-monitoring"
+      description: "Real-time execution data for monitoring dashboard"
+      destination:
+        type: "webhook"
+        url: "https://monitoring.enterprise.com/api/executions"
+        method: "POST"
+        headers:
+          "Content-Type": "application/json"
+          "X-Service": "ratchet-mcp"
+          "X-Priority": "high"
+        timeout_seconds: 30
+        auth:
+          type: "bearer"
+          token: "${MONITORING_WEBHOOK_TOKEN}"
+    
+    # Long-term data lake storage
+    - name: "data-lake"
+      description: "Long-term storage for analytics and reporting"
+      destination:
+        type: "filesystem"
+        path: "/mnt/data-lake/ratchet/{tenant}/{date}/{task_name}.parquet"
+        format: "json"  # Convert to Parquet in post-processing
+        permissions: "640"
+        create_dirs: true
+        overwrite: false
+        backup_existing: false
+  
+  default_retry_policy:
+    max_attempts: 7
+    initial_delay_ms: 1000
+    max_delay_ms: 120000
+    backoff_multiplier: 2.5
+
+# Enterprise server configuration with HA
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  
+  database:
+    url: "postgresql://ratchet:${DB_PASSWORD}@ratchet-cluster.enterprise.com:5432/ratchet_prod?sslmode=require"
+    max_connections: 100
+    connection_timeout: 45
+  
+  auth:
+    jwt_secret: "${JWT_SECRET}"
+    token_expiration: 7200
+
+# Enterprise registry with multi-source support
+registry:
+  sources:
+    # Primary enterprise task repository
+    - name: "enterprise-certified"
+      uri: "https://tasks.enterprise.com/registry/v2"
+      config:
+        auth_token: "${ENTERPRISE_REGISTRY_TOKEN}"
+        verify_signatures: true
+        require_approval: true
+        cache_ttl: 7200
+        compliance_scan: true
+    
+    # Department-specific task collections
+    - name: "finance-tasks"
+      uri: "https://finance.enterprise.com/tasks/registry"
+      config:
+        auth_token: "${FINANCE_REGISTRY_TOKEN}"
+        tenant_id: "finance"
+        compliance_tags: ["sox", "gdpr"]
+    
+    - name: "hr-tasks"
+      uri: "https://hr.enterprise.com/tasks/registry"
+      config:
+        auth_token: "${HR_REGISTRY_TOKEN}"
+        tenant_id: "hr"
+        compliance_tags: ["pii", "gdpr", "ccpa"]
+    
+    # Local enterprise-approved tasks
+    - name: "local-enterprise"
+      uri: "file:///opt/ratchet/enterprise-tasks"
+      config:
+        read_only: true
+        scan_on_startup: true
+        validate_signatures: true

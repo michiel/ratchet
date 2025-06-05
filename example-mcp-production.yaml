@@ -1,0 +1,307 @@
+# Ratchet MCP Production Configuration
+# This configuration is designed for production deployment
+# with comprehensive security, authentication, and monitoring
+
+# Execution settings with production limits
+execution:
+  max_execution_duration: 300
+  validate_schemas: true
+  fetch_variables:
+    url_var: "__fetch_url"
+    params_var: "__fetch_params"
+    body_var: "__fetch_body"
+    result_var: "__http_result"
+    temp_result_var: "__temp_result"
+
+http:
+  timeout: 30
+  max_redirects: 5  # Fewer redirects for security
+  user_agent: "Ratchet-Production/1.0"
+  verify_ssl: true
+
+cache:
+  task_content_cache_size: 1000
+  enabled: true
+
+# Production logging with structured output
+logging:
+  level: info
+  format: json
+  structured: true
+  destination: file
+  file_path: "/var/log/ratchet/ratchet.log"
+  context:
+    enabled: true
+    include_file_location: false
+    include_thread: false
+    include_target: false
+    max_context_size: 500
+  filter_patterns:
+    - "password"
+    - "secret"
+    - "token"
+    - "key"
+  enrichment:
+    enabled: true
+    include_hostname: true
+    include_process_id: true
+    include_thread_id: false
+    include_session_id: true
+    include_task_metadata: true
+    include_execution_context: false
+
+# MCP Server Configuration for Production
+mcp:
+  enabled: true
+  
+  # Server settings with TLS and proper network configuration
+  server:
+    transport: "sse"  # Server-Sent Events for web compatibility
+    host: "0.0.0.0"
+    port: 8443
+    metrics_port: 9090
+    enable_cors: true
+    cors_origins:
+      - "https://your-domain.com"
+      - "https://api.your-domain.com"
+    tls:
+      cert_file: "/etc/ratchet/tls/server.crt"
+      key_file: "/etc/ratchet/tls/server.key"
+      ca_file: "/etc/ratchet/tls/ca.crt"
+      require_client_cert: false
+  
+  # Strong authentication with API keys
+  authentication:
+    method: "api_key"
+    api_key:
+      header_name: "Authorization"
+      prefix: "Bearer"
+      keys:
+        # Example API key - replace with actual secure keys
+        "prod-api-key-secure-random-string-123456789abcdef":
+          name: "Production Client"
+          description: "Main production client access"
+          permissions:
+            can_execute_tasks: true
+            can_read_logs: true
+            can_read_traces: false
+            can_access_system_info: false
+            allowed_task_patterns:
+              - "approved-*"
+              - "safe-*"
+              - "production-*"
+            denied_task_patterns:
+              - "*-debug"
+              - "*-dev"
+              - "unsafe-*"
+          created_at: "2024-01-01T00:00:00Z"
+          active: true
+          allowed_ips:
+            - "10.0.0.0/8"
+            - "172.16.0.0/12"
+            - "192.168.0.0/16"
+        
+        "monitoring-api-key-readonly-987654321fedcba":
+          name: "Monitoring System"
+          description: "Read-only access for monitoring"
+          permissions:
+            can_execute_tasks: false
+            can_read_logs: true
+            can_read_traces: true
+            can_access_system_info: true
+            allowed_task_patterns: []
+            denied_task_patterns: ["*"]
+          created_at: "2024-01-01T00:00:00Z"
+          active: true
+          allowed_ips:
+            - "10.1.0.0/16"  # Monitoring network
+    
+    session:
+      timeout_seconds: 3600  # 1 hour
+      max_sessions_per_client: 5
+      cleanup_interval_seconds: 300
+      persistent: true
+  
+  # Production security settings
+  security:
+    rate_limiting:
+      global_per_minute: 1000
+      execute_task_per_minute: 100
+      get_logs_per_minute: 500
+      get_traces_per_minute: 100
+      algorithm: "sliding_window"
+      burst_allowance: 20
+    
+    request_limits:
+      max_request_size_bytes: 10485760    # 10MB
+      max_response_size_bytes: 52428800   # 50MB
+      max_connections_per_ip: 50
+      max_concurrent_executions_per_client: 10
+      max_execution_time_seconds: 300
+    
+    ip_filtering:
+      enabled: true
+      default_policy: "deny"
+      allowed_ranges:
+        - "10.0.0.0/8"       # Internal network
+        - "172.16.0.0/12"    # Private network
+        - "192.168.0.0/16"   # Local network
+      blocked_ranges:
+        - "169.254.0.0/16"   # Link-local
+      trusted_proxies:
+        - "10.0.1.10"        # Load balancer
+        - "10.0.1.11"        # Load balancer backup
+    
+    headers:
+      enabled: true
+      content_security_policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+      x_frame_options: "DENY"
+      x_content_type_options: "nosniff"
+      strict_transport_security: "max-age=31536000; includeSubDomains; preload"
+    
+    validation:
+      strict_schema_validation: true
+      sanitize_strings: true
+      max_string_length: 65536   # 64KB
+      max_array_length: 10000
+      max_object_depth: 16
+  
+  # Performance settings for production scale
+  performance:
+    connection_pool:
+      max_connections: 500
+      min_idle_connections: 50
+      connection_timeout_seconds: 10
+      idle_timeout_seconds: 300
+      max_lifetime_seconds: 3600
+    
+    caching:
+      enabled: true
+      max_size_mb: 2048  # 2GB cache
+      default_ttl_seconds: 3600
+      cache_execution_results: true
+      cache_log_queries: true
+    
+    background_tasks:
+      worker_threads: 16  # Scale based on server capacity
+      queue_size: 100000
+      health_check_interval_seconds: 30
+      cleanup_interval_seconds: 300
+    
+    monitoring:
+      enabled: true
+      collection_interval_seconds: 60
+      export_enabled: true
+      export_endpoint: "http://prometheus:9090/metrics"
+      alerts:
+        cpu_threshold: 80.0
+        memory_threshold: 85.0
+        connection_threshold: 400
+        error_rate_threshold: 5.0
+  
+  # Selective tool enablement for production
+  tools:
+    enable_execution: true
+    enable_logging: true
+    enable_monitoring: true
+    enable_debugging: false  # Disabled in production
+    enable_filesystem: false # Disabled for security
+    custom_tools: {}
+    tool_rate_limits:
+      execute_task: 50        # Per minute per client
+      get_logs: 200          # Per minute per client
+      get_system_info: 10    # Per minute per client
+  
+  # Production audit configuration
+  audit:
+    enabled: true
+    level: "info"
+    log_all_requests: false
+    log_auth_events: true
+    log_permission_checks: true
+    log_performance: true
+    
+    rotation:
+      max_size_mb: 500
+      max_files: 30
+      compress: true
+    
+    external_destinations:
+      - type: "syslog"
+        address: "syslog.company.com:514"
+        facility: "local0"
+      - type: "webhook"
+        url: "https://audit.company.com/api/logs"
+        headers:
+          "Content-Type": "application/json"
+          "X-Service": "ratchet-mcp"
+        auth:
+          type: "bearer"
+          token: "${AUDIT_WEBHOOK_TOKEN}"
+
+# Production output destinations
+output:
+  max_concurrent_deliveries: 50
+  default_timeout: 30
+  validate_on_startup: true
+  
+  global_destinations:
+    - name: "production-logs"
+      description: "Production execution logs"
+      destination:
+        type: "filesystem"
+        path: "/var/log/ratchet/executions/{task_name}/{date}.log"
+        format: "json"
+        permissions: "640"
+        create_dirs: true
+        overwrite: false
+        backup_existing: true
+    
+    - name: "audit-webhook"
+      description: "Audit webhook for compliance"
+      destination:
+        type: "webhook"
+        url: "https://audit.company.com/api/executions"
+        method: "POST"
+        headers:
+          "Content-Type": "application/json"
+          "X-Service": "ratchet-mcp"
+        timeout_seconds: 30
+        auth:
+          type: "bearer"
+          token: "${AUDIT_WEBHOOK_TOKEN}"
+  
+  default_retry_policy:
+    max_attempts: 5
+    initial_delay_ms: 2000
+    max_delay_ms: 60000
+    backoff_multiplier: 2.0
+
+# Server configuration for database and API
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  
+  database:
+    url: "postgresql://ratchet:${DB_PASSWORD}@db.company.com:5432/ratchet_prod"
+    max_connections: 50
+    connection_timeout: 30
+  
+  auth:
+    jwt_secret: "${JWT_SECRET}"
+    token_expiration: 3600
+
+# Registry for approved production tasks
+registry:
+  sources:
+    - name: "production-tasks"
+      uri: "https://tasks.company.com/registry/v1"
+      config:
+        auth_token: "${REGISTRY_AUTH_TOKEN}"
+        verify_signatures: true
+        cache_ttl: 3600
+    
+    - name: "local-approved"
+      uri: "file:///opt/ratchet/approved-tasks"
+      config:
+        read_only: true

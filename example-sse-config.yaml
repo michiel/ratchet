@@ -1,0 +1,28 @@
+# Example configuration for SSE-based MCP server
+transport_type: sse
+host: 127.0.0.1
+port: 3000
+
+# Authentication (optional)
+auth:
+  type: none
+
+# Connection limits
+limits:
+  max_connections: 100
+  max_message_size: 1048576  # 1MB
+  rate_limit: 60  # requests per minute
+
+# Timeouts
+timeouts:
+  request_timeout: 30s
+  idle_timeout: 5m
+  health_check_interval: 30s
+
+# Tool configuration
+tools:
+  enable_execution: true
+  enable_logging: true
+  enable_monitoring: true
+  enable_debugging: false
+  max_execution_time: 5m

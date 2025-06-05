@@ -72,6 +72,10 @@ pub enum McpError {
     #[error("Server unavailable: {reason}")]
     ServerUnavailable { reason: String },
 
+    /// Server error
+    #[error("Server error: {message}")]
+    ServerError { message: String },
+
     /// Configuration errors
     #[error("Configuration error: {message}")]
     Configuration { message: String },

@@ -58,6 +58,10 @@ pub enum McpMethod {
     #[serde(rename = "tools/call")]
     ToolsCall(ToolsCallParams),
     
+    /// Batch request for multiple operations
+    #[serde(rename = "batch")]
+    Batch(BatchParams),
+    
     /// List available resources
     #[serde(rename = "resources/list")]
     ResourcesList(Option<ResourcesListParams>),
@@ -89,6 +93,14 @@ pub enum McpMethod {
     /// Progress notification
     #[serde(rename = "notifications/progress")]
     NotificationsProgress(ProgressNotification),
+    
+    /// Task execution progress notification
+    #[serde(rename = "notifications/task_progress")]
+    NotificationsTaskProgress(TaskProgressNotification),
+    
+    /// Batch execution progress notification
+    #[serde(rename = "notifications/batch_progress")]
+    NotificationsBatchProgress(BatchProgressNotification),
     
     /// Custom method for extension
     #[serde(untagged)]
@@ -571,6 +583,44 @@ pub struct ProgressNotification {
     pub total: Option<u64>,
 }
 
+/// Task execution progress notification
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TaskProgressNotification {
+    /// Execution ID
+    #[serde(rename = "executionId")]
+    pub execution_id: String,
+    
+    /// Task ID or name
+    #[serde(rename = "taskId")]
+    pub task_id: String,
+    
+    /// Progress value (0.0 to 1.0)
+    pub progress: f32,
+    
+    /// Current step description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<String>,
+    
+    /// Step number (current step)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "stepNumber")]
+    pub step_number: Option<u32>,
+    
+    /// Total steps
+    #[serde(skip_serializing_if = "Option::is_none", rename = "totalSteps")]
+    pub total_steps: Option<u32>,
+    
+    /// Custom status message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    
+    /// Progress data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
+    
+    /// Timestamp of progress update
+    pub timestamp: String,
+}
+
 // === Capabilities ===
 
 /// Client capabilities
@@ -607,6 +657,10 @@ pub struct ServerCapabilities {
     /// Tools capability
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<ToolsCapability>,
+    
+    /// Batch capability
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch: Option<BatchCapability>,
 }
 
 /// Sampling capability
@@ -643,4 +697,215 @@ pub struct ToolsCapability {
     /// Whether list_changed notifications are supported
     #[serde(default, rename = "listChanged")]
     pub list_changed: bool,
+}
+
+/// Batch capability
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchCapability {
+    /// Maximum number of requests in a single batch
+    #[serde(rename = "maxBatchSize")]
+    pub max_batch_size: u32,
+    
+    /// Maximum parallel executions supported
+    #[serde(rename = "maxParallel")]
+    pub max_parallel: u32,
+    
+    /// Whether dependency execution is supported
+    #[serde(default, rename = "supportsDependencies")]
+    pub supports_dependencies: bool,
+    
+    /// Whether progress notifications are supported for batches
+    #[serde(default, rename = "supportsProgress")]
+    pub supports_progress: bool,
+    
+    /// Supported execution modes
+    #[serde(rename = "supportedExecutionModes")]
+    pub supported_execution_modes: Vec<BatchExecutionMode>,
+}
+
+// === Batch Protocol ===
+
+/// Parameters for batch method
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchParams {
+    /// List of requests to execute in batch
+    pub requests: Vec<BatchRequest>,
+    
+    /// Execution mode for the batch
+    #[serde(default, rename = "executionMode")]
+    pub execution_mode: BatchExecutionMode,
+    
+    /// Maximum parallel execution count
+    #[serde(skip_serializing_if = "Option::is_none", rename = "maxParallel")]
+    pub max_parallel: Option<u32>,
+    
+    /// Timeout for the entire batch in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none", rename = "timeoutMs")]
+    pub timeout_ms: Option<u64>,
+    
+    /// Whether to stop on first error
+    #[serde(default, rename = "stopOnError")]
+    pub stop_on_error: bool,
+    
+    /// Correlation token for tracking the batch
+    #[serde(skip_serializing_if = "Option::is_none", rename = "correlationToken")]
+    pub correlation_token: Option<String>,
+    
+    /// Additional batch metadata
+    #[serde(flatten)]
+    pub metadata: HashMap<String, Value>,
+}
+
+/// Individual request within a batch
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchRequest {
+    /// Unique identifier for this request within the batch
+    pub id: String,
+    
+    /// Method to call
+    pub method: String,
+    
+    /// Method parameters
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Value>,
+    
+    /// Dependencies on other requests in the batch (by their IDs)
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    
+    /// Timeout for this specific request in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none", rename = "timeoutMs")]
+    pub timeout_ms: Option<u64>,
+    
+    /// Priority for request execution (higher values = higher priority)
+    #[serde(default)]
+    pub priority: i32,
+    
+    /// Additional request metadata
+    #[serde(flatten)]
+    pub metadata: HashMap<String, Value>,
+}
+
+/// Batch execution mode
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchExecutionMode {
+    /// Execute all requests in parallel
+    Parallel,
+    /// Execute requests sequentially in order
+    Sequential,
+    /// Execute based on dependency graph
+    Dependency,
+    /// Execute based on priority and dependency
+    PriorityDependency,
+}
+
+impl Default for BatchExecutionMode {
+    fn default() -> Self {
+        BatchExecutionMode::Parallel
+    }
+}
+
+/// Result of batch method
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchResult {
+    /// Results for each request in the batch
+    pub results: Vec<BatchItemResult>,
+    
+    /// Batch execution statistics
+    pub stats: BatchStats,
+    
+    /// Correlation token if provided in request
+    #[serde(skip_serializing_if = "Option::is_none", rename = "correlationToken")]
+    pub correlation_token: Option<String>,
+    
+    /// Additional result metadata
+    #[serde(flatten)]
+    pub metadata: HashMap<String, Value>,
+}
+
+/// Result for an individual request in a batch
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchItemResult {
+    /// Request ID from the batch request
+    pub id: String,
+    
+    /// Success result (mutually exclusive with error)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
+    
+    /// Error information (mutually exclusive with result)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<super::JsonRpcError>,
+    
+    /// Execution time in milliseconds
+    #[serde(rename = "executionTimeMs")]
+    pub execution_time_ms: u64,
+    
+    /// Whether this request was skipped due to dependency failure
+    #[serde(default)]
+    pub skipped: bool,
+    
+    /// Additional item metadata
+    #[serde(flatten)]
+    pub metadata: HashMap<String, Value>,
+}
+
+/// Batch execution statistics
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchStats {
+    /// Total number of requests
+    #[serde(rename = "totalRequests")]
+    pub total_requests: u32,
+    
+    /// Number of successful requests
+    #[serde(rename = "successfulRequests")]
+    pub successful_requests: u32,
+    
+    /// Number of failed requests
+    #[serde(rename = "failedRequests")]
+    pub failed_requests: u32,
+    
+    /// Number of skipped requests
+    #[serde(rename = "skippedRequests")]
+    pub skipped_requests: u32,
+    
+    /// Total execution time in milliseconds
+    #[serde(rename = "totalExecutionTimeMs")]
+    pub total_execution_time_ms: u64,
+    
+    /// Average execution time per request in milliseconds
+    #[serde(rename = "averageExecutionTimeMs")]
+    pub average_execution_time_ms: f64,
+    
+    /// Maximum parallel executions achieved
+    #[serde(rename = "maxParallelExecuted")]
+    pub max_parallel_executed: u32,
+}
+
+/// Batch progress notification for long-running batch operations
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchProgressNotification {
+    /// Correlation token for the batch
+    #[serde(rename = "correlationToken")]
+    pub correlation_token: String,
+    
+    /// Number of completed requests
+    #[serde(rename = "completedRequests")]
+    pub completed_requests: u32,
+    
+    /// Total number of requests in the batch
+    #[serde(rename = "totalRequests")]
+    pub total_requests: u32,
+    
+    /// Currently executing request IDs
+    #[serde(rename = "executingRequests")]
+    pub executing_requests: Vec<String>,
+    
+    /// Timestamp of progress update
+    pub timestamp: String,
+    
+    /// Additional progress data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
 }

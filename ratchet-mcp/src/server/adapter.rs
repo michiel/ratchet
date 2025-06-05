@@ -11,8 +11,9 @@ use ratchet_lib::execution::ProcessTaskExecutor;
 use ratchet_lib::database::repositories::{ExecutionRepository, TaskRepository};
 use ratchet_lib::logging::event::{LogEvent, LogLevel};
 use ratchet_lib::database::repositories::task_repository::{TaskFilters, Pagination};
+use ratchet_lib::database::entities::ExecutionStatus;
 
-use super::tools::{McpTaskExecutor, McpTaskInfo};
+use super::tools::{McpTaskExecutor, McpTaskInfo, McpExecutionStatus};
 
 /// Adapter that wraps Ratchet's process executor to provide MCP-compatible task execution
 pub struct RatchetMcpAdapter {
@@ -105,6 +106,40 @@ impl McpTaskExecutor for RatchetMcpAdapter {
         }
     }
     
+    async fn execute_task_with_progress(
+        &self, 
+        task_path: &str, 
+        input: Value,
+        progress_manager: Option<Arc<super::progress::ProgressNotificationManager>>,
+        _connection: Option<Arc<dyn crate::transport::connection::TransportConnection>>,
+        _filter: Option<super::progress::ProgressFilter>,
+    ) -> Result<(String, Value), String> {
+        // For now, just execute the task normally and return with a fake execution ID
+        // In the future, this would integrate with the worker process IPC to receive progress updates
+        let result = self.execute_task(task_path, input).await?;
+        
+        let execution_id = uuid::Uuid::new_v4().to_string();
+        
+        // If progress manager is provided, send a completion update
+        if let Some(manager) = progress_manager {
+            let progress_update = super::progress::ProgressUpdate {
+                execution_id: execution_id.clone(),
+                task_id: task_path.to_string(),
+                progress: 1.0,
+                step: Some("completed".to_string()),
+                step_number: Some(1),
+                total_steps: Some(1),
+                message: Some("Task completed successfully".to_string()),
+                data: Some(result.clone()),
+                timestamp: chrono::Utc::now(),
+            };
+            
+            let _ = manager.send_progress_update(progress_update).await;
+        }
+        
+        Ok((execution_id, result))
+    }
+    
     async fn list_tasks(&self, filter: Option<&str>) -> Result<Vec<McpTaskInfo>, String> {
         let filters = TaskFilters {
             name: filter.map(|s| s.to_string()),
@@ -188,6 +223,75 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             Err("Invalid execution ID format - must be a valid UUID".to_string())
         }
     }
+    
+    async fn get_execution_status(&self, execution_id: &str) -> Result<McpExecutionStatus, String> {
+        // Try to parse execution_id as UUID to query the execution repository
+        if let Ok(exec_uuid) = uuid::Uuid::parse_str(execution_id) {
+            match self.execution_repository.find_by_uuid(exec_uuid).await {
+                Ok(Some(execution)) => {
+                    // Convert execution status to string
+                    let status_str = match execution.status {
+                        ExecutionStatus::Pending => "pending",
+                        ExecutionStatus::Running => "running",
+                        ExecutionStatus::Completed => "completed",
+                        ExecutionStatus::Failed => "failed",
+                        ExecutionStatus::Cancelled => "cancelled",
+                    }.to_string();
+                    
+                    // Calculate progress information
+                    let progress = match execution.status {
+                        ExecutionStatus::Pending => Some(serde_json::json!({
+                            "current_step": "pending",
+                            "percentage": 0
+                        })),
+                        ExecutionStatus::Running => {
+                            // For running executions, we can estimate progress based on time
+                            if let Some(started_at) = execution.started_at {
+                                let elapsed = chrono::Utc::now().signed_duration_since(started_at);
+                                Some(serde_json::json!({
+                                    "current_step": "running",
+                                    "elapsed_ms": elapsed.num_milliseconds(),
+                                    "percentage": null  // Cannot estimate without task-specific progress
+                                }))
+                            } else {
+                                Some(serde_json::json!({
+                                    "current_step": "running",
+                                    "percentage": null
+                                }))
+                            }
+                        },
+                        ExecutionStatus::Completed => Some(serde_json::json!({
+                            "current_step": "completed",
+                            "percentage": 100
+                        })),
+                        ExecutionStatus::Failed | ExecutionStatus::Cancelled => Some(serde_json::json!({
+                            "current_step": status_str,
+                            "percentage": null
+                        })),
+                    };
+                    
+                    Ok(McpExecutionStatus {
+                        execution_id: execution_id.to_string(),
+                        status: status_str,
+                        task_id: execution.task_id,
+                        input: Some(execution.input),
+                        output: execution.output,
+                        error_message: execution.error_message,
+                        error_details: execution.error_details,
+                        queued_at: execution.queued_at.to_rfc3339(),
+                        started_at: execution.started_at.map(|dt| dt.to_rfc3339()),
+                        completed_at: execution.completed_at.map(|dt| dt.to_rfc3339()),
+                        duration_ms: execution.duration_ms,
+                        progress,
+                    })
+                }
+                Ok(None) => Err(format!("Execution not found: {}", execution_id)),
+                Err(e) => Err(format!("Database error: {}", e)),
+            }
+        } else {
+            Err("Invalid execution ID format - must be a valid UUID".to_string())
+        }
+    }
 }
 
 // Additional helper methods for RatchetMcpAdapter
@@ -225,33 +329,74 @@ impl RatchetMcpAdapter {
         
         let reader = BufReader::new(file);
         let mut matching_logs = Vec::new();
+        let mut total_lines = 0;
+        let mut parse_errors = 0;
         
         for (line_num, line) in reader.lines().enumerate() {
+            total_lines += 1;
+            
             let line = line
                 .map_err(|e| format!("Error reading log file at line {}: {}", line_num, e))?;
             
+            // Skip empty lines
+            if line.trim().is_empty() {
+                continue;
+            }
+            
             // Try to parse as JSON log event
-            if let Ok(log_event) = serde_json::from_str::<LogEvent>(&line) {
-                // Check if this log is related to our execution
-                let is_related = log_event.trace_id.as_deref() == Some(execution_id)
-                    || log_event.span_id.as_deref() == Some(execution_id)
-                    || log_event.fields.get("execution_id")
-                        .and_then(|v| v.as_str()) == Some(execution_id);
-                
-                if is_related && log_event.level >= *min_level {
-                    matching_logs.push(serde_json::json!({
-                        "timestamp": log_event.timestamp,
-                        "level": format!("{:?}", log_event.level),
-                        "message": log_event.message,
-                        "logger": log_event.logger,
-                        "fields": log_event.fields,
-                        "error": log_event.error,
-                        "trace_id": log_event.trace_id,
-                        "span_id": log_event.span_id
-                    }));
+            match serde_json::from_str::<LogEvent>(&line) {
+                Ok(log_event) => {
+                    // Check if this log is related to our execution
+                    let is_related = log_event.trace_id.as_deref() == Some(execution_id)
+                        || log_event.span_id.as_deref() == Some(execution_id)
+                        || log_event.fields.get("execution_id")
+                            .and_then(|v| v.as_str()) == Some(execution_id)
+                        || log_event.fields.get("exec_id")
+                            .and_then(|v| v.as_str()) == Some(execution_id)
+                        || log_event.message.contains(execution_id);
                     
-                    if matching_logs.len() >= limit {
-                        break;
+                    if is_related && log_event.level >= *min_level {
+                        let log_entry = serde_json::json!({
+                            "timestamp": log_event.timestamp.to_rfc3339(),
+                            "level": log_event.level.as_str(),
+                            "message": log_event.message,
+                            "logger": log_event.logger,
+                            "fields": log_event.fields,
+                            "error": log_event.error,
+                            "trace_id": log_event.trace_id,
+                            "span_id": log_event.span_id,
+                            "line_number": line_num + 1
+                        });
+                        
+                        matching_logs.push(log_entry);
+                        
+                        if matching_logs.len() >= limit {
+                            break;
+                        }
+                    }
+                }
+                Err(_) => {
+                    parse_errors += 1;
+                    // Also check plain text lines for the execution ID
+                    if line.contains(execution_id) {
+                        let log_entry = serde_json::json!({
+                            "timestamp": null,
+                            "level": "unknown",
+                            "message": line,
+                            "logger": "raw",
+                            "fields": {},
+                            "error": null,
+                            "trace_id": null,
+                            "span_id": null,
+                            "line_number": line_num + 1,
+                            "format": "plain_text"
+                        });
+                        
+                        matching_logs.push(log_entry);
+                        
+                        if matching_logs.len() >= limit {
+                            break;
+                        }
                     }
                 }
             }
@@ -263,7 +408,16 @@ impl RatchetMcpAdapter {
             "logs": matching_logs,
             "total_found": matching_logs.len(),
             "limit_applied": limit,
-            "min_level": format!("{:?}", min_level)
+            "min_level": min_level.as_str(),
+            "search_stats": {
+                "total_lines_processed": total_lines,
+                "parse_errors": parse_errors,
+                "has_more": matching_logs.len() >= limit
+            },
+            "search_criteria": {
+                "execution_id": execution_id,
+                "search_fields": ["trace_id", "span_id", "execution_id", "exec_id", "message_content"]
+            }
         });
         
         Ok(serde_json::to_string_pretty(&result)

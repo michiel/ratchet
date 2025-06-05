@@ -44,7 +44,7 @@ enum Commands {
         transport: TransportChoice,
         
         /// Server address for SSE transport
-        #[arg(short, long, default_value = "127.0.0.1")]
+        #[arg(long, default_value = "127.0.0.1")]
         host: String,
         
         /// Server port for SSE transport
@@ -57,6 +57,9 @@ enum Commands {
     
     /// Test connection to Ratchet backend
     Test,
+    
+    /// Validate configuration file
+    ValidateConfig,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -94,6 +97,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Test => {
             test_command(cli.config.as_deref()).await
+        }
+        Commands::ValidateConfig => {
+            validate_config_command(cli.config.as_deref()).await
         }
     }
 }
@@ -236,6 +242,39 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     
     tracing::info!("All systems operational - MCP server ready to start");
     Ok(())
+}
+
+async fn validate_config_command(config_path: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!("Validating MCP configuration");
+    
+    let config_path = config_path.ok_or("Configuration file path is required for validation")?;
+    
+    // Load and validate MCP config
+    match McpConfig::from_file(config_path).await {
+        Ok(config) => {
+            tracing::info!("✓ Configuration file loaded successfully");
+            tracing::info!("  Transport: {:?}", config.transport_type);
+            tracing::info!("  Host: {}", config.host);
+            tracing::info!("  Port: {}", config.port);
+            tracing::info!("  Auth: {:?}", config.auth);
+            
+            match config.validate() {
+                Ok(()) => {
+                    tracing::info!("✓ Configuration is valid");
+                    println!("Configuration validation successful!");
+                    Ok(())
+                }
+                Err(e) => {
+                    tracing::error!("✗ Configuration validation failed: {}", e);
+                    Err(e.into())
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("✗ Failed to load configuration: {}", e);
+            Err(e.into())
+        }
+    }
 }
 
 async fn load_config(config_path: Option<&str>) -> Result<RatchetConfig, Box<dyn std::error::Error>> {

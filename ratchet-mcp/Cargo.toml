@@ -20,6 +20,12 @@ uuid = { workspace = true }
 # HTTP client and server
 reqwest = { workspace = true }
 axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+hyper = { workspace = true }
+http = { workspace = true }
+futures-util = "0.3"
+async-stream = "0.3"
 
 # Logging and tracing
 tracing = { workspace = true }
@@ -50,7 +56,7 @@ default = ["server", "client"]
 server = []
 client = []
 transport-stdio = []
-transport-sse = ["reqwest/stream"]
+transport-sse = ["reqwest/stream", "axum/tokio", "tower/timeout", "tower-http/cors"]
 
 [dev-dependencies]
 tokio-test = "0.4"
