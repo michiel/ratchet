@@ -120,10 +120,8 @@ impl DefaultRegistryService {
             if let TaskSource::Filesystem { path } = source {
                 // Check if this source has watch enabled in its config
                 if let Some(config) = self.source_configs.get(i) {
-                    if let Some(source_config) = &config.config {
-                        if source_config.get("watch").and_then(|v| v.as_bool()).unwrap_or(false) {
-                            watch_paths.push((path.clone(), true)); // recursive = true
-                        }
+                    if config.config.watch_for_changes {
+                        watch_paths.push((path.clone(), true)); // recursive = true
                     }
                 }
             }

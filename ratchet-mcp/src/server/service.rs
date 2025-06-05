@@ -330,14 +330,14 @@ impl McpService {
         log_file_path: Option<std::path::PathBuf>,
     ) -> McpResult<Self> {
         // Convert Ratchet config to MCP service config
-        let transport = match mcp_config.server.transport.as_str() {
+        let transport = match mcp_config.transport.as_str() {
             "stdio" => McpServerTransport::Stdio,
             "sse" => McpServerTransport::Sse {
-                host: mcp_config.server.host.clone(),
-                port: mcp_config.server.port,
-                tls: false, // TODO: Make configurable from mcp_config.server.tls
+                host: mcp_config.host.clone(),
+                port: mcp_config.port,
+                tls: false, // TODO: Make configurable
                 cors: crate::server::config::CorsConfig {
-                    allowed_origins: mcp_config.server.cors_origins.clone(),
+                    allowed_origins: vec!["*".to_string()], // Default CORS
                     allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
                     allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
                     allow_credentials: false,
@@ -345,26 +345,26 @@ impl McpService {
                 timeout: std::time::Duration::from_secs(mcp_config.authentication.session.timeout_seconds),
             },
             _ => return Err(McpError::Configuration {
-                message: format!("Unknown transport: {}", mcp_config.server.transport),
+                message: format!("Unknown transport: {}", mcp_config.transport),
             }),
         };
 
         let security = SecurityConfig {
-            max_execution_time: std::time::Duration::from_secs(mcp_config.security.request_limits.max_execution_time_seconds),
-            max_log_entries: mcp_config.security.validation.max_array_length,
+            max_execution_time: std::time::Duration::from_secs(300), // Default 5 minutes
+            max_log_entries: 1000, // Default limit
             allow_dangerous_tasks: mcp_config.tools.enable_debugging,
-            audit_log_enabled: mcp_config.audit.enabled,
-            input_sanitization: mcp_config.security.validation.sanitize_strings,
-            max_request_size: mcp_config.security.request_limits.max_request_size_bytes as usize,
-            max_response_size: mcp_config.security.request_limits.max_response_size_bytes as usize,
+            audit_log_enabled: true, // Default enabled
+            input_sanitization: true, // Default enabled
+            max_request_size: 1048576, // Default 1MB
+            max_response_size: 10485760, // Default 10MB
             session_timeout: std::time::Duration::from_secs(mcp_config.authentication.session.timeout_seconds),
-            require_encryption: mcp_config.server.tls.is_some(),
+            require_encryption: false, // Default disabled
         };
 
         let server_config = McpServerConfig {
             transport,
             security,
-            bind_address: Some(format!("{}:{}", mcp_config.server.host, mcp_config.server.port)),
+            bind_address: Some(format!("{}:{}", mcp_config.host, mcp_config.port)),
         };
 
         let config = McpServiceConfig {
