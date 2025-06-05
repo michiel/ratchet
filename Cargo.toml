@@ -3,13 +3,12 @@ members = [
     "ratchet-core",
     "ratchet-runtime",
     "ratchet-storage", 
-    "ratchet-api",
     "ratchet-ipc",
     "ratchet-resilience",
     "ratchet-caching",
     "ratchet-plugins",
     "ratchet-mcp",      # New MCP implementation
-    "ratchet-lib",      # Keep for now during migration
+    "ratchet-lib",      # Primary API implementation (REST & GraphQL)
     "ratchet-cli", "ratchet-config", "ratchet-plugin",
 ]
 resolver = "2"

@@ -26,7 +26,7 @@
 - **Performance**: <10μs pattern matching, 500K+ events/second throughput
 
 ### ✅ **Modular Architecture** (COMPLETED)
-- **7 Modular Crates**: Clean separation of concerns with ratchet-api, ratchet-caching, ratchet-config, ratchet-ipc, ratchet-plugin, ratchet-resilience, ratchet-runtime, ratchet-storage
+- **10 Modular Crates**: Clean separation of concerns with ratchet-lib (primary API), ratchet-storage, ratchet-caching, ratchet-config, ratchet-ipc, ratchet-plugin, ratchet-resilience, ratchet-runtime, ratchet-mcp, ratchet-plugins
 - **Plugin System**: Full lifecycle management with async hooks, dependency resolution, dynamic/static loading
 - **Storage Abstraction**: Repository pattern with unified entity types and migration system
 - **Resilience Patterns**: Retry policies, circuit breakers, graceful shutdown coordination
@@ -364,8 +364,8 @@
 
 ## 🏗️ **Phase 1.5: Complete ratchet-lib Migration** (HIGH PRIORITY)
 
-### Migration Status: ~60% Complete (Updated Status)
-**Progress**: Critical infrastructure blockers resolved - configuration system streamlined and database layer consolidated to ratchet-storage. Foundation now ready for remaining business logic migration.
+### Migration Status: ~75% Complete (Updated Status)
+**Progress**: All high-priority infrastructure migration completed - configuration streamlined, database consolidated to ratchet-storage, and API layer unified in ratchet-lib. Core architecture is now clean and maintainable.
 
 ### Critical Migration Blockers Results
 - [x] **Database Layer Consolidation** ✅ COMPLETED
@@ -380,11 +380,11 @@
   - [x] Updated CLI and MCP to use sensible defaults instead of complex unused config
   - [x] All tests passing with streamlined configuration
 
-- [ ] **API Implementation Decision**
-  - [ ] Choose primary API implementation: ratchet-lib vs ratchet-api
-  - [ ] Migrate REST handlers from `ratchet-lib/src/rest/` to `ratchet-api/src/rest/`
-  - [ ] Migrate GraphQL implementation from `ratchet-lib/src/graphql/` to `ratchet-api/src/graphql/`
-  - [ ] Update all 24 integration tests to use new API layer
+- [x] **API Implementation Decision** ✅ COMPLETED
+  - [x] Chose ratchet-lib as primary API implementation (complete, mature, actively used)
+  - [x] Removed ratchet-api crate (was skeleton implementation with placeholder endpoints)
+  - [x] Consolidated on ratchet-lib's sophisticated REST and GraphQL implementation
+  - [x] Preserved all existing functionality and integration tests
 
 ### Medium Priority Migration Tasks
 - [ ] **Execution Engine Completion**

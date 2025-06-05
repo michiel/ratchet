@@ -127,7 +127,7 @@ Ratchet has evolved from a monolithic structure to a modular architecture with s
 ```
 ratchet/
 ├── ratchet-core/         # Core domain models and types
-├── ratchet-api/          # Unified API layer (REST & GraphQL)
+├── ratchet-lib/          # Primary API implementation (REST & GraphQL)
 ├── ratchet-caching/      # Caching abstractions and implementations
 ├── ratchet-cli/          # Command-line interface
 ├── ratchet-config/       # Configuration management
