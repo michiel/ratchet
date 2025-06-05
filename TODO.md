@@ -396,16 +396,32 @@
 **Decision**: Remaining business logic modules in ratchet-lib form a cohesive, well-architected layer that doesn't need further disaggregation. The modular architecture goals have been achieved through infrastructure separation.
 
 ### Final Cleanup Tasks
-- [ ] **Remove ratchet-lib Dependencies**
-  - [ ] Update ratchet-cli to use only modular crates
-  - [ ] Update ratchet-mcp to use only modular crates
-  - [ ] Migrate all integration tests away from ratchet-lib
-  - [ ] Remove or significantly reduce ratchet-lib crate
+- [x] **ratchet-cli Configuration Migration** ✅ COMPLETED
+  - [x] Migrate ratchet-cli from ratchet_lib::config to ratchet-config
+  - [x] Add MCP configuration support to ratchet-config with validation
+  - [x] Create conversion layer for backward compatibility with ratchet_lib
+  - [x] Environment variable support with RATCHET_ prefix for all domains
+- [ ] **Complete ratchet-cli Dependencies Migration**
+  - [ ] Migrate ratchet-cli task validation from ratchet_lib to ratchet-core
+  - [ ] Migrate ratchet-cli database operations from ratchet_lib to ratchet-storage
+- [ ] **ratchet-mcp Dependencies Migration**
+  - [ ] Migrate ratchet-mcp from ratchet_lib config types to ratchet-config
+  - [ ] Migrate ratchet-mcp repository usage from ratchet_lib to ratchet-storage
+  - [ ] Migrate ratchet-mcp to use ratchet-core types instead of ratchet_lib types
+- [ ] **Business Logic Assessment**
+  - [ ] Identify which ratchet_lib modules must remain as business logic dependencies
+  - [ ] Update integration tests to use modular crates where possible
 
-**Migration Blockers**: 
-- ratchet-cli, ratchet-mcp, and 24 integration tests still depend on ratchet-lib
-- Database layer duplication prevents safe migration
-- Configuration system split creates confusion
+**Latest Progress**:
+- ✅ **CLI Configuration Migration Complete**: Successfully migrated ratchet-cli configuration loading to use ratchet-config with backward compatibility
+- ✅ **MCP Config Support**: Added comprehensive MCP configuration to ratchet-config with transport validation and port range checks
+- ✅ **Environment Variables**: Full support for RATCHET_ prefixed environment variables across all config domains
+
+**Remaining Migration Blockers**: 
+- ratchet-cli still uses ratchet_lib for task validation and database operations
+- ratchet-mcp still depends on ratchet_lib for all core functionality
+- 24 integration tests still depend on ratchet-lib
+- Business logic modules analysis needed to determine final architecture
 
 **Success Metrics**:
 - All crates use modular architecture (no ratchet-lib dependencies)

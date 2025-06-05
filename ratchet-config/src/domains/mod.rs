@@ -5,6 +5,7 @@ pub mod database;
 pub mod execution;
 pub mod http;
 pub mod logging;
+pub mod mcp;
 pub mod output;
 pub mod registry;
 pub mod server;
@@ -45,6 +46,10 @@ pub struct RatchetConfig {
     /// Registry configuration (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub registry: Option<registry::RegistryConfig>,
+    
+    /// MCP server configuration (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<mcp::McpConfig>,
 }
 
 impl RatchetConfig {
@@ -63,6 +68,10 @@ impl RatchetConfig {
         
         if let Some(ref registry) = self.registry {
             registry.validate()?;
+        }
+        
+        if let Some(ref mcp) = self.mcp {
+            mcp.validate()?;
         }
         
         Ok(())

@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use ratchet_config::{RatchetConfig as NewRatchetConfig, ConfigLoader};
+use ratchet_lib::config::RatchetConfig;
 use ratchet_lib::{
-    config::RatchetConfig,
     task::Task,
     execution::ipc::{WorkerMessage, CoordinatorMessage, TaskExecutionResult, MessageEnvelope},
     recording,
@@ -19,42 +20,94 @@ use uuid::Uuid;
 mod cli;
 use cli::{Cli, Commands, GenerateCommands, ConfigCommands};
 
+/// Convert new config format to legacy format for backward compatibility
+fn convert_to_legacy_config(new_config: NewRatchetConfig) -> Result<RatchetConfig> {
+    use ratchet_lib::config::*;
+    
+    // Convert database config
+    let database_config = DatabaseConfig {
+        url: new_config.server.as_ref()
+            .map(|_| "sqlite::memory:".to_string()) // Default for now
+            .unwrap_or_else(|| "sqlite::memory:".to_string()),
+        max_connections: 10,
+        connection_timeout: std::time::Duration::from_secs(30),
+    };
+    
+    // Convert server config
+    let server_config = ServerConfig {
+        bind_address: new_config.server.as_ref()
+            .map(|s| s.bind_address.clone())
+            .unwrap_or_else(|| "0.0.0.0".to_string()),
+        port: new_config.server.as_ref()
+            .map(|s| s.port)
+            .unwrap_or(8080),
+        database: database_config,
+    };
+    
+    // Convert execution config
+    let execution_config = ExecutionConfig {
+        max_execution_duration: new_config.execution.max_execution_duration.as_secs(),
+        validate_schemas: new_config.execution.validate_schemas,
+        max_concurrent_tasks: 4, // Default
+        timeout_grace_period: 30, // Default
+    };
+    
+    // Convert HTTP config
+    let http_config = HttpConfig {
+        timeout: new_config.http.timeout,
+        user_agent: new_config.http.user_agent,
+        verify_ssl: new_config.http.verify_ssl,
+        max_redirects: 10, // Default
+    };
+    
+    // Convert logging config - use ratchet_lib's default LoggingConfig
+    let logging_config = ratchet_lib::logging::LoggingConfig::default();
+    
+    // Convert MCP config
+    let mcp_config = new_config.mcp.map(|mcp| McpServerConfig {
+        enabled: mcp.enabled,
+        transport: mcp.transport,
+        host: mcp.host,
+        port: mcp.port,
+    });
+    
+    Ok(RatchetConfig {
+        server: Some(server_config),
+        execution: execution_config,
+        http: http_config,
+        logging: logging_config,
+        mcp: mcp_config,
+        cache: CacheConfig::default(), // Use default
+        output: OutputConfig::default(), // Use default
+        registry: None, // Default
+    })
+}
+
 /// Load configuration from file or use defaults
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
-    use ratchet_lib::config::{RatchetConfig, ServerConfig};
+    let loader = ConfigLoader::new();
     
-    let mut config = match config_path {
+    let new_config = match config_path {
         Some(path) => {
             if path.exists() {
                 info!("Loading configuration from: {:?}", path);
-                RatchetConfig::from_file(path)
+                loader.from_file(path)
                     .context(format!("Failed to load configuration from {:?}", path))?
             } else {
                 warn!("Configuration file not found: {:?}. Using defaults.", path);
-                RatchetConfig::default()
+                loader.from_env()
+                    .context("Failed to load configuration from environment")?
             }
         }
         None => {
-            debug!("No configuration file specified. Using defaults.");
-            RatchetConfig::default()
+            debug!("No configuration file specified. Loading from environment or defaults.");
+            loader.from_env()
+                .context("Failed to load configuration from environment")?
         }
     };
     
-    // Ensure server config is set
-    if config.server.is_none() {
-        debug!("No server configuration found. Adding default server config.");
-        config.server = Some(ServerConfig::default());
-    }
-
-    // Apply environment variable overrides
-    config.apply_env_overrides()
-        .context("Failed to apply environment variable overrides")?;
-
-    // Validate the configuration
-    config.validate()
-        .context("Configuration validation failed")?;
-
-    Ok(config)
+    // Convert to legacy format
+    convert_to_legacy_config(new_config)
 }
 
 /// Start the Ratchet server
@@ -219,29 +272,17 @@ async fn mcp_serve_command_with_config(
         }
     };
     
-    // Get MCP configuration (use dedicated MCP config if available, otherwise fall back to server config)
-    let (database_config, mcp_server_config) = if let Some(mcp_config) = &ratchet_config.mcp {
+    // Get database configuration (use server config if available, otherwise default)
+    let database_config = if let Some(server_config) = &ratchet_config.server {
         if !is_stdio {
-            info!("Using dedicated MCP server configuration");
+            info!("Using server database configuration for MCP");
         }
-        // Use server database config if available, otherwise default
-        let db_config = ratchet_config.server.as_ref()
-            .map(|s| s.database.clone())
-            .unwrap_or_default();
-        (db_config, mcp_config.clone())
-    } else if let Some(server_config) = &ratchet_config.server {
-        if !is_stdio {
-            info!("Using server configuration for MCP server");
-        }
-        let default_mcp = ratchet_lib::config::McpServerConfig::default();
-        (server_config.database.clone(), default_mcp)
+        server_config.database.clone()
     } else {
         if !is_stdio {
-            info!("No MCP or server configuration found, using defaults");
+            info!("No server configuration found, using default database config");
         }
-        let default_db = ratchet_lib::config::DatabaseConfig::default();
-        let default_mcp = ratchet_lib::config::McpServerConfig::default();
-        (default_db, default_mcp)
+        ratchet_lib::config::DatabaseConfig::default()
     };
 
     // Initialize database
@@ -932,7 +973,7 @@ fn handle_config_validate(config_file: &PathBuf) -> Result<()> {
     }
     
     // Try to load and validate configuration
-    match RatchetConfig::from_file(config_file) {
+    match load_config(Some(config_file)) {
         Ok(_config) => {
             println!("✅ Configuration file is valid");
             info!("Configuration validation passed");
@@ -941,7 +982,7 @@ fn handle_config_validate(config_file: &PathBuf) -> Result<()> {
         Err(e) => {
             println!("❌ Configuration validation failed: {}", e);
             error!("Configuration validation failed: {}", e);
-            Err(e.into())
+            Err(e)
         }
     }
 }

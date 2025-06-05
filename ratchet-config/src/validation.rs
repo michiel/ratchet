@@ -83,3 +83,20 @@ where
     
     Ok(())
 }
+
+/// Validate a port number
+pub fn validate_port_range(port: u16, field_name: &str, domain: &str) -> ConfigResult<()> {
+    if port == 0 {
+        return Err(ConfigError::DomainError {
+            domain: domain.to_string(),
+            message: format!("{} cannot be 0", field_name),
+        });
+    }
+    
+    // Port 1-1023 are typically reserved for system services
+    if port <= 1023 {
+        log::warn!("{} port {} is in the reserved range (1-1023)", field_name, port);
+    }
+    
+    Ok(())
+}

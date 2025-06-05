@@ -25,6 +25,7 @@ pub use domains::{
     server::ServerConfig,
     database::DatabaseConfig,
     registry::RegistryConfig,
+    mcp::McpConfig,
 };
 
 // Re-export utilities
