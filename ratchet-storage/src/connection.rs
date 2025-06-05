@@ -251,8 +251,8 @@ pub async fn create_connection_manager(config: &StorageConfig) -> StorageResult<
         
         #[cfg(feature = "database")]
         _ => {
-            // Create Sea-ORM based connection manager
-            Ok(Arc::new(crate::database::SeaOrmConnectionManager::new(config).await?))
+            // TODO: Create Sea-ORM based connection manager when database module is implemented
+            Err(StorageError::ConfigError("Sea-ORM connection manager not yet implemented".to_string()))
         }
         
         #[cfg(not(feature = "database"))]

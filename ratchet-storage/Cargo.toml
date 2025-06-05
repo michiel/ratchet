@@ -19,6 +19,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 async-trait = "0.1"
 log = { workspace = true }
+tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 regex = "1.10"
@@ -30,7 +31,7 @@ sea-query = { version = "0.32", optional = true }
 sqlx = { workspace = true, optional = true }
 
 [features]
-default = []
+default = ["database"]
 database = ["sea-orm", "sea-query", "sqlx"]
 postgres = ["database"]
 mysql = ["database"]

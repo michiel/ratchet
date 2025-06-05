@@ -17,7 +17,8 @@ pub mod transaction;
 pub use config::StorageConfig;
 pub use connection::{Connection, ConnectionManager};
 pub use error::{StorageError, StorageResult};
-pub use repositories::{Repository, BaseRepository};
+pub use repositories::Repository;
+pub use filters::SafeFilterBuilder;
 pub use transaction::{Transaction, TransactionManager};
 
 // Entity re-exports
@@ -38,8 +39,3 @@ pub use repositories::{
     delivery_result::DeliveryResultRepository,
 };
 
-#[cfg(feature = "database")]
-pub mod database;
-
-#[cfg(feature = "database")]
-pub use database::*;

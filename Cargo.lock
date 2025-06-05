@@ -3760,18 +3760,23 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "boa_engine",
+ "boa_runtime",
  "chrono",
  "env_logger",
+ "jsonschema",
  "log",
  "num_cpus",
  "ratchet-caching",
  "ratchet-core",
  "ratchet-ipc",
  "ratchet-resilience",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -3794,6 +3799,7 @@ dependencies = [
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "uuid",
 ]
 

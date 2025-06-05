@@ -21,9 +21,20 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 async-trait = "0.1"
 log = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 num_cpus = "1.16"
+jsonschema = { workspace = true }
+regex = "1.10"
+
+# JavaScript execution dependencies
+boa_engine = { version = "0.20", optional = true }
+boa_runtime = { version = "0.20", optional = true }
+
+[features]
+default = ["javascript"]
+javascript = ["boa_engine", "boa_runtime"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
