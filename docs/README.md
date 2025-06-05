@@ -135,4 +135,4 @@ Comprehensive design proposal for adding LLM Model Context Protocol support:
 - [TODO.md](../TODO.md) - Comprehensive architectural roadmap
 - [CHANGES.md](../CHANGES.md) - Release notes and changelog
 - [CLI Usage Guide](CLI_USAGE.md) - Server command documentation
-- [example-config.yaml](../example-config.yaml) - Complete configuration example
+- [example-config.yaml](../sample/configs/example-config.yaml) - Complete configuration example

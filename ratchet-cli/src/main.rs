@@ -967,23 +967,23 @@ fn handle_config_generate(config_type: &str, output: &PathBuf, force: bool) -> R
     let config_content = match config_type.to_lowercase().as_str() {
         "dev" | "development" => {
             info!("Generating development configuration");
-            include_str!("../../example-mcp-dev.yaml")
+            include_str!("../../sample/configs/example-mcp-dev.yaml")
         }
         "prod" | "production" => {
             info!("Generating production configuration");
-            include_str!("../../example-mcp-production.yaml")
+            include_str!("../../sample/configs/example-mcp-production.yaml")
         }
         "enterprise" => {
             info!("Generating enterprise configuration");
-            include_str!("../../example-mcp-enterprise.yaml")
+            include_str!("../../sample/configs/example-mcp-enterprise.yaml")
         }
         "minimal" => {
             info!("Generating minimal configuration");
-            include_str!("../../example-mcp-minimal.yaml")
+            include_str!("../../sample/configs/example-mcp-minimal.yaml")
         }
         "claude" => {
             info!("Generating Claude integration configuration");
-            include_str!("../../example-mcp-claude-integration.yaml")
+            include_str!("../../sample/configs/example-mcp-claude-integration.yaml")
         }
         _ => {
             return Err(anyhow::anyhow!(

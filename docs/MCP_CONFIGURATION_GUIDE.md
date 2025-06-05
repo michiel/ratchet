@@ -40,30 +40,30 @@ mcp:
 
 ### Available Examples
 
-1. **Development** (`example-mcp-dev.yaml`)
+1. **Development** (`sample/configs/example-mcp-dev.yaml`)
    - Minimal security for local development
    - Maximum debugging capabilities
    - High resource limits
    - stdio transport for simplicity
 
-2. **Production** (`example-mcp-production.yaml`)
+2. **Production** (`sample/configs/example-mcp-production.yaml`)
    - Comprehensive security settings
    - API key authentication
    - Network transport with TLS
    - Structured logging and monitoring
 
-3. **Enterprise** (`example-mcp-enterprise.yaml`)
+3. **Enterprise** (`sample/configs/example-mcp-enterprise.yaml`)
    - Multi-tenant support
    - Multiple authentication methods (JWT, OAuth2, API keys)
    - Comprehensive compliance features
    - High availability configuration
 
-4. **Minimal** (`example-mcp-minimal.yaml`)
+4. **Minimal** (`sample/configs/example-mcp-minimal.yaml`)
    - Bare minimum configuration
    - Suitable for simple deployments
    - Reduced feature set
 
-5. **Claude Integration** (`example-mcp-claude-integration.yaml`)
+5. **Claude Integration** (`sample/configs/example-mcp-claude-integration.yaml`)
    - Optimized for Claude Desktop
    - stdio transport configuration
    - LLM-specific rate limits and settings

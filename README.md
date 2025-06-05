@@ -80,7 +80,7 @@ cargo build --release
 ratchet serve
 
 # Start with custom configuration
-ratchet serve --config=example-config.yaml
+ratchet serve --config=sample/configs/example-config.yaml
 
 # Server will be available at:
 # - GraphQL: http://localhost:8080/graphql
@@ -293,7 +293,7 @@ logging:
   level: debug
 ```
 
-### Full Configuration Example (example-config.yaml)
+### Full Configuration Example (sample/configs/example-config.yaml)
 
 ```yaml
 # Server settings
