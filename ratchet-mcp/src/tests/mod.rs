@@ -229,10 +229,9 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     use ratchet_lib::{
         database::{DatabaseConnection, repositories::{TaskRepository, ExecutionRepository}},
         execution::ProcessTaskExecutor,
-        config::RatchetConfig,
     };
     
-    // Create in-memory database for testing
+    // Create in-memory database for testing using new config type
     let db_config = ratchet_lib::config::DatabaseConfig {
         url: "sqlite::memory:".to_string(),
         max_connections: 1,
@@ -250,8 +249,8 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     let task_repository = Arc::new(TaskRepository::new(database.clone()));
     let execution_repository = Arc::new(ExecutionRepository::new(database.clone()));
     
-    // Create executor with test config
-    let config = RatchetConfig::default();
+    // Create executor with test config (using legacy config for now since executor still needs it)
+    let config = ratchet_lib::config::RatchetConfig::default();
     let executor = Arc::new(
         ProcessTaskExecutor::new(
             ratchet_lib::database::repositories::RepositoryFactory::new(database),

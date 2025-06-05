@@ -49,6 +49,7 @@ clap = { version = "4.4", features = ["derive"] }
 ratchet-core = { path = "../ratchet-core" }
 ratchet-ipc = { path = "../ratchet-ipc" }
 ratchet-storage = { path = "../ratchet-storage" }
+ratchet-config = { path = "../ratchet-config" }
 ratchet_lib = { path = "../ratchet-lib" }
 
 [features]

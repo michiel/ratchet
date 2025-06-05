@@ -321,7 +321,26 @@ impl Default for McpServiceBuilder {
 
 /// Integration helper to create MCP service from Ratchet config
 impl McpService {
-    /// Create from Ratchet's MCP configuration
+    /// Create from Ratchet's new modular MCP configuration
+    pub async fn from_new_ratchet_config(
+        mcp_config: &ratchet_config::McpConfig,
+        task_executor: Arc<ProcessTaskExecutor>,
+        task_repository: Arc<TaskRepository>,
+        execution_repository: Arc<ExecutionRepository>,
+        log_file_path: Option<std::path::PathBuf>,
+    ) -> McpResult<Self> {
+        // Use the new convenience method from McpServerConfig
+        let server_config = crate::server::config::McpServerConfig::from_ratchet_config(mcp_config);
+
+        let config = McpServiceConfig {
+            server_config,
+            log_file_path,
+        };
+
+        Self::new(config, task_executor, task_repository, execution_repository).await
+    }
+
+    /// Create from Ratchet's legacy MCP configuration (for backward compatibility)
     pub async fn from_ratchet_config(
         mcp_config: &ratchet_lib::config::McpServerConfig,
         task_executor: Arc<ProcessTaskExecutor>,

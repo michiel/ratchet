@@ -14,14 +14,27 @@ use crate::{McpResult, McpError};
 use crate::server::{McpServer, McpServerBuilder};
 use crate::server::adapter::RatchetMcpAdapter;
 use crate::server::tools::RatchetToolRegistry;
-use crate::transport::{TransportConfig, StdioTransport};
+use crate::transport::{StdioTransport};
 use crate::security::SecurityConfig;
+
+/// Simple transport configuration for MCP service
+#[derive(Debug, Clone)]
+pub enum SimpleTransportConfig {
+    Stdio,
+    Sse { bind_address: String },
+}
+
+impl Default for SimpleTransportConfig {
+    fn default() -> Self {
+        Self::Stdio
+    }
+}
 
 /// MCP service configuration
 #[derive(Debug, Clone)]
 pub struct McpServiceConfig {
     /// Transport configuration
-    pub transport: TransportConfig,
+    pub transport: SimpleTransportConfig,
     /// Security configuration
     pub security: SecurityConfig,
     /// Optional log file path for enhanced logging
@@ -31,7 +44,7 @@ pub struct McpServiceConfig {
 impl Default for McpServiceConfig {
     fn default() -> Self {
         Self {
-            transport: TransportConfig::Stdio,
+            transport: SimpleTransportConfig::Stdio,
             security: SecurityConfig::default(),
             log_file_path: None,
         }
@@ -98,14 +111,14 @@ impl McpService {
     /// Start the MCP server
     pub async fn start(&self) -> McpResult<()> {
         match &self.config.transport {
-            TransportConfig::Stdio => {
+            SimpleTransportConfig::Stdio => {
                 // For stdio transport, we run in the current task
                 // The server will block until shutdown
                 info!("Starting MCP server with STDIO transport");
                 let transport = StdioTransport::new();
                 self.server.run(Box::new(transport)).await?;
             }
-            TransportConfig::Sse { bind_address, .. } => {
+            SimpleTransportConfig::Sse { bind_address } => {
                 // For SSE transport, spawn a background task
                 info!("Starting MCP server with SSE transport on {}", bind_address);
                 
@@ -153,14 +166,14 @@ impl McpService {
         } else {
             // For stdio transport, we can't easily check
             // Assume it's running if we haven't explicitly stopped it
-            matches!(self.config.transport, TransportConfig::Stdio)
+            matches!(self.config.transport, SimpleTransportConfig::Stdio)
         }
     }
 
     /// Get server address (for SSE transport)
     pub fn server_address(&self) -> Option<SocketAddr> {
         match &self.config.transport {
-            TransportConfig::Sse { bind_address, .. } => {
+            SimpleTransportConfig::Sse { bind_address } => {
                 bind_address.parse().ok()
             }
             _ => None,
@@ -212,8 +225,8 @@ impl Service for McpService {
 
         // Add transport info
         health = health.with_metadata("transport", match &self.config.transport {
-            TransportConfig::Stdio => "stdio",
-            TransportConfig::Sse { .. } => "sse",
+            SimpleTransportConfig::Stdio => "stdio",
+            SimpleTransportConfig::Sse { .. } => "sse",
         });
 
         // Add server address for SSE
@@ -319,7 +332,37 @@ impl Default for McpServiceBuilder {
 
 /// Integration helper to create MCP service from Ratchet config
 impl McpService {
-    /// Create from Ratchet's MCP configuration
+    /// Create from Ratchet's new modular MCP configuration
+    pub async fn from_new_ratchet_config(
+        mcp_config: &ratchet_config::McpConfig,
+        task_executor: Arc<ProcessTaskExecutor>,
+        task_repository: Arc<TaskRepository>,
+        execution_repository: Arc<ExecutionRepository>,
+        log_file_path: Option<std::path::PathBuf>,
+    ) -> McpResult<Self> {
+        // Convert new config to MCP service config
+        let transport = match mcp_config.transport.as_str() {
+            "stdio" => SimpleTransportConfig::Stdio,
+            "sse" => SimpleTransportConfig::Sse {
+                bind_address: format!("{}:{}", mcp_config.host, mcp_config.port),
+            },
+            _ => return Err(McpError::Configuration {
+                message: format!("Unknown transport: {}", mcp_config.transport),
+            }),
+        };
+
+        let security = SecurityConfig::default();
+
+        let config = McpServiceConfig {
+            transport,
+            security,
+            log_file_path,
+        };
+
+        Self::new(config, task_executor, task_repository, execution_repository).await
+    }
+
+    /// Create from Ratchet's legacy MCP configuration (for backward compatibility)
     pub async fn from_ratchet_config(
         mcp_config: &ratchet_lib::config::McpServerConfig,
         task_executor: Arc<ProcessTaskExecutor>,

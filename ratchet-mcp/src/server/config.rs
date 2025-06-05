@@ -28,6 +28,54 @@ impl Default for McpServerConfig {
     }
 }
 
+impl McpServerConfig {
+    /// Create stdio configuration
+    pub fn stdio() -> Self {
+        Self {
+            transport: McpServerTransport::Stdio,
+            security: SecurityConfig::default(),
+            bind_address: None,
+        }
+    }
+    
+    /// Create SSE configuration with basic settings
+    pub fn sse(port: u16) -> Self {
+        Self {
+            transport: McpServerTransport::sse(port),
+            security: SecurityConfig::default(),
+            bind_address: Some(format!("127.0.0.1:{}", port)),
+        }
+    }
+    
+    /// Create SSE configuration with custom host
+    pub fn sse_with_host(port: u16, host: impl Into<String>) -> Self {
+        let host = host.into();
+        Self {
+            transport: McpServerTransport::Sse {
+                port,
+                host: host.clone(),
+                tls: false,
+                cors: CorsConfig::default(),
+                timeout: Duration::from_secs(30),
+            },
+            security: SecurityConfig::default(),
+            bind_address: Some(format!("{}:{}", host, port)),
+        }
+    }
+
+    /// Create from new ratchet-config MCP configuration
+    pub fn from_ratchet_config(mcp_config: &ratchet_config::McpConfig) -> Self {
+        match mcp_config.transport.as_str() {
+            "stdio" => Self::stdio(),
+            "sse" => Self::sse_with_host(mcp_config.port, &mcp_config.host),
+            _ => {
+                // Default to stdio for unknown transport types
+                Self::stdio()
+            }
+        }
+    }
+}
+
 /// MCP server transport configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
