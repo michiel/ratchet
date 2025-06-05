@@ -7,6 +7,9 @@ pub mod error;
 pub mod loader;
 pub mod validation;
 
+// Compatibility layer for migration from ratchet-lib
+pub mod compat;
+
 // Domain-specific configuration modules
 pub mod domains;
 

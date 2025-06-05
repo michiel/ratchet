@@ -80,27 +80,42 @@ impl Related<super::jobs::Entity> for Entity {
 impl ActiveModelBehavior for ActiveModel {}
 
 impl Model {
-    /// Create a new task from ratchet-lib Task
+    /// Create a new task from ratchet-core Task
     pub fn from_ratchet_task(task: &ratchet_core::task::Task) -> Self {
+        // Extract path from task source
+        let path = match &task.source {
+            ratchet_core::task::TaskSource::File { path } => path.clone(),
+            ratchet_core::task::TaskSource::Url { url, .. } => url.clone(),
+            ratchet_core::task::TaskSource::JavaScript { .. } => "javascript:inline".to_string(),
+            ratchet_core::task::TaskSource::Plugin { plugin_id, task_name } => {
+                format!("plugin://{}:{}", plugin_id, task_name)
+            }
+        };
+
         Self {
             id: 0, // Will be set by database
-            uuid: task.uuid(),
-            name: task.metadata.label.clone(),
-            description: Some(task.metadata.description.clone()),
+            uuid: task.metadata.id.0, // TaskId contains the UUID
+            name: task.metadata.name.clone(),
+            description: task.metadata.description.clone(),
             version: task.metadata.version.clone(),
-            path: task.path.to_string_lossy().to_string(),
+            path,
             metadata: serde_json::json!({
-                "uuid": task.metadata.uuid,
+                "id": task.metadata.id.0,
+                "name": task.metadata.name,
                 "version": task.metadata.version,
-                "label": task.metadata.label,
                 "description": task.metadata.description,
+                "author": task.metadata.author,
+                "tags": task.metadata.tags,
+                "deprecated": task.metadata.deprecated,
+                "deprecation_message": task.metadata.deprecation_message,
+                "documentation": task.metadata.documentation,
             }),
             input_schema: task.input_schema.clone(),
             output_schema: task.output_schema.clone(),
-            enabled: true,
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-            validated_at: None,
+            enabled: task.enabled,
+            created_at: task.created_at,
+            updated_at: task.updated_at,
+            validated_at: task.validated_at,
         }
     }
 }

@@ -7,15 +7,15 @@ use ratchet_mcp::{
 };
 use ratchet_lib::{
     execution::ProcessTaskExecutor,
-    database::{
-        connection::DatabaseConnection,
-        repositories::{
-            task_repository::TaskRepository,
-            execution_repository::ExecutionRepository,
-            RepositoryFactory,
-        },
-    },
     config::{RatchetConfig, DatabaseConfig},
+};
+use ratchet_lib::database::{
+    connection::DatabaseConnection,
+    repositories::{
+        task_repository::TaskRepository,
+        execution_repository::ExecutionRepository,
+        RepositoryFactory,
+    },
 };
 
 #[derive(Parser)]
@@ -230,7 +230,7 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     
     // Test executor initialization
     let repositories = RepositoryFactory::new(db.clone());
-    match ProcessTaskExecutor::new(repositories, config.clone()).await {
+    match ProcessTaskExecutor::new(RepositoryFactory::new(db.clone()), config.clone()).await {
         Ok(_) => {
             tracing::info!("✓ Task executor initialized successfully");
         }

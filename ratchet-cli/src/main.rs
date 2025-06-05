@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use ratchet_config::{RatchetConfig as NewRatchetConfig, ConfigLoader};
+use ratchet_config::{RatchetConfig as NewRatchetConfig, ConfigLoader, compat};
 use ratchet_lib::config::RatchetConfig;
 use ratchet_lib::{
     task::Task,

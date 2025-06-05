@@ -340,7 +340,7 @@ impl super::Repository for TaskRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::DatabaseConfig;
+    use crate::seaorm::config::DatabaseConfig;
     use crate::database::entities::Task;
     use crate::database::repositories::Repository;
     
