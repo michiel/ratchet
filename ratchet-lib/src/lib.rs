@@ -18,7 +18,6 @@ pub mod services;
 pub mod task;
 pub mod test;
 pub mod types;
-pub mod validation;
 
 // #[cfg(test)]
 // pub mod testing;
@@ -31,6 +30,7 @@ pub use js_executor::{execute_task, execute_js_file};
 pub use rest::create_rest_app;
 pub use server::{create_app, ServerState};
 pub use services::{RatchetEngine, ServiceProvider, ServiceError, ServiceResult};
-pub use validation::{validate_json, parse_schema};
+// Re-export validation functions from ratchet-core for compatibility
+pub use ratchet_core::validation::{validate_json, parse_schema};
 
 // Legacy function removed as part of code cleanup

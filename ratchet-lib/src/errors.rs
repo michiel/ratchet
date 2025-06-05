@@ -72,6 +72,39 @@ pub enum JsExecutionError {
     InvalidOutputFormat(String),
 }
 
+/// Convert from ratchet-core's validation errors to JS execution errors
+impl From<ratchet_core::error::RatchetError> for JsExecutionError {
+    fn from(err: ratchet_core::error::RatchetError) -> Self {
+        match err {
+            ratchet_core::error::RatchetError::Validation(validation_err) => {
+                match validation_err {
+                    ratchet_core::error::ValidationError::SchemaValidation(msg) => {
+                        JsExecutionError::SchemaValidationError(msg)
+                    },
+                    ratchet_core::error::ValidationError::InvalidFormat(msg) => {
+                        JsExecutionError::InvalidInputSchema(msg)
+                    },
+                    ratchet_core::error::ValidationError::InputValidation(msg) => {
+                        JsExecutionError::InvalidInputSchema(msg)
+                    },
+                    ratchet_core::error::ValidationError::OutputValidation(msg) => {
+                        JsExecutionError::InvalidOutputSchema(msg)
+                    },
+                    ratchet_core::error::ValidationError::RequiredFieldMissing(msg) => {
+                        JsExecutionError::SchemaValidationError(format!("Required field missing: {}", msg))
+                    },
+                }
+            },
+            ratchet_core::error::RatchetError::Io(io_err) => {
+                JsExecutionError::FileReadError(io_err)
+            },
+            other => {
+                JsExecutionError::ExecutionError(format!("Core error: {}", other))
+            },
+        }
+    }
+}
+
 /// General errors that can occur in Ratchet
 #[derive(Error, Debug)]
 pub enum RatchetError {

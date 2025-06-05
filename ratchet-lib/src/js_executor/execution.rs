@@ -2,7 +2,7 @@ use crate::errors::JsExecutionError;
 use crate::js_executor::conversion::{prepare_input_argument, convert_js_result_to_json};
 use crate::js_executor::error_handling::{register_error_types, parse_js_error};
 use crate::js_executor::http_integration::{check_fetch_call, handle_fetch_processing, handle_fetch_processing_with_context};
-use crate::validation::{validate_json, parse_schema};
+use ratchet_core::validation::{validate_json, parse_schema};
 use boa_engine::{Context as BoaContext, Source};
 use serde_json::Value as JsonValue;
 use tracing::{debug, info, trace, warn};

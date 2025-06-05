@@ -12,6 +12,7 @@ description = "Core library functionality for the project"
 # Dependencies
 [dependencies]
 # Use workspace-level dependencies
+ratchet-core = { path = "../ratchet-core" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
