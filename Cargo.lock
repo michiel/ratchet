@@ -3651,13 +3651,17 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "inventory",
  "libloading",
  "log",
+ "ratchet-config",
  "ratchet-core",
+ "ratchet-plugin",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
