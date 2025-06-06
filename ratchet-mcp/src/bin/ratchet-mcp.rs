@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use anyhow::Result;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use ratchet_mcp::{
@@ -13,7 +14,6 @@ use ratchet_storage::seaorm::{
     connection::DatabaseConnection,
     repositories::{
         task_repository::TaskRepository,
-        execution_repository::ExecutionRepository,
         RepositoryFactory,
     },
     config::DatabaseConfig,
@@ -80,6 +80,25 @@ impl From<TransportChoice> for ratchet_mcp::SimpleTransportType {
     }
 }
 
+/// Convert ratchet-storage RepositoryFactory to ratchet_lib RepositoryFactory
+async fn convert_to_legacy_repository_factory(storage_config: DatabaseConfig) -> Result<ratchet_lib::database::repositories::RepositoryFactory> {
+    // Convert storage config to legacy config
+    let legacy_config = ratchet_lib::config::DatabaseConfig {
+        url: storage_config.url.clone(),
+        max_connections: storage_config.max_connections,
+        connection_timeout: storage_config.connection_timeout,
+    };
+    
+    // Create legacy database connection using the same configuration
+    let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config).await
+        .map_err(|e| anyhow::anyhow!("Failed to create legacy database connection: {}", e))?;
+    
+    // Create legacy repository factory
+    let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
+    
+    Ok(legacy_repos)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -118,7 +137,7 @@ async fn serve_command(
     
     // Initialize database connection (using default since RatchetConfig doesn't have database field)
     let db_config = DatabaseConfig::default();
-    let db = DatabaseConnection::new(db_config).await?;
+    let db = DatabaseConnection::new(db_config.clone()).await?;
     
     // Run migrations
     db.migrate().await?;
@@ -129,7 +148,7 @@ async fn serve_command(
     let execution_repository = Arc::new(repo_factory.execution_repository());
     
     // Initialize task executor (still needs legacy format)
-    let legacy_repo_factory = ratchet_lib::database::repositories::RepositoryFactory::new(db.clone().into());
+    let legacy_repo_factory = convert_to_legacy_repository_factory(db_config.clone()).await?;
     let executor = Arc::new(ProcessTaskExecutor::new(legacy_repo_factory, config.clone()).await?);
     
     // Create MCP adapter
@@ -210,7 +229,7 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     
     // Test database connection
     let db_config = DatabaseConfig::default();
-    let db = match DatabaseConnection::new(db_config).await {
+    let db = match DatabaseConnection::new(db_config.clone()).await {
         Ok(db) => {
             tracing::info!("✓ Database connection successful");
             db
@@ -235,7 +254,8 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     
     // Test executor initialization
     let repositories = RepositoryFactory::new(db.clone());
-    match ProcessTaskExecutor::new(RepositoryFactory::new(db.clone()), config.clone()).await {
+    let legacy_repo_factory_test = convert_to_legacy_repository_factory(db_config.clone()).await?;
+    match ProcessTaskExecutor::new(legacy_repo_factory_test, config.clone()).await {
         Ok(_) => {
             tracing::info!("✓ Task executor initialized successfully");
         }

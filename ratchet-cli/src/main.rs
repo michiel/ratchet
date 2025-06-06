@@ -14,7 +14,6 @@ use ratchet_lib::{
     execution::ipc::{WorkerMessage, CoordinatorMessage, TaskExecutionResult, MessageEnvelope},
 };
 
-#[cfg(feature = "javascript")]
 use ratchet_lib::{
     task::Task,
     recording,
@@ -107,7 +106,7 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
         max_execution_duration: new_config.execution.max_execution_duration.as_secs(),
         validate_schemas: new_config.execution.validate_schemas,
         max_concurrent_tasks: new_config.execution.max_concurrent_tasks,
-        timeout_grace_period: new_config.execution.timeout_grace_period.as_secs() as u32,
+        timeout_grace_period: new_config.execution.timeout_grace_period.as_secs(),
     };
     
     // Convert HTTP config
@@ -1293,7 +1292,8 @@ async fn main() -> Result<()> {
         init_mcp_stdio_logging(cli.log_level.as_ref())?;
     } else {
         // Initialize logging from config
-        init_logging_with_config(&config, cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
+        let legacy_config = convert_to_legacy_config(config.clone())?;
+        init_logging_with_config(&legacy_config, cli.log_level.as_ref(), cli.command.as_ref().and_then(|cmd| {
             match cmd {
                 Commands::RunOnce { record, .. } => record.as_ref(),
                 _ => None,
