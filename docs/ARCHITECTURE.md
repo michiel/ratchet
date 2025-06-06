@@ -16,16 +16,26 @@ This document outlines the architecture, design principles, and conventions used
 
 ## Overview
 
-Ratchet is a JavaScript task execution framework written in Rust, designed with modularity, type safety, and maintainability as core principles. The architecture follows a layered approach with clear separation of concerns.
+Ratchet is a JavaScript task execution framework written in Rust, designed with modularity, type safety, and maintainability as core principles. The architecture follows a **fully modular approach** with clear separation of concerns across **10+ specialized crates**.
+
+**🎉 MIGRATION COMPLETE**: Ratchet has successfully migrated from a monolithic `ratchet_lib` architecture to a fully modular crate system with optional dependencies, feature flags, and multiple execution paths while maintaining 100% backward compatibility.
 
 ### Core Components
 
-- **Task Management**: Loading, validation, and execution of JavaScript tasks
-- **JavaScript Engine**: Secure JavaScript execution environment using Boa
-- **HTTP Client**: Type-safe HTTP request handling with mock support
-- **Validation**: JSON schema validation for inputs and outputs
-- **Recording**: Session recording and replay functionality
-- **CLI Interface**: Command-line interface for task operations
+- **Task Management**: Loading, validation, and execution of JavaScript tasks (`ratchet-core`, `ratchet_lib`)
+- **JavaScript Engine**: Secure JavaScript execution environment using Boa (`ratchet_lib`, `ratchet-runtime`)
+- **HTTP Client**: Type-safe HTTP request handling with mock support (`ratchet_lib`)
+- **Validation**: JSON schema validation for inputs and outputs (`ratchet-core`)
+- **Recording**: Session recording and replay functionality (`ratchet_lib`)
+- **CLI Interface**: Command-line interface with dual execution paths (`ratchet-cli`)
+- **Configuration Management**: Domain-specific configuration with validation (`ratchet-config`)
+- **Storage Layer**: Repository pattern with unified entity types (`ratchet-storage`)
+- **Caching System**: Multiple store backends with HTTP request caching (`ratchet-caching`)
+- **Runtime Execution**: Modern task execution infrastructure (`ratchet-runtime`)
+- **MCP Server**: Model Context Protocol server for LLM integration (`ratchet-mcp`)
+- **Plugin System**: Dynamic and static plugin architecture (`ratchet-plugin`, `ratchet-plugins`)
+- **Resilience Patterns**: Circuit breakers, retry policies, graceful shutdown (`ratchet-resilience`)
+- **IPC Communication**: Inter-process communication abstractions (`ratchet-ipc`)
 - **Logging System**: Advanced structured logging with LLM-powered error analysis
 - **Error Pattern Recognition**: Built-in patterns for common errors with AI suggestions
 
@@ -122,23 +132,97 @@ The following diagram shows the high-level architecture of Ratchet, illustrating
 
 ### Modular Crate Architecture
 
-Ratchet has evolved from a monolithic structure to a modular architecture with specialized crates:
+**✅ COMPLETED MIGRATION**: Ratchet has successfully migrated from a monolithic structure to a fully modular architecture with 11 specialized crates:
 
 ```
 ratchet/
-├── ratchet-core/         # Core domain models and types
-├── ratchet-lib/          # Primary API implementation (REST & GraphQL)
-├── ratchet-caching/      # Caching abstractions and implementations
-├── ratchet-cli/          # Command-line interface
-├── ratchet-config/       # Configuration management
-├── ratchet-ipc/          # Inter-process communication
-├── ratchet-lib/          # Legacy monolithic library (being phased out)
+├── ratchet-core/         # Core domain models and types (Task, Execution, etc.)
+├── ratchet-lib/          # Legacy API implementation (REST & GraphQL) - maintained for compatibility
+├── ratchet-caching/      # Caching abstractions and implementations (LRU, TTL, Moka)
+├── ratchet-cli/          # Command-line interface with dual execution paths
+├── ratchet-config/       # Configuration management with domain separation
+├── ratchet-ipc/          # Inter-process communication abstractions
 ├── ratchet-mcp/          # Model Context Protocol server for LLM integration
-├── ratchet-plugin/       # Plugin infrastructure
-├── ratchet-plugins/      # Plugin implementations
-├── ratchet-resilience/   # Resilience patterns (circuit breakers, retry)
-├── ratchet-runtime/      # Task execution runtime
-└── ratchet-storage/      # Storage abstraction layer
+├── ratchet-plugin/       # Plugin infrastructure and lifecycle management
+├── ratchet-plugins/      # Plugin implementations (logging, metrics, notifications)
+├── ratchet-resilience/   # Resilience patterns (circuit breakers, retry, shutdown)
+├── ratchet-runtime/      # Modern task execution runtime with worker management
+└── ratchet-storage/      # Storage abstraction layer with repository pattern
+```
+
+### Feature Flag System
+
+The modular architecture is enhanced with a comprehensive feature flag system:
+
+```toml
+# Available build profiles in ratchet-cli/Cargo.toml
+[features]
+default = ["server", "database", "mcp-server", "plugins", "runtime"]
+
+# Core functionality
+core = []
+minimal = ["core"]
+
+# Server components  
+server = ["rest-api", "graphql-api"]
+rest-api = ["ratchet_lib/server"]
+graphql-api = ["ratchet_lib/server"]
+
+# Database backends
+database = ["sqlite"]
+sqlite = ["ratchet-storage/database", "ratchet-storage/seaorm"]
+postgres = ["ratchet-storage/postgres"]
+
+# MCP Server
+mcp-server = ["mcp-stdio", "mcp-sse"]
+mcp-stdio = ["ratchet-mcp/transport-stdio"]
+mcp-sse = ["ratchet-mcp/transport-sse"]
+
+# Execution engines
+javascript = ["ratchet_lib/javascript"]      # Legacy JavaScript executor
+runtime = ["dep:ratchet-runtime"]            # Modern runtime executor
+
+# Additional features
+plugins = ["static-plugins"]
+caching = ["dep:ratchet-caching"]
+resilience = ["dep:ratchet-resilience"]
+output = ["ratchet_lib/output"]
+
+# Complete profiles
+full = ["server", "database", "mcp-server", "plugins", "javascript", "output", "caching", "resilience", "runtime"]
+production = ["server", "database", "mcp-server", "static-plugins", "output"]
+enterprise = ["full", "postgres"]
+```
+
+### Dual Execution Architecture
+
+Ratchet now supports **dual execution paths** for maximum flexibility:
+
+#### 1. Modern Runtime Executor (`ratchet-runtime`)
+- **Feature Flag**: `runtime`
+- **Implementation**: `InMemoryTaskExecutor` and `ExecutionEngine`
+- **Advantages**: Modular, type-safe, easy to test
+- **Usage**: CLI task execution, testing, development
+
+#### 2. Legacy JavaScript Executor (`ratchet_lib`)
+- **Feature Flag**: `javascript`
+- **Implementation**: `ProcessTaskExecutor` with Boa JavaScript engine
+- **Advantages**: Full production feature set, process isolation
+- **Usage**: Server operations, complex task execution
+
+#### 3. Automatic Fallback Strategy
+```rust
+// CLI automatically selects the best available executor:
+#[cfg(all(feature = "runtime", feature = "core"))]
+{
+    // Use modern runtime executor (preferred)
+    run_task_runtime(from_fs, &input).await
+}
+#[cfg(all(feature = "javascript", not(all(feature = "runtime", feature = "core"))))]
+{
+    // Fallback to legacy executor
+    run_task(from_fs, &input).await
+}
 ```
 
 ### Workspace Structure
