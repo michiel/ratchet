@@ -46,7 +46,7 @@ ratchet-runtime = { path = "../ratchet-runtime", optional = true }
 
 # Feature flags for optional functionality
 [features]
-default = ["server", "database", "mcp-server", "plugins", "runtime", "rest-api", "graphql-api"]
+default = ["server", "database", "mcp-server", "plugins", "javascript", "output", "runtime"]
 
 # Core functionality (minimal build)
 core = []

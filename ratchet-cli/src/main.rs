@@ -10,14 +10,13 @@ use ratchet_lib::execution::ipc::{
     CoordinatorMessage, MessageEnvelope, TaskExecutionResult, WorkerMessage,
 };
 
-use ratchet_lib::{http::HttpManager, js_executor::execute_task, task::Task};
+use ratchet_lib::{http::HttpManager, js_executor::execute_task, recording, task::Task};
 
 #[cfg(feature = "database")]
 use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
-use serde_json::{from_str, json, Value as JsonValue};
+use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
