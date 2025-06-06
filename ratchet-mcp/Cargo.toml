@@ -54,7 +54,7 @@ ratchet-config = { path = "../ratchet-config" }
 ratchet_lib = { path = "../ratchet-lib" }
 
 [features]
-default = ["server", "client"]
+default = ["server", "client", "transport-stdio", "transport-sse"]
 server = []
 client = []
 transport-stdio = []
