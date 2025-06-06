@@ -1,53 +1,191 @@
-# LLM Task Development Guide for Ratchet
+# LLM Task Development Guide for Ratchet via MCP
 
-This guide provides comprehensive instructions for Large Language Models (LLMs) to understand, instrument, and develop tasks for the Ratchet system.
+This guide provides comprehensive instructions for Large Language Models (LLMs) to develop, test, and debug tasks for the Ratchet system using the Model Context Protocol (MCP) interface.
 
 ## Table of Contents
 
-1. [System Overview](#system-overview)
-2. [Architecture](#architecture)
-3. [Task Structure](#task-structure)
-4. [Development Workflow](#development-workflow)
-5. [Task Generation](#task-generation)
-6. [Implementation Guidelines](#implementation-guidelines)
-7. [Testing Framework](#testing-framework)
-8. [Examples](#examples)
-9. [Best Practices](#best-practices)
-10. [Troubleshooting](#troubleshooting)
+1. [MCP Integration Overview](#mcp-integration-overview)
+2. [Available MCP Tools](#available-mcp-tools)
+3. [Development Workflow](#development-workflow)
+4. [Task Structure](#task-structure)
+5. [Using MCP Tools for Development](#using-mcp-tools-for-development)
+6. [Testing and Debugging](#testing-and-debugging)
+7. [Best Practices](#best-practices)
+8. [Troubleshooting](#troubleshooting)
+9. [Examples](#examples)
 
-## System Overview
+## MCP Integration Overview
 
-Ratchet is a task execution engine designed for automated workflow processing. It provides:
+Ratchet provides a complete MCP (Model Context Protocol) server that allows LLMs to interact with the task execution system. This enables:
 
-- **Task Registry**: Manages JavaScript-based task definitions
-- **JavaScript Engine**: Secure JavaScript execution environment using Boa engine
-- **Execution Engine**: Runs tasks in isolated processes with resource management
-- **REST/GraphQL APIs**: Unified interface for task management and execution
-- **Scheduler**: Cron-based task scheduling
-- **Output Destinations**: Flexible result delivery (filesystem, webhooks, databases)
-- **Testing Framework**: Comprehensive test suite for task validation
+- **Direct task execution** via MCP tools
+- **Real-time monitoring** of task execution
+- **Comprehensive debugging** capabilities
+- **Task generation and validation** through the CLI
+- **Error analysis** with AI-powered suggestions
 
-### Key Concepts
-
-- **Task**: A JavaScript module with defined input/output schemas and business logic
-- **Job**: An execution instance of a task with specific input data
-- **Execution**: The runtime state and results of a job
-- **Schedule**: Automated task execution based on cron expressions
-
-## Architecture
+### Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   REST/GraphQL  │    │   Task Registry │    │ Execution Engine│
-│      APIs       │◄──►│   (File-based)  │◄──►│  (Process-based)│
+│      LLM        │◄──►│   MCP Server    │◄──►│ Ratchet Engine  │
+│   (You/Client)  │    │  (ratchet-mcp)  │    │   (ratchet)     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│    Database     │    │    Scheduler    │    │Output Destinations│
-│ (Jobs/Results)  │    │  (Cron-based)  │    │ (Files/Webhooks) │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       ▼                       ▼
+         │              ┌─────────────────┐    ┌─────────────────┐
+         │              │  Task Registry  │    │    Database     │
+         │              │  (filesystem)   │    │ (SQLite/Postgres)│
+         │              └─────────────────┘    └─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Ratchet CLI    │ # Available via direct execution
+│   (generate,    │ # Not through MCP - use for scaffolding
+│   validate,     │
+│   test)         │
+└─────────────────┘
 ```
+
+## Available MCP Tools
+
+The Ratchet MCP server provides these tools for task development and execution:
+
+### Core Execution Tools
+
+1. **`ratchet.execute_task`** - Execute a task with input data
+2. **`ratchet.list_available_tasks`** - List all tasks in the registry
+3. **`ratchet.get_task_info`** - Get detailed information about a specific task
+
+### Monitoring & Debugging Tools
+
+4. **`ratchet.get_execution_status`** - Get status of a task execution
+5. **`ratchet.get_execution_logs`** - Get logs from a task execution
+6. **`ratchet.get_execution_trace`** - Get detailed execution trace for debugging
+7. **`ratchet.analyze_execution_error`** - AI-powered error analysis with suggestions
+8. **`ratchet.list_executions`** - List recent task executions
+
+### Management Tools
+
+9. **`ratchet.cancel_execution`** - Cancel a running task execution
+10. **`ratchet.validate_task_input`** - Validate input data against task schema
+
+## Development Workflow
+
+### 1. Initial Setup
+
+When starting task development:
+
+1. **Generate task scaffold** using the CLI:
+   ```bash
+   ratchet generate task my-new-task --label "My Task" --description "What this task does"
+   ```
+
+2. **List available tasks** to understand the current registry:
+   ```json
+   {
+     "tool": "ratchet.list_available_tasks"
+   }
+   ```
+
+3. **Examine existing tasks** for patterns and examples:
+   ```json
+   {
+     "tool": "ratchet.get_task_info",
+     "arguments": {
+       "task_id_or_path": "sample/js-tasks/addition"
+     }
+   }
+   ```
+
+### 2. Development Cycle
+
+Follow this iterative development process:
+
+```
+┌─────────────────┐
+│  1. Design      │ ──► Define input/output schemas
+│     Task        │     and core logic requirements
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  2. Implement   │ ──► Write main.js with proper
+│     Core Logic  │     function wrapper and error handling  
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  3. Validate    │ ──► Test input validation and
+│     Input       │     basic execution
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  4. Execute &   │ ──► Run test cases and debug
+│     Debug       │     any issues with MCP tools
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  5. Monitor &   │ ──► Use monitoring tools to
+│     Optimize    │     analyze performance and logs
+└─────────────────┘
+```
+
+### 3. Testing Strategy
+
+Use MCP tools to thoroughly test your tasks:
+
+1. **Validate input schemas**:
+   ```json
+   {
+     "tool": "ratchet.validate_task_input",
+     "arguments": {
+       "task_id_or_path": "sample/js-tasks/my-task",
+       "input": {
+         "param1": "test value",
+         "param2": 42
+       }
+     }
+   }
+   ```
+
+2. **Execute with test data**:
+   ```json
+   {
+     "tool": "ratchet.execute_task",
+     "arguments": {
+       "task_id_or_path": "sample/js-tasks/my-task",
+       "input": {
+         "param1": "production value",
+         "param2": 100
+       }
+     }
+   }
+   ```
+
+3. **Monitor execution**:
+   ```json
+   {
+     "tool": "ratchet.get_execution_status",
+     "arguments": {
+       "execution_id": "uuid-from-execute-response"
+     }
+   }
+   ```
+
+4. **Debug issues**:
+   ```json
+   {
+     "tool": "ratchet.get_execution_logs",
+     "arguments": {
+       "execution_id": "uuid-from-execute-response",
+       "level": "debug",
+       "limit": 100
+     }
+   }
+   ```
 
 ## Task Structure
 
@@ -80,14 +218,9 @@ task-name/
 }
 ```
 
-### Schema Files
-
-- **input.schema.json**: JSON Schema defining expected input structure
-- **output.schema.json**: JSON Schema defining expected output structure
-
 ### main.js Implementation
 
-The main.js file must contain a single function that takes input and optionally context, and returns output:
+The main.js file must contain a single function:
 
 ```javascript
 (function(input, context) {
@@ -104,10 +237,6 @@ The main.js file must contain a single function that takes input and optionally 
         if (context) {
             console.log("Execution ID:", context.executionId);
             console.log("Task ID:", context.taskId);
-            console.log("Task Version:", context.taskVersion);
-            if (context.jobId) {
-                console.log("Job ID:", context.jobId);
-            }
         }
         
         // Perform your task logic
@@ -127,32 +256,14 @@ The main.js file must contain a single function that takes input and optionally 
 ```
 
 **Important Notes:**
-- The function must be wrapped in parentheses: `(function(input, context) { ... })`
-- The context parameter is optional - tasks can work with just `(function(input) { ... })`
+- Function must be wrapped: `(function(input, context) { ... })`
 - No async/await support - all operations must be synchronous
-- Use the built-in `fetch` function for HTTP requests
+- Use built-in `fetch` function for HTTP requests
 - No external modules or Node.js APIs available
-
-### Context Object
-
-The context object provides execution metadata and contains:
-
-```javascript
-{
-  executionId: "uuid-string",  // Unique execution identifier
-  taskId: "uuid-string",       // Task UUID
-  taskVersion: "1.0.0",        // Task version string
-  jobId: "uuid-string"         // Job UUID (only present for scheduled executions)
-}
-```
 
 ### Available APIs
 
-Ratchet provides a minimal JavaScript runtime environment with these built-in functions:
-
 #### fetch(url, options, body)
-
-Makes HTTP requests to external services:
 
 ```javascript
 // GET request
@@ -168,17 +279,9 @@ const response = fetch(
     { method: "POST", headers: { "Content-Type": "application/json" } },
     { name: "example", value: 42 }
 );
-
-// Response object has:
-// - ok: boolean (status 200-299)
-// - status: number (HTTP status code)
-// - statusText: string
-// - body: object (parsed JSON response)
 ```
 
 #### Error Types
-
-Built-in error types for different failure scenarios:
 
 ```javascript
 // Network-related errors
@@ -191,237 +294,149 @@ throw new DataError("Invalid response format");
 throw new Error("Something went wrong");
 ```
 
-**Note**: No context object is provided. Tasks are pure functions that take input and return output.
+## Using MCP Tools for Development
 
-## Development Workflow
+### Step-by-Step Task Development
 
-### 1. Understanding Requirements
+#### 1. Start with Task Information
 
-When given a task request, analyze:
-- **Input requirements**: What data does the task need?
-- **Processing logic**: What operations to perform?
-- **Output format**: What should be returned?
-- **External dependencies**: APIs, services, or data sources needed?
-- **Error handling**: What could go wrong and how to handle it?
-
-### 2. Using Ratchet Generate
-
-Use the `ratchet generate` command to scaffold a new task:
-
-```bash
-# Generate a new task
-ratchet generate task my-task-name
-
-# This creates:
-# sample/js-tasks/my-task-name/
-# ├── metadata.json
-# ├── input.schema.json  
-# ├── output.schema.json
-# ├── main.js
-# └── tests/
-#     └── test-001.json
-```
-
-### 3. Development Process
-
-1. **Define schemas first**: Start with input and output schemas
-2. **Implement core logic**: Write the main execute function
-3. **Add error handling**: Handle edge cases and failures
-4. **Create comprehensive tests**: Cover happy path and error cases
-5. **Validate and iterate**: Test thoroughly before finalizing
-
-## Task Generation
-
-### Command Usage
-
-```bash
-# Basic task generation
-ratchet generate task task-name
-
-# With specific options
-ratchet generate task task-name \
-  --author "Your Name" \
-  --description "Task description" \
-  --tags "tag1,tag2"
-```
-
-### Generated Template
-
-The generator creates a basic template that you should customize:
-
-```javascript
-// Generated main.js template
-(function(input, context) {
-    // TODO: Implement your task logic here
-    
-    try {
-        // Extract input parameters
-        const { /* your parameters */ } = input;
-        
-        // Access execution context if needed
-        if (context) {
-            // Log execution metadata
-            console.log("Executing task:", context.taskId);
-        }
-        
-        // Your implementation
-        return {
-            result: "placeholder"
-        };
-    } catch (error) {
-        throw new Error(`Task execution failed: ${error.message}`);
-    }
-})
-```
-
-## Implementation Guidelines
-
-### Input Validation
-
-Always rely on schema validation - the input is pre-validated:
-
-```javascript
-(function(input) {
-    // Input is already validated against input.schema.json
-    // Access properties directly
-    const { apiKey, endpoint, params } = input;
-    
-    // Perform additional business logic validation if needed
-    if (!apiKey) {
-        throw new Error("API key is required");
-    }
-    
-    // Continue with task logic...
-})
-```
-
-### HTTP Requests
-
-Use the built-in `fetch` function for external API calls:
-
-```javascript
-(function(input) {
-    try {
-        // GET request with headers
-        const response = fetch(input.url, {
-            method: "GET",
-            headers: {
-                'Authorization': `Bearer ${input.apiKey}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new NetworkError(`API request failed: ${response.status} ${response.statusText}`);
-        }
-        
-        // POST request with data
-        const postResponse = fetch(input.webhookUrl, {
-            method: "POST",
-            headers: { 'Content-Type': 'application/json' }
-        }, {
-            data: response.body
-        });
-        
-        return { data: response.body };
-    } catch (error) {
-        throw new Error(`API call failed: ${error.message}`);
-    }
-})
-```
-
-### Error Handling
-
-Implement comprehensive error handling:
-
-```javascript
-(function(input) {
-    try {
-        // Main logic
-        const result = performOperation(input);
-        return { data: result };
-        
-    } catch (error) {
-        // Handle different error types appropriately
-        if (error instanceof NetworkError) {
-            throw new NetworkError(`Network operation failed: ${error.message}`);
-        } else if (error instanceof DataError) {
-            throw new DataError(`Data validation failed: ${error.message}`);
-        } else {
-            throw new Error(`Task failed: ${error.message}`);
-        }
-    }
-})
-
-function performOperation(input) {
-    // Your business logic here
-    const response = fetch(input.apiUrl);
-    
-    if (!response.ok) {
-        throw new NetworkError(`API returned ${response.status}`);
-    }
-    
-    if (!response.body || !response.body.data) {
-        throw new DataError("Invalid response format");
-    }
-    
-    return response.body.data;
-}
-```
-
-### Debugging and Logging
-
-Since no logging context is provided, use return values and error messages for debugging:
-
-```javascript
-(function(input) {
-    try {
-        // Add debug information to your return values during development
-        const debugInfo = [];
-        debugInfo.push("Starting task execution");
-        
-        const result = performLogic(input);
-        debugInfo.push("Logic completed successfully");
-        
-        return {
-            result: result,
-            // Include debug info in development (remove in production)
-            debug: debugInfo
-        };
-    } catch (error) {
-        // Provide detailed error messages
-        throw new Error(`Task failed at step: ${error.message}`);
-    }
-})
-```
-
-## Testing Framework
-
-### Test Case Structure
-
-Each test case is a JSON file in the `tests/` directory:
+First, understand existing tasks and patterns:
 
 ```json
 {
-  "name": "Test case description",
-  "description": "Detailed explanation of what this test validates",
+  "tool": "ratchet.list_available_tasks",
+  "arguments": {}
+}
+```
+
+Examine a similar task:
+
+```json
+{
+  "tool": "ratchet.get_task_info",
+  "arguments": {
+    "task_id_or_path": "sample/js-tasks/weather-api"
+  }
+}
+```
+
+#### 2. Create and Test Input Validation
+
+Before implementing logic, validate your input schema:
+
+```json
+{
+  "tool": "ratchet.validate_task_input",
+  "arguments": {
+    "task_id_or_path": "sample/js-tasks/my-new-task",
+    "input": {
+      "testParam": "testValue"
+    }
+  }
+}
+```
+
+#### 3. Implement and Execute
+
+Execute your task with test data:
+
+```json
+{
+  "tool": "ratchet.execute_task",
+  "arguments": {
+    "task_id_or_path": "sample/js-tasks/my-new-task",
+    "input": {
+      "apiKey": "test-key",
+      "endpoint": "https://api.example.com/data",
+      "params": {
+        "limit": 10
+      }
+    }
+  }
+}
+```
+
+#### 4. Monitor Execution Progress
+
+Track the execution status:
+
+```json
+{
+  "tool": "ratchet.get_execution_status",
+  "arguments": {
+    "execution_id": "execution-uuid-from-step-3"
+  }
+}
+```
+
+#### 5. Debug Issues
+
+If there are problems, get detailed logs:
+
+```json
+{
+  "tool": "ratchet.get_execution_logs",
+  "arguments": {
+    "execution_id": "execution-uuid-from-step-3",
+    "level": "debug",
+    "limit": 50
+  }
+}
+```
+
+Get a detailed trace:
+
+```json
+{
+  "tool": "ratchet.get_execution_trace",
+  "arguments": {
+    "execution_id": "execution-uuid-from-step-3"
+  }
+}
+```
+
+#### 6. Analyze Errors
+
+Use AI-powered error analysis:
+
+```json
+{
+  "tool": "ratchet.analyze_execution_error",
+  "arguments": {
+    "execution_id": "execution-uuid-from-step-3",
+    "include_suggestions": true,
+    "include_similar_errors": true
+  }
+}
+```
+
+## Testing and Debugging
+
+### Test Case Development
+
+Create comprehensive test cases in the `tests/` directory:
+
+```json
+{
+  "name": "Successful API call",
+  "description": "Test successful data retrieval from API",
   "input": {
-    // Input data matching input.schema.json
+    "apiKey": "test-key",
+    "endpoint": "https://httpbin.org/json",
+    "timeout": 30
   },
   "expected_output": {
-    // Expected output matching output.schema.json
+    "status": "success",
+    "data": {}
   },
-  "should_fail": false,
-  "timeout": 10000,
   "mock_http": {
     "requests": [
       {
         "method": "GET",
-        "url": "https://api.example.com/data",
+        "url": "https://httpbin.org/json",
         "response": {
           "status": 200,
-          "headers": { "Content-Type": "application/json" },
-          "body": { "result": "mocked data" }
+          "body": {"key": "value"}
         }
       }
     ]
@@ -429,218 +444,199 @@ Each test case is a JSON file in the `tests/` directory:
 }
 ```
 
-### Test Categories
+### Debugging Workflow
 
-Create tests for different scenarios:
+When a task fails:
 
-1. **Happy Path Tests** (`test-001-success.json`):
-   ```json
-   {
-     "name": "Successful execution with valid input",
-     "input": { /* valid input */ },
-     "expected_output": { /* expected result */ },
-     "should_fail": false
-   }
-   ```
+1. **Check execution status** for high-level error information
+2. **Get execution logs** to see console output and errors
+3. **Get execution trace** for detailed step-by-step execution
+4. **Use error analysis** for AI-powered suggestions
+5. **Validate input** to ensure schema compliance
+6. **Test with minimal input** to isolate the issue
 
-2. **Error Handling Tests** (`test-002-invalid-input.json`):
-   ```json
-   {
-     "name": "Handle invalid input gracefully",
-     "input": { /* invalid input */ },
-     "should_fail": true,
-     "expected_error": "ValidationError"
-   }
-   ```
+### CLI Integration
 
-3. **Edge Case Tests** (`test-003-edge-cases.json`):
-   ```json
-   {
-     "name": "Handle edge cases",
-     "input": { /* edge case data */ },
-     "expected_output": { /* expected behavior */ }
-   }
-   ```
-
-4. **Mocked External API Tests** (`test-004-api-mock.json`):
-   ```json
-   {
-     "name": "Test with mocked external API",
-     "mock_http": {
-       "requests": [
-         {
-           "method": "GET",
-           "url": "https://api.example.com/endpoint",
-           "response": {
-             "status": 200,
-             "body": { "data": "mocked response" }
-           }
-         }
-       ]
-     }
-   }
-   ```
-
-### Running Tests
+Use the CLI for scaffolding and validation:
 
 ```bash
-# Test a specific task
-ratchet test sample/js-tasks/my-task
+# Generate new task
+ratchet generate task my-api-task --label "API Integration Task"
 
-# Test all tasks
-ratchet test sample/js-tasks/
+# Validate task structure
+ratchet validate sample/js-tasks/my-api-task
 
-# Run with verbose output
-ratchet test sample/js-tasks/my-task --verbose
+# Run comprehensive tests
+ratchet test sample/js-tasks/my-api-task
 
-# Run specific test case
-ratchet test sample/js-tasks/my-task --test test-001.json
-```
-
-## Examples
-
-### Example 1: Basic API Task
-
-```javascript
-// main.js - Simple API task
-(function(input) {
-    const { endpoint, apiKey, params = {} } = input;
-    
-    try {
-        // Build URL with parameters
-        const url = new URL(endpoint);
-        Object.keys(params).forEach(key => {
-            url.searchParams.append(key, params[key]);
-        });
-        
-        // Make HTTP request
-        const response = fetch(url.toString(), {
-            method: "GET",
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new NetworkError(`API request failed: ${response.status} ${response.statusText}`);
-        }
-        
-        const data = response.body;
-        
-        return {
-            data: data,
-            timestamp: new Date().toISOString()
-        };
-        
-    } catch (error) {
-        if (error instanceof NetworkError) {
-            throw error;
-        }
-        throw new Error(`Task execution failed: ${error.message}`);
-    }
-})
-```
-
-### Example 2: Data Processing Task
-
-```javascript
-// main.js - Data transformation task
-(function(input) {
-    const { data, transformations, outputFormat = 'json' } = input;
-    
-    if (!Array.isArray(data)) {
-        throw new DataError("Input data must be an array");
-    }
-    
-    let processedData = [...data];
-    
-    // Apply transformations
-    for (const transform of transformations) {
-        switch (transform.type) {
-            case 'filter':
-                processedData = processedData.filter(
-                    item => evaluateFilter(item, transform.condition)
-                );
-                break;
-                
-            case 'map':
-                processedData = processedData.map(
-                    item => applyMapping(item, transform.mapping)
-                );
-                break;
-                
-            case 'sort':
-                processedData.sort((a, b) => 
-                    compareValues(a[transform.field], b[transform.field], transform.order)
-                );
-                break;
-        }
-    }
-    
-    return {
-        originalCount: data.length,
-        processedCount: processedData.length,
-        data: processedData,
-        format: outputFormat,
-        processedAt: new Date().toISOString()
-    };
-    
-    function evaluateFilter(item, condition) {
-        // Implement filter logic based on condition
-        return item[condition.field] === condition.value;
-    }
-    
-    function applyMapping(item, mapping) {
-        // Apply field mapping transformations
-        const mapped = {};
-        for (const [key, value] of Object.entries(mapping)) {
-            mapped[key] = item[value];
-        }
-        return mapped;
-    }
-    
-    function compareValues(a, b, order) {
-        if (order === 'desc') {
-            return b - a;
-        }
-        return a - b;
-    }
-})
+# Execute directly (alternative to MCP)
+ratchet run-once sample/js-tasks/my-api-task --input '{"key":"value"}'
 ```
 
 ## Best Practices
 
-### 1. Schema Design
+### 1. Development Process
+
+- **Start simple**: Begin with minimal input/output and basic logic
+- **Test early**: Validate schemas and basic execution before adding complexity
+- **Use MCP monitoring**: Leverage execution status and logs throughout development
+- **Iterate quickly**: Make small changes and test frequently
+
+### 2. Error Handling
+
+- **Provide context**: Include relevant information in error messages
+- **Categorize errors**: Use appropriate error types (NetworkError, DataError, Error)
+- **Debug information**: Return debug data during development (remove in production)
+
+### 3. MCP Tool Usage
+
+- **Monitor all executions**: Always check status after executing tasks
+- **Use error analysis**: Let AI help you understand and fix issues
+- **Validate inputs**: Check schema compliance before complex logic
+- **Leverage logs**: Use execution logs to understand task behavior
+
+### 4. Schema Design
 
 - **Be specific**: Use precise types and constraints
 - **Document everything**: Add descriptions to all fields
+- **Test edge cases**: Include boundary conditions in schemas
 - **Version schemas**: Consider backward compatibility
-- **Validate thoroughly**: Use JSON Schema features effectively
 
-Example input schema:
+### 5. Performance
+
+- **Set appropriate timeouts**: In metadata.json and for HTTP calls
+- **Monitor execution time**: Use MCP tools to track performance
+- **Handle large data**: Process in chunks when necessary
+- **Cache wisely**: Store expensive computations in variables
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Schema Validation Failures
+
+**Problem**: Task input validation fails
+```
+Error: Input validation failed: property 'apiKey' is required
+```
+
+**Solution**: Use MCP to validate and debug:
+```json
+{
+  "tool": "ratchet.validate_task_input",
+  "arguments": {
+    "task_id_or_path": "sample/js-tasks/my-task",
+    "input": {
+      "apiKey": "test-key"
+    }
+  }
+}
+```
+
+#### 2. Execution Timeouts
+
+**Problem**: Task execution times out
+```
+Error: Task execution timed out after 30000ms
+```
+
+**Solution**: 
+1. Check execution logs for bottlenecks
+2. Increase timeout in metadata.json
+3. Optimize performance
+
+```json
+{
+  "tool": "ratchet.get_execution_logs",
+  "arguments": {
+    "execution_id": "uuid",
+    "level": "debug"
+  }
+}
+```
+
+#### 3. HTTP Request Failures
+
+**Problem**: External API calls fail
+```
+NetworkError: Failed to connect to API
+```
+
+**Solution**: 
+1. Check execution trace for detailed request info
+2. Validate API endpoints and credentials
+3. Add proper error handling
+
+```json
+{
+  "tool": "ratchet.get_execution_trace",
+  "arguments": {
+    "execution_id": "uuid"
+  }
+}
+```
+
+#### 4. JavaScript Runtime Errors
+
+**Problem**: JavaScript execution fails
+```
+Error: Cannot read property 'x' of undefined
+```
+
+**Solution**: Use error analysis for suggestions:
+```json
+{
+  "tool": "ratchet.analyze_execution_error",
+  "arguments": {
+    "execution_id": "uuid",
+    "include_suggestions": true
+  }
+}
+```
+
+### Debugging Checklist
+
+When troubleshooting a task:
+
+- [ ] Check if task structure is valid (`ratchet validate`)
+- [ ] Verify input matches schema (`ratchet.validate_task_input`)
+- [ ] Examine execution status (`ratchet.get_execution_status`)
+- [ ] Review execution logs (`ratchet.get_execution_logs`)
+- [ ] Get detailed trace (`ratchet.get_execution_trace`)
+- [ ] Use AI error analysis (`ratchet.analyze_execution_error`)
+- [ ] Test with minimal input to isolate issue
+- [ ] Check for similar working tasks as examples
+
+## Examples
+
+### Example 1: Weather API Task
+
+**Objective**: Create a task that fetches weather data from an external API
+
+#### Step 1: Generate Task Scaffold
+```bash
+ratchet generate task weather-fetcher --label "Weather Data Fetcher"
+```
+
+#### Step 2: Design Input Schema
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "title": "Weather API Input",
-  "description": "Input parameters for weather data retrieval",
   "required": ["location", "apiKey"],
   "properties": {
     "location": {
       "type": "string",
-      "description": "City name or coordinates (lat,lon)",
-      "minLength": 1,
-      "examples": ["London", "40.7128,-74.0060"]
+      "description": "City name or coordinates",
+      "minLength": 1
     },
     "apiKey": {
-      "type": "string",
+      "type": "string", 
       "description": "OpenWeatherMap API key",
-      "pattern": "^[a-f0-9]{32}$"
+      "minLength": 1
     },
     "units": {
       "type": "string",
-      "description": "Temperature units",
       "enum": ["metric", "imperial", "kelvin"],
       "default": "metric"
     }
@@ -648,125 +644,262 @@ Example input schema:
 }
 ```
 
-### 2. Error Handling Strategy
+#### Step 3: Implement Logic
+```javascript
+(function(input, context) {
+    const { location, apiKey, units = 'metric' } = input;
+    
+    try {
+        // Build API URL
+        const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=${units}`;
+        
+        // Make API request
+        const response = fetch(url, {
+            method: "GET",
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new NetworkError(`Weather API returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const weatherData = response.body;
+        
+        if (!weatherData || !weatherData.main) {
+            throw new DataError("Invalid weather data format received");
+        }
+        
+        // Return formatted weather information
+        return {
+            location: weatherData.name,
+            country: weatherData.sys.country,
+            temperature: weatherData.main.temp,
+            humidity: weatherData.main.humidity,
+            description: weatherData.weather[0].description,
+            units: units,
+            timestamp: new Date().toISOString(),
+            executionId: context ? context.executionId : null
+        };
+        
+    } catch (error) {
+        if (error instanceof NetworkError || error instanceof DataError) {
+            throw error;
+        }
+        throw new Error(`Weather fetch failed: ${error.message}`);
+    }
+})
+```
 
-- **Catch and categorize**: Different error types need different handling
-- **Provide context**: Include relevant information in error messages
-- **Log appropriately**: Use correct log levels
-- **Fail fast**: Don't continue processing with invalid state
+#### Step 4: Test with MCP
 
-### 3. Performance Considerations
+Validate input:
+```json
+{
+  "tool": "ratchet.validate_task_input",
+  "arguments": {
+    "task_id_or_path": "sample/js-tasks/weather-fetcher",
+    "input": {
+      "location": "London",
+      "apiKey": "your-api-key",
+      "units": "metric"
+    }
+  }
+}
+```
 
-- **Set timeouts**: For all external calls
-- **Batch operations**: When possible
-- **Stream large data**: Don't load everything into memory
-- **Cache results**: For expensive operations within the task
+Execute task:
+```json
+{
+  "tool": "ratchet.execute_task",
+  "arguments": {
+    "task_id_or_path": "sample/js-tasks/weather-fetcher",
+    "input": {
+      "location": "London",
+      "apiKey": "your-api-key",
+      "units": "metric"
+    }
+  }
+}
+```
 
-### 4. Security Guidelines
+Monitor execution:
+```json
+{
+  "tool": "ratchet.get_execution_status",
+  "arguments": {
+    "execution_id": "execution-uuid-from-previous-step"
+  }
+}
+```
 
-- **Validate inputs**: Even though schemas handle structure
-- **Sanitize outputs**: Prevent injection attacks
-- **Secure external calls**: Use HTTPS, validate certificates
-- **Handle secrets properly**: Never log sensitive data
+### Example 2: Data Processing Task
 
-## Troubleshooting
+**Objective**: Create a task that processes and transforms data arrays
 
-### Common Issues
+#### Implementation
+```javascript
+(function(input, context) {
+    const { data, operations = [], outputFormat = 'json' } = input;
+    
+    if (!Array.isArray(data)) {
+        throw new DataError("Input 'data' must be an array");
+    }
+    
+    let processedData = [...data];
+    let operationsSummary = [];
+    
+    // Apply each operation in sequence
+    for (const [index, operation] of operations.entries()) {
+        const beforeCount = processedData.length;
+        
+        try {
+            switch (operation.type) {
+                case 'filter':
+                    processedData = processedData.filter(item => 
+                        evaluateCondition(item, operation.condition)
+                    );
+                    break;
+                    
+                case 'map':
+                    processedData = processedData.map(item => 
+                        applyTransformation(item, operation.transformation)
+                    );
+                    break;
+                    
+                case 'sort':
+                    const field = operation.field;
+                    const order = operation.order || 'asc';
+                    processedData.sort((a, b) => {
+                        const aVal = a[field];
+                        const bVal = b[field];
+                        if (order === 'desc') {
+                            return bVal > aVal ? 1 : -1;
+                        }
+                        return aVal > bVal ? 1 : -1;
+                    });
+                    break;
+                    
+                default:
+                    throw new DataError(`Unknown operation type: ${operation.type}`);
+            }
+            
+            operationsSummary.push({
+                step: index + 1,
+                operation: operation.type,
+                itemsBefore: beforeCount,
+                itemsAfter: processedData.length
+            });
+            
+        } catch (error) {
+            throw new DataError(`Operation ${index + 1} (${operation.type}) failed: ${error.message}`);
+        }
+    }
+    
+    return {
+        originalCount: data.length,
+        processedCount: processedData.length,
+        operations: operationsSummary,
+        data: processedData,
+        format: outputFormat,
+        processedAt: new Date().toISOString(),
+        executionId: context ? context.executionId : null
+    };
+    
+    function evaluateCondition(item, condition) {
+        const { field, operator, value } = condition;
+        const itemValue = item[field];
+        
+        switch (operator) {
+            case 'equals':
+                return itemValue === value;
+            case 'not_equals':
+                return itemValue !== value;
+            case 'greater_than':
+                return itemValue > value;
+            case 'less_than':
+                return itemValue < value;
+            case 'contains':
+                return String(itemValue).includes(String(value));
+            default:
+                throw new DataError(`Unknown operator: ${operator}`);
+        }
+    }
+    
+    function applyTransformation(item, transformation) {
+        const result = {};
+        for (const [newField, sourceField] of Object.entries(transformation)) {
+            result[newField] = item[sourceField];
+        }
+        return result;
+    }
+})
+```
 
-1. **Schema Validation Errors**:
-   ```
-   Error: Input validation failed
-   ```
-   - Check input.schema.json syntax
-   - Verify input data matches schema exactly
-   - Use online JSON Schema validators
-
-2. **Module Loading Errors**:
-   ```
-   Error: Cannot find module 'xyz'
-   ```
-   - Ratchet runs in isolated Boa JavaScript environment
-   - No external modules available
-   - Use built-in fetch function instead of external HTTP libraries
-
-3. **Timeout Errors**:
-   ```
-   Error: Task execution timed out
-   ```
-   - Increase timeout in metadata.json
-   - Optimize task performance
-   - Use streaming for large operations
-
-4. **Memory Errors**:
-   ```
-   Error: JavaScript heap out of memory
-   ```
-   - Increase memory_limit in metadata.json
-   - Process data in chunks
-   - Clean up variables after use
-
-### Debugging Tips
-
-1. **Include debug information in return values**:
-   ```javascript
-   return {
-       result: processedData,
-       debug: { step: "processing", itemCount: data.length }
-   };
-   ```
-
-2. **Test with simple cases first**:
-   ```json
-   {
-     "name": "Minimal test case",
-     "input": { /* minimal valid input */ }
-   }
-   ```
-
-3. **Check generated files**:
-   ```bash
-   # Verify task structure
-   find sample/js-tasks/my-task -type f
-   
-   # Validate schemas
-   ratchet validate sample/js-tasks/my-task
-   ```
+#### Test with MCP
+```json
+{
+  "tool": "ratchet.execute_task",
+  "arguments": {
+    "task_id_or_path": "sample/js-tasks/data-processor",
+    "input": {
+      "data": [
+        {"name": "Alice", "age": 30, "city": "London"},
+        {"name": "Bob", "age": 25, "city": "Paris"},
+        {"name": "Charlie", "age": 35, "city": "London"}
+      ],
+      "operations": [
+        {
+          "type": "filter",
+          "condition": {
+            "field": "city",
+            "operator": "equals",
+            "value": "London"
+          }
+        },
+        {
+          "type": "sort",
+          "field": "age",
+          "order": "desc"
+        }
+      ]
+    }
+  }
+}
+```
 
 ## Development Checklist
 
 Before considering a task complete:
 
-- [ ] Metadata.json has correct UUID, version, and description
-- [ ] Input schema validates all required fields with proper constraints
-- [ ] Output schema matches actual return structure
-- [ ] Main.js implements function wrapper correctly: (function(input) { ... })
-- [ ] Error handling covers common failure scenarios
-- [ ] Return values provide useful information without exposing secrets
-- [ ] At least 3 test cases: success, failure, edge case
-- [ ] Test cases include proper mocking for external APIs
-- [ ] All tests pass when run with `ratchet test`
-- [ ] Performance is acceptable for expected input sizes
-- [ ] Documentation is clear and complete
+- [ ] **Task Structure**
+  - [ ] metadata.json has correct UUID, version, and description
+  - [ ] input.schema.json validates all required fields with proper constraints
+  - [ ] output.schema.json matches actual return structure
+  - [ ] main.js implements function wrapper correctly: `(function(input, context) { ... })`
 
-## Execution Commands
+- [ ] **Functionality**
+  - [ ] Error handling covers common failure scenarios
+  - [ ] Return values provide useful information without exposing secrets
+  - [ ] HTTP requests use proper error handling and timeouts
 
-```bash
-# Development workflow
-ratchet generate task my-task        # Create task scaffold
-# Edit files: metadata.json, schemas, main.js, tests/
-ratchet validate sample/js-tasks/my-task  # Validate structure
-ratchet test sample/js-tasks/my-task      # Run tests
-ratchet execute sample/js-tasks/my-task --input '{"key":"value"}'  # Test execution
+- [ ] **Testing** 
+  - [ ] Input validation passes: `ratchet.validate_task_input`
+  - [ ] Basic execution succeeds: `ratchet.execute_task`
+  - [ ] Execution status shows success: `ratchet.get_execution_status`
+  - [ ] At least 3 test cases: success, failure, edge case
+  - [ ] All CLI tests pass: `ratchet test`
 
-# API interaction
-curl -X POST http://localhost:3000/api/v1/tasks/execute \
-  -H "Content-Type: application/json" \
-  -d '{"taskId": "task-uuid", "input": {"key": "value"}}'
+- [ ] **Monitoring & Debugging**
+  - [ ] Execution logs are clean: `ratchet.get_execution_logs`
+  - [ ] No errors in execution trace: `ratchet.get_execution_trace`
+  - [ ] Error analysis (if any) provides useful suggestions
+  - [ ] Performance is acceptable for expected input sizes
 
-# GraphQL
-curl -X POST http://localhost:3000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query": "mutation { executeTask(input: {taskId: \"uuid\", inputData: {key: \"value\"}}) { id status } }"}'
-```
+- [ ] **Documentation**
+  - [ ] Schemas have clear descriptions for all fields
+  - [ ] Error messages are helpful and specific
+  - [ ] Code comments explain complex logic
 
-This guide provides everything needed to understand and develop tasks for the Ratchet system. Follow the patterns shown in the examples above for proper task implementation.
+This guide provides everything needed for an LLM to effectively develop, test, and debug Ratchet tasks using the MCP interface. The combination of MCP tools for real-time interaction and CLI tools for scaffolding provides a complete development environment.

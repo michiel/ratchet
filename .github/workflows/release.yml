@@ -64,6 +64,6 @@ jobs:
           target: ${{ matrix.platform.target }}
           changes-file: "CHANGES.md"
           extra-files: |
-            LLM_TASK_DEVELOPMENT.md
+            docs/LLM_TASK_DEVELOPMENT.md
             docs/CLI_USAGE.md
           archive-name: "ratchet-${{ github.event.release.tag_name }}-${{ matrix.platform.os-name }}"
