@@ -1,9 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use ratchet_config::{
-    RatchetConfig, ConfigLoader, compat,
-    DatabaseConfig, ServerConfig, ExecutionConfig, HttpConfig, 
-    CacheConfig, OutputConfig, LoggingConfig
+    RatchetConfig, ConfigLoader
 };
 
 #[cfg(feature = "server")]
@@ -16,7 +14,6 @@ use ratchet_lib::{
 
 use ratchet_lib::{
     task::Task,
-    recording,
     js_executor::execute_task,
     http::HttpManager,
 };
@@ -24,13 +21,9 @@ use ratchet_lib::{
 #[cfg(feature = "database")]
 use ratchet_storage::seaorm::{
     connection::DatabaseConnection,
-    repositories::{
-        RepositoryFactory,
-        task_repository::TaskRepository,
-        execution_repository::ExecutionRepository,
-    },
+    repositories::RepositoryFactory,
 };
-use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
+use serde_json::{from_str, json, Value as JsonValue};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use std::path::PathBuf;
@@ -38,11 +31,6 @@ use std::fs;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
-#[cfg(feature = "runtime")]
-use ratchet_runtime::{
-    executor::{ExecutionEngine, TaskExecutor, InMemoryTaskExecutor},
-    process::WorkerConfig,
-};
 
 #[cfg(feature = "core")]
 use ratchet_core::task::Task as CoreTask;
@@ -919,7 +907,7 @@ async fn run_worker_process(worker_id: String) -> Result<()> {
             }
             Ok(_) => {
                 // Parse the message envelope
-                match serde_json::from_str::<MessageEnvelope<WorkerMessage>>(&line.trim()) {
+                match serde_json::from_str::<MessageEnvelope<WorkerMessage>>(line.trim()) {
                     Ok(envelope) => {
                         let result = process_worker_message(envelope.message).await;
                         

@@ -292,7 +292,7 @@ impl BatchProcessor {
             // Build reverse dependency edges
             for dep in &request.dependencies {
                 edges.entry(dep.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(request.id.clone());
             }
         }
@@ -324,13 +324,11 @@ impl BatchProcessor {
         let mut rec_stack = HashSet::new();
 
         for node_id in nodes.keys() {
-            if !visited.contains(node_id) {
-                if self.has_cycle_dfs(node_id, nodes, edges, &mut visited, &mut rec_stack) {
-                    return Err(McpError::Validation {
-                        field: "dependencies".to_string(),
-                        message: "Circular dependency detected in batch requests".to_string(),
-                    });
-                }
+            if !visited.contains(node_id) && self.has_cycle_dfs(node_id, nodes, edges, &mut visited, &mut rec_stack) {
+                return Err(McpError::Validation {
+                    field: "dependencies".to_string(),
+                    message: "Circular dependency detected in batch requests".to_string(),
+                });
             }
         }
 

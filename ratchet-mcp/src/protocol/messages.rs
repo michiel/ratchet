@@ -789,8 +789,10 @@ pub struct BatchRequest {
 /// Batch execution mode
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum BatchExecutionMode {
     /// Execute all requests in parallel
+    #[default]
     Parallel,
     /// Execute requests sequentially in order
     Sequential,
@@ -800,11 +802,6 @@ pub enum BatchExecutionMode {
     PriorityDependency,
 }
 
-impl Default for BatchExecutionMode {
-    fn default() -> Self {
-        BatchExecutionMode::Parallel
-    }
-}
 
 /// Result of batch method
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

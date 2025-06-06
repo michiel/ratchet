@@ -14,13 +14,10 @@ pub fn init_logging_from_config(config: &LoggingConfig) -> Result<(), RatchetErr
     // Check if only console sink is configured - use tracing for simplicity
     if config.sinks.len() == 1 {
         if let Some(sink) = config.sinks.first() {
-            match sink {
-                super::config::SinkConfig::Console { level, use_json } => {
-                    if !use_json {
-                        return init_simple_tracing(&level.to_string());
-                    }
+            if let super::config::SinkConfig::Console { level, use_json } = sink {
+                if !use_json {
+                    return init_simple_tracing(&level.to_string());
                 }
-                _ => {}
             }
         }
     }
@@ -57,7 +54,7 @@ pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<(), RatchetError> {
         .with_line_number(true);
 
     // Create env filter
-    let env_filter = EnvFilter::try_new(&config.level.to_string())
+    let env_filter = EnvFilter::try_new(config.level.to_string())
         .or_else(|_| EnvFilter::try_from_default_env())
         .unwrap_or_else(|_| EnvFilter::new("info"));
 

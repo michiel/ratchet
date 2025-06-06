@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 async fn test_mcp_server_stdio_initialization_compatibility() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
-        .args(&["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
+        .args(["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -53,7 +53,7 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
     let mut response_line = String::new();
     reader.read_line(&mut response_line).expect("Failed to read initialize response");
     
-    let init_response: Value = serde_json::from_str(&response_line.trim())
+    let init_response: Value = serde_json::from_str(response_line.trim())
         .expect("Failed to parse initialize response");
 
     // Verify initialize response
@@ -77,7 +77,7 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
     response_line.clear();
     reader.read_line(&mut response_line).expect("Failed to read tools/list response");
     
-    let tools_response: Value = serde_json::from_str(&response_line.trim())
+    let tools_response: Value = serde_json::from_str(response_line.trim())
         .expect("Failed to parse tools/list response");
 
     // Verify tools/list response (should NOT be "Server not initialized" error)
@@ -118,7 +118,7 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
     response_line.clear();
     reader.read_line(&mut response_line).expect("Failed to read tools/call response");
     
-    let call_response: Value = serde_json::from_str(&response_line.trim())
+    let call_response: Value = serde_json::from_str(response_line.trim())
         .expect("Failed to parse tools/call response");
 
     // Verify tools/call response
@@ -164,7 +164,7 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
 async fn test_mcp_server_stdio_with_initialized_notification() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
-        .args(&["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
+        .args(["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -201,7 +201,7 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
     let mut response_line = String::new();
     reader.read_line(&mut response_line).expect("Failed to read initialize response");
     
-    let init_response: Value = serde_json::from_str(&response_line.trim())
+    let init_response: Value = serde_json::from_str(response_line.trim())
         .expect("Failed to parse initialize response");
 
     assert_eq!(init_response["jsonrpc"], "2.0");
@@ -233,7 +233,7 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
     response_line.clear();
     reader.read_line(&mut response_line).expect("Failed to read tools/list response");
     
-    let tools_response: Value = serde_json::from_str(&response_line.trim())
+    let tools_response: Value = serde_json::from_str(response_line.trim())
         .expect("Failed to parse tools/list response");
 
     // Verify tools/list response works correctly

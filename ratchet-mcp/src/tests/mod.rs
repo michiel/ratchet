@@ -248,11 +248,7 @@ async fn test_mcp_server_error_handling() {
 async fn create_test_adapter() -> RatchetMcpAdapter {
     use ratchet_storage::seaorm::{
         connection::DatabaseConnection,
-        repositories::{
-            task_repository::TaskRepository,
-            execution_repository::ExecutionRepository,
-            RepositoryFactory,
-        }
+        repositories::RepositoryFactory
     };
     use ratchet_lib::execution::ProcessTaskExecutor;
     

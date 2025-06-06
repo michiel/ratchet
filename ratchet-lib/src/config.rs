@@ -212,6 +212,7 @@ pub struct McpServerConfig {
 /// Registry configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct RegistryConfig {
     /// Registry sources
     #[serde(default)]
@@ -221,6 +222,7 @@ pub struct RegistryConfig {
 /// Registry source
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct RegistrySource {
     /// Source name
     pub name: String,
@@ -232,6 +234,7 @@ pub struct RegistrySource {
 /// Registry source configuration (for compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct RegistrySourceConfig {
     /// Source name
     pub name: String,
@@ -356,32 +359,8 @@ impl Default for McpServerConfig {
     }
 }
 
-impl Default for RegistrySource {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            uri: String::new(),
-        }
-    }
-}
 
-impl Default for RegistryConfig {
-    fn default() -> Self {
-        Self {
-            sources: Vec::new(),
-        }
-    }
-}
 
-impl Default for RegistrySourceConfig {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            uri: String::new(),
-            config: RegistrySourceSettings::default(),
-        }
-    }
-}
 
 impl Default for RegistrySourceSettings {
     fn default() -> Self {

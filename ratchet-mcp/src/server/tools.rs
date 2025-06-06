@@ -603,8 +603,7 @@ impl RatchetToolRegistry {
             .unwrap_or(false);
             
         // Parse progress filter if provided
-        let progress_filter = if let Some(filter_json) = args.get("progress_filter") {
-            Some(super::progress::ProgressFilter {
+        let progress_filter = args.get("progress_filter").map(|filter_json| super::progress::ProgressFilter {
                 min_progress_delta: filter_json.get("min_progress_delta")
                     .and_then(|v| v.as_f64().map(|f| f as f32)),
                 max_frequency_ms: filter_json.get("max_frequency_ms")
@@ -617,10 +616,7 @@ impl RatchetToolRegistry {
                 include_data: filter_json.get("include_data")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true),
-            })
-        } else {
-            None
-        };
+            });
             
         // Check if executor is configured
         let executor = match self.task_executor.as_ref() {
@@ -643,7 +639,9 @@ impl RatchetToolRegistry {
         };
         
         // Execute the task with or without progress streaming
-        let result = if stream_progress {
+        
+        
+        if stream_progress {
             // Use progress streaming
             match executor.execute_task_with_progress(
                 task_id, 
@@ -731,9 +729,7 @@ impl RatchetToolRegistry {
                     })
                 }
             }
-        };
-        
-        result
+        }
     }
     
     /// Execute the execution status tool
