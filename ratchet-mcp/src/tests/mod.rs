@@ -3,11 +3,31 @@
 use std::sync::Arc;
 use serde_json::json;
 use uuid::Uuid;
+use anyhow::Result;
 
 use crate::{
     McpServer, McpConfig, SimpleTransportType,
     server::adapter::RatchetMcpAdapter,
 };
+
+/// Convert storage config to legacy repository factory for testing
+async fn convert_to_legacy_repository_factory_for_test(storage_config: ratchet_storage::seaorm::config::DatabaseConfig) -> Result<ratchet_lib::database::repositories::RepositoryFactory> {
+    // Convert storage config to legacy config
+    let legacy_config = ratchet_lib::config::DatabaseConfig {
+        url: storage_config.url.clone(),
+        max_connections: storage_config.max_connections,
+        connection_timeout: storage_config.connection_timeout,
+    };
+    
+    // Create legacy database connection using the same configuration
+    let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config).await
+        .map_err(|e| anyhow::anyhow!("Failed to create legacy database connection: {}", e))?;
+    
+    // Create legacy repository factory
+    let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
+    
+    Ok(legacy_repos)
+}
 
 // Stdio-specific integration tests
 mod stdio_initialization_test;
@@ -243,7 +263,7 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
         connection_timeout: std::time::Duration::from_secs(5),
     };
     
-    let database = DatabaseConnection::new(db_config).await
+    let database = DatabaseConnection::new(db_config.clone()).await
         .expect("Failed to create test database");
     
     // Run migrations
@@ -257,11 +277,11 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     
     // Create executor with test config (using legacy config for now since executor still needs it)
     let config = ratchet_lib::config::RatchetConfig::default();
+    let legacy_repo_factory = convert_to_legacy_repository_factory_for_test(db_config.clone()).await
+        .expect("Failed to create legacy repository factory");
     let executor = Arc::new(
-        ProcessTaskExecutor::new(
-            ratchet_lib::database::repositories::RepositoryFactory::new(database.clone().into()),
-            config
-        ).await.expect("Failed to create test executor")
+        ProcessTaskExecutor::new(legacy_repo_factory, config)
+            .await.expect("Failed to create test executor")
     );
     
     RatchetMcpAdapter::new(executor, task_repository, execution_repository)

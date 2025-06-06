@@ -401,25 +401,39 @@ impl McpService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratchet_lib::config::{RatchetConfig, DatabaseConfig};
-    use ratchet_lib::database::{DatabaseConnection, repositories::RepositoryFactory};
+    use ratchet_lib::config::RatchetConfig;
     use ratchet_lib::services::base::HealthStatus;
+    use ratchet_storage::seaorm::{
+        config::DatabaseConfig as StorageDbConfig,
+        connection::DatabaseConnection as StorageDbConnection,
+        repositories::RepositoryFactory as StorageRepositoryFactory,
+    };
 
     async fn create_test_dependencies() -> (Arc<ProcessTaskExecutor>, Arc<TaskRepository>, Arc<ExecutionRepository>) {
         let config = RatchetConfig::default();
-        let db_config = DatabaseConfig {
+        let storage_db_config = StorageDbConfig {
             url: "sqlite::memory:".to_string(),
             max_connections: 5,
             connection_timeout: std::time::Duration::from_secs(10),
         };
         
-        let db = DatabaseConnection::new(db_config).await.unwrap();
-        db.migrate().await.unwrap();
+        // Create storage database and repositories
+        let storage_db = StorageDbConnection::new(storage_db_config.clone()).await.unwrap();
+        storage_db.migrate().await.unwrap();
+        let storage_repos = StorageRepositoryFactory::new(storage_db);
         
-        let repos = RepositoryFactory::new(db);
-        let executor = Arc::new(ProcessTaskExecutor::new(repos.clone(), config).await.unwrap());
+        // Create legacy repository factory for the executor
+        let legacy_config = ratchet_lib::config::DatabaseConfig {
+            url: storage_db_config.url.clone(),
+            max_connections: storage_db_config.max_connections,
+            connection_timeout: storage_db_config.connection_timeout,
+        };
+        let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config).await.unwrap();
+        let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
         
-        (executor, Arc::new(repos.task_repository()), Arc::new(repos.execution_repository()))
+        let executor = Arc::new(ProcessTaskExecutor::new(legacy_repos, config).await.unwrap());
+        
+        (executor, Arc::new(storage_repos.task_repository()), Arc::new(storage_repos.execution_repository()))
     }
 
     #[tokio::test]
