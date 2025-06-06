@@ -68,6 +68,10 @@ impl ConfigLoader {
             self.apply_server_overrides(server)?;
         }
 
+        if let Some(ref mut mcp) = config.mcp {
+            self.apply_mcp_overrides(mcp)?;
+        }
+
         Ok(())
     }
 
@@ -192,6 +196,34 @@ impl ConfigLoader {
             config.port = port
                 .parse()
                 .map_err(|e| ConfigError::EnvError(format!("Invalid SERVER_PORT: {}", e)))?;
+        }
+
+        Ok(())
+    }
+
+    /// Apply MCP config overrides
+    fn apply_mcp_overrides(
+        &self,
+        config: &mut crate::domains::mcp::McpConfig,
+    ) -> ConfigResult<()> {
+        if let Ok(enabled) = self.get_env_var("MCP_ENABLED") {
+            config.enabled = enabled
+                .parse()
+                .map_err(|e| ConfigError::EnvError(format!("Invalid MCP_ENABLED: {}", e)))?;
+        }
+
+        if let Ok(transport) = self.get_env_var("MCP_TRANSPORT") {
+            config.transport = transport;
+        }
+
+        if let Ok(host) = self.get_env_var("MCP_HOST") {
+            config.host = host;
+        }
+
+        if let Ok(port) = self.get_env_var("MCP_PORT") {
+            config.port = port
+                .parse()
+                .map_err(|e| ConfigError::EnvError(format!("Invalid MCP_PORT: {}", e)))?;
         }
 
         Ok(())

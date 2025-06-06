@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct McpConfig {
     /// Whether MCP server is enabled
-    #[serde(default = "crate::domains::utils::default_false")]
+    #[serde(default = "crate::domains::utils::default_true")]
     pub enabled: bool,
 
     /// Transport protocol ("stdio" or "sse")
@@ -28,7 +28,7 @@ pub struct McpConfig {
 impl Default for McpConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             transport: default_mcp_transport(),
             host: default_mcp_host(),
             port: default_mcp_port(),
@@ -62,7 +62,7 @@ impl Validatable for McpConfig {
 
 // Default value functions
 fn default_mcp_transport() -> String {
-    "stdio".to_string()
+    "sse".to_string()
 }
 
 fn default_mcp_host() -> String {
@@ -70,7 +70,7 @@ fn default_mcp_host() -> String {
 }
 
 fn default_mcp_port() -> u16 {
-    3001
+    8090
 }
 
 #[cfg(test)]
@@ -80,10 +80,10 @@ mod tests {
     #[test]
     fn test_mcp_config_defaults() {
         let config = McpConfig::default();
-        assert!(!config.enabled);
-        assert_eq!(config.transport, "stdio");
+        assert!(config.enabled);
+        assert_eq!(config.transport, "sse");
         assert_eq!(config.host, "127.0.0.1");
-        assert_eq!(config.port, 3001);
+        assert_eq!(config.port, 8090);
     }
 
     #[test]

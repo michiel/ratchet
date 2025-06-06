@@ -16,7 +16,7 @@ use crate::validation::Validatable;
 use serde::{Deserialize, Serialize};
 
 /// Main Ratchet configuration combining all domains
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RatchetConfig {
     /// Task execution configuration
@@ -40,7 +40,6 @@ pub struct RatchetConfig {
     pub output: output::OutputConfig,
 
     /// Server configuration (optional, for server mode)
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<server::ServerConfig>,
 
     /// Registry configuration (optional)
@@ -48,8 +47,22 @@ pub struct RatchetConfig {
     pub registry: Option<registry::RegistryConfig>,
 
     /// MCP server configuration (optional)
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp: Option<mcp::McpConfig>,
+}
+
+impl Default for RatchetConfig {
+    fn default() -> Self {
+        Self {
+            execution: execution::ExecutionConfig::default(),
+            http: http::HttpConfig::default(),
+            cache: cache::CacheConfig::default(),
+            logging: logging::LoggingConfig::default(),
+            output: output::OutputConfig::default(),
+            server: Some(server::ServerConfig::default()),
+            registry: None,
+            mcp: Some(mcp::McpConfig::default()),
+        }
+    }
 }
 
 impl RatchetConfig {
