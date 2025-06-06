@@ -38,6 +38,7 @@ ratchet-storage = { path = "../ratchet-storage", optional = true }
 ratchet-caching = { path = "../ratchet-caching", optional = true }
 ratchet-resilience = { path = "../ratchet-resilience", optional = true }
 ratchet-plugins = { path = "../ratchet-plugins", optional = true }
+ratchet-runtime = { path = "../ratchet-runtime", optional = true }
 
 # Binary-specific dependencies (commented out for now due to network issues)
 # dialoguer = "0.11"
@@ -45,7 +46,7 @@ ratchet-plugins = { path = "../ratchet-plugins", optional = true }
 
 # Feature flags for optional functionality
 [features]
-default = ["server", "database", "mcp-server", "plugins"]
+default = ["server", "database", "mcp-server", "plugins", "runtime"]
 
 # Core functionality (minimal build)
 core = []
@@ -83,8 +84,11 @@ caching = ["dep:ratchet-caching"]
 # Resilience patterns
 resilience = ["dep:ratchet-resilience"]
 
+# Runtime execution engine
+runtime = ["dep:ratchet-runtime"]
+
 # Full feature set (everything enabled)
-full = ["server", "database", "mcp-server", "plugins", "javascript", "output", "caching", "resilience"]
+full = ["server", "database", "mcp-server", "plugins", "javascript", "output", "caching", "resilience", "runtime"]
 
 # Minimal build (core functionality only)
 minimal = ["core"]

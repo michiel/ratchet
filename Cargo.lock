@@ -3504,6 +3504,7 @@ dependencies = [
  "ratchet-mcp",
  "ratchet-plugins",
  "ratchet-resilience",
+ "ratchet-runtime",
  "ratchet-storage",
  "ratchet_lib",
  "serde",

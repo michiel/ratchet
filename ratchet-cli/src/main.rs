@@ -11,8 +11,12 @@ use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
 
 #[cfg(feature = "server")]
 use ratchet_lib::{
-    task::Task,
     execution::ipc::{WorkerMessage, CoordinatorMessage, TaskExecutionResult, MessageEnvelope},
+};
+
+#[cfg(feature = "javascript")]
+use ratchet_lib::{
+    task::Task,
     recording,
     js_executor::execute_task,
     http::HttpManager,
@@ -34,6 +38,15 @@ use std::path::PathBuf;
 use std::fs;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use uuid::Uuid;
+
+#[cfg(feature = "runtime")]
+use ratchet_runtime::{
+    executor::{ExecutionEngine, TaskExecutor, InMemoryTaskExecutor},
+    process::WorkerConfig,
+};
+
+#[cfg(feature = "core")]
+use ratchet_core::task::Task as CoreTask;
 
 mod cli;
 use cli::{Cli, Commands, GenerateCommands, ConfigCommands};
@@ -605,10 +618,66 @@ fn parse_input_json(input_json: Option<&String>) -> Result<JsonValue> {
     }
 }
 
-/// Run a task from a file system path
+/// Load task from filesystem and convert to Core Task
+#[cfg(all(feature = "runtime", feature = "core", feature = "javascript"))]
+fn load_task_as_core_task(from_fs: &str) -> Result<CoreTask> {
+    use ratchet_lib::task::Task as LibTask;
+    use ratchet_core::task::TaskBuilder;
+    
+    // Load using ratchet_lib's filesystem loader
+    let mut lib_task = LibTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+    
+    // Ensure JavaScript content is loaded
+    lib_task.ensure_content_loaded()
+        .map_err(|e| anyhow::anyhow!("Failed to load task content: {}", e))?;
+    
+    // Get the JavaScript content
+    let js_content = lib_task.get_js_content()
+        .map_err(|e| anyhow::anyhow!("Failed to get JS content: {}", e))?;
+    
+    // Convert to Core Task
+    let core_task = TaskBuilder::new(&lib_task.metadata.label, &lib_task.metadata.version)
+        .input_schema(lib_task.input_schema.clone())
+        .output_schema(lib_task.output_schema.clone())
+        .javascript_source(js_content.as_str())
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to build Core Task: {}", e))?;
+    
+    Ok(core_task)
+}
+
+/// Run a task from a file system path using runtime executor
+#[cfg(all(feature = "runtime", feature = "core"))]
+async fn run_task_runtime(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
+    info!("Loading task from: {} (using runtime executor)", from_fs);
+    
+    // Load the task as Core Task (with conversion from ratchet_lib if available)
+    #[cfg(feature = "javascript")]
+    let task = load_task_as_core_task(from_fs)?;
+    
+    #[cfg(not(feature = "javascript"))]
+    {
+        return Err(anyhow::anyhow!("Task loading requires javascript feature. Please build with --features=javascript or use legacy executor."));
+    }
+    
+    // Execute the task
+    info!("Executing task: {} (using runtime executor)", task.metadata.name);
+    
+    // Create in-memory executor for CLI usage (simpler than full worker process management)
+    let executor = InMemoryTaskExecutor::new();
+    
+    // Execute the task
+    let result = executor.execute_task(&task, input.clone(), None).await
+        .map_err(|e| anyhow::anyhow!("Runtime task execution failed: {}", e))?;
+    
+    Ok(result)
+}
+
+/// Run a task from a file system path using legacy executor
 #[cfg(feature = "javascript")]
 async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
-    info!("Loading task from: {}", from_fs);
+    info!("Loading task from: {} (using legacy executor)", from_fs);
     
     // Load the task
     let mut task = Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
@@ -1217,9 +1286,10 @@ async fn main() -> Result<()> {
             input_json,
             record,
         }) => {
-            #[cfg(feature = "javascript")]
+            // Try runtime executor first if available, then fall back to legacy
+            #[cfg(all(feature = "runtime", feature = "core"))]
             {
-                info!("Running task from file system path: {}", from_fs);
+                info!("Running task from file system path: {} (using runtime executor)", from_fs);
 
                 // Parse input JSON
                 let input = parse_input_json(input_json.as_ref())?;
@@ -1228,7 +1298,28 @@ async fn main() -> Result<()> {
                     info!("Using provided input: {}", input_json.as_ref().unwrap());
                 }
 
-                // Run the task
+                // Run the task with runtime executor
+                let result = run_task_runtime(from_fs, &input).await?;
+
+                // Pretty-print the result
+                let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
+                
+                println!("{}", formatted);
+                return Ok(());
+            }
+            
+            #[cfg(all(feature = "javascript", not(all(feature = "runtime", feature = "core"))))]
+            {
+                info!("Running task from file system path: {} (using legacy executor)", from_fs);
+
+                // Parse input JSON
+                let input = parse_input_json(input_json.as_ref())?;
+
+                if input_json.is_some() {
+                    info!("Using provided input: {}", input_json.as_ref().unwrap());
+                }
+
+                // Run the task with legacy executor
                 let result = run_task(from_fs, &input).await?;
 
                 // Pretty-print the result
@@ -1255,9 +1346,9 @@ async fn main() -> Result<()> {
                 
                 Ok(())
             }
-            #[cfg(not(feature = "javascript"))]
+            #[cfg(not(any(feature = "javascript", all(feature = "runtime", feature = "core"))))]
             {
-                Err(anyhow::anyhow!("Task execution not available. Build with --features=javascript"))
+                Err(anyhow::anyhow!("Task execution not available. Build with --features=javascript or --features=runtime,core"))
             }
         }
         Some(Commands::Serve { config: config_override }) => {
