@@ -51,6 +51,26 @@ use ratchet_core::task::Task as CoreTask;
 mod cli;
 use cli::{Cli, Commands, GenerateCommands, ConfigCommands};
 
+/// Convert ratchet-storage RepositoryFactory to ratchet_lib RepositoryFactory
+#[cfg(all(feature = "server", feature = "database"))]
+async fn convert_to_legacy_repository_factory(storage_config: ratchet_storage::seaorm::config::DatabaseConfig) -> Result<ratchet_lib::database::repositories::RepositoryFactory> {
+    // Convert storage config to legacy config
+    let legacy_config = ratchet_lib::config::DatabaseConfig {
+        url: storage_config.url.clone(),
+        max_connections: storage_config.max_connections,
+        connection_timeout: storage_config.connection_timeout,
+    };
+    
+    // Create legacy database connection using the same configuration
+    let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config).await
+        .map_err(|e| anyhow::anyhow!("Failed to create legacy database connection: {}", e))?;
+    
+    // Create legacy repository factory
+    let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
+    
+    Ok(legacy_repos)
+}
+
 /// Convert config format to legacy format for backward compatibility when server features are enabled
 #[cfg(feature = "server")]
 fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfig> {
@@ -184,23 +204,24 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
         connection_timeout: server_config.database.connection_timeout,
     };
     
-    let database = DatabaseConnection::new(storage_db_config).await
+    let database = DatabaseConnection::new(storage_db_config.clone()).await
         .context("Failed to connect to database")?;
     
     // Run migrations
     info!("Running database migrations");
     database.migrate().await.context("Failed to run database migrations")?;
     
-    // Initialize repositories
-    let repositories = RepositoryFactory::new(database);
+    // Initialize repositories using legacy factory for backward compatibility
+    let storage_config = storage_db_config;
+    let legacy_repositories = convert_to_legacy_repository_factory(storage_config).await?;
     
     // Initialize job queue
-    let job_queue = Arc::new(JobQueueManager::with_default_config(repositories.clone()));
+    let job_queue = Arc::new(JobQueueManager::with_default_config(legacy_repositories.clone()));
     
     // Initialize process task executor
     info!("Initializing process task executor");
     let task_executor = Arc::new(
-        ProcessTaskExecutor::new(repositories.clone(), config.clone()).await
+        ProcessTaskExecutor::new(legacy_repositories.clone(), config.clone()).await
             .context("Failed to initialize process task executor")?
     );
     
@@ -224,7 +245,7 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     };
     
     // Create the application
-    let app = create_app(repositories, job_queue, task_executor.clone(), None, None);
+    let app = create_app(legacy_repositories, job_queue, task_executor.clone(), None, None);
     
     // Bind to address
     let addr_str = format!("{}:{}", server_config.bind_address, server_config.port);
@@ -366,6 +387,10 @@ async fn mcp_serve_command_with_config(
     let repositories = RepositoryFactory::new(database.clone());
     let task_repo = Arc::new(repositories.task_repository());
     let execution_repo = Arc::new(repositories.execution_repository());
+    
+    // For legacy ProcessTaskExecutor, convert to legacy repository factory
+    let storage_config = database.get_config().clone();
+    let legacy_repositories = convert_to_legacy_repository_factory(storage_config).await?;
 
     // Initialize task executor for MCP - convert to legacy config for executor
     if !is_stdio {
@@ -373,7 +398,7 @@ async fn mcp_serve_command_with_config(
     }
     let legacy_config = convert_to_legacy_config(ratchet_config.clone())?;
     let task_executor = Arc::new(
-        ProcessTaskExecutor::new(repositories, legacy_config).await
+        ProcessTaskExecutor::new(legacy_repositories, legacy_config).await
             .context("Failed to initialize process task executor")?
     );
 

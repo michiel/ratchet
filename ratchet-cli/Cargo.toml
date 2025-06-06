@@ -58,7 +58,7 @@ graphql-api = ["ratchet_lib/server"]
 
 # Database backends
 database = ["sqlite", "dep:ratchet-storage"]
-sqlite = ["ratchet-storage/database", "ratchet_lib/database"]
+sqlite = ["ratchet-storage/database", "ratchet-storage/seaorm", "ratchet_lib/database"]
 postgres = ["ratchet-storage/postgres", "ratchet_lib/database"]
 mysql = ["ratchet-storage/mysql", "ratchet_lib/database"]
 
