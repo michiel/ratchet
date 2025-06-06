@@ -17,6 +17,7 @@ use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::Repo
 use serde_json::{from_str, json, Value as JsonValue};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -205,7 +206,10 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
 
     // Initialize repositories using legacy factory for backward compatibility
     let storage_config = storage_db_config;
-    let legacy_repositories = convert_to_legacy_repository_factory(storage_config).await?;
+    let legacy_repositories = convert_to_legacy_repository_factory(storage_config.clone()).await?;
+    
+    // Create storage repository factory for MCP service
+    let storage_repositories = RepositoryFactory::new(database.clone());
 
     // Initialize job queue
     let job_queue = Arc::new(JobQueueManager::with_default_config(
@@ -230,12 +234,64 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     let mcp_service_handle = if let Some(mcp_config) = &config.mcp {
         if mcp_config.enabled {
             info!("Starting MCP service integration");
-            let handle = tokio::spawn(async {
-                // MCP service integration would go here
-                // For now, just a placeholder
-            });
-            Some(handle)
+            
+            #[cfg(feature = "mcp-server")]
+            {
+                use ratchet_mcp::server::service::McpService;
+                
+                // Create repositories for MCP service using storage types
+                let mcp_task_repo = Arc::new(storage_repositories.task_repository());
+                let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
+                
+                // Create MCP service with legacy repository factory conversion
+                let mcp_service_result = McpService::from_legacy_ratchet_config(
+                    mcp_config,
+                    task_executor.clone(),
+                    mcp_task_repo,
+                    mcp_execution_repo,
+                    None, // No special log file for MCP service
+                ).await;
+                
+                match mcp_service_result {
+                    Ok(mcp_service) => {
+                        let mcp_service = Arc::new(mcp_service);
+                        
+                        // Start MCP service in background task
+                        let mcp_service_for_task = mcp_service.clone();
+                        let handle = tokio::spawn(async move {
+                            info!("MCP service starting...");
+                            if let Err(e) = mcp_service_for_task.start().await {
+                                error!("MCP service failed to start: {}", e);
+                            } else {
+                                info!("MCP service started successfully");
+                                
+                                // Keep the service running until shutdown
+                                loop {
+                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                    if !mcp_service_for_task.is_running().await {
+                                        warn!("MCP service stopped running");
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+                        
+                        Some(handle)
+                    }
+                    Err(e) => {
+                        error!("Failed to create MCP service: {}", e);
+                        None
+                    }
+                }
+            }
+            
+            #[cfg(not(feature = "mcp-server"))]
+            {
+                warn!("MCP service requested but mcp-server feature not enabled");
+                None
+            }
         } else {
+            info!("MCP service disabled in configuration");
             None
         }
     } else {
@@ -284,8 +340,27 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     // Stop MCP service if running
     if let Some(handle) = mcp_service_handle {
         info!("Stopping MCP service");
-        handle.abort();
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await;
+        
+        #[cfg(feature = "mcp-server")]
+        {
+            // Gracefully abort the MCP service task
+            handle.abort();
+            
+            // Wait for the task to complete with timeout
+            match tokio::time::timeout(std::time::Duration::from_secs(10), handle).await {
+                Ok(_) => {
+                    info!("MCP service stopped gracefully");
+                }
+                Err(_) => {
+                    warn!("MCP service shutdown timed out");
+                }
+            }
+        }
+        
+        #[cfg(not(feature = "mcp-server"))]
+        {
+            handle.abort();
+        }
     }
 
     // Stop worker processes
