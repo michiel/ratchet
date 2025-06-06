@@ -37,6 +37,7 @@ pub fn create_app(
     task_executor: Arc<ProcessTaskExecutor>,
     registry: Option<Arc<TaskRegistry>>,
     task_sync_service: Option<Arc<TaskSyncService>>,
+    mcp_routes: Option<Router>,
 ) -> Router {
     // Create GraphQL schema with process-based executor
     let schema = create_schema(
@@ -67,7 +68,7 @@ pub fn create_app(
     };
 
     // Build the router with all routes
-    Router::new()
+    let mut app = Router::new()
         // GraphQL routes
         .route("/graphql", post(graphql_handler))
         .route("/playground", get(graphql_playground))
@@ -85,14 +86,20 @@ pub fn create_app(
         // Nest REST API under /api/v1
         .nest("/api/v1", rest_api)
         // Serve static documentation files
-        .nest_service("/docs", ServeDir::new("docs"))
-        // Add middleware stack
-        .layer(
-            ServiceBuilder::new()
-                .layer(trace_layer())
-                .layer(cors_layer())
-                .layer(middleware::from_fn(logging_middleware)),
-        )
+        .nest_service("/docs", ServeDir::new("docs"));
+
+    // Add MCP routes if provided
+    if let Some(mcp_router) = mcp_routes {
+        app = app.nest("/mcp", mcp_router);
+    }
+
+    // Add middleware stack
+    app.layer(
+        ServiceBuilder::new()
+            .layer(trace_layer())
+            .layer(cors_layer())
+            .layer(middleware::from_fn(logging_middleware)),
+    )
 }
 
 #[cfg(test)]
@@ -129,7 +136,7 @@ mod tests {
                 .unwrap(),
         );
 
-        create_app(repositories, job_queue, task_executor, None, None)
+        create_app(repositories, job_queue, task_executor, None, None, None)
     }
 
     #[tokio::test]

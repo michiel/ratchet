@@ -184,18 +184,29 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     use std::sync::Arc;
     use tokio::signal;
 
-    info!("Starting Ratchet server");
+    info!("🔧 Starting Ratchet server");
 
     // Get server configuration (guaranteed to exist from load_config)
     let server_config = config.server.as_ref().unwrap();
 
-    info!(
-        "Server configuration loaded: {}:{}",
-        server_config.bind_address, server_config.port
-    );
+    info!("📋 Configuration Summary:");
+    info!("   • Server Address: {}:{}", server_config.bind_address, server_config.port);
+    info!("   • Database URL: {}", server_config.database.url);
+    info!("   • Max DB Connections: {}", server_config.database.max_connections);
+    
+    // Log MCP configuration
+    if let Some(mcp_config) = &config.mcp {
+        if mcp_config.enabled {
+            info!("   • MCP Service: Enabled ({})", mcp_config.transport);
+        } else {
+            info!("   • MCP Service: Disabled");
+        }
+    } else {
+        info!("   • MCP Service: Not configured");
+    }
 
     // Initialize database
-    info!("Connecting to database: {}", server_config.database.url);
+    info!("💾 Initializing database connection...");
 
     // Convert lib database config to storage database config
     let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
@@ -209,11 +220,12 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
         .context("Failed to connect to database")?;
 
     // Run migrations
-    info!("Running database migrations");
+    info!("🔄 Running database migrations...");
     database
         .migrate()
         .await
         .context("Failed to run database migrations")?;
+    info!("✅ Database initialized successfully");
 
     // Initialize repositories using legacy factory for backward compatibility
     let storage_config = storage_db_config;
@@ -228,7 +240,7 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     ));
 
     // Initialize process task executor
-    info!("Initializing process task executor");
+    info!("⚙️  Initializing task executor...");
     let task_executor = Arc::new(
         ProcessTaskExecutor::new(legacy_repositories.clone(), config.clone())
             .await
@@ -236,61 +248,59 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     );
 
     // Start worker processes
+    info!("👷 Starting worker processes...");
     task_executor
         .start()
         .await
         .context("Failed to start worker processes")?;
+    info!("✅ Worker processes started successfully");
 
-    // Start MCP service if enabled
-    let mcp_service_handle = if let Some(mcp_config) = &config.mcp {
+    // Note: MCP service is now integrated as routes rather than a separate service
+
+    // Check if MCP is enabled for logging
+    let mcp_enabled = config.mcp.as_ref().map_or(false, |mcp| mcp.enabled);
+    
+    // Create MCP routes if MCP service is enabled
+    let mcp_routes = if let Some(mcp_config) = &config.mcp {
         if mcp_config.enabled {
-            info!("Starting MCP service integration");
-            
             #[cfg(feature = "mcp-server")]
             {
-                use ratchet_mcp::server::service::McpService;
+                use ratchet_mcp::server::adapter::RatchetMcpAdapter;
+                use ratchet_mcp::server::McpServer;
                 
-                // Create repositories for MCP service using storage types
+                // Create MCP adapter for route integration
                 let mcp_task_repo = Arc::new(storage_repositories.task_repository());
                 let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
                 
-                // Create MCP service with legacy repository factory conversion
-                let mcp_service_result = McpService::from_legacy_ratchet_config(
-                    mcp_config,
+                let mcp_adapter = RatchetMcpAdapter::new(
                     task_executor.clone(),
                     mcp_task_repo,
                     mcp_execution_repo,
-                    None, // No special log file for MCP service
-                ).await;
+                );
                 
-                match mcp_service_result {
-                    Ok(mcp_service) => {
-                        let mcp_service = Arc::new(mcp_service);
-                        
-                        // Start MCP service in background task
-                        let mcp_service_for_task = mcp_service.clone();
-                        let handle = tokio::spawn(async move {
-                            info!("MCP service starting...");
-                            if let Err(e) = mcp_service_for_task.start().await {
-                                error!("MCP service failed to start: {}", e);
-                            } else {
-                                info!("MCP service started successfully");
-                                
-                                // Keep the service running until shutdown
-                                loop {
-                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                                    if !mcp_service_for_task.is_running().await {
-                                        warn!("MCP service stopped running");
-                                        break;
-                                    }
-                                }
-                            }
-                        });
-                        
-                        Some(handle)
+                // Convert to ratchet-mcp config format
+                let mcp_server_config = ratchet_mcp::config::McpConfig {
+                    transport_type: match mcp_config.transport.as_str() {
+                        "stdio" => ratchet_mcp::config::SimpleTransportType::Stdio,
+                        "sse" => ratchet_mcp::config::SimpleTransportType::Sse,
+                        _ => ratchet_mcp::config::SimpleTransportType::Sse, // Default fallback
+                    },
+                    host: mcp_config.host.clone(),
+                    port: mcp_config.port,
+                    auth: ratchet_mcp::security::McpAuth::default(),
+                    limits: ratchet_mcp::config::ConnectionLimits::default(),
+                    timeouts: ratchet_mcp::config::Timeouts::default(),
+                    tools: ratchet_mcp::config::ToolConfig::default(),
+                };
+
+                // Create MCP server
+                match McpServer::with_adapter(mcp_server_config, mcp_adapter).await {
+                    Ok(mcp_server) => {
+                        info!("✅ MCP SSE service initialized for unified server");
+                        Some(mcp_server.create_sse_routes())
                     }
                     Err(e) => {
-                        error!("Failed to create MCP service: {}", e);
+                        error!("❌ Failed to create MCP server for routes: {}", e);
                         None
                     }
                 }
@@ -298,11 +308,10 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
             
             #[cfg(not(feature = "mcp-server"))]
             {
-                warn!("MCP service requested but mcp-server feature not enabled");
+                warn!("MCP service enabled but mcp-server feature not available");
                 None
             }
         } else {
-            info!("MCP service disabled in configuration");
             None
         }
     } else {
@@ -316,6 +325,7 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
         task_executor.clone(),
         None,
         None,
+        mcp_routes,
     );
 
     // Bind to address
@@ -323,7 +333,36 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     let addr: std::net::SocketAddr = addr_str
         .parse()
         .context(format!("Invalid bind address: {}", addr_str))?;
-    info!("Server listening on: {}", addr);
+    
+    // Log server startup information
+    info!("🚀 Ratchet server starting on: http://{}", addr);
+    info!("📋 Active services and routes:");
+    info!("   🏠 Root:              http://{}/", addr);
+    info!("   ❤️  Health Check:      http://{}/health", addr);
+    info!("   📊 Version Info:       http://{}/version", addr);
+    info!("   📚 API Documentation: http://{}/api-docs", addr);
+    info!("   📖 Static Docs:       http://{}/docs/", addr);
+    
+    // Always enabled services (based on default features)
+    info!("   🔗 REST API:          http://{}/api/v1/", addr);
+    info!("      • Tasks:           http://{}/api/v1/tasks", addr);
+    info!("      • Executions:      http://{}/api/v1/executions", addr);
+    info!("      • Jobs:            http://{}/api/v1/jobs", addr);
+    info!("      • Schedules:       http://{}/api/v1/schedules", addr);
+    info!("      • Workers:         http://{}/api/v1/workers", addr);
+    
+    info!("   🔍 GraphQL API:       http://{}/graphql", addr);
+    info!("   🎮 GraphQL Playground: http://{}/playground", addr);
+    
+    // Log MCP routes if enabled
+    if mcp_enabled {
+        info!("   🤖 MCP SSE Service:   http://{}/mcp/", addr);
+        info!("      • SSE Endpoint:    http://{}/mcp/sse/{{session_id}}", addr);
+        info!("      • Message Endpoint: http://{}/mcp/message/{{session_id}}", addr);
+        info!("      • Health Check:    http://{}/mcp/health", addr);
+    } else {
+        info!("   🤖 MCP SSE Service:   ❌ Disabled");
+    }
 
     // Graceful shutdown signal
     let shutdown_signal = async {
@@ -337,6 +376,8 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
         .serve(app.into_make_service())
         .with_graceful_shutdown(shutdown_signal);
 
+    info!("✅ Server ready and accepting connections");
+
     // Run server and handle shutdown
     match server.await {
         Ok(_) => {
@@ -348,31 +389,7 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
         }
     }
 
-    // Stop MCP service if running
-    if let Some(handle) = mcp_service_handle {
-        info!("Stopping MCP service");
-        
-        #[cfg(feature = "mcp-server")]
-        {
-            // Gracefully abort the MCP service task
-            handle.abort();
-            
-            // Wait for the task to complete with timeout
-            match tokio::time::timeout(std::time::Duration::from_secs(10), handle).await {
-                Ok(_) => {
-                    info!("MCP service stopped gracefully");
-                }
-                Err(_) => {
-                    warn!("MCP service shutdown timed out");
-                }
-            }
-        }
-        
-        #[cfg(not(feature = "mcp-server"))]
-        {
-            handle.abort();
-        }
-    }
+    // Note: MCP service is now integrated as routes and will stop with the main server
 
     // Stop worker processes
     info!("Stopping worker processes");

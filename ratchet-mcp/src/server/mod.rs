@@ -476,6 +476,155 @@ impl McpServer {
         Ok(())
     }
 
+    /// Create MCP SSE routes that can be nested into another Axum router
+    pub fn create_sse_routes(&self) -> axum::Router {
+        use axum::{
+            extract::{Path, State},
+            http::{header::CONTENT_TYPE, HeaderMap, StatusCode},
+            response::{sse::Event, Sse},
+            routing::{get, post},
+            Json, Router,
+        };
+        use serde_json::Value;
+        use std::collections::HashMap;
+        use std::convert::Infallible;
+        use std::sync::Arc;
+        use tokio::sync::{mpsc, RwLock};
+
+        // Server state for managing SSE connections
+        #[derive(Clone)]
+        struct SseServerState {
+            server: Arc<McpServer>,
+            connections: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<String>>>>,
+        }
+
+        impl SseServerState {
+            fn new(server: Arc<McpServer>) -> Self {
+                Self {
+                    server,
+                    connections: Arc::new(RwLock::new(HashMap::new())),
+                }
+            }
+        }
+
+        let state = SseServerState::new(Arc::new(self.clone()));
+
+        // Create SSE endpoint handler
+        async fn sse_handler(
+            Path(session_id): Path<String>,
+            State(state): State<SseServerState>,
+        ) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+            tracing::info!("New MCP SSE connection established for session: {}", session_id);
+
+            let (tx, mut rx) = mpsc::unbounded_channel();
+
+            // Store connection
+            {
+                let mut connections = state.connections.write().await;
+                connections.insert(session_id.clone(), tx.clone());
+            }
+
+            // Send initial connection event
+            let _ =
+                tx.send("data: {\"type\":\"connection\",\"status\":\"connected\"}\n\n".to_string());
+
+            let stream = async_stream::stream! {
+                while let Some(data) = rx.recv().await {
+                    yield Ok(Event::default().data(data));
+                }
+            };
+
+            Sse::new(stream).keep_alive(
+                axum::response::sse::KeepAlive::new()
+                    .interval(std::time::Duration::from_secs(30))
+                    .text("keep-alive"),
+            )
+        }
+
+        // Create message posting endpoint
+        async fn post_message_handler(
+            Path(session_id): Path<String>,
+            State(state): State<SseServerState>,
+            headers: HeaderMap,
+            Json(payload): Json<Value>,
+        ) -> Result<Json<Value>, StatusCode> {
+            tracing::debug!(
+                "Received MCP message for session {}: {:?}",
+                session_id,
+                payload
+            );
+
+            // Extract auth header
+            let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
+
+            // Process the MCP request
+            let message_str =
+                serde_json::to_string(&payload).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+            match state.server.handle_message(&message_str, auth_header).await {
+                Ok(Some(response)) => {
+                    // Send response via SSE
+                    let response_data = serde_json::to_string(&response)
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                    let connections = state.connections.read().await;
+                    if let Some(tx) = connections.get(&session_id) {
+                        let sse_data = format!("data: {}\n\n", response_data);
+                        if tx.send(sse_data).is_err() {
+                            tracing::warn!(
+                                "Failed to send SSE response for session: {}",
+                                session_id
+                            );
+                        }
+                    }
+
+                    Ok(Json(serde_json::json!({"status": "sent"})))
+                }
+                Ok(None) => {
+                    // Notification, no response needed
+                    Ok(Json(serde_json::json!({"status": "processed"})))
+                }
+                Err(e) => {
+                    tracing::error!("Error processing MCP request: {}", e);
+
+                    // Send error via SSE
+                    let error_response = crate::protocol::JsonRpcResponse::error(
+                        crate::protocol::JsonRpcError::internal_error(e.to_string()),
+                        None,
+                    );
+
+                    let error_data = serde_json::to_string(&error_response)
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                    let connections = state.connections.read().await;
+                    if let Some(tx) = connections.get(&session_id) {
+                        let sse_data = format!("data: {}\n\n", error_data);
+                        let _ = tx.send(sse_data);
+                    }
+
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
+
+        // MCP health check endpoint
+        async fn mcp_health_handler() -> Json<Value> {
+            Json(serde_json::json!({
+                "status": "healthy",
+                "service": "ratchet-mcp-server",
+                "version": env!("CARGO_PKG_VERSION"),
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }))
+        }
+
+        // Build the MCP routes
+        Router::new()
+            .route("/sse/:session_id", get(sse_handler))
+            .route("/message/:session_id", post(post_message_handler))
+            .route("/health", get(mcp_health_handler))
+            .with_state(state)
+    }
+
     /// Handle an incoming message
     pub async fn handle_message(
         &self,
