@@ -152,7 +152,18 @@ fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
 /// Start the Ratchet server
 #[cfg(feature = "server")]
 async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
-    let config = load_config(config_path)?;
+    let mut config = load_config(config_path)?;
+    
+    // If no explicit config file is provided, enable MCP by default for integrated server
+    if config_path.is_none() {
+        if let Some(ref mut mcp_config) = config.mcp {
+            if !mcp_config.enabled {
+                info!("Enabling MCP SSE server by default for integrated server mode");
+                mcp_config.enabled = true;
+            }
+        }
+    }
+    
     let lib_config = convert_to_legacy_config(config)?;
     serve_command_with_config(lib_config).await
 }
@@ -1563,12 +1574,23 @@ async fn main() -> Result<()> {
             #[cfg(feature = "server")]
             {
                 info!("Starting Ratchet server");
-                // Use config override if provided, otherwise use loaded config
-                let server_config = if config_override.is_some() {
+                // Load config with MCP auto-enabling logic
+                let mut server_config = if config_override.is_some() {
                     load_config(config_override.as_ref())?
                 } else {
-                    config
+                    config.clone()
                 };
+                
+                // If no explicit config file is provided, enable MCP by default for integrated server
+                if config_override.is_none() {
+                    if let Some(ref mut mcp_config) = server_config.mcp {
+                        if !mcp_config.enabled {
+                            info!("Enabling MCP SSE server by default for integrated server mode");
+                            mcp_config.enabled = true;
+                        }
+                    }
+                }
+                
                 let lib_config = convert_to_legacy_config(server_config)?;
                 serve_command_with_config(lib_config).await
             }
