@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use ratchet_lib::execution::ProcessTaskExecutor;
+use ratchet_runtime::executor::TaskExecutor;
 use ratchet_lib::logging::event::{LogEvent, LogLevel};
 use ratchet_storage::seaorm::repositories::{
     task_repository::{TaskRepository, TaskFilters, Pagination},
@@ -17,10 +18,18 @@ use ratchet_storage::seaorm::entities::{ExecutionStatus, Task, Execution};
 
 use super::tools::{McpTaskExecutor, McpTaskInfo, McpExecutionStatus};
 
-/// Adapter that wraps Ratchet's process executor to provide MCP-compatible task execution
+/// Executor type that can handle both legacy and new execution engines
+pub enum ExecutorType {
+    /// Legacy process executor from ratchet_lib
+    Legacy(Arc<ProcessTaskExecutor>),
+    /// New modular task executor from ratchet-runtime
+    Runtime(Arc<dyn TaskExecutor>),
+}
+
+/// Adapter that wraps Ratchet's task execution to provide MCP-compatible task execution
 pub struct RatchetMcpAdapter {
-    /// The process-based task executor (Send + Sync)
-    executor: Arc<ProcessTaskExecutor>,
+    /// The task executor (either legacy or new runtime)
+    executor: ExecutorType,
     
     /// Task repository for task discovery
     task_repository: Arc<TaskRepository>,
@@ -33,21 +42,35 @@ pub struct RatchetMcpAdapter {
 }
 
 impl RatchetMcpAdapter {
-    /// Create a new adapter
+    /// Create a new adapter with legacy ProcessTaskExecutor
     pub fn new(
         executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
         execution_repository: Arc<ExecutionRepository>,
     ) -> Self {
         Self {
-            executor,
+            executor: ExecutorType::Legacy(executor),
             task_repository,
             execution_repository,
             log_file_path: None,
         }
     }
     
-    /// Create a new adapter with log file path for log retrieval
+    /// Create a new adapter with new runtime TaskExecutor
+    pub fn with_runtime_executor(
+        executor: Arc<dyn TaskExecutor>,
+        task_repository: Arc<TaskRepository>,
+        execution_repository: Arc<ExecutionRepository>,
+    ) -> Self {
+        Self {
+            executor: ExecutorType::Runtime(executor),
+            task_repository,
+            execution_repository,
+            log_file_path: None,
+        }
+    }
+    
+    /// Create a new adapter with log file path for log retrieval (legacy)
     pub fn with_log_file(
         executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
@@ -55,7 +78,22 @@ impl RatchetMcpAdapter {
         log_file_path: PathBuf,
     ) -> Self {
         Self {
-            executor,
+            executor: ExecutorType::Legacy(executor),
+            task_repository,
+            execution_repository,
+            log_file_path: Some(log_file_path),
+        }
+    }
+    
+    /// Create a new adapter with log file path for log retrieval (runtime)
+    pub fn with_runtime_executor_and_log_file(
+        executor: Arc<dyn TaskExecutor>,
+        task_repository: Arc<TaskRepository>,
+        execution_repository: Arc<ExecutionRepository>,
+        log_file_path: PathBuf,
+    ) -> Self {
+        Self {
+            executor: ExecutorType::Runtime(executor),
             task_repository,
             execution_repository,
             log_file_path: Some(log_file_path),
