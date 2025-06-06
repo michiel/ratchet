@@ -7,15 +7,16 @@ use ratchet_mcp::{
 };
 use ratchet_lib::{
     execution::ProcessTaskExecutor,
-    config::{RatchetConfig, DatabaseConfig},
+    config::RatchetConfig,
 };
-use ratchet_lib::database::{
+use ratchet_storage::seaorm::{
     connection::DatabaseConnection,
     repositories::{
         task_repository::TaskRepository,
         execution_repository::ExecutionRepository,
         RepositoryFactory,
     },
+    config::DatabaseConfig,
 };
 
 #[derive(Parser)]
@@ -119,13 +120,17 @@ async fn serve_command(
     let db_config = DatabaseConfig::default();
     let db = DatabaseConnection::new(db_config).await?;
     
-    // Initialize repositories
-    let task_repository = Arc::new(TaskRepository::new(db.clone()));
-    let execution_repository = Arc::new(ExecutionRepository::new(db.clone()));
+    // Run migrations
+    db.migrate().await?;
     
-    // Initialize task executor
-    let repositories = RepositoryFactory::new(db.clone());
-    let executor = Arc::new(ProcessTaskExecutor::new(repositories, config.clone()).await?);
+    // Initialize repositories using repository factory
+    let repo_factory = RepositoryFactory::new(db.clone());
+    let task_repository = Arc::new(repo_factory.task_repository());
+    let execution_repository = Arc::new(repo_factory.execution_repository());
+    
+    // Initialize task executor (still needs legacy format)
+    let legacy_repo_factory = ratchet_lib::database::repositories::RepositoryFactory::new(db.clone().into());
+    let executor = Arc::new(ProcessTaskExecutor::new(legacy_repo_factory, config.clone()).await?);
     
     // Create MCP adapter
     let adapter = RatchetMcpAdapter::new(

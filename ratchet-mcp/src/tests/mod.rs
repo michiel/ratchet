@@ -226,13 +226,18 @@ async fn test_mcp_server_error_handling() {
 
 /// Create a test adapter with mock repositories
 async fn create_test_adapter() -> RatchetMcpAdapter {
-    use ratchet_lib::{
-        database::{DatabaseConnection, repositories::{TaskRepository, ExecutionRepository}},
-        execution::ProcessTaskExecutor,
+    use ratchet_storage::seaorm::{
+        connection::DatabaseConnection,
+        repositories::{
+            task_repository::TaskRepository,
+            execution_repository::ExecutionRepository,
+            RepositoryFactory,
+        }
     };
+    use ratchet_lib::execution::ProcessTaskExecutor;
     
     // Create in-memory database for testing using new config type
-    let db_config = ratchet_lib::config::DatabaseConfig {
+    let db_config = ratchet_storage::seaorm::config::DatabaseConfig {
         url: "sqlite::memory:".to_string(),
         max_connections: 1,
         connection_timeout: std::time::Duration::from_secs(5),
@@ -245,15 +250,16 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     database.migrate().await
         .expect("Failed to run migrations");
     
-    // Create repositories
-    let task_repository = Arc::new(TaskRepository::new(database.clone()));
-    let execution_repository = Arc::new(ExecutionRepository::new(database.clone()));
+    // Create repositories using the new factory
+    let repo_factory = RepositoryFactory::new(database.clone());
+    let task_repository = Arc::new(repo_factory.task_repository());
+    let execution_repository = Arc::new(repo_factory.execution_repository());
     
     // Create executor with test config (using legacy config for now since executor still needs it)
     let config = ratchet_lib::config::RatchetConfig::default();
     let executor = Arc::new(
         ProcessTaskExecutor::new(
-            ratchet_lib::database::repositories::RepositoryFactory::new(database),
+            ratchet_lib::database::repositories::RepositoryFactory::new(database.clone().into()),
             config
         ).await.expect("Failed to create test executor")
     );

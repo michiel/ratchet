@@ -9,7 +9,10 @@ use tracing::{info, error};
 
 use ratchet_lib::services::base::{Service, ServiceHealth, ServiceMetrics};
 use ratchet_lib::execution::ProcessTaskExecutor;
-use ratchet_lib::database::repositories::{TaskRepository, ExecutionRepository};
+use ratchet_storage::seaorm::repositories::{
+    task_repository::TaskRepository,
+    execution_repository::ExecutionRepository,
+};
 
 use crate::{McpResult, McpError, McpAuth};
 use crate::server::{McpServer, McpServerConfig, McpServerTransport, RatchetMcpAdapter, RatchetToolRegistry};

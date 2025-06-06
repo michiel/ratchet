@@ -8,7 +8,10 @@ use tokio::sync::Mutex;
 
 use ratchet_lib::services::base::{Service, ServiceHealth, ServiceMetrics, HealthStatus};
 use ratchet_lib::execution::ProcessTaskExecutor;
-use ratchet_lib::database::repositories::{TaskRepository, ExecutionRepository};
+use ratchet_storage::seaorm::repositories::{
+    task_repository::TaskRepository,
+    execution_repository::ExecutionRepository,
+};
 
 use crate::{McpResult, McpError};
 use crate::server::{McpServer, McpServerBuilder};

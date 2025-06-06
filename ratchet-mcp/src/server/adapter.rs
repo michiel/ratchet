@@ -8,10 +8,12 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use ratchet_lib::execution::ProcessTaskExecutor;
-use ratchet_lib::database::repositories::{ExecutionRepository, TaskRepository};
 use ratchet_lib::logging::event::{LogEvent, LogLevel};
-use ratchet_lib::database::repositories::task_repository::{TaskFilters, Pagination};
-use ratchet_lib::database::entities::ExecutionStatus;
+use ratchet_storage::seaorm::repositories::{
+    task_repository::{TaskRepository, TaskFilters, Pagination},
+    execution_repository::ExecutionRepository,
+};
+use ratchet_storage::seaorm::entities::{ExecutionStatus, Task, Execution};
 
 use super::tools::{McpTaskExecutor, McpTaskInfo, McpExecutionStatus};
 
@@ -168,8 +170,8 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             description: task.description.clone(),
             tags: vec![], // Database entity doesn't have tags directly
             enabled: task.enabled,
-            input_schema: Some(task.input_schema),
-            output_schema: Some(task.output_schema),
+            input_schema: Some(task.input_schema.clone()),
+            output_schema: Some(task.output_schema.clone()),
         }).collect())
     }
     
