@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::{
     cache::{Cache, CacheWarmer},
     config::TaskCacheConfig,
-    stores::{LruCache, MokaCache, TtlCache},
+    stores::{InMemoryCache, LruCache, MokaCache, TtlCache},
     CacheError, CacheResult, CacheStats,
 };
 
@@ -74,6 +74,7 @@ pub struct TaskCache {
 
 /// Inner cache implementation enum
 enum TaskCacheImpl {
+    InMemory(InMemoryCache<String, Arc<CachedTask>>),
     Lru(LruCache<String, Arc<CachedTask>>),
     Ttl(TtlCache<String, Arc<CachedTask>>),
     Moka(MokaCache<String, Arc<CachedTask>>),
@@ -83,7 +84,10 @@ impl TaskCache {
     /// Create a new task cache from configuration
     pub fn from_config(config: TaskCacheConfig) -> Self {
         let inner = match config.cache_type {
-            crate::config::CacheType::InMemory | crate::config::CacheType::Lru => {
+            crate::config::CacheType::InMemory => {
+                TaskCacheImpl::InMemory(InMemoryCache::new())
+            }
+            crate::config::CacheType::Lru => {
                 TaskCacheImpl::Lru(LruCache::new(config.max_entries))
             }
             crate::config::CacheType::Ttl => {
@@ -113,6 +117,7 @@ impl TaskCache {
     /// Get a task by ID
     pub async fn get(&self, task_id: &str) -> CacheResult<Option<Arc<CachedTask>>> {
         match &self.inner {
+            TaskCacheImpl::InMemory(cache) => cache.get(&task_id.to_string()).await,
             TaskCacheImpl::Lru(cache) => cache.get(&task_id.to_string()).await,
             TaskCacheImpl::Ttl(cache) => cache.get(&task_id.to_string()).await,
             TaskCacheImpl::Moka(cache) => cache.get(&task_id.to_string()).await,
@@ -133,6 +138,7 @@ impl TaskCache {
         let task = Arc::new(task);
         
         match &self.inner {
+            TaskCacheImpl::InMemory(cache) => cache.put(task_id, task).await,
             TaskCacheImpl::Lru(cache) => cache.put(task_id, task).await,
             TaskCacheImpl::Ttl(cache) => cache.put(task_id, task).await,
             TaskCacheImpl::Moka(cache) => cache.put(task_id, task).await,
@@ -142,6 +148,7 @@ impl TaskCache {
     /// Remove a task from cache
     pub async fn remove(&self, task_id: &str) -> CacheResult<Option<Arc<CachedTask>>> {
         match &self.inner {
+            TaskCacheImpl::InMemory(cache) => cache.remove(&task_id.to_string()).await,
             TaskCacheImpl::Lru(cache) => cache.remove(&task_id.to_string()).await,
             TaskCacheImpl::Ttl(cache) => cache.remove(&task_id.to_string()).await,
             TaskCacheImpl::Moka(cache) => cache.remove(&task_id.to_string()).await,
@@ -151,6 +158,7 @@ impl TaskCache {
     /// Clear all tasks
     pub async fn clear(&self) -> CacheResult<()> {
         match &self.inner {
+            TaskCacheImpl::InMemory(cache) => cache.clear().await,
             TaskCacheImpl::Lru(cache) => cache.clear().await,
             TaskCacheImpl::Ttl(cache) => cache.clear().await,
             TaskCacheImpl::Moka(cache) => cache.clear().await,
@@ -160,6 +168,7 @@ impl TaskCache {
     /// Get cache statistics
     pub async fn stats(&self) -> CacheResult<CacheStats> {
         match &self.inner {
+            TaskCacheImpl::InMemory(cache) => cache.stats().await,
             TaskCacheImpl::Lru(cache) => cache.stats().await,
             TaskCacheImpl::Ttl(cache) => cache.stats().await,
             TaskCacheImpl::Moka(cache) => cache.stats().await,
@@ -169,6 +178,10 @@ impl TaskCache {
     /// Get current memory usage
     pub async fn memory_usage(&self) -> CacheResult<usize> {
         match &self.inner {
+            TaskCacheImpl::InMemory(cache) => {
+                let len = cache.len().await?;
+                Ok(len * 1024 * 10) // Rough estimate
+            }
             TaskCacheImpl::Lru(cache) => {
                 // This is a simplified approach - in production you'd track this differently
                 let len = cache.len().await?;

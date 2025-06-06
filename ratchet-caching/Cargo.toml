@@ -25,7 +25,7 @@ parking_lot = "0.12"
 lru = { workspace = true, optional = true }
 
 [features]
-default = ["inmemory"]
+default = ["inmemory", "lru", "ttl", "moka"]
 inmemory = []
 lru = ["dep:lru"]
 moka = ["dep:moka"]

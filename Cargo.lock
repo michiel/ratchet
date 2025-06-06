@@ -3609,6 +3609,7 @@ dependencies = [
  "ratchet-config",
  "ratchet-core",
  "ratchet-ipc",
+ "ratchet-runtime",
  "ratchet-storage",
  "ratchet_lib",
  "reqwest",

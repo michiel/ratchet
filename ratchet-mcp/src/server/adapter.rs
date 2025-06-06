@@ -1,20 +1,20 @@
 //! Adapter to bridge Ratchet's execution engine with MCP server
 
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{Value, Value as JsonValue};
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use ratchet_lib::execution::ProcessTaskExecutor;
+use ratchet_lib::execution::{ProcessTaskExecutor, ExecutionResult, ExecutionError};
 use ratchet_runtime::executor::TaskExecutor;
 use ratchet_lib::logging::event::{LogEvent, LogLevel};
 use ratchet_storage::seaorm::repositories::{
     task_repository::{TaskRepository, TaskFilters, Pagination},
     execution_repository::ExecutionRepository,
 };
-use ratchet_storage::seaorm::entities::{ExecutionStatus, Task, Execution};
+use ratchet_storage::seaorm::entities::ExecutionStatus;
 
 use super::tools::{McpTaskExecutor, McpTaskInfo, McpExecutionStatus};
 
@@ -24,6 +24,28 @@ pub enum ExecutorType {
     Legacy(Arc<ProcessTaskExecutor>),
     /// New modular task executor from ratchet-runtime
     Runtime(Arc<dyn TaskExecutor>),
+}
+
+impl ExecutorType {
+    /// Execute task sending results via IPC
+    pub async fn execute_task_send(
+        &self,
+        task_id: i32,
+        input_data: JsonValue,
+        context: Option<ratchet_lib::execution::ipc::ExecutionContext>,
+    ) -> Result<ExecutionResult, ExecutionError> {
+        match self {
+            ExecutorType::Legacy(executor) => {
+                // Context is already the right type for legacy executor
+                executor.execute_task_send(task_id, input_data, context).await
+            }
+            ExecutorType::Runtime(executor) => {
+                // For runtime executor, we need to implement this
+                // This is a simplified implementation - in production you'd want proper conversion
+                Err(ExecutionError::ExecutionFailed("Runtime executor not yet fully implemented".to_string()))
+            }
+        }
+    }
 }
 
 /// Adapter that wraps Ratchet's task execution to provide MCP-compatible task execution
