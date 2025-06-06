@@ -20,8 +20,17 @@ async-trait = "0.1"
 log = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
-moka = { version = "0.12", features = ["future"] }
+moka = { version = "0.12", features = ["future"], optional = true }
 parking_lot = "0.12"
+lru = { workspace = true, optional = true }
+
+[features]
+default = ["inmemory"]
+inmemory = []
+lru = ["dep:lru"]
+moka = ["dep:moka"]
+ttl = []
+all = ["inmemory", "lru", "moka", "ttl"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

@@ -21,7 +21,16 @@ pub use errors::{CacheError, CacheResult};
 pub use stats::CacheStats;
 
 // Re-export store implementations
-pub use stores::{InMemoryCache, LruCache, TtlCache, MokaCache};
+pub use stores::InMemoryCache;
+
+#[cfg(feature = "lru")]
+pub use stores::LruCache;
+
+#[cfg(feature = "ttl")]
+pub use stores::TtlCache;
+
+#[cfg(feature = "moka")]
+pub use stores::MokaCache;
 
 // Re-export specialized caches
 pub use task_cache::TaskCache;
@@ -38,6 +47,7 @@ where
 }
 
 /// Create an LRU cache with specified capacity
+#[cfg(feature = "lru")]
 pub fn create_lru_cache<K, V>(capacity: usize) -> impl Cache<K, V>
 where
     K: CacheKey + 'static,
@@ -47,6 +57,7 @@ where
 }
 
 /// Create a TTL-based cache with default TTL
+#[cfg(feature = "ttl")]
 pub fn create_ttl_cache<K, V>(default_ttl: std::time::Duration) -> impl Cache<K, V>
 where
     K: CacheKey + 'static,
@@ -56,6 +67,7 @@ where
 }
 
 /// Create a high-performance Moka-based cache
+#[cfg(feature = "moka")]
 pub fn create_moka_cache<K, V>(max_capacity: u64) -> impl Cache<K, V>
 where
     K: CacheKey + Send + Sync + 'static,

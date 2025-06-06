@@ -30,12 +30,68 @@ uuid.workspace = true
 axum.workspace = true
 
 # Local dependencies
-ratchet_lib = { path = "../ratchet-lib" }
-ratchet-mcp = { path = "../ratchet-mcp" }
+ratchet_lib = { path = "../ratchet-lib", optional = true }
+ratchet-mcp = { path = "../ratchet-mcp", optional = true }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-core = { path = "../ratchet-core" }
-ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
+ratchet-storage = { path = "../ratchet-storage", optional = true }
+ratchet-caching = { path = "../ratchet-caching", optional = true }
+ratchet-resilience = { path = "../ratchet-resilience", optional = true }
+ratchet-plugins = { path = "../ratchet-plugins", optional = true }
 
 # Binary-specific dependencies (commented out for now due to network issues)
 # dialoguer = "0.11"
 # indicatif = "0.17"
+
+# Feature flags for optional functionality
+[features]
+default = ["server", "database", "mcp-server", "plugins"]
+
+# Core functionality (minimal build)
+core = []
+
+# Server components
+server = ["rest-api", "graphql-api", "dep:ratchet_lib"]
+rest-api = ["ratchet_lib/server"]
+graphql-api = ["ratchet_lib/server"]
+
+# Database backends
+database = ["sqlite", "dep:ratchet-storage"]
+sqlite = ["ratchet-storage/database", "ratchet_lib/database"]
+postgres = ["ratchet-storage/postgres", "ratchet_lib/database"]
+mysql = ["ratchet-storage/mysql", "ratchet_lib/database"]
+
+# MCP Server implementation
+mcp-server = ["mcp-stdio", "mcp-sse", "dep:ratchet-mcp"]
+mcp-stdio = ["ratchet-mcp/transport-stdio"]
+mcp-sse = ["ratchet-mcp/transport-sse"]
+
+# Plugin system
+plugins = ["static-plugins", "dep:ratchet-plugins"]
+static-plugins = []
+dynamic-plugins = ["ratchet-plugins/dynamic"]
+
+# JavaScript execution
+javascript = ["ratchet_lib/javascript"]
+
+# Output destinations
+output = ["ratchet_lib/output"]
+
+# Caching backends
+caching = ["dep:ratchet-caching"]
+
+# Resilience patterns
+resilience = ["dep:ratchet-resilience"]
+
+# Full feature set (everything enabled)
+full = ["server", "database", "mcp-server", "plugins", "javascript", "output", "caching", "resilience"]
+
+# Minimal build (core functionality only)
+minimal = ["core"]
+
+# Development profile (includes everything for development)
+dev-full = ["full", "dynamic-plugins"]
+
+# Production profiles
+production = ["server", "database", "mcp-server", "static-plugins", "output"]
+enterprise = ["full", "postgres"]

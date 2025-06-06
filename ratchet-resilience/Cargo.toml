@@ -24,7 +24,15 @@ humantime-serde = "1.1"
 futures = "0.3"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.28", features = ["signal", "process"] }
+nix = { version = "0.28", features = ["signal", "process"], optional = true }
+
+[features]
+default = ["retry", "circuit-breaker", "shutdown"]
+retry = []
+circuit-breaker = []
+shutdown = ["dep:nix"]
+backoff = []
+all = ["retry", "circuit-breaker", "shutdown", "backoff"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
