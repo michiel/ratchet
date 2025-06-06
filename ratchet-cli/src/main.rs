@@ -43,17 +43,19 @@ use cli::{Cli, Commands, GenerateCommands, ConfigCommands};
 fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfig> {
     use ratchet_lib::config::*;
     
-    // Convert database config
-    let database_config = DatabaseConfig {
-        url: new_config.database.as_ref()
-            .map(|db| db.url.clone())
-            .unwrap_or_else(|| "sqlite::memory:".to_string()),
-        max_connections: new_config.database.as_ref()
-            .map(|db| db.max_connections)
-            .unwrap_or(10),
-        connection_timeout: new_config.database.as_ref()
-            .map(|db| db.connection_timeout)
-            .unwrap_or_else(|| std::time::Duration::from_secs(30)),
+    // Convert database config from server.database
+    let database_config = if let Some(server_config) = &new_config.server {
+        DatabaseConfig {
+            url: server_config.database.url.clone(),
+            max_connections: server_config.database.max_connections,
+            connection_timeout: server_config.database.connection_timeout,
+        }
+    } else {
+        DatabaseConfig {
+            url: "sqlite::memory:".to_string(),
+            max_connections: 10,
+            connection_timeout: std::time::Duration::from_secs(30),
+        }
     };
     
     // Convert server config
@@ -71,8 +73,8 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
     let execution_config = ExecutionConfig {
         max_execution_duration: new_config.execution.max_execution_duration.as_secs(),
         validate_schemas: new_config.execution.validate_schemas,
-        max_concurrent_tasks: new_config.execution.max_concurrent_tasks.unwrap_or(4),
-        timeout_grace_period: new_config.execution.timeout_grace_period.unwrap_or(30),
+        max_concurrent_tasks: new_config.execution.max_concurrent_tasks,
+        timeout_grace_period: new_config.execution.timeout_grace_period.as_secs() as u32,
     };
     
     // Convert HTTP config
@@ -80,7 +82,7 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
         timeout: new_config.http.timeout,
         user_agent: new_config.http.user_agent,
         verify_ssl: new_config.http.verify_ssl,
-        max_redirects: new_config.http.max_redirects.unwrap_or(10),
+        max_redirects: new_config.http.max_redirects,
     };
     
     // Convert logging config - use lib's format
@@ -146,8 +148,6 @@ async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
 #[cfg(feature = "server")]
 async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     use ratchet_lib::{
-        database::DatabaseConnection,
-        database::repositories::RepositoryFactory,
         execution::{JobQueueManager, ProcessTaskExecutor},
         server::create_app,
     };
@@ -163,7 +163,15 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
 
     // Initialize database
     info!("Connecting to database: {}", server_config.database.url);
-    let database = DatabaseConnection::new(server_config.database.clone()).await
+    
+    // Convert lib database config to storage database config
+    let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
+        url: server_config.database.url.clone(),
+        max_connections: server_config.database.max_connections,
+        connection_timeout: server_config.database.connection_timeout,
+    };
+    
+    let database = DatabaseConnection::new(storage_db_config).await
         .context("Failed to connect to database")?;
     
     // Run migrations
@@ -290,11 +298,6 @@ async fn mcp_serve_command_with_config(
         security::{McpAuthManager, McpAuth},
     };
     use ratchet_lib::{
-        database::DatabaseConnection,
-        database::repositories::{
-            task_repository::TaskRepository,
-            execution_repository::ExecutionRepository,
-        },
         execution::ProcessTaskExecutor,
     };
     use std::sync::Arc;
@@ -314,7 +317,7 @@ async fn mcp_serve_command_with_config(
     };
     
     // Get database configuration (use server config if available, otherwise default)
-    let database_config = if let Some(server_config) = &ratchet_config.server {
+    let lib_database_config = if let Some(server_config) = &ratchet_config.server {
         if !is_stdio {
             info!("Using server database configuration for MCP");
         }
@@ -326,11 +329,18 @@ async fn mcp_serve_command_with_config(
         ratchet_lib::config::DatabaseConfig::default()
     };
 
+    // Convert lib database config to storage database config
+    let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
+        url: lib_database_config.url.clone(),
+        max_connections: lib_database_config.max_connections,
+        connection_timeout: lib_database_config.connection_timeout,
+    };
+
     // Initialize database
     if !is_stdio {
-        info!("Connecting to database: {}", database_config.url);
+        info!("Connecting to database: {}", storage_db_config.url);
     }
-    let database = DatabaseConnection::new(database_config).await
+    let database = DatabaseConnection::new(storage_db_config).await
         .context("Failed to connect to database")?;
 
     // Run migrations
@@ -339,15 +349,15 @@ async fn mcp_serve_command_with_config(
     }
     database.migrate().await.context("Failed to run database migrations")?;
 
-    // Initialize repositories
-    let task_repo = Arc::new(TaskRepository::new(database.clone()));
-    let execution_repo = Arc::new(ExecutionRepository::new(database.clone()));
+    // Initialize repositories using ratchet-storage
+    let repositories = RepositoryFactory::new(database.clone());
+    let task_repo = Arc::new(repositories.task_repository());
+    let execution_repo = Arc::new(repositories.execution_repository());
 
     // Initialize task executor for MCP
     if !is_stdio {
         info!("Initializing task executor for MCP");
     }
-    let repositories = ratchet_lib::database::repositories::RepositoryFactory::new(database.clone());
     let task_executor = Arc::new(
         ProcessTaskExecutor::new(repositories, ratchet_config).await
             .context("Failed to initialize process task executor")?
