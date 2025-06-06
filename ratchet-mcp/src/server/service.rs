@@ -1,22 +1,23 @@
 //! MCP service implementation for integration with Ratchet's service architecture
 
 use async_trait::async_trait;
-use std::sync::Arc;
 use std::net::SocketAddr;
-use tokio::task::JoinHandle;
+use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, error};
+use tokio::task::JoinHandle;
+use tracing::{error, info};
 
-use ratchet_lib::services::base::{Service, ServiceHealth, ServiceMetrics};
 use ratchet_lib::execution::ProcessTaskExecutor;
+use ratchet_lib::services::base::{Service, ServiceHealth, ServiceMetrics};
 use ratchet_storage::seaorm::repositories::{
-    task_repository::TaskRepository,
-    execution_repository::ExecutionRepository,
+    execution_repository::ExecutionRepository, task_repository::TaskRepository,
 };
 
-use crate::{McpResult, McpError, McpAuth};
-use crate::server::{McpServer, McpServerConfig, McpServerTransport, RatchetMcpAdapter, RatchetToolRegistry};
-use crate::security::{McpAuthManager, AuditLogger, SecurityConfig};
+use crate::security::{AuditLogger, McpAuthManager, SecurityConfig};
+use crate::server::{
+    McpServer, McpServerConfig, McpServerTransport, RatchetMcpAdapter, RatchetToolRegistry,
+};
+use crate::{McpAuth, McpError, McpResult};
 
 /// MCP service configuration
 #[derive(Debug, Clone)]
@@ -71,11 +72,7 @@ impl McpService {
                 log_path.clone(),
             )
         } else {
-            RatchetMcpAdapter::new(
-                task_executor,
-                task_repository,
-                execution_repository,
-            )
+            RatchetMcpAdapter::new(task_executor, task_repository, execution_repository)
         };
 
         // Create tool registry with the adapter
@@ -114,10 +111,13 @@ impl McpService {
             }
             McpServerTransport::Sse { host, port, .. } => {
                 // For SSE transport, spawn a background task
-                info!("Starting MCP server with SSE transport on {}:{}", host, port);
-                
+                info!(
+                    "Starting MCP server with SSE transport on {}:{}",
+                    host, port
+                );
+
                 let server = self.server.clone();
-                
+
                 let handle = tokio::spawn(async move {
                     if let Err(e) = server.start().await {
                         error!("MCP server error: {}", e);
@@ -135,16 +135,13 @@ impl McpService {
     /// Stop the MCP server
     pub async fn stop(&self) -> McpResult<()> {
         info!("Stopping MCP server");
-        
+
         // Cancel the server task if running
         let mut handle_guard = self.server_handle.lock().await;
         if let Some(handle) = handle_guard.take() {
             handle.abort();
             // Wait for task to finish (with timeout)
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                handle
-            ).await;
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await;
         }
 
         Ok(())
@@ -158,16 +155,17 @@ impl McpService {
         } else {
             // For stdio transport, we can't easily check
             // Assume it's running if we haven't explicitly stopped it
-            matches!(self.config.server_config.transport, McpServerTransport::Stdio)
+            matches!(
+                self.config.server_config.transport,
+                McpServerTransport::Stdio
+            )
         }
     }
 
     /// Get server address (for SSE transport)
     pub fn server_address(&self) -> Option<SocketAddr> {
         match &self.config.server_config.transport {
-            McpServerTransport::Sse { host, port, .. } => {
-                format!("{}:{}", host, port).parse().ok()
-            }
+            McpServerTransport::Sse { host, port, .. } => format!("{}:{}", host, port).parse().ok(),
             _ => None,
         }
     }
@@ -177,10 +175,10 @@ impl McpService {
 pub enum McpServiceError {
     #[error("MCP error: {0}")]
     McpError(#[from] McpError),
-    
+
     #[error("Service configuration error: {0}")]
     ConfigError(String),
-    
+
     #[error("Service initialization failed: {0}")]
     InitializationFailed(String),
 }
@@ -197,7 +195,8 @@ impl Service for McpService {
         // This would need the repositories and executor to be passed somehow
         // For now, return an error as we can't create a complete service without dependencies
         Err(McpServiceError::InitializationFailed(
-            "McpService requires repositories and executor - use McpService::new instead".to_string()
+            "McpService requires repositories and executor - use McpService::new instead"
+                .to_string(),
         ))
     }
 
@@ -207,19 +206,21 @@ impl Service for McpService {
 
     async fn health_check(&self) -> Result<ServiceHealth, Self::Error> {
         let is_running = self.is_running().await;
-        
+
         let mut health = if is_running {
-            ServiceHealth::healthy()
-                .with_message("MCP server is running")
+            ServiceHealth::healthy().with_message("MCP server is running")
         } else {
             ServiceHealth::unhealthy("MCP server is not running")
         };
 
         // Add transport info
-        health = health.with_metadata("transport", match &self.config.server_config.transport {
-            McpServerTransport::Stdio => "stdio",
-            McpServerTransport::Sse { .. } => "sse",
-        });
+        health = health.with_metadata(
+            "transport",
+            match &self.config.server_config.transport {
+                McpServerTransport::Stdio => "stdio",
+                McpServerTransport::Sse { .. } => "sse",
+            },
+        );
 
         // Add server address for SSE
         if let Some(addr) = self.server_address() {
@@ -298,21 +299,26 @@ impl McpServiceBuilder {
 
     /// Build the MCP service
     pub async fn build(self) -> Result<McpService, McpServiceError> {
-        let task_executor = self.task_executor
-            .ok_or_else(|| McpServiceError::InitializationFailed("Task executor is required".to_string()))?;
-        
-        let task_repository = self.task_repository
-            .ok_or_else(|| McpServiceError::InitializationFailed("Task repository is required".to_string()))?;
-            
-        let execution_repository = self.execution_repository
-            .ok_or_else(|| McpServiceError::InitializationFailed("Execution repository is required".to_string()))?;
+        let task_executor = self.task_executor.ok_or_else(|| {
+            McpServiceError::InitializationFailed("Task executor is required".to_string())
+        })?;
+
+        let task_repository = self.task_repository.ok_or_else(|| {
+            McpServiceError::InitializationFailed("Task repository is required".to_string())
+        })?;
+
+        let execution_repository = self.execution_repository.ok_or_else(|| {
+            McpServiceError::InitializationFailed("Execution repository is required".to_string())
+        })?;
 
         McpService::new(
             self.config,
             task_executor,
             task_repository,
             execution_repository,
-        ).await.map_err(Into::into)
+        )
+        .await
+        .map_err(Into::into)
     }
 }
 
@@ -360,27 +366,33 @@ impl McpService {
                 tls: false, // TODO: Make configurable
                 cors: crate::server::config::CorsConfig {
                     allowed_origins: vec!["*".to_string()], // Default CORS
-                    allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
+                    allowed_methods: vec![
+                        "GET".to_string(),
+                        "POST".to_string(),
+                        "OPTIONS".to_string(),
+                    ],
                     allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
                     allow_credentials: false,
                 },
                 timeout: std::time::Duration::from_secs(300), // Default 5 minutes
             },
-            _ => return Err(McpError::Configuration {
-                message: format!("Unknown transport: {}", mcp_config.transport),
-            }),
+            _ => {
+                return Err(McpError::Configuration {
+                    message: format!("Unknown transport: {}", mcp_config.transport),
+                })
+            }
         };
 
         let security = SecurityConfig {
             max_execution_time: std::time::Duration::from_secs(300), // Default 5 minutes
-            max_log_entries: 1000, // Default limit
+            max_log_entries: 1000,                                   // Default limit
             allow_dangerous_tasks: false, // Default disabled for security
-            audit_log_enabled: true, // Default enabled
-            input_sanitization: true, // Default enabled
-            max_request_size: 1048576, // Default 1MB
-            max_response_size: 10485760, // Default 10MB
+            audit_log_enabled: true,      // Default enabled
+            input_sanitization: true,     // Default enabled
+            max_request_size: 1048576,    // Default 1MB
+            max_response_size: 10485760,  // Default 10MB
             session_timeout: std::time::Duration::from_secs(3600), // Default 1 hour
-            require_encryption: false, // Default disabled
+            require_encryption: false,    // Default disabled
         };
 
         let server_config = McpServerConfig {
@@ -409,44 +421,56 @@ mod tests {
         repositories::RepositoryFactory as StorageRepositoryFactory,
     };
 
-    async fn create_test_dependencies() -> (Arc<ProcessTaskExecutor>, Arc<TaskRepository>, Arc<ExecutionRepository>) {
+    async fn create_test_dependencies() -> (
+        Arc<ProcessTaskExecutor>,
+        Arc<TaskRepository>,
+        Arc<ExecutionRepository>,
+    ) {
         let config = RatchetConfig::default();
         let storage_db_config = StorageDbConfig {
             url: "sqlite::memory:".to_string(),
             max_connections: 5,
             connection_timeout: std::time::Duration::from_secs(10),
         };
-        
+
         // Create storage database and repositories
-        let storage_db = StorageDbConnection::new(storage_db_config.clone()).await.unwrap();
+        let storage_db = StorageDbConnection::new(storage_db_config.clone())
+            .await
+            .unwrap();
         storage_db.migrate().await.unwrap();
         let storage_repos = StorageRepositoryFactory::new(storage_db);
-        
+
         // Create legacy repository factory for the executor
         let legacy_config = ratchet_lib::config::DatabaseConfig {
             url: storage_db_config.url.clone(),
             max_connections: storage_db_config.max_connections,
             connection_timeout: storage_db_config.connection_timeout,
         };
-        let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config).await.unwrap();
+        let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config)
+            .await
+            .unwrap();
         let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
-        
-        let executor = Arc::new(ProcessTaskExecutor::new(legacy_repos, config).await.unwrap());
-        
-        (executor, Arc::new(storage_repos.task_repository()), Arc::new(storage_repos.execution_repository()))
+
+        let executor = Arc::new(
+            ProcessTaskExecutor::new(legacy_repos, config)
+                .await
+                .unwrap(),
+        );
+
+        (
+            executor,
+            Arc::new(storage_repos.task_repository()),
+            Arc::new(storage_repos.execution_repository()),
+        )
     }
 
     #[tokio::test]
     async fn test_mcp_service_creation() {
         let (executor, task_repo, exec_repo) = create_test_dependencies().await;
-        
-        let service = McpService::new(
-            McpServiceConfig::default(),
-            executor,
-            task_repo,
-            exec_repo,
-        ).await;
-        
+
+        let service =
+            McpService::new(McpServiceConfig::default(), executor, task_repo, exec_repo).await;
+
         assert!(service.is_ok());
         let service = service.unwrap();
         assert_eq!(service.name(), "mcp-server");
@@ -455,7 +479,7 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_service_health_check() {
         let (executor, task_repo, exec_repo) = create_test_dependencies().await;
-        
+
         // Use SSE transport config so it properly shows as not running
         let config = McpServiceConfig {
             server_config: McpServerConfig {
@@ -476,14 +500,11 @@ mod tests {
             },
             log_file_path: None,
         };
-        
-        let service = McpService::new(
-            config,
-            executor,
-            task_repo,
-            exec_repo,
-        ).await.unwrap();
-        
+
+        let service = McpService::new(config, executor, task_repo, exec_repo)
+            .await
+            .unwrap();
+
         let health = service.health_check().await.unwrap();
         // Service is not started, so it should be unhealthy
         assert!(matches!(health.status, HealthStatus::Unhealthy { .. }));
@@ -492,14 +513,14 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_service_builder() {
         let (executor, task_repo, exec_repo) = create_test_dependencies().await;
-        
+
         let service = McpServiceBuilder::new()
             .with_task_executor(executor)
             .with_task_repository(task_repo)
             .with_execution_repository(exec_repo)
             .build()
             .await;
-            
+
         assert!(service.is_ok());
     }
 }

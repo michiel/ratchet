@@ -1,9 +1,9 @@
 //! Metrics collection for output delivery
 
+use crate::output::errors::DeliveryError;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use crate::output::errors::DeliveryError;
 
 /// Metrics for delivery operations
 #[derive(Debug, Default)]
@@ -55,12 +55,22 @@ impl DeliveryMetrics {
         bytes_delivered: u64,
     ) {
         let mut inner = self.inner.lock().unwrap();
-        
-        *inner.total_deliveries.entry(destination_type.to_string()).or_insert(0) += 1;
-        *inner.successful_deliveries.entry(destination_type.to_string()).or_insert(0) += 1;
-        *inner.bytes_delivered.entry(destination_type.to_string()).or_insert(0) += bytes_delivered;
-        
-        let total_time = inner.total_delivery_time
+
+        *inner
+            .total_deliveries
+            .entry(destination_type.to_string())
+            .or_insert(0) += 1;
+        *inner
+            .successful_deliveries
+            .entry(destination_type.to_string())
+            .or_insert(0) += 1;
+        *inner
+            .bytes_delivered
+            .entry(destination_type.to_string())
+            .or_insert(0) += bytes_delivered;
+
+        let total_time = inner
+            .total_delivery_time
             .entry(destination_type.to_string())
             .or_insert(Duration::ZERO);
         *total_time += delivery_time;
@@ -74,15 +84,22 @@ impl DeliveryMetrics {
         error: &DeliveryError,
     ) {
         let mut inner = self.inner.lock().unwrap();
-        
-        *inner.total_deliveries.entry(destination_type.to_string()).or_insert(0) += 1;
-        *inner.failed_deliveries.entry(destination_type.to_string()).or_insert(0) += 1;
-        
-        let total_time = inner.total_delivery_time
+
+        *inner
+            .total_deliveries
+            .entry(destination_type.to_string())
+            .or_insert(0) += 1;
+        *inner
+            .failed_deliveries
+            .entry(destination_type.to_string())
+            .or_insert(0) += 1;
+
+        let total_time = inner
+            .total_delivery_time
             .entry(destination_type.to_string())
             .or_insert(Duration::ZERO);
         *total_time += delivery_time;
-        
+
         // Track error types
         let error_type = match error {
             DeliveryError::TemplateRender { .. } => "template_render",
@@ -98,9 +115,14 @@ impl DeliveryMetrics {
             DeliveryError::Database { .. } => "database",
             DeliveryError::S3 { .. } => "s3",
         };
-        
-        *inner.error_counts.entry(error_type.to_string()).or_insert(0) += 1;
-        inner.last_errors.insert(destination_type.to_string(), error.to_string());
+
+        *inner
+            .error_counts
+            .entry(error_type.to_string())
+            .or_insert(0) += 1;
+        inner
+            .last_errors
+            .insert(destination_type.to_string(), error.to_string());
     }
 
     /// Record batch delivery statistics
@@ -112,7 +134,7 @@ impl DeliveryMetrics {
         batch_time: Duration,
     ) {
         let mut inner = self.inner.lock().unwrap();
-        
+
         inner.batch_stats.total_batches += 1;
         inner.batch_stats.total_destinations += total_destinations as u64;
         inner.batch_stats.successful_destinations += successful_destinations as u64;
@@ -123,10 +145,18 @@ impl DeliveryMetrics {
     /// Get success rate for a destination type
     pub fn success_rate(&self, destination_type: &str) -> f64 {
         let inner = self.inner.lock().unwrap();
-        
-        let total = inner.total_deliveries.get(destination_type).copied().unwrap_or(0);
-        let successful = inner.successful_deliveries.get(destination_type).copied().unwrap_or(0);
-        
+
+        let total = inner
+            .total_deliveries
+            .get(destination_type)
+            .copied()
+            .unwrap_or(0);
+        let successful = inner
+            .successful_deliveries
+            .get(destination_type)
+            .copied()
+            .unwrap_or(0);
+
         if total == 0 {
             0.0
         } else {
@@ -137,10 +167,18 @@ impl DeliveryMetrics {
     /// Get average delivery time for a destination type
     pub fn average_delivery_time(&self, destination_type: &str) -> Duration {
         let inner = self.inner.lock().unwrap();
-        
-        let total = inner.total_deliveries.get(destination_type).copied().unwrap_or(0);
-        let total_time = inner.total_delivery_time.get(destination_type).copied().unwrap_or(Duration::ZERO);
-        
+
+        let total = inner
+            .total_deliveries
+            .get(destination_type)
+            .copied()
+            .unwrap_or(0);
+        let total_time = inner
+            .total_delivery_time
+            .get(destination_type)
+            .copied()
+            .unwrap_or(Duration::ZERO);
+
         if total == 0 {
             Duration::ZERO
         } else {
@@ -151,7 +189,11 @@ impl DeliveryMetrics {
     /// Get total bytes delivered for a destination type
     pub fn total_bytes_delivered(&self, destination_type: &str) -> u64 {
         let inner = self.inner.lock().unwrap();
-        inner.bytes_delivered.get(destination_type).copied().unwrap_or(0)
+        inner
+            .bytes_delivered
+            .get(destination_type)
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Get all destination types that have been used
@@ -163,13 +205,17 @@ impl DeliveryMetrics {
     /// Get summary statistics
     pub fn summary(&self) -> MetricsSummary {
         let inner = self.inner.lock().unwrap();
-        
+
         let mut destinations = Vec::new();
         for dest_type in inner.total_deliveries.keys() {
             destinations.push(DestinationMetrics {
                 destination_type: dest_type.clone(),
                 total_deliveries: inner.total_deliveries.get(dest_type).copied().unwrap_or(0),
-                successful_deliveries: inner.successful_deliveries.get(dest_type).copied().unwrap_or(0),
+                successful_deliveries: inner
+                    .successful_deliveries
+                    .get(dest_type)
+                    .copied()
+                    .unwrap_or(0),
                 failed_deliveries: inner.failed_deliveries.get(dest_type).copied().unwrap_or(0),
                 bytes_delivered: inner.bytes_delivered.get(dest_type).copied().unwrap_or(0),
                 average_delivery_time: self.average_delivery_time(dest_type),
@@ -192,7 +238,8 @@ impl DeliveryMetrics {
                     Duration::ZERO
                 },
                 batch_success_rate: if inner.batch_stats.total_destinations > 0 {
-                    inner.batch_stats.successful_destinations as f64 / inner.batch_stats.total_destinations as f64
+                    inner.batch_stats.successful_destinations as f64
+                        / inner.batch_stats.total_destinations as f64
                 } else {
                     0.0
                 },
@@ -247,36 +294,44 @@ mod tests {
     #[test]
     fn test_success_metrics() {
         let metrics = DeliveryMetrics::new();
-        
+
         metrics.record_success("filesystem", Duration::from_millis(100), 1024);
         metrics.record_success("filesystem", Duration::from_millis(200), 2048);
         metrics.record_success("webhook", Duration::from_millis(300), 512);
-        
+
         assert_eq!(metrics.success_rate("filesystem"), 1.0);
         assert_eq!(metrics.success_rate("webhook"), 1.0);
-        assert_eq!(metrics.average_delivery_time("filesystem"), Duration::from_millis(150));
+        assert_eq!(
+            metrics.average_delivery_time("filesystem"),
+            Duration::from_millis(150)
+        );
         assert_eq!(metrics.total_bytes_delivered("filesystem"), 3072);
     }
 
     #[test]
     fn test_failure_metrics() {
         let metrics = DeliveryMetrics::new();
-        let error = DeliveryError::FileExists { path: "/tmp/test".to_string() };
-        
+        let error = DeliveryError::FileExists {
+            path: "/tmp/test".to_string(),
+        };
+
         metrics.record_success("filesystem", Duration::from_millis(100), 1024);
         metrics.record_failure("filesystem", Duration::from_millis(50), &error);
-        
+
         assert_eq!(metrics.success_rate("filesystem"), 0.5);
-        assert_eq!(metrics.average_delivery_time("filesystem"), Duration::from_millis(75));
+        assert_eq!(
+            metrics.average_delivery_time("filesystem"),
+            Duration::from_millis(75)
+        );
     }
 
     #[test]
     fn test_batch_metrics() {
         let metrics = DeliveryMetrics::new();
-        
+
         metrics.record_batch_delivery(5, 3, 2, Duration::from_millis(500));
         metrics.record_batch_delivery(3, 3, 0, Duration::from_millis(300));
-        
+
         let summary = metrics.summary();
         assert_eq!(summary.batch_stats.total_batches, 2);
         assert_eq!(summary.batch_stats.total_destinations, 8);

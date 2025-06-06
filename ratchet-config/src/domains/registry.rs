@@ -1,10 +1,10 @@
 //! Registry configuration for task sources
 
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
-use std::collections::HashMap;
-use crate::validation::{Validatable, validate_required_string, validate_positive, validate_url};
 use crate::error::ConfigResult;
+use crate::validation::{validate_positive, validate_required_string, validate_url, Validatable};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::Duration;
 
 /// Registry configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,15 +13,18 @@ pub struct RegistryConfig {
     /// List of registry sources
     #[serde(default)]
     pub sources: Vec<RegistrySourceConfig>,
-    
+
     /// Default polling interval for sources
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_polling_interval")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_polling_interval"
+    )]
     pub default_polling_interval: Duration,
-    
+
     /// Cache configuration for registry data
     #[serde(default)]
     pub cache: RegistryCacheConfig,
-    
+
     /// Authentication configuration for registry sources
     #[serde(default)]
     pub auth: HashMap<String, RegistryAuthConfig>,
@@ -32,25 +35,28 @@ pub struct RegistryConfig {
 pub struct RegistrySourceConfig {
     /// Source name for identification
     pub name: String,
-    
+
     /// Source URI (e.g., "file://./tasks", "https://registry.example.com", "git://github.com/user/repo")
     pub uri: String,
-    
+
     /// Source type
     #[serde(default = "default_source_type")]
     pub source_type: RegistrySourceType,
-    
+
     /// Polling interval for this source (overrides default)
-    #[serde(with = "crate::domains::utils::serde_duration_option", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration_option",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub polling_interval: Option<Duration>,
-    
+
     /// Whether this source is enabled
     #[serde(default = "crate::domains::utils::default_true")]
     pub enabled: bool,
-    
+
     /// Authentication name (references auth config)
     pub auth_name: Option<String>,
-    
+
     /// Source-specific configuration
     #[serde(default)]
     pub config: SourceSpecificConfig,
@@ -79,13 +85,13 @@ pub enum RegistrySourceType {
 pub struct SourceSpecificConfig {
     /// Filesystem-specific configuration
     pub filesystem: FilesystemSourceConfig,
-    
+
     /// HTTP-specific configuration
     pub http: HttpSourceConfig,
-    
+
     /// Git-specific configuration
     pub git: GitSourceConfig,
-    
+
     /// S3-specific configuration
     pub s3: S3SourceConfig,
 }
@@ -97,15 +103,15 @@ pub struct FilesystemSourceConfig {
     /// Whether to watch for changes
     #[serde(default = "crate::domains::utils::default_true")]
     pub watch_changes: bool,
-    
+
     /// File patterns to include
     #[serde(default = "default_file_patterns")]
     pub include_patterns: Vec<String>,
-    
+
     /// File patterns to exclude
     #[serde(default)]
     pub exclude_patterns: Vec<String>,
-    
+
     /// Whether to follow symbolic links
     #[serde(default = "crate::domains::utils::default_false")]
     pub follow_symlinks: bool,
@@ -116,17 +122,20 @@ pub struct FilesystemSourceConfig {
 #[serde(default)]
 pub struct HttpSourceConfig {
     /// Request timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_http_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_http_timeout"
+    )]
     pub timeout: Duration,
-    
+
     /// Custom headers
     #[serde(default)]
     pub headers: HashMap<String, String>,
-    
+
     /// Whether to verify SSL certificates
     #[serde(default = "crate::domains::utils::default_true")]
     pub verify_ssl: bool,
-    
+
     /// User agent string
     #[serde(default = "default_user_agent")]
     pub user_agent: String,
@@ -139,16 +148,19 @@ pub struct GitSourceConfig {
     /// Git branch to track
     #[serde(default = "default_git_branch")]
     pub branch: String,
-    
+
     /// Subdirectory within repository
     pub subdirectory: Option<String>,
-    
+
     /// Whether to use shallow clones
     #[serde(default = "crate::domains::utils::default_true")]
     pub shallow: bool,
-    
+
     /// Git clone timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_git_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_git_timeout"
+    )]
     pub timeout: Duration,
 }
 
@@ -159,12 +171,15 @@ pub struct S3SourceConfig {
     /// S3 region
     #[serde(default = "default_s3_region")]
     pub region: String,
-    
+
     /// Object prefix filter
     pub prefix: Option<String>,
-    
+
     /// Request timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_s3_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_s3_timeout"
+    )]
     pub timeout: Duration,
 }
 
@@ -175,11 +190,14 @@ pub struct RegistryCacheConfig {
     /// Whether caching is enabled
     #[serde(default = "crate::domains::utils::default_true")]
     pub enabled: bool,
-    
+
     /// Cache TTL for registry metadata
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_cache_ttl")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_cache_ttl"
+    )]
     pub ttl: Duration,
-    
+
     /// Maximum cache size in entries
     #[serde(default = "default_cache_max_entries")]
     pub max_entries: usize,
@@ -190,19 +208,11 @@ pub struct RegistryCacheConfig {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum RegistryAuthConfig {
     /// HTTP Basic authentication
-    Basic {
-        username: String,
-        password: String,
-    },
+    Basic { username: String, password: String },
     /// Bearer token authentication
-    Bearer {
-        token: String,
-    },
+    Bearer { token: String },
     /// API key authentication
-    ApiKey {
-        header: String,
-        value: String,
-    },
+    ApiKey { header: String, value: String },
     /// Git SSH key authentication
     SshKey {
         private_key_path: String,
@@ -226,8 +236,6 @@ impl Default for RegistryConfig {
         }
     }
 }
-
-
 
 impl Default for FilesystemSourceConfig {
     fn default() -> Self {
@@ -287,24 +295,24 @@ impl Validatable for RegistryConfig {
         validate_positive(
             self.default_polling_interval.as_secs(),
             "default_polling_interval",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
+
         self.cache.validate()?;
-        
+
         // Validate sources
         for (index, source) in self.sources.iter().enumerate() {
             source.validate_with_context(&format!("sources[{}]", index))?;
         }
-        
+
         // Validate auth configs
         for (name, auth) in &self.auth {
             auth.validate_with_name(name)?;
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "registry"
     }
@@ -316,10 +324,10 @@ impl Validatable for RegistryCacheConfig {
             validate_positive(self.ttl.as_secs(), "ttl", self.domain_name())?;
             validate_positive(self.max_entries, "max_entries", self.domain_name())?;
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "registry.cache"
     }
@@ -329,32 +337,36 @@ impl RegistrySourceConfig {
     pub fn validate_with_context(&self, context: &str) -> ConfigResult<()> {
         validate_required_string(&self.name, "name", "registry")?;
         validate_required_string(&self.uri, "uri", "registry")?;
-        
+
         // Validate URI format based on source type
         match self.source_type {
             RegistrySourceType::Http => {
                 validate_url(&self.uri, "uri", "registry")?;
-            },
+            }
             RegistrySourceType::Filesystem => {
                 if !self.uri.starts_with("file://") && !std::path::Path::new(&self.uri).exists() {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "registry".to_string(),
-                        message: format!("{}: filesystem path does not exist: {}", context, self.uri),
+                        message: format!(
+                            "{}: filesystem path does not exist: {}",
+                            context, self.uri
+                        ),
                     });
                 }
-            },
+            }
             RegistrySourceType::Git => {
                 // Basic Git URL validation
-                if !self.uri.starts_with("git://") && 
-                   !self.uri.starts_with("https://") && 
-                   !self.uri.starts_with("ssh://") &&
-                   !self.uri.contains("@") {
+                if !self.uri.starts_with("git://")
+                    && !self.uri.starts_with("https://")
+                    && !self.uri.starts_with("ssh://")
+                    && !self.uri.contains("@")
+                {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "registry".to_string(),
                         message: format!("{}: invalid Git URL format: {}", context, self.uri),
                     });
                 }
-            },
+            }
             RegistrySourceType::S3 => {
                 if !self.uri.starts_with("s3://") {
                     return Err(crate::error::ConfigError::DomainError {
@@ -362,9 +374,9 @@ impl RegistrySourceConfig {
                         message: format!("{}: S3 URI must start with s3://: {}", context, self.uri),
                     });
                 }
-            },
+            }
         }
-        
+
         // Validate polling interval if specified
         if let Some(interval) = self.polling_interval {
             if interval.as_secs() == 0 {
@@ -374,7 +386,7 @@ impl RegistrySourceConfig {
                 });
             }
         }
-        
+
         Ok(())
     }
 }
@@ -382,36 +394,45 @@ impl RegistrySourceConfig {
 impl RegistryAuthConfig {
     pub fn validate_with_name(&self, name: &str) -> ConfigResult<()> {
         let context = &format!("auth.{}", name);
-        
+
         match self {
             Self::Basic { username, password } => {
                 validate_required_string(username, "username", "registry")?;
                 validate_required_string(password, "password", "registry")?;
-            },
+            }
             Self::Bearer { token } => {
                 validate_required_string(token, "token", "registry")?;
-            },
+            }
             Self::ApiKey { header, value } => {
                 validate_required_string(header, "header", "registry")?;
                 validate_required_string(value, "value", "registry")?;
-            },
-            Self::SshKey { private_key_path, .. } => {
+            }
+            Self::SshKey {
+                private_key_path, ..
+            } => {
                 validate_required_string(private_key_path, "private_key_path", "registry")?;
-                
+
                 // Check if private key file exists
                 if !std::path::Path::new(private_key_path).exists() {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "registry".to_string(),
-                        message: format!("{}: private key file not found: {}", context, private_key_path),
+                        message: format!(
+                            "{}: private key file not found: {}",
+                            context, private_key_path
+                        ),
                     });
                 }
-            },
-            Self::AwsCredentials { access_key_id, secret_access_key, .. } => {
+            }
+            Self::AwsCredentials {
+                access_key_id,
+                secret_access_key,
+                ..
+            } => {
                 validate_required_string(access_key_id, "access_key_id", "registry")?;
                 validate_required_string(secret_access_key, "secret_access_key", "registry")?;
-            },
+            }
         }
-        
+
         Ok(())
     }
 }
@@ -485,11 +506,11 @@ mod tests {
             config: SourceSpecificConfig::default(),
         };
         assert!(source.validate_with_context("test").is_ok());
-        
+
         // Test empty name
         source.name = String::new();
         assert!(source.validate_with_context("test").is_err());
-        
+
         // Test invalid URL for HTTP source
         source.name = "test".to_string();
         source.uri = "not-a-url".to_string();
@@ -502,7 +523,7 @@ mod tests {
             token: "test-token".to_string(),
         };
         assert!(auth.validate_with_name("test").is_ok());
-        
+
         let invalid_auth = RegistryAuthConfig::Bearer {
             token: String::new(),
         };
@@ -522,7 +543,7 @@ mod tests {
             config: SourceSpecificConfig::default(),
         };
         assert!(s3_source.validate_with_context("test").is_ok());
-        
+
         // Test invalid S3 URI
         let invalid_s3 = RegistrySourceConfig {
             name: "s3-test".to_string(),

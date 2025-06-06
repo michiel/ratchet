@@ -1,9 +1,9 @@
 //! Task domain model and related types
 
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::fmt;
+use uuid::Uuid;
 
 /// Unique identifier for a task (newtype pattern for type safety)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -50,28 +50,28 @@ impl From<TaskId> for Uuid {
 pub struct TaskMetadata {
     /// Unique identifier for the task
     pub id: TaskId,
-    
+
     /// Human-readable name of the task
     pub name: String,
-    
+
     /// Semantic version of the task
     pub version: String,
-    
+
     /// Brief description of what the task does
     pub description: Option<String>,
-    
+
     /// Longer documentation or usage instructions
     pub documentation: Option<String>,
-    
+
     /// Author or maintainer of the task
     pub author: Option<String>,
-    
+
     /// Tags for categorization and discovery
     pub tags: Vec<String>,
-    
+
     /// Whether this task is deprecated
     pub deprecated: bool,
-    
+
     /// Deprecation message if deprecated
     pub deprecation_message: Option<String>,
 }
@@ -117,28 +117,28 @@ impl TaskMetadata {
 pub struct Task {
     /// Task metadata
     pub metadata: TaskMetadata,
-    
+
     /// JSON schema for input validation
     pub input_schema: serde_json::Value,
-    
+
     /// JSON schema for output validation
     pub output_schema: serde_json::Value,
-    
+
     /// The source code or reference to the task implementation
     pub source: TaskSource,
-    
+
     /// Whether this task is enabled for execution
     pub enabled: bool,
-    
+
     /// When the task was created
     pub created_at: DateTime<Utc>,
-    
+
     /// When the task was last updated
     pub updated_at: DateTime<Utc>,
-    
+
     /// When the task was last validated
     pub validated_at: Option<DateTime<Utc>>,
-    
+
     /// Registry source if loaded from a registry
     pub registry_source: Option<String>,
 }
@@ -148,21 +148,17 @@ pub struct Task {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TaskSource {
     /// JavaScript source code
-    JavaScript {
-        code: String,
-    },
-    
+    JavaScript { code: String },
+
     /// Reference to a file on disk
-    File {
-        path: String,
-    },
-    
+    File { path: String },
+
     /// Reference to a URL
     Url {
         url: String,
         checksum: Option<String>,
     },
-    
+
     /// Plugin-based task
     Plugin {
         plugin_id: String,
@@ -270,12 +266,9 @@ impl TaskBuilder {
 
     /// Build the task
     pub fn build(self) -> Result<Task, String> {
-        let input_schema = self.input_schema
-            .ok_or("Input schema is required")?;
-        let output_schema = self.output_schema
-            .ok_or("Output schema is required")?;
-        let source = self.source
-            .ok_or("Task source is required")?;
+        let input_schema = self.input_schema.ok_or("Input schema is required")?;
+        let output_schema = self.output_schema.ok_or("Output schema is required")?;
+        let source = self.source.ok_or("Task source is required")?;
 
         let now = Utc::now();
         Ok(Task {
@@ -319,7 +312,10 @@ mod tests {
         assert_eq!(metadata.description.as_deref(), Some("A test task"));
         assert_eq!(metadata.tags.len(), 2);
         assert!(metadata.deprecated);
-        assert_eq!(metadata.deprecation_message.as_deref(), Some("Use test-task-v2 instead"));
+        assert_eq!(
+            metadata.deprecation_message.as_deref(),
+            Some("Use test-task-v2 instead")
+        );
     }
 
     #[test]

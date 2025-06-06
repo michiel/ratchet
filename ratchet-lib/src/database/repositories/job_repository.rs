@@ -1,9 +1,12 @@
 use crate::database::{
-    entities::{jobs, Job, JobActiveModel, Jobs, JobStatus},
+    entities::{jobs, Job, JobActiveModel, JobStatus, Jobs},
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set, Order, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
+};
 
 /// Repository for job-related database operations
 #[derive(Clone)]
@@ -47,9 +50,7 @@ impl JobRepository {
 
     /// Find job by ID
     pub async fn find_by_id(&self, id: i32) -> Result<Option<Job>, DatabaseError> {
-        let job = Jobs::find_by_id(id)
-            .one(self.db.get_connection())
-            .await?;
+        let job = Jobs::find_by_id(id).one(self.db.get_connection()).await?;
         Ok(job)
     }
 
@@ -57,15 +58,14 @@ impl JobRepository {
     pub async fn find_ready_for_processing(&self, limit: u64) -> Result<Vec<Job>, DatabaseError> {
         let now = chrono::Utc::now();
         let jobs = Jobs::find()
+            .filter(jobs::Column::Status.is_in(vec![JobStatus::Queued, JobStatus::Retrying]))
             .filter(
-                jobs::Column::Status.is_in(vec![JobStatus::Queued, JobStatus::Retrying])
-            )
-            .filter(
-                jobs::Column::ProcessAt.is_null()
-                .or(jobs::Column::ProcessAt.lte(now))
+                jobs::Column::ProcessAt
+                    .is_null()
+                    .or(jobs::Column::ProcessAt.lte(now)),
             )
             .order_by(jobs::Column::Priority, Order::Desc) // Higher priority first
-            .order_by(jobs::Column::QueuedAt, Order::Asc)   // FIFO within same priority
+            .order_by(jobs::Column::QueuedAt, Order::Asc) // FIFO within same priority
             .limit(limit)
             .all(self.db.get_connection())
             .await?;
@@ -142,12 +142,17 @@ impl JobRepository {
     }
 
     /// Mark job as failed and increment retry count
-    pub async fn mark_failed(&self, id: i32, error: String, details: Option<serde_json::Value>) -> Result<bool, DatabaseError> {
+    pub async fn mark_failed(
+        &self,
+        id: i32,
+        error: String,
+        details: Option<serde_json::Value>,
+    ) -> Result<bool, DatabaseError> {
         // Get current job to check retry logic
         let job = self.find_by_id(id).await?;
         if let Some(mut job) = job {
             let will_retry = job.fail(error, details);
-            
+
             let active_model = JobActiveModel {
                 id: Set(id),
                 status: Set(job.status),

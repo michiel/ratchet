@@ -1,9 +1,12 @@
 use crate::database::{
-    entities::{executions, Execution, ExecutionActiveModel, Executions, ExecutionStatus},
+    entities::{executions, Execution, ExecutionActiveModel, ExecutionStatus, Executions},
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set, Order, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
+};
 use uuid::Uuid;
 
 /// Repository for execution-related database operations
@@ -69,7 +72,10 @@ impl ExecutionRepository {
     }
 
     /// Find executions by status
-    pub async fn find_by_status(&self, status: ExecutionStatus) -> Result<Vec<Execution>, DatabaseError> {
+    pub async fn find_by_status(
+        &self,
+        status: ExecutionStatus,
+    ) -> Result<Vec<Execution>, DatabaseError> {
         let executions = Executions::find()
             .filter(executions::Column::Status.eq(status))
             .order_by(executions::Column::QueuedAt, Order::Desc)
@@ -106,7 +112,11 @@ impl ExecutionRepository {
     }
 
     /// Update execution status
-    pub async fn update_status(&self, id: i32, status: ExecutionStatus) -> Result<(), DatabaseError> {
+    pub async fn update_status(
+        &self,
+        id: i32,
+        status: ExecutionStatus,
+    ) -> Result<(), DatabaseError> {
         let mut active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(status),
@@ -134,7 +144,11 @@ impl ExecutionRepository {
     }
 
     /// Mark execution as completed with output
-    pub async fn mark_completed(&self, id: i32, output: serde_json::Value) -> Result<(), DatabaseError> {
+    pub async fn mark_completed(
+        &self,
+        id: i32,
+        output: serde_json::Value,
+    ) -> Result<(), DatabaseError> {
         let active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(ExecutionStatus::Completed),
@@ -148,7 +162,12 @@ impl ExecutionRepository {
     }
 
     /// Mark execution as failed with error
-    pub async fn mark_failed(&self, id: i32, error: String, details: Option<serde_json::Value>) -> Result<(), DatabaseError> {
+    pub async fn mark_failed(
+        &self,
+        id: i32,
+        error: String,
+        details: Option<serde_json::Value>,
+    ) -> Result<(), DatabaseError> {
         let active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(ExecutionStatus::Failed),

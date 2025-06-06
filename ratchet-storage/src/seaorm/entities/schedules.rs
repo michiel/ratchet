@@ -8,47 +8,47 @@ pub struct Model {
     /// Primary key
     #[sea_orm(primary_key)]
     pub id: i32,
-    
+
     /// Unique identifier for the schedule
     #[sea_orm(unique)]
     pub uuid: Uuid,
-    
+
     /// Foreign key to tasks table
     pub task_id: i32,
-    
+
     /// Schedule name
     pub name: String,
-    
+
     /// Cron expression for scheduling
     pub cron_expression: String,
-    
+
     /// Input data as JSON for scheduled executions
     pub input_data: Json,
-    
+
     /// Whether the schedule is enabled
     pub enabled: bool,
-    
+
     /// Next scheduled run time
     pub next_run_at: Option<ChronoDateTimeUtc>,
-    
+
     /// Last time the schedule was executed
     pub last_run_at: Option<ChronoDateTimeUtc>,
-    
+
     /// Number of times this schedule has been executed
     pub execution_count: i32,
-    
+
     /// Maximum number of executions (null for unlimited)
     pub max_executions: Option<i32>,
-    
+
     /// Schedule metadata as JSON
     pub metadata: Option<Json>,
-    
+
     /// Output destinations configuration as JSON
     pub output_destinations: Option<Json>,
-    
+
     /// When the schedule was created
     pub created_at: ChronoDateTimeUtc,
-    
+
     /// When the schedule was last updated
     pub updated_at: ChronoDateTimeUtc,
 }
@@ -97,14 +97,14 @@ impl Model {
             updated_at: chrono::Utc::now(),
         }
     }
-    
+
     /// Update last run time and increment execution count
     pub fn record_execution(&mut self) {
         self.last_run_at = Some(chrono::Utc::now());
         self.execution_count += 1;
         self.updated_at = chrono::Utc::now();
     }
-    
+
     /// Check if schedule has reached maximum executions
     pub fn is_exhausted(&self) -> bool {
         if let Some(max) = self.max_executions {
@@ -113,19 +113,19 @@ impl Model {
             false
         }
     }
-    
+
     /// Parse cron expression and get next run time
     pub fn calculate_next_run(&self) -> Result<Option<chrono::DateTime<chrono::Utc>>, String> {
         use cron::Schedule;
         use std::str::FromStr;
-        
+
         if !self.enabled || self.is_exhausted() {
             return Ok(None);
         }
-        
+
         let schedule = Schedule::from_str(&self.cron_expression)
             .map_err(|e| format!("Invalid cron expression: {}", e))?;
-        
+
         let next = schedule.upcoming(chrono::Utc).next();
         Ok(next)
     }

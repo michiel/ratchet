@@ -1,10 +1,8 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
-use crate::api::{
-    pagination::{PaginationInput, PaginationMeta},
-};
+use crate::api::pagination::{PaginationInput, PaginationMeta};
 
 /// Standard API response wrapper for Refine.dev compatibility
 #[derive(Debug, Serialize)]
@@ -119,9 +117,13 @@ impl PaginationQuery {
     pub fn limit(&self) -> u64 {
         let start = self.start.unwrap_or(0);
         let end = self.end.unwrap_or(start + 25);
-        if end > start { end - start } else { 25 }
+        if end > start {
+            end - start
+        } else {
+            25
+        }
     }
-    
+
     /// Convert to unified pagination input
     pub fn to_unified(&self) -> PaginationInput {
         PaginationInput::from_refine(self.start, self.end)
@@ -189,13 +191,13 @@ pub struct ListQuery {
     pub start: Option<u64>,
     #[serde(rename = "_end")]
     pub end: Option<u64>,
-    
-    // Sort parameters  
+
+    // Sort parameters
     #[serde(rename = "_sort")]
     pub sort: Option<String>,
     #[serde(rename = "_order")]
     pub order: Option<String>,
-    
+
     // All other parameters as filters
     #[serde(flatten)]
     pub filters: HashMap<String, String>,
@@ -208,14 +210,14 @@ impl ListQuery {
             end: self.end,
         }
     }
-    
+
     pub fn sort(&self) -> SortQuery {
         SortQuery {
             sort: self.sort.clone(),
             order: self.order.clone(),
         }
     }
-    
+
     pub fn filter(&self) -> FilterQuery {
         FilterQuery {
             filters: self.filters.clone(),
@@ -240,4 +242,3 @@ impl From<PaginationMeta> for ListMeta {
         }
     }
 }
-

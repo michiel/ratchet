@@ -8,34 +8,34 @@ pub struct Model {
     /// Primary key
     #[sea_orm(primary_key)]
     pub id: i32,
-    
+
     /// Foreign key to jobs table
     pub job_id: i32,
-    
+
     /// Foreign key to executions table
     pub execution_id: i32,
-    
+
     /// Type of destination (filesystem, webhook, etc.)
     pub destination_type: String,
-    
+
     /// Unique identifier for the destination
     pub destination_id: String,
-    
+
     /// Whether delivery was successful
     pub success: bool,
-    
+
     /// Delivery time in milliseconds
     pub delivery_time_ms: i32,
-    
+
     /// Size of delivered data in bytes
     pub size_bytes: i32,
-    
+
     /// Response information from destination (HTTP response, file path, etc.)
     pub response_info: Option<String>,
-    
+
     /// Error message if delivery failed
     pub error_message: Option<String>,
-    
+
     /// When the delivery was attempted
     pub created_at: ChronoDateTimeUtc,
 }
@@ -48,7 +48,7 @@ pub enum Relation {
         to = "super::jobs::Column::Id"
     )]
     Job,
-    
+
     #[sea_orm(
         belongs_to = "super::executions::Entity",
         from = "Column::ExecutionId",

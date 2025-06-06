@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{info, warn};
 use uuid::Uuid;
-use tracing::{warn, info};
 
-use crate::task::Task;
-use crate::errors::Result;
 use crate::config::RegistrySourceConfig;
+use crate::errors::Result;
+use crate::task::Task;
 
 #[derive(Debug, Clone)]
 pub enum TaskSource {
@@ -44,10 +44,10 @@ impl TaskRegistry {
     pub async fn add_task(&self, task: Task) -> Result<()> {
         let task_id = task.metadata.uuid;
         let version = task.metadata.version.clone();
-        
+
         let mut tasks = self.tasks.write().await;
         let version_map = tasks.entry(task_id).or_insert_with(HashMap::new);
-        
+
         if version_map.contains_key(&version) {
             warn!(
                 "Task {} version {} already exists in registry, skipping",
@@ -55,7 +55,7 @@ impl TaskRegistry {
             );
             return Ok(());
         }
-        
+
         info!("Adding task {} version {} to registry", task_id, version);
         version_map.insert(version, Arc::new(task));
         Ok(())
@@ -63,13 +63,14 @@ impl TaskRegistry {
 
     pub async fn get_task(&self, id: Uuid, version: Option<&str>) -> Result<Option<Arc<Task>>> {
         let tasks = self.tasks.read().await;
-        
+
         if let Some(version_map) = tasks.get(&id) {
             if let Some(version) = version {
                 Ok(version_map.get(version).cloned())
             } else {
                 // Get latest version
-                let latest = version_map.keys()
+                let latest = version_map
+                    .keys()
                     .max()
                     .and_then(|v| version_map.get(v))
                     .cloned();
@@ -83,20 +84,20 @@ impl TaskRegistry {
     pub async fn list_tasks(&self) -> Result<Vec<Arc<Task>>> {
         let tasks = self.tasks.read().await;
         let mut all_tasks = Vec::new();
-        
+
         for version_map in tasks.values() {
             // Get latest version of each task
             if let Some(latest) = version_map.keys().max().and_then(|v| version_map.get(v)) {
                 all_tasks.push(latest.clone());
             }
         }
-        
+
         Ok(all_tasks)
     }
 
     pub async fn list_versions(&self, id: Uuid) -> Result<Vec<String>> {
         let tasks = self.tasks.read().await;
-        
+
         if let Some(version_map) = tasks.get(&id) {
             let mut versions: Vec<String> = version_map.keys().cloned().collect();
             versions.sort();
@@ -116,7 +117,7 @@ impl TaskRegistry {
             Ok(())
         }
     }
-    
+
     pub fn sources(&self) -> &[TaskSource] {
         &self.sources
     }
@@ -130,11 +131,14 @@ impl TaskSource {
             let path = PathBuf::from(path_str);
             Ok(TaskSource::Filesystem { path })
         } else if config.uri.starts_with("http://") || config.uri.starts_with("https://") {
-            Ok(TaskSource::Http { url: config.uri.clone() })
+            Ok(TaskSource::Http {
+                url: config.uri.clone(),
+            })
         } else {
-            Err(crate::errors::RatchetError::Configuration(
-                format!("Unsupported registry source URI: {}", config.uri)
-            ))
+            Err(crate::errors::RatchetError::Configuration(format!(
+                "Unsupported registry source URI: {}",
+                config.uri
+            )))
         }
     }
 }

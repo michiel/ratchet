@@ -8,41 +8,41 @@ pub struct Model {
     /// Primary key
     #[sea_orm(primary_key)]
     pub id: i32,
-    
+
     /// Unique identifier for the task
     #[sea_orm(unique)]
     pub uuid: Uuid,
-    
+
     /// Task name/label
     pub name: String,
-    
+
     /// Task description
     pub description: Option<String>,
-    
+
     /// Task version
     pub version: String,
-    
+
     /// Path to task files (directory or ZIP)
     pub path: String,
-    
+
     /// Task metadata as JSON
     pub metadata: Json,
-    
+
     /// Input schema as JSON
     pub input_schema: Json,
-    
+
     /// Output schema as JSON  
     pub output_schema: Json,
-    
+
     /// Whether the task is enabled for execution
     pub enabled: bool,
-    
+
     /// When the task was created
     pub created_at: ChronoDateTimeUtc,
-    
+
     /// When the task was last updated
     pub updated_at: ChronoDateTimeUtc,
-    
+
     /// When the task was last validated
     pub validated_at: Option<ChronoDateTimeUtc>,
 }
@@ -51,10 +51,10 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::executions::Entity")]
     Executions,
-    
+
     #[sea_orm(has_many = "super::schedules::Entity")]
     Schedules,
-    
+
     #[sea_orm(has_many = "super::jobs::Entity")]
     Jobs,
 }
@@ -87,13 +87,16 @@ impl Model {
             ratchet_core::task::TaskSource::File { path } => path.clone(),
             ratchet_core::task::TaskSource::Url { url, .. } => url.clone(),
             ratchet_core::task::TaskSource::JavaScript { .. } => "javascript:inline".to_string(),
-            ratchet_core::task::TaskSource::Plugin { plugin_id, task_name } => {
+            ratchet_core::task::TaskSource::Plugin {
+                plugin_id,
+                task_name,
+            } => {
                 format!("plugin://{}:{}", plugin_id, task_name)
             }
         };
 
         Self {
-            id: 0, // Will be set by database
+            id: 0,                    // Will be set by database
             uuid: task.metadata.id.0, // TaskId contains the UUID
             name: task.metadata.name.clone(),
             description: task.metadata.description.clone(),

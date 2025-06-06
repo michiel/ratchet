@@ -1,9 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 /// Worker metrics for load balancing decisions
@@ -47,18 +47,20 @@ impl WorkerMetrics {
 
     pub async fn record_task_completion(&self, duration_ms: u64, success: bool) {
         self.tasks_in_flight.fetch_sub(1, Ordering::Relaxed);
-        self.last_task_duration_ms.store(duration_ms, Ordering::Relaxed);
-        
+        self.last_task_duration_ms
+            .store(duration_ms, Ordering::Relaxed);
+
         if !success {
             self.total_failures.fetch_add(1, Ordering::Relaxed);
         }
-        
+
         *self.last_activity.write().await = Instant::now();
     }
 
     pub fn update_system_metrics(&self, memory_mb: u64, cpu_percent: f32) {
         self.memory_usage_mb.store(memory_mb, Ordering::Relaxed);
-        self.cpu_usage_percent.store((cpu_percent * 100.0) as u32, Ordering::Relaxed);
+        self.cpu_usage_percent
+            .store((cpu_percent * 100.0) as u32, Ordering::Relaxed);
     }
 
     pub fn get_cpu_usage(&self) -> f32 {
@@ -111,8 +113,8 @@ impl WorkerInfo {
     }
 
     pub fn is_available(&self) -> bool {
-        matches!(self.health, WorkerHealth::Healthy | WorkerHealth::Degraded) &&
-        self.metrics.tasks_in_flight.load(Ordering::Relaxed) < self.max_concurrent_tasks
+        matches!(self.health, WorkerHealth::Healthy | WorkerHealth::Degraded)
+            && self.metrics.tasks_in_flight.load(Ordering::Relaxed) < self.max_concurrent_tasks
     }
 
     pub async fn calculate_load_score(&self) -> u64 {
@@ -126,7 +128,11 @@ impl WorkerInfo {
         let utilization_score = (tasks_in_flight * 1000) / (self.max_concurrent_tasks as u64);
         let resource_score = memory_usage / 10 + cpu_usage * 10;
         let reliability_score = failure_rate;
-        let freshness_penalty = if idle_time_penalty > 300 { idle_time_penalty } else { 0 };
+        let freshness_penalty = if idle_time_penalty > 300 {
+            idle_time_penalty
+        } else {
+            0
+        };
 
         utilization_score + resource_score + reliability_score + freshness_penalty
     }
@@ -160,9 +166,7 @@ impl RoundRobinStrategy {
 #[async_trait::async_trait]
 impl LoadBalancingStrategy for RoundRobinStrategy {
     async fn select_worker(&self, workers: &[WorkerInfo]) -> Option<String> {
-        let available_workers: Vec<_> = workers.iter()
-            .filter(|w| w.is_available())
-            .collect();
+        let available_workers: Vec<_> = workers.iter().filter(|w| w.is_available()).collect();
 
         if available_workers.is_empty() {
             return None;
@@ -185,7 +189,7 @@ impl LoadBalancingStrategy for LeastLoadedStrategy {
         for worker in workers.iter().filter(|w| w.is_available()) {
             let score = worker.calculate_load_score().await;
             debug!("Worker {} load score: {}", worker.id, score);
-            
+
             if score < best_score {
                 best_score = score;
                 best_worker = Some(worker.id.clone());
@@ -218,9 +222,7 @@ impl WeightedRoundRobinStrategy {
 #[async_trait::async_trait]
 impl LoadBalancingStrategy for WeightedRoundRobinStrategy {
     async fn select_worker(&self, workers: &[WorkerInfo]) -> Option<String> {
-        let available_workers: Vec<_> = workers.iter()
-            .filter(|w| w.is_available())
-            .collect();
+        let available_workers: Vec<_> = workers.iter().filter(|w| w.is_available()).collect();
 
         if available_workers.is_empty() {
             return None;
@@ -310,27 +312,33 @@ impl LoadBalancer {
     /// Get load balancer statistics
     pub async fn get_statistics(&self) -> LoadBalancerStats {
         let workers = self.workers.read().await;
-        
+
         let total_workers = workers.len();
-        let healthy_workers = workers.values()
+        let healthy_workers = workers
+            .values()
             .filter(|w| w.health == WorkerHealth::Healthy)
             .count();
-        let degraded_workers = workers.values()
+        let degraded_workers = workers
+            .values()
             .filter(|w| w.health == WorkerHealth::Degraded)
             .count();
-        let unhealthy_workers = workers.values()
+        let unhealthy_workers = workers
+            .values()
             .filter(|w| w.health == WorkerHealth::Unhealthy)
             .count();
 
-        let total_tasks_in_flight = workers.values()
+        let total_tasks_in_flight = workers
+            .values()
             .map(|w| w.metrics.tasks_in_flight.load(Ordering::Relaxed) as u64)
             .sum();
 
-        let total_tasks_completed = workers.values()
+        let total_tasks_completed = workers
+            .values()
             .map(|w| w.metrics.total_tasks.load(Ordering::Relaxed))
             .sum();
 
-        let total_failures = workers.values()
+        let total_failures = workers
+            .values()
             .map(|w| w.metrics.total_failures.load(Ordering::Relaxed))
             .sum();
 
@@ -348,7 +356,7 @@ impl LoadBalancer {
     /// Start background health checking
     pub async fn start_health_monitor(self: Arc<Self>) {
         let mut interval = tokio::time::interval(self.health_check_interval);
-        
+
         loop {
             interval.tick().await;
             self.perform_health_checks().await;
@@ -407,18 +415,18 @@ mod tests {
     #[tokio::test]
     async fn test_worker_metrics() {
         let metrics = WorkerMetrics::new();
-        
+
         assert_eq!(metrics.tasks_in_flight.load(Ordering::Relaxed), 0);
-        
+
         metrics.record_task_start().await;
         assert_eq!(metrics.tasks_in_flight.load(Ordering::Relaxed), 1);
         assert_eq!(metrics.total_tasks.load(Ordering::Relaxed), 1);
-        
+
         metrics.record_task_completion(1000, true).await;
         assert_eq!(metrics.tasks_in_flight.load(Ordering::Relaxed), 0);
         assert_eq!(metrics.last_task_duration_ms.load(Ordering::Relaxed), 1000);
         assert_eq!(metrics.total_failures.load(Ordering::Relaxed), 0);
-        
+
         metrics.record_task_completion(500, false).await;
         assert_eq!(metrics.total_failures.load(Ordering::Relaxed), 1);
     }
@@ -426,7 +434,7 @@ mod tests {
     #[tokio::test]
     async fn test_round_robin_strategy() {
         let strategy = RoundRobinStrategy::new();
-        
+
         let workers = vec![
             WorkerInfo::new("worker1".to_string(), 10),
             WorkerInfo::new("worker2".to_string(), 10),
@@ -454,7 +462,7 @@ mod tests {
     #[tokio::test]
     async fn test_least_loaded_strategy() {
         let strategy = LeastLoadedStrategy;
-        
+
         let mut workers = vec![
             WorkerInfo::new("worker1".to_string(), 10),
             WorkerInfo::new("worker2".to_string(), 10),
@@ -467,9 +475,18 @@ mod tests {
         }
 
         // Load worker1 with tasks
-        workers[0].metrics.tasks_in_flight.store(5, Ordering::Relaxed);
-        workers[1].metrics.tasks_in_flight.store(2, Ordering::Relaxed);
-        workers[2].metrics.tasks_in_flight.store(8, Ordering::Relaxed);
+        workers[0]
+            .metrics
+            .tasks_in_flight
+            .store(5, Ordering::Relaxed);
+        workers[1]
+            .metrics
+            .tasks_in_flight
+            .store(2, Ordering::Relaxed);
+        workers[2]
+            .metrics
+            .tasks_in_flight
+            .store(8, Ordering::Relaxed);
 
         let selected = strategy.select_worker(&workers).await.unwrap();
         assert_eq!(selected, "worker2"); // Should select least loaded
@@ -483,7 +500,9 @@ mod tests {
         let worker = WorkerInfo::new("test_worker".to_string(), 5);
         balancer.add_worker(worker).await;
 
-        balancer.update_worker_health("test_worker", WorkerHealth::Healthy).await;
+        balancer
+            .update_worker_health("test_worker", WorkerHealth::Healthy)
+            .await;
 
         let selected = balancer.select_worker().await;
         assert_eq!(selected, Some("test_worker".to_string()));

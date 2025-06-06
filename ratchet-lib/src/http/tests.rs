@@ -3,9 +3,9 @@ use crate::types::HttpMethod;
 use boa_engine::{Context, Source};
 use serde_json::json;
 // use std::net::SocketAddr;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::collections::HashMap;
 // use std::time::Duration;
 // Temporarily disabled due to axum version compatibility issues
 // use axum::{
@@ -66,7 +66,7 @@ fn _start_mock_server_disabled(port: u16) -> (thread::JoinHandle<()>, Arc<Mutex<
         if let Ok(mut req_list) = state.requests.lock() {
             req_list.push(payload.to_string());
         }
-        
+
         // Return the payload as-is
         Json(payload)
     }
@@ -93,7 +93,7 @@ fn _start_mock_server_disabled(port: u16) -> (thread::JoinHandle<()>, Arc<Mutex<
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    
+
     // Start the server in a separate thread
     let server = thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -118,26 +118,31 @@ async fn test_call_http_get_json() {
 
     // Test a GET request to JSON endpoint
     let result = call_http(
-        "http://localhost:3030/json", 
+        "http://localhost:3030/json",
         Some(&json!({"method": "GET"})),
-        None
-    ).await.unwrap();
+        None,
+    )
+    .await
+    .unwrap();
 
     assert!(result.get("ok").unwrap().as_bool().unwrap());
     assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
     assert!(result.get("body").is_some());
-    
+
     let body = result.get("body").unwrap();
-    assert_eq!(body.get("message").unwrap().as_str().unwrap(), "Hello, World!");
+    assert_eq!(
+        body.get("message").unwrap().as_str().unwrap(),
+        "Hello, World!"
+    );
     assert_eq!(body.get("status").unwrap().as_str().unwrap(), "success");
 }
 
-// Temporarily disabled due to axum compatibility issues  
+// Temporarily disabled due to axum compatibility issues
 #[ignore]
 #[tokio::test]
 async fn test_call_http_post() {
     let (_server, requests) = start_mock_server(3031);
-    
+
     // Test a POST request with a JSON body
     let test_body = json!({
         "name": "Test User",
@@ -145,103 +150,145 @@ async fn test_call_http_post() {
     });
 
     let result = call_http(
-        "http://localhost:3031/", 
+        "http://localhost:3031/",
         Some(&json!({"method": "POST"})),
-        Some(&test_body)
-    ).await.unwrap();
+        Some(&test_body),
+    )
+    .await
+    .unwrap();
 
     assert!(result.get("ok").unwrap().as_bool().unwrap());
     assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
-    
+
     // Verify the request was recorded correctly
     let recorded_requests = requests.lock().unwrap();
     assert!(!recorded_requests.is_empty());
-    
+
     // The request should match our test body
     let request_json: serde_json::Value = serde_json::from_str(&recorded_requests[0]).unwrap();
-    assert_eq!(request_json.get("name").unwrap().as_str().unwrap(), "Test User");
-    assert_eq!(request_json.get("email").unwrap().as_str().unwrap(), "test@example.com");
+    assert_eq!(
+        request_json.get("name").unwrap().as_str().unwrap(),
+        "Test User"
+    );
+    assert_eq!(
+        request_json.get("email").unwrap().as_str().unwrap(),
+        "test@example.com"
+    );
 }
 
 // Temporarily disabled due to axum compatibility issues
-#[ignore]  
+#[ignore]
 #[tokio::test]
 async fn test_js_fetch_integration() {
     let (_server, _requests) = start_mock_server(3032);
-    
+
     // Create a JavaScript context
     let mut context = Context::default();
-    
+
     // Register the fetch API
     register_fetch(&mut context).unwrap();
-    
+
     // Initialize fetch variables
-    context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
+    context
+        .eval(Source::from_bytes(
+            "var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;",
+        ))
         .unwrap();
-    
+
     // Create a JavaScript fetch call
-    context.eval(Source::from_bytes(r#"
+    context
+        .eval(Source::from_bytes(
+            r#"
         function testFetch() {
             return fetch("http://localhost:3032/json", { method: "GET" });
         }
         
         // Call the function to set up the fetch parameters
         testFetch();
-    "#)).unwrap();
-    
+    "#,
+        ))
+        .unwrap();
+
     // Verify that the fetch variables were set correctly
     let url = context.eval(Source::from_bytes("__fetch_url")).unwrap();
-    assert_eq!(url.to_string(&mut context).unwrap().to_std_string().unwrap(), "http://localhost:3032/json");
-    
+    assert_eq!(
+        url.to_string(&mut context)
+            .unwrap()
+            .to_std_string()
+            .unwrap(),
+        "http://localhost:3032/json"
+    );
+
     let params = context.eval(Source::from_bytes("__fetch_params")).unwrap();
     assert!(!params.is_null());
-    
+
     // Now we would need to extract the parameters and make the actual HTTP call,
     // which is what happens in the execute_task function in lib.rs
-    
+
     // Extract URL
     let url_js = context.eval(Source::from_bytes("__fetch_url")).unwrap();
-    let url = url_js.to_string(&mut context).unwrap().to_std_string().unwrap();
-    
+    let url = url_js
+        .to_string(&mut context)
+        .unwrap()
+        .to_std_string()
+        .unwrap();
+
     // Extract params
     let params_js = context.eval(Source::from_bytes("__fetch_params")).unwrap();
-    let params_str = params_js.to_string(&mut context).unwrap().to_std_string().unwrap();
+    let params_str = params_js
+        .to_string(&mut context)
+        .unwrap()
+        .to_std_string()
+        .unwrap();
     let params: Option<serde_json::Value> = Some(serde_json::from_str(&params_str).unwrap());
-    
+
     // Make the HTTP call
     let result = call_http(&url, params.as_ref(), None).await.unwrap();
-    
+
     // Verify the result
     assert!(result.get("ok").unwrap().as_bool().unwrap());
     assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
-    
+
     let body = result.get("body").unwrap();
-    assert_eq!(body.get("message").unwrap().as_str().unwrap(), "Hello, World!");
+    assert_eq!(
+        body.get("message").unwrap().as_str().unwrap(),
+        "Hello, World!"
+    );
 }
 
 #[tokio::test]
 async fn test_http_manager_offline_mode() {
     let mut manager = HttpManager::new();
     manager.set_offline();
-    
+
     // Add a mock for GET request
-    manager.add_mock(HttpMethod::Get, "http://example.com/api", json!({
-        "message": "Mock response",
-        "id": 123
-    }));
-    
-    // Test that the mock is returned in offline mode
-    let result = manager.call_http(
+    manager.add_mock(
+        HttpMethod::Get,
         "http://example.com/api",
-        Some(&json!({"method": "GET"})),
-        None
-    ).await.unwrap();
-    
+        json!({
+            "message": "Mock response",
+            "id": 123
+        }),
+    );
+
+    // Test that the mock is returned in offline mode
+    let result = manager
+        .call_http(
+            "http://example.com/api",
+            Some(&json!({"method": "GET"})),
+            None,
+        )
+        .await
+        .unwrap();
+
     assert!(result.get("ok").unwrap().as_bool().unwrap());
     assert_eq!(result.get("status").unwrap().as_u64().unwrap(), 200);
-    
+
     let body = result.get("body").unwrap();
-    assert_eq!(body.get("message").unwrap().as_str().unwrap(), "Mock response");
+    assert_eq!(
+        body.get("message").unwrap().as_str().unwrap(),
+        "Mock response"
+    );
     assert_eq!(body.get("id").unwrap().as_u64().unwrap(), 123);
 }
 
@@ -249,14 +296,16 @@ async fn test_http_manager_offline_mode() {
 async fn test_http_manager_offline_mode_no_mock() {
     let mut manager = HttpManager::new();
     manager.set_offline();
-    
+
     // Test that an error is returned when no mock is available
-    let result = manager.call_http(
-        "http://example.com/api",
-        Some(&json!({"method": "GET"})),
-        None
-    ).await;
-    
+    let result = manager
+        .call_http(
+            "http://example.com/api",
+            Some(&json!({"method": "GET"})),
+            None,
+        )
+        .await;
+
     assert!(result.is_err());
 }
 
@@ -264,30 +313,34 @@ async fn test_http_manager_offline_mode_no_mock() {
 async fn test_http_manager_add_mocks() {
     let mut manager = HttpManager::new();
     manager.set_offline();
-    
+
     let mut mocks = HashMap::new();
-    mocks.insert("GET:http://api1.com".to_string(), json!({"data": "response1"}));
-    mocks.insert("POST:http://api2.com".to_string(), json!({"data": "response2"}));
-    
+    mocks.insert(
+        "GET:http://api1.com".to_string(),
+        json!({"data": "response1"}),
+    );
+    mocks.insert(
+        "POST:http://api2.com".to_string(),
+        json!({"data": "response2"}),
+    );
+
     manager.add_mocks(mocks);
-    
+
     // Test first mock
-    let result1 = manager.call_http(
-        "http://api1.com",
-        Some(&json!({"method": "GET"})),
-        None
-    ).await.unwrap();
-    
+    let result1 = manager
+        .call_http("http://api1.com", Some(&json!({"method": "GET"})), None)
+        .await
+        .unwrap();
+
     let body1 = result1.get("body").unwrap();
     assert_eq!(body1.get("data").unwrap().as_str().unwrap(), "response1");
-    
+
     // Test second mock
-    let result2 = manager.call_http(
-        "http://api2.com",
-        Some(&json!({"method": "POST"})),
-        None
-    ).await.unwrap();
-    
+    let result2 = manager
+        .call_http("http://api2.com", Some(&json!({"method": "POST"})), None)
+        .await
+        .unwrap();
+
     let body2 = result2.get("body").unwrap();
     assert_eq!(body2.get("data").unwrap().as_str().unwrap(), "response2");
 }

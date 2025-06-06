@@ -25,25 +25,21 @@ pub mod database;
 pub use config::StorageConfig;
 pub use connection::{Connection, ConnectionManager};
 pub use error::{StorageError, StorageResult};
-pub use repositories::Repository;
 pub use filters::SafeFilterBuilder;
+pub use repositories::Repository;
 pub use transaction::{Transaction, TransactionManager};
 
 // Entity re-exports
 pub use entities::{
-    task::{Task, TaskStatus},
-    execution::{Execution, ExecutionStatus},
-    job::{Job, JobStatus, JobPriority},
-    schedule::{Schedule, ScheduleStatus},
     delivery_result::DeliveryResult,
+    execution::{Execution, ExecutionStatus},
+    job::{Job, JobPriority, JobStatus},
+    schedule::{Schedule, ScheduleStatus},
+    task::{Task, TaskStatus},
 };
 
 // Repository re-exports
 pub use repositories::{
-    task::TaskRepository,
-    execution::ExecutionRepository,
-    job::JobRepository,
-    schedule::ScheduleRepository,
-    delivery_result::DeliveryResultRepository,
+    delivery_result::DeliveryResultRepository, execution::ExecutionRepository, job::JobRepository,
+    schedule::ScheduleRepository, task::TaskRepository,
 };
-

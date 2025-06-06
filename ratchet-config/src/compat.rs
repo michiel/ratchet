@@ -7,7 +7,7 @@
 use crate::domains::RatchetConfig as NewRatchetConfig;
 
 /// Convert new RatchetConfig to ratchet-lib's config format
-/// 
+///
 /// This function is used during the migration period to maintain compatibility
 /// with components that still expect the old configuration format.
 pub fn to_legacy_config(new_config: &NewRatchetConfig) -> LegacyRatchetConfig {
@@ -17,26 +17,26 @@ pub fn to_legacy_config(new_config: &NewRatchetConfig) -> LegacyRatchetConfig {
         max_connections: 10,
         connection_timeout: std::time::Duration::from_secs(30),
     };
-    
+
     // Convert server config
     let server_config = LegacyServerConfig {
-        bind_address: new_config.server.as_ref()
+        bind_address: new_config
+            .server
+            .as_ref()
             .map(|s| s.bind_address.clone())
             .unwrap_or_else(|| "0.0.0.0".to_string()),
-        port: new_config.server.as_ref()
-            .map(|s| s.port)
-            .unwrap_or(8080),
+        port: new_config.server.as_ref().map(|s| s.port).unwrap_or(8080),
         database: database_config,
     };
-    
+
     // Convert execution config
     let execution_config = LegacyExecutionConfig {
         max_execution_duration: new_config.execution.max_execution_duration.as_secs(),
         validate_schemas: new_config.execution.validate_schemas,
-        max_concurrent_tasks: 4, // Default
+        max_concurrent_tasks: 4,  // Default
         timeout_grace_period: 30, // Default
     };
-    
+
     // Convert HTTP config
     let http_config = LegacyHttpConfig {
         timeout: new_config.http.timeout,
@@ -44,14 +44,14 @@ pub fn to_legacy_config(new_config: &NewRatchetConfig) -> LegacyRatchetConfig {
         verify_ssl: new_config.http.verify_ssl,
         max_redirects: 10, // Default
     };
-    
+
     // Convert logging config
     let logging_config = LegacyLoggingConfig {
-        level: "info".to_string(), // Default
-        format: "text".to_string(), // Default
+        level: "info".to_string(),     // Default
+        format: "text".to_string(),    // Default
         output: "console".to_string(), // Default
     };
-    
+
     // Convert MCP config
     let mcp_config = new_config.mcp.as_ref().map(|mcp| LegacyMcpServerConfig {
         enabled: mcp.enabled,

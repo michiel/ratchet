@@ -18,12 +18,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(Jobs::Uuid)
-                            .string()
-                            .not_null()
-                            .unique_key(),
-                    )
+                    .col(ColumnDef::new(Jobs::Uuid).string().not_null().unique_key())
                     .col(ColumnDef::new(Jobs::TaskId).integer().not_null())
                     .col(ColumnDef::new(Jobs::ExecutionId).integer())
                     .col(ColumnDef::new(Jobs::ScheduleId).integer())

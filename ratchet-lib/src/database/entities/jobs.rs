@@ -1,8 +1,8 @@
 use sea_orm::entity::prelude::*;
 use sea_orm::sea_query::StringLen;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use std::fmt;
+use std::str::FromStr;
 
 /// Job priority enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
@@ -45,59 +45,59 @@ pub struct Model {
     /// Primary key
     #[sea_orm(primary_key)]
     pub id: i32,
-    
+
     /// Unique identifier for the job
     #[sea_orm(unique)]
     pub uuid: Uuid,
-    
+
     /// Foreign key to tasks table
     pub task_id: i32,
-    
+
     /// Foreign key to executions table (null until execution starts)
     pub execution_id: Option<i32>,
-    
+
     /// Foreign key to schedules table (null for manual jobs)
     pub schedule_id: Option<i32>,
-    
+
     /// Job priority
     pub priority: JobPriority,
-    
+
     /// Job status
     pub status: JobStatus,
-    
+
     /// Input data as JSON
     pub input_data: Json,
-    
+
     /// Number of retry attempts made
     pub retry_count: i32,
-    
+
     /// Maximum number of retry attempts
     pub max_retries: i32,
-    
+
     /// Delay before next retry attempt in seconds
     pub retry_delay_seconds: i32,
-    
+
     /// Error message from last attempt (if failed)
     pub error_message: Option<String>,
-    
+
     /// Error details as JSON from last attempt (if failed)
     pub error_details: Option<Json>,
-    
+
     /// When the job was queued
     pub queued_at: ChronoDateTimeUtc,
-    
+
     /// When the job should be processed (for delayed jobs)
     pub process_at: Option<ChronoDateTimeUtc>,
-    
+
     /// When the job started processing (null if not started)
     pub started_at: Option<ChronoDateTimeUtc>,
-    
+
     /// When the job completed processing (null if not completed)
     pub completed_at: Option<ChronoDateTimeUtc>,
-    
+
     /// Job metadata as JSON
     pub metadata: Option<Json>,
-    
+
     /// Output destinations configuration as JSON
     pub output_destinations: Option<Json>,
 }
@@ -110,14 +110,14 @@ pub enum Relation {
         to = "super::tasks::Column::Id"
     )]
     Task,
-    
+
     #[sea_orm(
         belongs_to = "super::executions::Entity",
         from = "Column::ExecutionId",
         to = "super::executions::Column::Id"
     )]
     Execution,
-    
+
     #[sea_orm(
         belongs_to = "super::schedules::Entity",
         from = "Column::ScheduleId",
@@ -145,7 +145,6 @@ impl Related<super::schedules::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
-
 
 impl JobPriority {
     /// Get numeric priority value for ordering (higher number = higher priority)
@@ -213,7 +212,7 @@ impl Model {
             status: JobStatus::Queued,
             input_data,
             retry_count: 0,
-            max_retries: 3, // Default retry limit
+            max_retries: 3,          // Default retry limit
             retry_delay_seconds: 60, // Default 1 minute delay
             error_message: None,
             error_details: None,
@@ -225,7 +224,7 @@ impl Model {
             output_destinations: None,
         }
     }
-    
+
     /// Create a new scheduled job
     pub fn new_scheduled(
         task_id: i32,
@@ -238,31 +237,32 @@ impl Model {
         job.process_at = Some(process_at);
         job
     }
-    
+
     /// Mark job as processing
     pub fn start_processing(&mut self, execution_id: i32) {
         self.status = JobStatus::Processing;
         self.execution_id = Some(execution_id);
         self.started_at = Some(chrono::Utc::now());
     }
-    
+
     /// Mark job as completed
     pub fn complete(&mut self) {
         self.status = JobStatus::Completed;
         self.completed_at = Some(chrono::Utc::now());
     }
-    
+
     /// Mark job as failed and prepare for retry
     pub fn fail(&mut self, error: String, details: Option<serde_json::Value>) -> bool {
         self.error_message = Some(error);
         self.error_details = details;
         self.retry_count += 1;
-        
+
         if self.retry_count < self.max_retries {
             // Schedule retry with exponential backoff
             self.status = JobStatus::Retrying;
             let delay_seconds = self.retry_delay_seconds * (2_i32.pow(self.retry_count as u32 - 1));
-            self.process_at = Some(chrono::Utc::now() + chrono::Duration::seconds(delay_seconds as i64));
+            self.process_at =
+                Some(chrono::Utc::now() + chrono::Duration::seconds(delay_seconds as i64));
             true // Will retry
         } else {
             // No more retries
@@ -271,7 +271,7 @@ impl Model {
             false // No more retries
         }
     }
-    
+
     /// Check if job is ready to be processed
     pub fn is_ready_for_processing(&self) -> bool {
         match self.status {

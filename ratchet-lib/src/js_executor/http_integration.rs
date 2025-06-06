@@ -1,6 +1,6 @@
 use crate::errors::JsExecutionError;
 use crate::js_executor::error_handling::parse_js_error;
-use boa_engine::{Context as BoaContext, Source, JsString, property::PropertyKey};
+use boa_engine::{property::PropertyKey, Context as BoaContext, JsString, Source};
 use serde_json::Value as JsonValue;
 use tracing::debug;
 
@@ -20,12 +20,12 @@ pub fn check_fetch_call(
     }
 
     debug!("Detected fetch API call, extracting parameters");
-    
+
     // Get URL
     let url_js = context
         .eval(Source::from_bytes("__fetch_url"))
         .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?;
-    
+
     let url = url_js
         .to_string(context)
         .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?
@@ -42,8 +42,10 @@ pub fn check_fetch_call(
             .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?
             .to_std_string_escaped();
 
-        Some(serde_json::from_str(&params_str)
-            .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?)
+        Some(
+            serde_json::from_str(&params_str)
+                .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?,
+        )
     } else {
         None
     };
@@ -82,7 +84,7 @@ pub async fn handle_fetch_processing(
     body: Option<JsonValue>,
 ) -> Result<boa_engine::JsValue, JsExecutionError> {
     debug!("Making HTTP call to: {}", url);
-    
+
     // Perform the HTTP call
     let http_result = http_manager
         .call_http(&url, params.as_ref(), body.as_ref())
@@ -90,23 +92,39 @@ pub async fn handle_fetch_processing(
         .map_err(|e| JsExecutionError::ExecutionError(format!("HTTP error: {}", e)))?;
 
     debug!("Injecting HTTP result back into JavaScript context");
-    
+
     // Store the HTTP result in a global variable
     context
         .global_object()
-        .set(PropertyKey::from(JsString::from("__http_result")), 
-             context.eval(Source::from_bytes(&format!("({})", 
-                serde_json::to_string(&http_result)
-                    .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e)))?
-             )))
-             .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e)))?, 
-             true, 
-             context)
-        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set HTTP result: {}", e)))?;
-    
+        .set(
+            PropertyKey::from(JsString::from("__http_result")),
+            context
+                .eval(Source::from_bytes(&format!(
+                    "({})",
+                    serde_json::to_string(&http_result).map_err(|e| {
+                        JsExecutionError::ExecutionError(format!(
+                            "Failed to serialize HTTP result: {}",
+                            e
+                        ))
+                    })?
+                )))
+                .map_err(|e| {
+                    JsExecutionError::ExecutionError(format!(
+                        "Failed to parse HTTP result JSON: {}",
+                        e
+                    ))
+                })?,
+            true,
+            context,
+        )
+        .map_err(|e| {
+            JsExecutionError::ExecutionError(format!("Failed to set HTTP result: {}", e))
+        })?;
+
     // Replace the fetch function to return the stored result and throw appropriate errors
     context
-        .eval(Source::from_bytes(r#"
+        .eval(Source::from_bytes(
+            r#"
             fetch = function(url, params, body) {
                 var response = __http_result;
                 
@@ -133,11 +151,14 @@ pub async fn handle_fetch_processing(
                 
                 return response;
             };
-        "#))
-        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e)))?;
+        "#,
+        ))
+        .map_err(|e| {
+            JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e))
+        })?;
 
     debug!("Re-calling JavaScript function with updated fetch");
-    
+
     // Get the function as an object
     let func_obj = func.as_object().ok_or_else(|| {
         JsExecutionError::ExecutionError("Failed to convert to object".to_string())
@@ -158,7 +179,7 @@ pub async fn handle_fetch_processing(
         })?;
 
     debug!("Clearing fetch state variables");
-    
+
     // Clear the fetch state
     context
         .eval(Source::from_bytes(
@@ -181,24 +202,31 @@ pub async fn handle_fetch_processing_with_context(
     body: Option<JsonValue>,
 ) -> Result<boa_engine::JsValue, JsExecutionError> {
     debug!("Processing HTTP fetch request for URL: {}", url);
-    
+
     // Make the actual HTTP request
-    let response_result = http_manager.call_http(&url, params.as_ref(), body.as_ref()).await
+    let response_result = http_manager
+        .call_http(&url, params.as_ref(), body.as_ref())
+        .await
         .map_err(|e| JsExecutionError::ExecutionError(format!("HTTP request failed: {}", e)))?;
-    
+
     debug!("HTTP request completed, setting result");
-    
+
     // Set the HTTP response result in the JavaScript context
     crate::js_executor::conversion::set_js_value(
         context,
         "__http_result",
-        &serde_json::to_value(response_result)
-            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e)))?
-    ).map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e)))?;
-    
+        &serde_json::to_value(response_result).map_err(|e| {
+            JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e))
+        })?,
+    )
+    .map_err(|e| {
+        JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e))
+    })?;
+
     // Replace the fetch function to return the stored result and throw appropriate errors
     context
-        .eval(Source::from_bytes(r#"
+        .eval(Source::from_bytes(
+            r#"
             fetch = function(url, params, body) {
                 var response = __http_result;
                 
@@ -225,11 +253,14 @@ pub async fn handle_fetch_processing_with_context(
                 
                 return response;
             };
-        "#))
-        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e)))?;
+        "#,
+        ))
+        .map_err(|e| {
+            JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e))
+        })?;
 
     debug!("Re-calling JavaScript function with updated fetch and context");
-    
+
     // Get the function as an object
     let func_obj = func.as_object().ok_or_else(|| {
         JsExecutionError::ExecutionError("Failed to convert to object".to_string())
@@ -250,7 +281,7 @@ pub async fn handle_fetch_processing_with_context(
         })?;
 
     debug!("Clearing fetch state variables");
-    
+
     // Clear the fetch state
     context
         .eval(Source::from_bytes(

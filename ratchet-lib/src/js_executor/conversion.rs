@@ -1,5 +1,5 @@
 use crate::errors::JsExecutionError;
-use boa_engine::{Context as BoaContext, Source, JsString, property::PropertyKey};
+use boa_engine::{property::PropertyKey, Context as BoaContext, JsString, Source};
 use serde_json::Value as JsonValue;
 use tracing::{debug, trace};
 
@@ -18,9 +18,7 @@ pub fn prepare_input_argument(
             "JSON.parse('{}')",
             input_js_str.replace("'", "\\'")
         )))
-        .map_err(|e| {
-            JsExecutionError::ExecutionError(format!("Failed to parse input JSON: {}", e))
-        })
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse input JSON: {}", e)))
 }
 
 /// Convert JavaScript result to JSON
@@ -29,11 +27,16 @@ pub fn convert_js_result_to_json(
     result: boa_engine::JsValue,
 ) -> Result<JsonValue, JsExecutionError> {
     debug!("Converting JavaScript result back to JSON");
-    
+
     // Set temporary variable to hold the result so we can stringify it
     context
         .global_object()
-        .set(PropertyKey::from(JsString::from("__temp_result")), result, true, context)
+        .set(
+            PropertyKey::from(JsString::from("__temp_result")),
+            result,
+            true,
+            context,
+        )
         .map_err(|e| {
             JsExecutionError::ExecutionError(format!("Failed to set temporary result: {}", e))
         })?;
@@ -67,9 +70,9 @@ pub fn set_js_value(
         .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
 
     let js_code = format!("var {} = {};", variable_name, value_str);
-    context
-        .eval(Source::from_bytes(&js_code))
-        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set variable {}: {}", variable_name, e)))?;
+    context.eval(Source::from_bytes(&js_code)).map_err(|e| {
+        JsExecutionError::ExecutionError(format!("Failed to set variable {}: {}", variable_name, e))
+    })?;
 
     Ok(())
 }

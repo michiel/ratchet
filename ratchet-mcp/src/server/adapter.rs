@@ -2,21 +2,21 @@
 
 use async_trait::async_trait;
 use serde_json::{Value, Value as JsonValue};
-use std::sync::Arc;
-use std::path::PathBuf;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use ratchet_lib::execution::{ProcessTaskExecutor, ExecutionResult, ExecutionError};
-use ratchet_runtime::executor::TaskExecutor;
+use ratchet_lib::execution::{ExecutionError, ExecutionResult, ProcessTaskExecutor};
 use ratchet_lib::logging::event::{LogEvent, LogLevel};
-use ratchet_storage::seaorm::repositories::{
-    task_repository::{TaskRepository, TaskFilters, Pagination},
-    execution_repository::ExecutionRepository,
-};
+use ratchet_runtime::executor::TaskExecutor;
 use ratchet_storage::seaorm::entities::ExecutionStatus;
+use ratchet_storage::seaorm::repositories::{
+    execution_repository::ExecutionRepository,
+    task_repository::{Pagination, TaskFilters, TaskRepository},
+};
 
-use super::tools::{McpTaskExecutor, McpTaskInfo, McpExecutionStatus};
+use super::tools::{McpExecutionStatus, McpTaskExecutor, McpTaskInfo};
 
 /// Executor type that can handle both legacy and new execution engines
 pub enum ExecutorType {
@@ -37,12 +37,16 @@ impl ExecutorType {
         match self {
             ExecutorType::Legacy(executor) => {
                 // Context is already the right type for legacy executor
-                executor.execute_task_send(task_id, input_data, context).await
+                executor
+                    .execute_task_send(task_id, input_data, context)
+                    .await
             }
             ExecutorType::Runtime(executor) => {
                 // For runtime executor, we need to implement this
                 // This is a simplified implementation - in production you'd want proper conversion
-                Err(ExecutionError::ExecutionFailed("Runtime executor not yet fully implemented".to_string()))
+                Err(ExecutionError::ExecutionFailed(
+                    "Runtime executor not yet fully implemented".to_string(),
+                ))
             }
         }
     }
@@ -52,13 +56,13 @@ impl ExecutorType {
 pub struct RatchetMcpAdapter {
     /// The task executor (either legacy or new runtime)
     executor: ExecutorType,
-    
+
     /// Task repository for task discovery
     task_repository: Arc<TaskRepository>,
-    
+
     /// Execution repository for monitoring
     execution_repository: Arc<ExecutionRepository>,
-    
+
     /// Optional path to log file for log retrieval
     log_file_path: Option<PathBuf>,
 }
@@ -77,7 +81,7 @@ impl RatchetMcpAdapter {
             log_file_path: None,
         }
     }
-    
+
     /// Create a new adapter with new runtime TaskExecutor
     pub fn with_runtime_executor(
         executor: Arc<dyn TaskExecutor>,
@@ -91,7 +95,7 @@ impl RatchetMcpAdapter {
             log_file_path: None,
         }
     }
-    
+
     /// Create a new adapter with log file path for log retrieval (legacy)
     pub fn with_log_file(
         executor: Arc<ProcessTaskExecutor>,
@@ -106,7 +110,7 @@ impl RatchetMcpAdapter {
             log_file_path: Some(log_file_path),
         }
     }
-    
+
     /// Create a new adapter with log file path for log retrieval (runtime)
     pub fn with_runtime_executor_and_log_file(
         executor: Arc<dyn TaskExecutor>,
@@ -143,7 +147,7 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             }
             Err(e) => return Err(format!("Database error: {}", e)),
         };
-        
+
         // Create an execution context
         use ratchet_lib::execution::ipc::ExecutionContext;
         let context = ExecutionContext {
@@ -152,25 +156,27 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             task_id: task.uuid.to_string(),
             task_version: task.version.clone(),
         };
-        
+
         // Execute the task using the process executor
-        match self.executor.execute_task_send(
-            task.id, // Database task ID
-            input,
-            Some(context),
-        ).await {
-            Ok(result) => {
-                result.output.ok_or_else(|| "No output from task execution".to_string())
-            }
-            Err(e) => {
-                Err(format!("Task execution failed: {}", e))
-            }
+        match self
+            .executor
+            .execute_task_send(
+                task.id, // Database task ID
+                input,
+                Some(context),
+            )
+            .await
+        {
+            Ok(result) => result
+                .output
+                .ok_or_else(|| "No output from task execution".to_string()),
+            Err(e) => Err(format!("Task execution failed: {}", e)),
         }
     }
-    
+
     async fn execute_task_with_progress(
-        &self, 
-        task_path: &str, 
+        &self,
+        task_path: &str,
         input: Value,
         progress_manager: Option<Arc<super::progress::ProgressNotificationManager>>,
         _connection: Option<Arc<dyn crate::transport::connection::TransportConnection>>,
@@ -179,9 +185,9 @@ impl McpTaskExecutor for RatchetMcpAdapter {
         // For now, just execute the task normally and return with a fake execution ID
         // In the future, this would integrate with the worker process IPC to receive progress updates
         let result = self.execute_task(task_path, input).await?;
-        
+
         let execution_id = uuid::Uuid::new_v4().to_string();
-        
+
         // If progress manager is provided, send a completion update
         if let Some(manager) = progress_manager {
             let progress_update = super::progress::ProgressUpdate {
@@ -195,13 +201,13 @@ impl McpTaskExecutor for RatchetMcpAdapter {
                 data: Some(result.clone()),
                 timestamp: chrono::Utc::now(),
             };
-            
+
             let _ = manager.send_progress_update(progress_update).await;
         }
-        
+
         Ok((execution_id, result))
     }
-    
+
     async fn list_tasks(&self, filter: Option<&str>) -> Result<Vec<McpTaskInfo>, String> {
         let filters = TaskFilters {
             name: filter.map(|s| s.to_string()),
@@ -209,33 +215,42 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             has_validation: None,
             version: None,
         };
-        
+
         let pagination = Pagination {
             limit: Some(100),
             offset: None,
             order_by: Some("name".to_string()),
             order_desc: Some(false),
         };
-        
-        let tasks = self.task_repository
+
+        let tasks = self
+            .task_repository
             .find_with_filters(filters, pagination)
             .await
             .map_err(|e| format!("Failed to list tasks: {}", e))?;
-            
+
         // Convert database tasks to MCP task info
-        Ok(tasks.into_iter().map(|task| McpTaskInfo {
-            id: task.uuid.to_string(),
-            name: task.name.clone(),
-            version: task.version.clone(),
-            description: task.description.clone(),
-            tags: vec![], // Database entity doesn't have tags directly
-            enabled: task.enabled,
-            input_schema: Some(task.input_schema.clone()),
-            output_schema: Some(task.output_schema.clone()),
-        }).collect())
+        Ok(tasks
+            .into_iter()
+            .map(|task| McpTaskInfo {
+                id: task.uuid.to_string(),
+                name: task.name.clone(),
+                version: task.version.clone(),
+                description: task.description.clone(),
+                tags: vec![], // Database entity doesn't have tags directly
+                enabled: task.enabled,
+                input_schema: Some(task.input_schema.clone()),
+                output_schema: Some(task.output_schema.clone()),
+            })
+            .collect())
     }
-    
-    async fn get_execution_logs(&self, execution_id: &str, level: &str, limit: usize) -> Result<String, String> {
+
+    async fn get_execution_logs(
+        &self,
+        execution_id: &str,
+        level: &str,
+        limit: usize,
+    ) -> Result<String, String> {
         // Parse the log level
         let min_level = match level.to_lowercase().as_str() {
             "trace" => LogLevel::Trace,
@@ -245,25 +260,36 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             "error" => LogLevel::Error,
             _ => LogLevel::Info,
         };
-        
+
         // Try to parse execution_id as UUID to query the execution repository
         if let Ok(exec_uuid) = uuid::Uuid::parse_str(execution_id) {
             match self.execution_repository.find_by_uuid(exec_uuid).await {
                 Ok(Some(execution)) => {
                     // First check if we have a recording path (most detailed logs)
                     if let Some(recording_path) = &execution.recording_path {
-                        if let Ok(logs) = self.get_logs_from_recording(recording_path, &min_level, limit).await {
+                        if let Ok(logs) = self
+                            .get_logs_from_recording(recording_path, &min_level, limit)
+                            .await
+                        {
                             return Ok(logs);
                         }
                     }
-                    
+
                     // Fallback to searching log files if available
                     if let Some(log_path) = &self.log_file_path {
-                        if let Ok(logs) = self.search_log_file_for_execution(log_path, execution_id, &min_level, limit).await {
+                        if let Ok(logs) = self
+                            .search_log_file_for_execution(
+                                log_path,
+                                execution_id,
+                                &min_level,
+                                limit,
+                            )
+                            .await
+                        {
                             return Ok(logs);
                         }
                     }
-                    
+
                     // Last fallback: return basic execution info with available data
                     let log_info = serde_json::json!({
                         "execution_id": execution_id,
@@ -285,7 +311,7 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             Err("Invalid execution ID format - must be a valid UUID".to_string())
         }
     }
-    
+
     async fn get_execution_status(&self, execution_id: &str) -> Result<McpExecutionStatus, String> {
         // Try to parse execution_id as UUID to query the execution repository
         if let Ok(exec_uuid) = uuid::Uuid::parse_str(execution_id) {
@@ -298,8 +324,9 @@ impl McpTaskExecutor for RatchetMcpAdapter {
                         ExecutionStatus::Completed => "completed",
                         ExecutionStatus::Failed => "failed",
                         ExecutionStatus::Cancelled => "cancelled",
-                    }.to_string();
-                    
+                    }
+                    .to_string();
+
                     // Calculate progress information
                     let progress = match execution.status {
                         ExecutionStatus::Pending => Some(serde_json::json!({
@@ -321,17 +348,19 @@ impl McpTaskExecutor for RatchetMcpAdapter {
                                     "percentage": null
                                 }))
                             }
-                        },
+                        }
                         ExecutionStatus::Completed => Some(serde_json::json!({
                             "current_step": "completed",
                             "percentage": 100
                         })),
-                        ExecutionStatus::Failed | ExecutionStatus::Cancelled => Some(serde_json::json!({
-                            "current_step": status_str,
-                            "percentage": null
-                        })),
+                        ExecutionStatus::Failed | ExecutionStatus::Cancelled => {
+                            Some(serde_json::json!({
+                                "current_step": status_str,
+                                "percentage": null
+                            }))
+                        }
                     };
-                    
+
                     Ok(McpExecutionStatus {
                         execution_id: execution_id.to_string(),
                         status: status_str,
@@ -360,10 +389,10 @@ impl McpTaskExecutor for RatchetMcpAdapter {
 impl RatchetMcpAdapter {
     /// Get logs from recording path (HAR format)
     async fn get_logs_from_recording(
-        &self, 
-        recording_path: &str, 
-        _min_level: &LogLevel, 
-        limit: usize
+        &self,
+        recording_path: &str,
+        _min_level: &LogLevel,
+        limit: usize,
     ) -> Result<String, String> {
         // For now, return basic recording info
         // In a full implementation, this would parse the HAR file from the recording
@@ -373,11 +402,11 @@ impl RatchetMcpAdapter {
             "limit": limit,
             "message": "Recording-based log retrieval not yet implemented - HAR parsing needed"
         });
-        
+
         Ok(serde_json::to_string_pretty(&recording_info)
             .unwrap_or_else(|_| recording_info.to_string()))
     }
-    
+
     /// Search log file for execution-specific logs
     async fn search_log_file_for_execution(
         &self,
@@ -388,35 +417,38 @@ impl RatchetMcpAdapter {
     ) -> Result<String, String> {
         let file = File::open(log_path)
             .map_err(|e| format!("Cannot open log file {}: {}", log_path.display(), e))?;
-        
+
         let reader = BufReader::new(file);
         let mut matching_logs = Vec::new();
         let mut total_lines = 0;
         let mut parse_errors = 0;
-        
+
         for (line_num, line) in reader.lines().enumerate() {
             total_lines += 1;
-            
-            let line = line
-                .map_err(|e| format!("Error reading log file at line {}: {}", line_num, e))?;
-            
+
+            let line =
+                line.map_err(|e| format!("Error reading log file at line {}: {}", line_num, e))?;
+
             // Skip empty lines
             if line.trim().is_empty() {
                 continue;
             }
-            
+
             // Try to parse as JSON log event
             match serde_json::from_str::<LogEvent>(&line) {
                 Ok(log_event) => {
                     // Check if this log is related to our execution
                     let is_related = log_event.trace_id.as_deref() == Some(execution_id)
                         || log_event.span_id.as_deref() == Some(execution_id)
-                        || log_event.fields.get("execution_id")
-                            .and_then(|v| v.as_str()) == Some(execution_id)
-                        || log_event.fields.get("exec_id")
-                            .and_then(|v| v.as_str()) == Some(execution_id)
+                        || log_event
+                            .fields
+                            .get("execution_id")
+                            .and_then(|v| v.as_str())
+                            == Some(execution_id)
+                        || log_event.fields.get("exec_id").and_then(|v| v.as_str())
+                            == Some(execution_id)
                         || log_event.message.contains(execution_id);
-                    
+
                     if is_related && log_event.level >= *min_level {
                         let log_entry = serde_json::json!({
                             "timestamp": log_event.timestamp.to_rfc3339(),
@@ -429,9 +461,9 @@ impl RatchetMcpAdapter {
                             "span_id": log_event.span_id,
                             "line_number": line_num + 1
                         });
-                        
+
                         matching_logs.push(log_entry);
-                        
+
                         if matching_logs.len() >= limit {
                             break;
                         }
@@ -453,9 +485,9 @@ impl RatchetMcpAdapter {
                             "line_number": line_num + 1,
                             "format": "plain_text"
                         });
-                        
+
                         matching_logs.push(log_entry);
-                        
+
                         if matching_logs.len() >= limit {
                             break;
                         }
@@ -463,7 +495,7 @@ impl RatchetMcpAdapter {
                 }
             }
         }
-        
+
         let result = serde_json::json!({
             "execution_id": execution_id,
             "log_file": log_path.display().to_string(),
@@ -481,9 +513,8 @@ impl RatchetMcpAdapter {
                 "search_fields": ["trace_id", "span_id", "execution_id", "exec_id", "message_content"]
             }
         });
-        
-        Ok(serde_json::to_string_pretty(&result)
-            .unwrap_or_else(|_| result.to_string()))
+
+        Ok(serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()))
     }
 }
 
@@ -503,31 +534,33 @@ impl RatchetMcpAdapterBuilder {
             execution_repository: None,
         }
     }
-    
+
     /// Set the process task executor
     pub fn with_executor(mut self, executor: Arc<ProcessTaskExecutor>) -> Self {
         self.executor = Some(executor);
         self
     }
-    
+
     /// Set the task repository
     pub fn with_task_repository(mut self, repo: Arc<TaskRepository>) -> Self {
         self.task_repository = Some(repo);
         self
     }
-    
+
     /// Set the execution repository
     pub fn with_execution_repository(mut self, repo: Arc<ExecutionRepository>) -> Self {
         self.execution_repository = Some(repo);
         self
     }
-    
+
     /// Build the adapter
     pub fn build(self) -> Result<RatchetMcpAdapter, String> {
         let executor = self.executor.ok_or("Executor is required")?;
         let task_repo = self.task_repository.ok_or("Task repository is required")?;
-        let exec_repo = self.execution_repository.ok_or("Execution repository is required")?;
-        
+        let exec_repo = self
+            .execution_repository
+            .ok_or("Execution repository is required")?;
+
         Ok(RatchetMcpAdapter::new(executor, task_repo, exec_repo))
     }
 }

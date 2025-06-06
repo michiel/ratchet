@@ -1,9 +1,9 @@
 //! Circuit breaker pattern implementation
 
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// Circuit breaker state
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,18 +32,18 @@ impl std::fmt::Display for CircuitState {
 pub struct CircuitBreakerConfig {
     /// Number of failures before opening the circuit
     pub failure_threshold: u32,
-    
+
     /// Number of successes in half-open state before closing
     pub success_threshold: u32,
-    
+
     /// Time to wait before transitioning from open to half-open
     #[serde(with = "humantime_serde")]
     pub timeout: Duration,
-    
+
     /// Time window for counting failures (rolling window)
     #[serde(with = "humantime_serde", default = "default_window")]
     pub window: Duration,
-    
+
     /// Minimum number of requests in window before evaluating
     #[serde(default = "default_min_requests")]
     pub min_requests: u32,
@@ -127,7 +127,7 @@ impl CircuitBreaker {
     pub fn is_open(&self) -> bool {
         let mut state = self.state.lock();
         self.update_state(&mut state);
-        
+
         match state.state {
             CircuitState::Open => true,
             CircuitState::HalfOpen => false,
@@ -146,18 +146,18 @@ impl CircuitBreaker {
     pub fn record_success(&self) {
         let mut state = self.state.lock();
         self.update_state(&mut state);
-        
+
         let now = Instant::now();
         state.metrics.total_requests += 1;
         state.metrics.total_successes += 1;
         state.metrics.last_success_time = Some(now);
         state.window_requests.push((now, true));
-        
+
         match state.state {
             CircuitState::HalfOpen => {
                 state.metrics.consecutive_successes += 1;
                 state.metrics.consecutive_failures = 0;
-                
+
                 if state.metrics.consecutive_successes >= self.config.success_threshold {
                     self.transition_to_closed(&mut state);
                 }
@@ -169,7 +169,7 @@ impl CircuitBreaker {
                 // Shouldn't happen, but handle gracefully
             }
         }
-        
+
         self.clean_window(&mut state);
     }
 
@@ -177,14 +177,14 @@ impl CircuitBreaker {
     pub fn record_failure(&self) {
         let mut state = self.state.lock();
         self.update_state(&mut state);
-        
+
         let now = Instant::now();
         state.metrics.total_requests += 1;
         state.metrics.total_failures += 1;
         state.metrics.last_failure_time = Some(now);
         state.metrics.consecutive_failures += 1;
         state.window_requests.push((now, false));
-        
+
         match state.state {
             CircuitState::Closed => {
                 self.clean_window(&mut state);
@@ -236,26 +236,31 @@ impl CircuitBreaker {
     }
 
     fn should_open(&self, state: &CircuitBreakerState) -> bool {
-        let window_failures = state.window_requests.iter()
+        let window_failures = state
+            .window_requests
+            .iter()
             .filter(|(_, success)| !success)
             .count() as u32;
-        
+
         let window_total = state.window_requests.len() as u32;
-        
-        window_total >= self.config.min_requests && 
-        window_failures >= self.config.failure_threshold
+
+        window_total >= self.config.min_requests && window_failures >= self.config.failure_threshold
     }
 
     fn clean_window(&self, state: &mut CircuitBreakerState) {
         let cutoff = Instant::now() - self.config.window;
-        state.window_requests.retain(|(timestamp, _)| *timestamp > cutoff);
+        state
+            .window_requests
+            .retain(|(timestamp, _)| *timestamp > cutoff);
     }
 
     fn transition_to_open(&self, state: &mut CircuitBreakerState) {
         state.state = CircuitState::Open;
         state.metrics.last_state_change = Some(Instant::now());
-        log::warn!("Circuit breaker opened after {} consecutive failures", 
-                  state.metrics.consecutive_failures);
+        log::warn!(
+            "Circuit breaker opened after {} consecutive failures",
+            state.metrics.consecutive_failures
+        );
     }
 
     fn transition_to_closed(&self, state: &mut CircuitBreakerState) {
@@ -350,7 +355,7 @@ mod tests {
         breaker.record_failure();
         breaker.record_failure();
         assert_eq!(breaker.state(), CircuitState::Closed);
-        
+
         breaker.record_failure();
         assert_eq!(breaker.state(), CircuitState::Open);
         assert!(breaker.is_open());
@@ -363,7 +368,7 @@ mod tests {
         // Record successes to close circuit
         breaker.record_success();
         assert_eq!(breaker.state(), CircuitState::HalfOpen);
-        
+
         breaker.record_success();
         assert_eq!(breaker.state(), CircuitState::Closed);
     }
@@ -418,14 +423,14 @@ mod tests {
         // Record failures
         breaker.record_failure();
         breaker.record_failure();
-        
+
         // Wait for window to expire
         thread::sleep(Duration::from_millis(250));
-        
+
         // Old failures should not count
         breaker.record_failure();
         assert_eq!(breaker.state(), CircuitState::Closed);
-        
+
         // But new failures within window should
         breaker.record_failure();
         breaker.record_failure();

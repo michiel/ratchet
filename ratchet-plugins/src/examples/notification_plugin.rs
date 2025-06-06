@@ -1,8 +1,8 @@
 //! Example notification plugin that simulates sending alerts
 
 use async_trait::async_trait;
-use ratchet_plugin::*;
 use ratchet_plugin::types::PluginStatus;
+use ratchet_plugin::*;
 use std::any::Any;
 use tracing::{info, warn};
 
@@ -36,11 +36,14 @@ impl NotificationPlugin {
         plugin.webhook_url = Some(webhook_url.into());
         plugin
     }
-    
+
     /// Send a notification (simulated)
     async fn send_notification(&self, title: &str, message: &str, level: &str) {
         if let Some(webhook_url) = &self.webhook_url {
-            info!("📤 Sending webhook to {}: {} - {}", webhook_url, title, message);
+            info!(
+                "📤 Sending webhook to {}: {} - {}",
+                webhook_url, title, message
+            );
             // In a real implementation, you would use reqwest to send HTTP request
         } else {
             match level {
@@ -65,36 +68,40 @@ impl Plugin for NotificationPlugin {
     }
 
     async fn initialize(&mut self, context: &mut PluginContext) -> PluginResult<()> {
-        info!("📬 Initializing Notification Plugin v{}", self.metadata.version);
-        
+        info!(
+            "📬 Initializing Notification Plugin v{}",
+            self.metadata.version
+        );
+
         if self.webhook_url.is_some() {
             info!("🌐 Webhook URL configured: notifications will be sent via HTTP");
         } else {
             info!("📋 No webhook URL: notifications will be logged only");
         }
-        
+
         // Set status to active (normally done by parent)
         context.set_status(PluginStatus::Active);
-        
+
         info!("✅ Notification Plugin initialized successfully");
         Ok(())
     }
 
     async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
         info!("📬 Notification Plugin execute called");
-        
+
         // Simulate sending some notifications
         self.send_notification(
             "Plugin Execution",
             "Notification plugin executed successfully",
-            "info"
-        ).await;
-        
+            "info",
+        )
+        .await;
+
         // In a real plugin, this might:
         // - Check for pending alerts
         // - Process notification queue
         // - Send scheduled notifications
-        
+
         let result = serde_json::json!({
             "status": "active",
             "webhook_configured": self.webhook_url.is_some(),
@@ -102,24 +109,25 @@ impl Plugin for NotificationPlugin {
             "notifications_sent": 1,
             "timestamp": chrono::Utc::now().to_rfc3339()
         });
-        
+
         info!("📬 Notification Plugin execution completed");
         Ok(result)
     }
 
     async fn shutdown(&mut self, context: &mut PluginContext) -> PluginResult<()> {
         info!("📬 Shutting down Notification Plugin");
-        
+
         // Send shutdown notification
         self.send_notification(
             "Plugin Shutdown",
             "Notification plugin is shutting down",
-            "info"
-        ).await;
-        
+            "info",
+        )
+        .await;
+
         // Set status to unloaded (normally done by parent)
         context.set_status(PluginStatus::Unloaded);
-        
+
         info!("✅ Notification Plugin shutdown complete");
         Ok(())
     }
@@ -141,7 +149,7 @@ mod tests {
     use super::*;
     use ratchet_config::RatchetConfig;
     use uuid::Uuid;
-    
+
     #[tokio::test]
     async fn test_notification_plugin_creation() {
         let plugin = NotificationPlugin::new();
@@ -149,14 +157,14 @@ mod tests {
         assert_eq!(plugin.metadata().name, "Task Execution Notifications");
         assert!(plugin.webhook_url.is_none());
     }
-    
+
     #[tokio::test]
     async fn test_notification_plugin_with_webhook() {
         let webhook_url = "https://example.com/webhook";
         let plugin = NotificationPlugin::with_webhook(webhook_url);
         assert_eq!(plugin.webhook_url.as_ref().unwrap(), webhook_url);
     }
-    
+
     #[tokio::test]
     async fn test_notification_plugin_lifecycle() {
         let mut plugin = NotificationPlugin::new();
@@ -165,16 +173,16 @@ mod tests {
             serde_json::json!({}),
             RatchetConfig::default(),
         );
-        
+
         // Test initialization
         assert!(plugin.initialize(&mut context).await.is_ok());
-        
+
         // Test execution
         let result = plugin.execute(&mut context).await.unwrap();
         assert!(result.is_object());
         assert_eq!(result["status"], "active");
         assert_eq!(result["webhook_configured"], false);
-        
+
         // Test shutdown
         assert!(plugin.shutdown(&mut context).await.is_ok());
     }

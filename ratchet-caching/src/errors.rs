@@ -11,35 +11,35 @@ pub enum CacheError {
     /// Cache capacity exceeded
     #[error("Cache capacity exceeded: {0}")]
     CapacityExceeded(String),
-    
+
     /// Key not found in cache
     #[error("Key not found in cache")]
     KeyNotFound,
-    
+
     /// Serialization error
     #[error("Serialization error: {0}")]
     SerializationError(String),
-    
+
     /// Deserialization error
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
-    
+
     /// Lock acquisition failed
     #[error("Failed to acquire cache lock: {0}")]
     LockError(String),
-    
+
     /// TTL expired
     #[error("Cache entry expired")]
     Expired,
-    
+
     /// Invalid configuration
     #[error("Invalid cache configuration: {0}")]
     InvalidConfiguration(String),
-    
+
     /// Backend-specific error
     #[error("Cache backend error: {0}")]
     BackendError(String),
-    
+
     /// I/O error
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),

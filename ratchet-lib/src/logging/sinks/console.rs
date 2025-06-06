@@ -1,4 +1,4 @@
-use crate::logging::{LogEvent, LogLevel, logger::LogSink};
+use crate::logging::{logger::LogSink, LogEvent, LogLevel};
 use colored::Colorize;
 use std::io::Write;
 
@@ -39,10 +39,13 @@ impl ConsoleSink {
 
             // Add error details if present
             if let Some(error) = &event.error {
-                output.push_str(&format!("\n  Error: {} ({})", error.message, error.error_code));
+                output.push_str(&format!(
+                    "\n  Error: {} ({})",
+                    error.message, error.error_code
+                ));
                 output.push_str(&format!("\n  Type: {}", error.error_type));
                 output.push_str(&format!("\n  Retryable: {}", error.is_retryable));
-                
+
                 if !error.suggestions.immediate.is_empty() {
                     output.push_str("\n  Suggestions:");
                     for suggestion in &error.suggestions.immediate {
@@ -53,9 +56,15 @@ impl ConsoleSink {
 
             // Add important fields
             if !event.fields.is_empty() {
-                let important_fields: Vec<(&str, &serde_json::Value)> = event.fields
+                let important_fields: Vec<(&str, &serde_json::Value)> = event
+                    .fields
                     .iter()
-                    .filter(|(k, _)| matches!(k.as_str(), "task_id" | "job_id" | "execution_id" | "error_count"))
+                    .filter(|(k, _)| {
+                        matches!(
+                            k.as_str(),
+                            "task_id" | "job_id" | "execution_id" | "error_count"
+                        )
+                    })
                     .map(|(k, v)| (k.as_str(), v))
                     .collect();
 
@@ -72,10 +81,15 @@ impl ConsoleSink {
 
             // Add trace context
             if let (Some(trace_id), Some(span_id)) = (&event.trace_id, &event.span_id) {
-                output.push_str(&format!(" trace={} span={}", 
-                    &trace_id[..8], // Show first 8 chars
-                    &span_id[..8]
-                ).dimmed().to_string());
+                output.push_str(
+                    &format!(
+                        " trace={} span={}",
+                        &trace_id[..8], // Show first 8 chars
+                        &span_id[..8]
+                    )
+                    .dimmed()
+                    .to_string(),
+                );
             }
 
             output
@@ -90,7 +104,7 @@ impl LogSink for ConsoleSink {
         }
 
         let formatted = self.format_event(&event);
-        
+
         // Write to stderr for errors, stdout for others
         if event.level >= LogLevel::Error {
             eprintln!("{}", formatted);

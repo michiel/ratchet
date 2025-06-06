@@ -1,9 +1,8 @@
-use boa_engine::{
-    Context, JsValue, JsError, Source,
-    JsNativeError, JsResult, JsString, property::PropertyKey
-};
-use serde_json::{Value as JsonValue};
 use super::manager::call_http;
+use boa_engine::{
+    property::PropertyKey, Context, JsError, JsNativeError, JsResult, JsString, JsValue, Source,
+};
+use serde_json::Value as JsonValue;
 
 /// Native function to handle fetch calls from JavaScript
 #[allow(dead_code)]
@@ -29,16 +28,21 @@ async fn fetch_native(
     // Convert params to JsonValue if provided
     let params_json = if args.len() > 1 && !args[1].is_null() && !args[1].is_undefined() {
         // Set a temporary variable in the global context
-        context.global_object().set(PropertyKey::from(JsString::from("__temp_params")), args[1].clone(), true, context)?;
-        
+        context.global_object().set(
+            PropertyKey::from(JsString::from("__temp_params")),
+            args[1].clone(),
+            true,
+            context,
+        )?;
+
         // Stringify it using JSON.stringify
         let params_json_str = context.eval(Source::from_bytes("JSON.stringify(__temp_params)"))?;
         let params_str = params_json_str.to_string(context)?.to_std_string_escaped();
-        
+
         // Parse the JSON string into a JsonValue
         match serde_json::from_str::<JsonValue>(&params_str) {
             Ok(json_val) => Some(json_val),
-            Err(_) => None
+            Err(_) => None,
         }
     } else {
         None
@@ -47,16 +51,21 @@ async fn fetch_native(
     // Convert body to JsonValue if provided
     let body_json = if args.len() > 2 && !args[2].is_null() && !args[2].is_undefined() {
         // Set a temporary variable in the global context
-        context.global_object().set(PropertyKey::from(JsString::from("__temp_body")), args[2].clone(), true, context)?;
-        
+        context.global_object().set(
+            PropertyKey::from(JsString::from("__temp_body")),
+            args[2].clone(),
+            true,
+            context,
+        )?;
+
         // Stringify it using JSON.stringify
         let body_json_str = context.eval(Source::from_bytes("JSON.stringify(__temp_body)"))?;
         let body_str = body_json_str.to_string(context)?.to_std_string_escaped();
-        
+
         // Parse the JSON string into a JsonValue
         match serde_json::from_str::<JsonValue>(&body_str) {
             Ok(json_val) => Some(json_val),
-            Err(_) => None
+            Err(_) => None,
         }
     } else {
         None
@@ -83,14 +92,18 @@ async fn fetch_native(
     };
 
     // Parse the JSON string into a JS value
-    context.eval(Source::from_bytes(&format!("JSON.parse('{}')", result_str.replace('\'', "\\'")))) 
+    context.eval(Source::from_bytes(&format!(
+        "JSON.parse('{}')",
+        result_str.replace('\'', "\\'")
+    )))
 }
 
 /// Register the fetch function in the JavaScript context
 pub fn register_fetch(context: &mut Context) -> Result<(), JsError> {
     // Create a direct JavaScript implementation
     // that will handle the fetch API by calling into Rust
-    context.eval(Source::from_bytes(r#"
+    context.eval(Source::from_bytes(
+        r#"
         // Define the fetch API
         function fetch(url, params, body) {
             if (typeof url !== 'string') {
@@ -115,7 +128,8 @@ pub fn register_fetch(context: &mut Context) -> Result<(), JsError> {
                 body: body
             };
         }
-    "#))?;
-    
+    "#,
+    ))?;
+
     Ok(())
 }

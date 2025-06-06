@@ -1,16 +1,16 @@
 //! Runtime components for Ratchet
-//! 
+//!
 //! This crate provides runtime execution components including process management,
 //! worker coordination, and task execution infrastructure.
 
-pub mod worker;
-pub mod process;
 pub mod executor;
+pub mod process;
+pub mod worker;
 
 // Re-export commonly used types
-pub use worker::{Worker, worker_main};
+pub use executor::{ExecutionEngine, TaskExecutor};
 pub use process::{
-    WorkerConfig, WorkerProcess, WorkerProcessManager, WorkerProcessStatus, 
-    WorkerProcessError, WorkerToManagerMessage
+    WorkerConfig, WorkerProcess, WorkerProcessError, WorkerProcessManager, WorkerProcessStatus,
+    WorkerToManagerMessage,
 };
-pub use executor::{TaskExecutor, ExecutionEngine};
+pub use worker::{worker_main, Worker};

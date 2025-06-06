@@ -1,7 +1,7 @@
 //! Error types for MCP operations
 
-use thiserror::Error;
 use std::time::Duration;
+use thiserror::Error;
 
 /// Result type for MCP operations
 pub type McpResult<T> = Result<T, McpError>;
@@ -55,9 +55,9 @@ pub enum McpError {
 
     /// Rate limiting errors
     #[error("Rate limit exceeded: {message}, retry after {retry_after:?}")]
-    RateLimitExceeded { 
-        message: String, 
-        retry_after: Option<Duration> 
+    RateLimitExceeded {
+        message: String,
+        retry_after: Option<Duration>,
     },
 
     /// Resource quota exceeded
@@ -102,7 +102,10 @@ pub enum McpError {
 
     /// Resource not found
     #[error("Resource not found: {resource_type}: {resource_id}")]
-    ResourceNotFound { resource_type: String, resource_id: String },
+    ResourceNotFound {
+        resource_type: String,
+        resource_id: String,
+    },
 
     /// Operation cancelled
     #[error("Operation cancelled: {reason}")]
@@ -116,70 +119,86 @@ pub enum McpError {
 impl McpError {
     /// Create a transport error
     pub fn transport(message: impl Into<String>) -> Self {
-        Self::Transport { message: message.into() }
+        Self::Transport {
+            message: message.into(),
+        }
     }
 
     /// Create a connection failed error
     pub fn connection_failed(reason: impl Into<String>) -> Self {
-        Self::ConnectionFailed { reason: reason.into() }
+        Self::ConnectionFailed {
+            reason: reason.into(),
+        }
     }
 
     /// Create a protocol error
     pub fn protocol(message: impl Into<String>) -> Self {
-        Self::Protocol { message: message.into() }
+        Self::Protocol {
+            message: message.into(),
+        }
     }
 
     /// Create a tool not found error
     pub fn tool_not_found(tool_name: impl Into<String>) -> Self {
-        Self::ToolNotFound { tool_name: tool_name.into() }
+        Self::ToolNotFound {
+            tool_name: tool_name.into(),
+        }
     }
 
     /// Create an authentication failed error
     pub fn authentication_failed(reason: impl Into<String>) -> Self {
-        Self::AuthenticationFailed { reason: reason.into() }
+        Self::AuthenticationFailed {
+            reason: reason.into(),
+        }
     }
 
     /// Create an authorization denied error
     pub fn authorization_denied(reason: impl Into<String>) -> Self {
-        Self::AuthorizationDenied { reason: reason.into() }
+        Self::AuthorizationDenied {
+            reason: reason.into(),
+        }
     }
 
     /// Create a rate limit exceeded error
     pub fn rate_limit_exceeded(message: impl Into<String>, retry_after: Option<Duration>) -> Self {
-        Self::RateLimitExceeded { 
-            message: message.into(), 
-            retry_after 
+        Self::RateLimitExceeded {
+            message: message.into(),
+            retry_after,
         }
     }
 
     /// Create an internal error
     pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal { message: message.into() }
+        Self::Internal {
+            message: message.into(),
+        }
     }
 
     /// Create a generic error
     pub fn generic(message: impl Into<String>) -> Self {
-        Self::Generic { message: message.into() }
+        Self::Generic {
+            message: message.into(),
+        }
     }
 
     /// Check if this error is retryable
     pub fn is_retryable(&self) -> bool {
         match self {
-            McpError::ConnectionTimeout { .. } |
-            McpError::ServerTimeout { .. } |
-            McpError::ServerUnavailable { .. } |
-            McpError::Network { .. } |
-            McpError::RateLimitExceeded { .. } => true,
-            
-            McpError::AuthenticationFailed { .. } |
-            McpError::AuthorizationDenied { .. } |
-            McpError::MethodNotFound { .. } |
-            McpError::ToolNotFound { .. } |
-            McpError::InvalidParams { .. } |
-            McpError::InvalidJsonRpc { .. } |
-            McpError::Configuration { .. } |
-            McpError::Validation { .. } => false,
-            
+            McpError::ConnectionTimeout { .. }
+            | McpError::ServerTimeout { .. }
+            | McpError::ServerUnavailable { .. }
+            | McpError::Network { .. }
+            | McpError::RateLimitExceeded { .. } => true,
+
+            McpError::AuthenticationFailed { .. }
+            | McpError::AuthorizationDenied { .. }
+            | McpError::MethodNotFound { .. }
+            | McpError::ToolNotFound { .. }
+            | McpError::InvalidParams { .. }
+            | McpError::InvalidJsonRpc { .. }
+            | McpError::Configuration { .. }
+            | McpError::Validation { .. } => false,
+
             _ => false,
         }
     }
@@ -200,8 +219,8 @@ impl McpError {
 // Implement conversions from common error types
 impl From<serde_json::Error> for McpError {
     fn from(err: serde_json::Error) -> Self {
-        McpError::Serialization { 
-            details: err.to_string() 
+        McpError::Serialization {
+            details: err.to_string(),
         }
     }
 }
@@ -209,16 +228,16 @@ impl From<serde_json::Error> for McpError {
 impl From<reqwest::Error> for McpError {
     fn from(err: reqwest::Error) -> Self {
         if err.is_timeout() {
-            McpError::ServerTimeout { 
-                timeout: Duration::from_secs(30) // Default timeout
+            McpError::ServerTimeout {
+                timeout: Duration::from_secs(30), // Default timeout
             }
         } else if err.is_connect() {
-            McpError::ConnectionFailed { 
-                reason: err.to_string() 
+            McpError::ConnectionFailed {
+                reason: err.to_string(),
             }
         } else {
-            McpError::Network { 
-                message: err.to_string() 
+            McpError::Network {
+                message: err.to_string(),
             }
         }
     }
@@ -227,16 +246,16 @@ impl From<reqwest::Error> for McpError {
 impl From<std::io::Error> for McpError {
     fn from(err: std::io::Error) -> Self {
         match err.kind() {
-            std::io::ErrorKind::TimedOut => McpError::ConnectionTimeout { 
-                timeout: Duration::from_secs(30) 
+            std::io::ErrorKind::TimedOut => McpError::ConnectionTimeout {
+                timeout: Duration::from_secs(30),
             },
-            std::io::ErrorKind::ConnectionRefused |
-            std::io::ErrorKind::ConnectionAborted |
-            std::io::ErrorKind::NotConnected => McpError::ConnectionFailed { 
-                reason: err.to_string() 
+            std::io::ErrorKind::ConnectionRefused
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::NotConnected => McpError::ConnectionFailed {
+                reason: err.to_string(),
             },
-            _ => McpError::Transport { 
-                message: err.to_string() 
+            _ => McpError::Transport {
+                message: err.to_string(),
             },
         }
     }
@@ -244,16 +263,16 @@ impl From<std::io::Error> for McpError {
 
 impl From<ratchet_core::error::RatchetError> for McpError {
     fn from(err: ratchet_core::error::RatchetError) -> Self {
-        McpError::Internal { 
-            message: format!("Ratchet core error: {}", err) 
+        McpError::Internal {
+            message: format!("Ratchet core error: {}", err),
         }
     }
 }
 
 impl From<ratchet_ipc::error::IpcError> for McpError {
     fn from(err: ratchet_ipc::error::IpcError) -> Self {
-        McpError::Transport { 
-            message: format!("IPC error: {}", err) 
+        McpError::Transport {
+            message: format!("IPC error: {}", err),
         }
     }
 }

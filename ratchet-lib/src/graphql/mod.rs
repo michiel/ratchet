@@ -1,6 +1,6 @@
+pub mod resolvers;
 pub mod schema;
 pub mod types;
-pub mod resolvers;
 
-pub use schema::{RatchetSchema, create_schema};
+pub use schema::{create_schema, RatchetSchema};
 pub use types::*;

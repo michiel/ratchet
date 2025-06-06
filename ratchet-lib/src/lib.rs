@@ -23,14 +23,14 @@ pub mod types;
 // pub mod testing;
 
 // Re-export commonly used types and functions for convenience
-pub use config::{RatchetConfig, ConfigError};
+pub use config::{ConfigError, RatchetConfig};
 pub use errors::{JsErrorType, JsExecutionError};
-pub use graphql::{RatchetSchema, create_schema};
-pub use js_executor::{execute_task, execute_js_file};
+pub use graphql::{create_schema, RatchetSchema};
+pub use js_executor::{execute_js_file, execute_task};
 pub use rest::create_rest_app;
 pub use server::{create_app, ServerState};
-pub use services::{RatchetEngine, ServiceProvider, ServiceError, ServiceResult};
+pub use services::{RatchetEngine, ServiceError, ServiceProvider, ServiceResult};
 // Re-export validation functions from ratchet-core for compatibility
-pub use ratchet_core::validation::{validate_json, parse_schema};
+pub use ratchet_core::validation::{parse_schema, validate_json};
 
 // Legacy function removed as part of code cleanup

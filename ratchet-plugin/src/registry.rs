@@ -70,7 +70,8 @@ impl PluginInfo {
         self.loaded_at.map(|loaded_at| {
             chrono::Utc::now()
                 .signed_duration_since(loaded_at)
-                .num_milliseconds() as f64 / 1000.0
+                .num_milliseconds() as f64
+                / 1000.0
         })
     }
 }
@@ -251,7 +252,10 @@ impl PluginRegistry {
     }
 
     /// Get plugin instance
-    pub async fn get_plugin_instance(&self, plugin_id: &str) -> Option<Arc<RwLock<Box<dyn Plugin>>>> {
+    pub async fn get_plugin_instance(
+        &self,
+        plugin_id: &str,
+    ) -> Option<Arc<RwLock<Box<dyn Plugin>>>> {
         let instances = self.instances.read().await;
         instances.get(plugin_id).cloned()
     }
@@ -283,7 +287,11 @@ impl PluginRegistry {
     }
 
     /// Update plugin status
-    pub async fn update_plugin_status(&self, plugin_id: &str, status: PluginStatus) -> PluginResult<()> {
+    pub async fn update_plugin_status(
+        &self,
+        plugin_id: &str,
+        status: PluginStatus,
+    ) -> PluginResult<()> {
         let mut plugins = self.plugins.write().await;
         if let Some(plugin_info) = plugins.get_mut(plugin_id) {
             let old_status = plugin_info.status.clone();
@@ -329,11 +337,15 @@ impl PluginRegistry {
     }
 
     /// Update plugin error
-    pub async fn update_plugin_error(&self, plugin_id: &str, error: impl Into<String>) -> PluginResult<()> {
+    pub async fn update_plugin_error(
+        &self,
+        plugin_id: &str,
+        error: impl Into<String>,
+    ) -> PluginResult<()> {
         let mut plugins = self.plugins.write().await;
         if let Some(plugin_info) = plugins.get_mut(plugin_id) {
             plugin_info.set_error(error);
-            
+
             tracing::error!(
                 target: "plugin_registry",
                 plugin_id = %plugin_id,
@@ -350,7 +362,11 @@ impl PluginRegistry {
     }
 
     /// Update plugin metrics
-    pub async fn update_plugin_metrics(&self, plugin_id: &str, metrics: HashMap<String, f64>) -> PluginResult<()> {
+    pub async fn update_plugin_metrics(
+        &self,
+        plugin_id: &str,
+        metrics: HashMap<String, f64>,
+    ) -> PluginResult<()> {
         let mut plugins = self.plugins.write().await;
         if let Some(plugin_info) = plugins.get_mut(plugin_id) {
             plugin_info.update_metrics(metrics);
@@ -411,7 +427,10 @@ impl PluginRegistry {
     }
 
     /// Validate plugin dependencies
-    async fn validate_dependencies(&self, dependencies: &[crate::types::PluginDependency]) -> PluginResult<()> {
+    async fn validate_dependencies(
+        &self,
+        dependencies: &[crate::types::PluginDependency],
+    ) -> PluginResult<()> {
         let plugins = self.plugins.read().await;
 
         for dep in dependencies {
@@ -479,7 +498,7 @@ impl PluginRegistry {
         // Check API version compatibility
         let api_version = semver::Version::parse(&metadata.api_version)
             .map_err(|e| PluginError::generic(format!("Invalid API version: {}", e)))?;
-        
+
         let min_version = semver::Version::parse(crate::MIN_PLUGIN_API_VERSION)
             .map_err(|e| PluginError::generic(format!("Invalid minimum API version: {}", e)))?;
 
@@ -500,7 +519,11 @@ impl PluginRegistry {
         F: Fn(&PluginInfo) -> bool,
     {
         let plugins = self.plugins.read().await;
-        plugins.values().filter(|info| predicate(info)).cloned().collect()
+        plugins
+            .values()
+            .filter(|info| predicate(info))
+            .cloned()
+            .collect()
     }
 
     /// Get plugin count by status
@@ -555,7 +578,10 @@ mod tests {
             &self.metadata
         }
 
-        async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
+        async fn execute(
+            &mut self,
+            _context: &mut PluginContext,
+        ) -> PluginResult<serde_json::Value> {
             Ok(serde_json::json!({"status": "success"}))
         }
 
@@ -595,7 +621,10 @@ mod tests {
         let config = serde_json::json!({});
 
         // Register first plugin
-        assert!(registry.register_plugin(plugin1, config.clone()).await.is_ok());
+        assert!(registry
+            .register_plugin(plugin1, config.clone())
+            .await
+            .is_ok());
 
         // Try to register duplicate - should fail
         assert!(registry.register_plugin(plugin2, config).await.is_err());
@@ -607,12 +636,19 @@ mod tests {
 
         // Register dependency first
         let dep_plugin = Box::new(TestPlugin::new("dep-plugin", "Dependency Plugin"));
-        assert!(registry.register_plugin(dep_plugin, serde_json::json!({})).await.is_ok());
+        assert!(registry
+            .register_plugin(dep_plugin, serde_json::json!({}))
+            .await
+            .is_ok());
 
         // Register plugin with dependency
-        let main_plugin = Box::new(TestPlugin::new("main-plugin", "Main Plugin")
-            .with_dependency("dep-plugin", "^1.0.0"));
-        assert!(registry.register_plugin(main_plugin, serde_json::json!({})).await.is_ok());
+        let main_plugin = Box::new(
+            TestPlugin::new("main-plugin", "Main Plugin").with_dependency("dep-plugin", "^1.0.0"),
+        );
+        assert!(registry
+            .register_plugin(main_plugin, serde_json::json!({}))
+            .await
+            .is_ok());
 
         // Check dependencies
         let deps = registry.get_dependencies("main-plugin").await;
@@ -628,18 +664,31 @@ mod tests {
 
         // Register plugins with dependencies: C -> B -> A
         let plugin_a = Box::new(TestPlugin::new("plugin-a", "Plugin A"));
-        let plugin_b = Box::new(TestPlugin::new("plugin-b", "Plugin B")
-            .with_dependency("plugin-a", "^1.0.0"));
-        let plugin_c = Box::new(TestPlugin::new("plugin-c", "Plugin C")
-            .with_dependency("plugin-b", "^1.0.0"));
+        let plugin_b =
+            Box::new(TestPlugin::new("plugin-b", "Plugin B").with_dependency("plugin-a", "^1.0.0"));
+        let plugin_c =
+            Box::new(TestPlugin::new("plugin-c", "Plugin C").with_dependency("plugin-b", "^1.0.0"));
 
-        assert!(registry.register_plugin(plugin_a, serde_json::json!({})).await.is_ok());
-        assert!(registry.register_plugin(plugin_b, serde_json::json!({})).await.is_ok());
-        assert!(registry.register_plugin(plugin_c, serde_json::json!({})).await.is_ok());
+        assert!(registry
+            .register_plugin(plugin_a, serde_json::json!({}))
+            .await
+            .is_ok());
+        assert!(registry
+            .register_plugin(plugin_b, serde_json::json!({}))
+            .await
+            .is_ok());
+        assert!(registry
+            .register_plugin(plugin_c, serde_json::json!({}))
+            .await
+            .is_ok());
 
         // Resolve load order
         let load_order = registry
-            .resolve_load_order(&["plugin-c".to_string(), "plugin-a".to_string(), "plugin-b".to_string()])
+            .resolve_load_order(&[
+                "plugin-c".to_string(),
+                "plugin-a".to_string(),
+                "plugin-b".to_string(),
+            ])
             .await
             .unwrap();
 
@@ -652,11 +701,20 @@ mod tests {
         let registry = PluginRegistry::new();
         let plugin = Box::new(TestPlugin::new("test-plugin", "Test Plugin"));
 
-        assert!(registry.register_plugin(plugin, serde_json::json!({})).await.is_ok());
+        assert!(registry
+            .register_plugin(plugin, serde_json::json!({}))
+            .await
+            .is_ok());
 
         // Update status
-        assert!(registry.update_plugin_status("test-plugin", PluginStatus::Loading).await.is_ok());
-        assert!(registry.update_plugin_status("test-plugin", PluginStatus::Active).await.is_ok());
+        assert!(registry
+            .update_plugin_status("test-plugin", PluginStatus::Loading)
+            .await
+            .is_ok());
+        assert!(registry
+            .update_plugin_status("test-plugin", PluginStatus::Active)
+            .await
+            .is_ok());
 
         let plugin_info = registry.get_plugin_info("test-plugin").await.unwrap();
         assert_eq!(plugin_info.status, PluginStatus::Active);
@@ -681,14 +739,28 @@ mod tests {
             "Test Author",
             PluginType::Output,
         );
-        let plugin2 = TestPlugin { metadata: plugin2_meta };
+        let plugin2 = TestPlugin {
+            metadata: plugin2_meta,
+        };
 
-        assert!(registry.register_plugin(plugin1, serde_json::json!({})).await.is_ok());
-        assert!(registry.register_plugin(Box::new(plugin2), serde_json::json!({})).await.is_ok());
+        assert!(registry
+            .register_plugin(plugin1, serde_json::json!({}))
+            .await
+            .is_ok());
+        assert!(registry
+            .register_plugin(Box::new(plugin2), serde_json::json!({}))
+            .await
+            .is_ok());
 
         // Update statuses
-        assert!(registry.update_plugin_status("plugin-1", PluginStatus::Active).await.is_ok());
-        assert!(registry.update_plugin_status("plugin-2", PluginStatus::Failed).await.is_ok());
+        assert!(registry
+            .update_plugin_status("plugin-1", PluginStatus::Active)
+            .await
+            .is_ok());
+        assert!(registry
+            .update_plugin_status("plugin-2", PluginStatus::Failed)
+            .await
+            .is_ok());
 
         // Filter by type
         let task_plugins = registry.list_plugins_by_type(&PluginType::Task).await;
@@ -710,11 +782,18 @@ mod tests {
         let registry = PluginRegistry::new();
 
         let dep_plugin = Box::new(TestPlugin::new("dep-plugin", "Dependency Plugin"));
-        let main_plugin = Box::new(TestPlugin::new("main-plugin", "Main Plugin")
-            .with_dependency("dep-plugin", "^1.0.0"));
+        let main_plugin = Box::new(
+            TestPlugin::new("main-plugin", "Main Plugin").with_dependency("dep-plugin", "^1.0.0"),
+        );
 
-        assert!(registry.register_plugin(dep_plugin, serde_json::json!({})).await.is_ok());
-        assert!(registry.register_plugin(main_plugin, serde_json::json!({})).await.is_ok());
+        assert!(registry
+            .register_plugin(dep_plugin, serde_json::json!({}))
+            .await
+            .is_ok());
+        assert!(registry
+            .register_plugin(main_plugin, serde_json::json!({}))
+            .await
+            .is_ok());
 
         // Try to unregister dependency - should fail because of dependent
         assert!(registry.unregister_plugin("dep-plugin").await.is_err());

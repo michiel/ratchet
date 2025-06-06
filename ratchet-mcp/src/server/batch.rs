@@ -18,14 +18,12 @@ use tracing::{debug, error, info, span, warn, Instrument, Level};
 use uuid::Uuid;
 
 /// Type for batch request handler function
-pub type BatchRequestHandler = dyn Fn(JsonRpcRequest) -> Pin<Box<dyn Future<Output = JsonRpcResponse> + Send>>
-    + Send
-    + Sync;
+pub type BatchRequestHandler =
+    dyn Fn(JsonRpcRequest) -> Pin<Box<dyn Future<Output = JsonRpcResponse> + Send>> + Send + Sync;
 
 /// Type for progress notification callback
-pub type ProgressCallback = dyn Fn(BatchProgressNotification) -> Pin<Box<dyn Future<Output = ()> + Send>>
-    + Send
-    + Sync;
+pub type ProgressCallback =
+    dyn Fn(BatchProgressNotification) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync;
 
 /// Batch processor for handling batch operations
 pub struct BatchProcessor {
@@ -109,18 +107,19 @@ impl BatchProcessor {
 
     /// Process a batch request
     pub async fn process_batch(&self, params: BatchParams) -> Result<BatchResult, McpError> {
-        self.process_batch_with_handler(params, &self.request_handler).await
+        self.process_batch_with_handler(params, &self.request_handler)
+            .await
     }
-    
+
     /// Process a batch request with a custom handler
     pub async fn process_batch_with_handler(
-        &self, 
+        &self,
         params: BatchParams,
         handler: &Arc<BatchRequestHandler>,
     ) -> Result<BatchResult, McpError> {
         let start_time = Instant::now();
         let correlation_token = params.correlation_token.clone();
-        
+
         // Validate batch size
         if params.requests.len() > self.max_batch_size as usize {
             return Err(McpError::Validation {
@@ -140,7 +139,7 @@ impl BatchProcessor {
             });
         }
 
-        let span = span!(Level::INFO, "batch_processing", 
+        let span = span!(Level::INFO, "batch_processing",
             batch_size = params.requests.len(),
             execution_mode = ?params.execution_mode,
             correlation_token = ?correlation_token
@@ -148,29 +147,40 @@ impl BatchProcessor {
 
         async move {
             info!("Starting batch processing");
-            
+
             // Validate and build dependency graph
             let mut requests = params.requests.clone();
-            
+
             // Apply deduplication if enabled
             if self.enable_deduplication {
                 requests = self.deduplicate_requests(requests);
-                info!("Deduplication reduced batch size from {} to {}", 
-                    params.requests.len(), requests.len());
+                info!(
+                    "Deduplication reduced batch size from {} to {}",
+                    params.requests.len(),
+                    requests.len()
+                );
             }
-            
+
             let mut graph = self.build_dependency_graph(requests).await?;
-            
+
             // Apply timeout
-            let batch_timeout = params.timeout_ms
+            let batch_timeout = params
+                .timeout_ms
                 .map(Duration::from_millis)
                 .unwrap_or(self.default_timeout);
 
-            let results = match timeout(batch_timeout, self.execute_batch(&mut graph, &params, handler)).await {
+            let results = match timeout(
+                batch_timeout,
+                self.execute_batch(&mut graph, &params, handler),
+            )
+            .await
+            {
                 Ok(results) => results?,
                 Err(_) => {
                     error!("Batch execution timed out after {:?}", batch_timeout);
-                    return Err(McpError::ServerTimeout { timeout: batch_timeout });
+                    return Err(McpError::ServerTimeout {
+                        timeout: batch_timeout,
+                    });
                 }
             };
 
@@ -179,7 +189,10 @@ impl BatchProcessor {
 
             info!(
                 "Batch processing completed in {:?}, success: {}, failed: {}, skipped: {}",
-                total_time, stats.successful_requests, stats.failed_requests, stats.skipped_requests
+                total_time,
+                stats.successful_requests,
+                stats.failed_requests,
+                stats.skipped_requests
             );
 
             Ok(BatchResult {
@@ -188,7 +201,9 @@ impl BatchProcessor {
                 correlation_token,
                 metadata: HashMap::new(),
             })
-        }.instrument(span).await
+        }
+        .instrument(span)
+        .await
     }
 
     /// Deduplicate requests based on method and params
@@ -291,7 +306,8 @@ impl BatchProcessor {
 
             // Build reverse dependency edges
             for dep in &request.dependencies {
-                edges.entry(dep.clone())
+                edges
+                    .entry(dep.clone())
                     .or_default()
                     .push(request.id.clone());
             }
@@ -324,7 +340,9 @@ impl BatchProcessor {
         let mut rec_stack = HashSet::new();
 
         for node_id in nodes.keys() {
-            if !visited.contains(node_id) && self.has_cycle_dfs(node_id, nodes, edges, &mut visited, &mut rec_stack) {
+            if !visited.contains(node_id)
+                && self.has_cycle_dfs(node_id, nodes, edges, &mut visited, &mut rec_stack)
+            {
                 return Err(McpError::Validation {
                     field: "dependencies".to_string(),
                     message: "Circular dependency detected in batch requests".to_string(),
@@ -373,9 +391,12 @@ impl BatchProcessor {
         match params.execution_mode {
             BatchExecutionMode::Parallel => self.execute_parallel(graph, params, handler).await,
             BatchExecutionMode::Sequential => self.execute_sequential(graph, params, handler).await,
-            BatchExecutionMode::Dependency => self.execute_dependency_based(graph, params, handler).await,
+            BatchExecutionMode::Dependency => {
+                self.execute_dependency_based(graph, params, handler).await
+            }
             BatchExecutionMode::PriorityDependency => {
-                self.execute_priority_dependency_based(graph, params, handler).await
+                self.execute_priority_dependency_based(graph, params, handler)
+                    .await
             }
         }
     }
@@ -387,7 +408,10 @@ impl BatchProcessor {
         params: &BatchParams,
         handler: &Arc<BatchRequestHandler>,
     ) -> Result<Vec<BatchItemResult>, McpError> {
-        let max_parallel = params.max_parallel.unwrap_or(self.max_parallel).min(self.max_parallel);
+        let max_parallel = params
+            .max_parallel
+            .unwrap_or(self.max_parallel)
+            .min(self.max_parallel);
         let semaphore = Arc::new(Semaphore::new(max_parallel as usize));
         let results = Arc::new(RwLock::new(HashMap::new()));
         let mut handles = Vec::new();
@@ -436,7 +460,7 @@ impl BatchProcessor {
                 };
 
                 results.write().await.insert(id.clone(), result);
-                
+
                 // Update progress
                 let completed = {
                     let mut count = completed_count.write().await;
@@ -456,7 +480,10 @@ impl BatchProcessor {
                     callback(notification).await;
                 }
 
-                debug!("Completed execution of request: {} in {:?}", id, execution_time);
+                debug!(
+                    "Completed execution of request: {} in {:?}",
+                    id, execution_time
+                );
             });
 
             handles.push(handle);
@@ -502,7 +529,9 @@ impl BatchProcessor {
                 Err(_) => {
                     warn!("Request {} timed out after {:?}", id, timeout_duration);
                     if params.stop_on_error {
-                        return Err(McpError::ServerTimeout { timeout: timeout_duration });
+                        return Err(McpError::ServerTimeout {
+                            timeout: timeout_duration,
+                        });
                     }
                     JsonRpcResponse {
                         jsonrpc: "2.0".to_string(),
@@ -533,7 +562,9 @@ impl BatchProcessor {
                     results.push(BatchItemResult {
                         id: remaining_id.clone(),
                         result: None,
-                        error: Some(JsonRpcError::internal_error("Skipped due to previous error")),
+                        error: Some(JsonRpcError::internal_error(
+                            "Skipped due to previous error",
+                        )),
                         execution_time_ms: 0,
                         skipped: true,
                         metadata: HashMap::new(),
@@ -543,7 +574,9 @@ impl BatchProcessor {
             }
 
             // Send progress notification
-            if let (Some(callback), Some(token)) = (&self.progress_callback, &params.correlation_token) {
+            if let (Some(callback), Some(token)) =
+                (&self.progress_callback, &params.correlation_token)
+            {
                 let notification = BatchProgressNotification {
                     correlation_token: token.clone(),
                     completed_requests: (index + 1) as u32,
@@ -555,7 +588,10 @@ impl BatchProcessor {
                 callback(notification).await;
             }
 
-            debug!("Completed sequential execution of request: {} in {:?}", id, execution_time);
+            debug!(
+                "Completed sequential execution of request: {} in {:?}",
+                id, execution_time
+            );
         }
 
         Ok(results)
@@ -568,7 +604,10 @@ impl BatchProcessor {
         params: &BatchParams,
         handler: &Arc<BatchRequestHandler>,
     ) -> Result<Vec<BatchItemResult>, McpError> {
-        let max_parallel = params.max_parallel.unwrap_or(self.max_parallel).min(self.max_parallel);
+        let max_parallel = params
+            .max_parallel
+            .unwrap_or(self.max_parallel)
+            .min(self.max_parallel);
         let semaphore = Arc::new(Semaphore::new(max_parallel as usize));
         let results = Arc::new(RwLock::new(HashMap::new()));
         let completed = Arc::new(RwLock::new(HashSet::new()));
@@ -581,7 +620,7 @@ impl BatchProcessor {
                 if let Some(id) = graph.ready_queue.pop_front() {
                     if let Some(context) = graph.nodes.get(&id) {
                         executing.insert(id.clone());
-                        
+
                         let request = context.request.clone();
                         let timeout_duration = context.timeout.unwrap_or(self.default_timeout);
                         let handler_clone = handler.clone();
@@ -594,20 +633,29 @@ impl BatchProcessor {
                             let _permit = semaphore.acquire().await.unwrap();
                             let start_time = Instant::now();
 
-                            debug!("Starting dependency-based execution of request: {}", id_clone);
+                            debug!(
+                                "Starting dependency-based execution of request: {}",
+                                id_clone
+                            );
 
-                            let response = match timeout(timeout_duration, handler_clone(request)).await {
-                                Ok(response) => response,
-                                Err(_) => {
-                                    warn!("Request {} timed out after {:?}", id_clone, timeout_duration);
-                                    JsonRpcResponse {
-                                        jsonrpc: "2.0".to_string(),
-                                        result: None,
-                                        error: Some(JsonRpcError::internal_error("Request timeout")),
-                                        id: Some(Value::String(id_clone.clone())),
+                            let response =
+                                match timeout(timeout_duration, handler_clone(request)).await {
+                                    Ok(response) => response,
+                                    Err(_) => {
+                                        warn!(
+                                            "Request {} timed out after {:?}",
+                                            id_clone, timeout_duration
+                                        );
+                                        JsonRpcResponse {
+                                            jsonrpc: "2.0".to_string(),
+                                            result: None,
+                                            error: Some(JsonRpcError::internal_error(
+                                                "Request timeout",
+                                            )),
+                                            id: Some(Value::String(id_clone.clone())),
+                                        }
                                     }
-                                }
-                            };
+                                };
 
                             let execution_time = start_time.elapsed();
                             let result = BatchItemResult {
@@ -622,7 +670,10 @@ impl BatchProcessor {
                             results.write().await.insert(id_clone.clone(), result);
                             completed.write().await.insert(id_clone.clone());
 
-                            debug!("Completed dependency-based execution of request: {} in {:?}", id_clone, execution_time);
+                            debug!(
+                                "Completed dependency-based execution of request: {} in {:?}",
+                                id_clone, execution_time
+                            );
                             id_clone
                         });
 
@@ -637,13 +688,13 @@ impl BatchProcessor {
                     // Use a simpler approach with tokio::select!
                     let mut completed_id = None;
                     let mut remaining_handles = Vec::new();
-                    
+
                     // For simplicity, await the first handle
                     if let Some(handle) = handles.pop() {
                         completed_id = Some(handle.await);
                         remaining_handles = handles;
                     }
-                    
+
                     (completed_id.unwrap(), 0, remaining_handles)
                 };
                 handles = remaining_handles;
@@ -651,16 +702,17 @@ impl BatchProcessor {
                 match completed_id {
                     Ok(id) => {
                         executing.remove(&id);
-                        
+
                         // Add dependents to ready queue if all their dependencies are complete
                         if let Some(dependents) = graph.edges.get(&id) {
                             let completed_set = completed.read().await;
                             for dependent in dependents {
                                 if let Some(dependent_context) = graph.nodes.get(dependent) {
-                                    let all_deps_complete = dependent_context.dependencies
+                                    let all_deps_complete = dependent_context
+                                        .dependencies
                                         .iter()
                                         .all(|dep| completed_set.contains(dep));
-                                    
+
                                     if all_deps_complete && !graph.ready_queue.contains(dependent) {
                                         graph.ready_queue.push_back(dependent.clone());
                                     }
@@ -717,16 +769,24 @@ impl BatchProcessor {
     /// Calculate batch execution statistics
     fn calculate_stats(&self, results: &[BatchItemResult], total_time: Duration) -> BatchStats {
         let total_requests = results.len() as u32;
-        let successful_requests = results.iter().filter(|r| r.error.is_none() && !r.skipped).count() as u32;
-        let failed_requests = results.iter().filter(|r| r.error.is_some() && !r.skipped).count() as u32;
+        let successful_requests = results
+            .iter()
+            .filter(|r| r.error.is_none() && !r.skipped)
+            .count() as u32;
+        let failed_requests = results
+            .iter()
+            .filter(|r| r.error.is_some() && !r.skipped)
+            .count() as u32;
         let skipped_requests = results.iter().filter(|r| r.skipped).count() as u32;
 
         let total_execution_time_ms = total_time.as_millis() as u64;
         let average_execution_time_ms = if total_requests > 0 {
-            results.iter()
+            results
+                .iter()
                 .filter(|r| !r.skipped)
                 .map(|r| r.execution_time_ms as f64)
-                .sum::<f64>() / (total_requests - skipped_requests) as f64
+                .sum::<f64>()
+                / (total_requests - skipped_requests) as f64
         } else {
             0.0
         };
@@ -761,7 +821,7 @@ mod tests {
                 // Simulate some work
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 let count = counter.fetch_add(1, Ordering::SeqCst);
-                
+
                 JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
                     result: Some(json!({"count": count, "method": request.method})),
@@ -771,19 +831,13 @@ mod tests {
             }) as Pin<Box<dyn Future<Output = JsonRpcResponse> + Send>>
         });
 
-        BatchProcessor::new(
-            100,
-            10,
-            Duration::from_secs(30),
-            handler,
-            None,
-        )
+        BatchProcessor::new(100, 10, Duration::from_secs(30), handler, None)
     }
 
     #[tokio::test]
     async fn test_parallel_execution() {
         let processor = create_test_processor();
-        
+
         let params = BatchParams {
             requests: vec![
                 BatchRequest {
@@ -814,7 +868,7 @@ mod tests {
         };
 
         let result = processor.process_batch(params).await.unwrap();
-        
+
         assert_eq!(result.results.len(), 2);
         assert_eq!(result.stats.total_requests, 2);
         assert_eq!(result.stats.successful_requests, 2);
@@ -825,7 +879,7 @@ mod tests {
     #[tokio::test]
     async fn test_dependency_execution() {
         let processor = create_test_processor();
-        
+
         let params = BatchParams {
             requests: vec![
                 BatchRequest {
@@ -856,17 +910,17 @@ mod tests {
         };
 
         let result = processor.process_batch(params).await.unwrap();
-        
+
         assert_eq!(result.results.len(), 2);
         assert_eq!(result.stats.successful_requests, 2);
-        
+
         // Verify execution order - req1 should complete before req2
         let req1_result = result.results.iter().find(|r| r.id == "req1").unwrap();
         let req2_result = result.results.iter().find(|r| r.id == "req2").unwrap();
-        
+
         if let (Some(req1_count), Some(req2_count)) = (
             req1_result.result.as_ref().and_then(|r| r.get("count")),
-            req2_result.result.as_ref().and_then(|r| r.get("count"))
+            req2_result.result.as_ref().and_then(|r| r.get("count")),
         ) {
             assert!(req1_count.as_u64().unwrap() < req2_count.as_u64().unwrap());
         }
@@ -875,7 +929,7 @@ mod tests {
     #[tokio::test]
     async fn test_circular_dependency_detection() {
         let processor = create_test_processor();
-        
+
         let params = BatchParams {
             requests: vec![
                 BatchRequest {
@@ -907,7 +961,10 @@ mod tests {
 
         let result = processor.process_batch(params).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Circular dependency"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Circular dependency"));
     }
 
     #[tokio::test]
@@ -916,15 +973,19 @@ mod tests {
             2, // max_batch_size = 2
             10,
             Duration::from_secs(30),
-            Arc::new(|_| Box::pin(async { JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                result: Some(json!({})),
-                error: None,
-                id: None,
-            } })),
+            Arc::new(|_| {
+                Box::pin(async {
+                    JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        result: Some(json!({})),
+                        error: None,
+                        id: None,
+                    }
+                })
+            }),
             None,
         );
-        
+
         let params = BatchParams {
             requests: vec![
                 BatchRequest {
@@ -965,7 +1026,10 @@ mod tests {
 
         let result = processor.process_batch(params).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("exceeds maximum allowed size"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("exceeds maximum allowed size"));
     }
 
     #[tokio::test]
@@ -974,17 +1038,21 @@ mod tests {
             100,
             10,
             Duration::from_secs(30),
-            Arc::new(|_| Box::pin(async { JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                result: Some(json!({"executed": true})),
-                error: None,
-                id: None,
-            } })),
+            Arc::new(|_| {
+                Box::pin(async {
+                    JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        result: Some(json!({"executed": true})),
+                        error: None,
+                        id: None,
+                    }
+                })
+            }),
             None,
             true, // enable_deduplication
             false,
         );
-        
+
         let params = BatchParams {
             requests: vec![
                 BatchRequest {
@@ -999,7 +1067,7 @@ mod tests {
                 BatchRequest {
                     id: "req2".to_string(),
                     method: "test_method".to_string(), // Same method
-                    params: Some(json!({"value": 42})), // Same params  
+                    params: Some(json!({"value": 42})), // Same params
                     dependencies: vec![],
                     timeout_ms: None,
                     priority: 0,
@@ -1024,7 +1092,7 @@ mod tests {
         };
 
         let result = processor.process_batch(params).await.unwrap();
-        
+
         // Should have 2 unique results (req1 and req3, req2 was deduplicated)
         assert_eq!(result.results.len(), 2);
         assert_eq!(result.correlation_token, Some("test-dedup".to_string()));

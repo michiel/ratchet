@@ -1,5 +1,5 @@
-use sea_orm::{ColumnTrait, Condition, EntityTrait, Value};
 use sea_orm::sea_query::SimpleExpr;
+use sea_orm::{ColumnTrait, Condition, EntityTrait, Value};
 
 /// Safe filter builder for database queries
 /// Prevents SQL injection by properly escaping and parameterizing queries
@@ -33,7 +33,7 @@ impl<E: EntityTrait> SafeFilterBuilder<E> {
                 .replace('\\', "\\\\")
                 .replace('%', "\\%")
                 .replace('_', "\\_");
-            
+
             // Use contains for safety (adds % on both sides)
             self.conditions.push(column.contains(&escaped));
         }
@@ -49,7 +49,7 @@ impl<E: EntityTrait> SafeFilterBuilder<E> {
         self.conditions.push(column.eq(value));
         self
     }
-    
+
     /// Add a condition directly (for complex expressions like is_null/is_not_null)
     pub fn add_condition(&mut self, condition: SimpleExpr) -> &mut Self {
         self.conditions.push(condition);
@@ -121,17 +121,56 @@ pub mod validation {
     pub fn validate_query_input(input: &str) -> Result<(), ValidationError> {
         // Common SQL injection patterns to block
         const FORBIDDEN_PATTERNS: &[&str] = &[
-            "--;", "/*", "*/", "xp_", "sp_", "0x", "@@", "char(", "nchar(",
-            "alter", "begin", "cast", "create", "cursor", "declare", "delete",
-            "drop", "exec", "execute", "fetch", "insert", "kill", "select",
-            "sys", "sysobjects", "syscolumns", "table", "update", "union",
-            "script", "<script", "javascript:", "vbscript:", "onload=", "onerror=",
-            "onclick=", "onmouseover=", "<iframe", "<frame", "<embed", "<object",
-            " or ", " and ", "=", "'", "\"",
+            "--;",
+            "/*",
+            "*/",
+            "xp_",
+            "sp_",
+            "0x",
+            "@@",
+            "char(",
+            "nchar(",
+            "alter",
+            "begin",
+            "cast",
+            "create",
+            "cursor",
+            "declare",
+            "delete",
+            "drop",
+            "exec",
+            "execute",
+            "fetch",
+            "insert",
+            "kill",
+            "select",
+            "sys",
+            "sysobjects",
+            "syscolumns",
+            "table",
+            "update",
+            "union",
+            "script",
+            "<script",
+            "javascript:",
+            "vbscript:",
+            "onload=",
+            "onerror=",
+            "onclick=",
+            "onmouseover=",
+            "<iframe",
+            "<frame",
+            "<embed",
+            "<object",
+            " or ",
+            " and ",
+            "=",
+            "'",
+            "\"",
         ];
 
         let lower_input = input.to_lowercase();
-        
+
         for pattern in FORBIDDEN_PATTERNS {
             if lower_input.contains(pattern) {
                 return Err(ValidationError::SqlInjectionAttempt);
@@ -163,7 +202,7 @@ mod tests {
     fn test_sql_injection_detection() {
         assert!(validation::validate_query_input("normal input").is_ok());
         assert!(validation::validate_query_input("test@example.com").is_ok());
-        
+
         assert!(validation::validate_query_input("'; DROP TABLE users--").is_err());
         assert!(validation::validate_query_input("1 OR 1=1").is_err());
         assert!(validation::validate_query_input("<script>alert('xss')</script>").is_err());
@@ -171,8 +210,17 @@ mod tests {
 
     #[test]
     fn test_input_sanitization() {
-        assert_eq!(validation::sanitize_input("normal-input_123"), "normal-input_123");
-        assert_eq!(validation::sanitize_input("test@example.com"), "test@example.com");
-        assert_eq!(validation::sanitize_input("'; DROP TABLE--"), " DROP TABLE--");
+        assert_eq!(
+            validation::sanitize_input("normal-input_123"),
+            "normal-input_123"
+        );
+        assert_eq!(
+            validation::sanitize_input("test@example.com"),
+            "test@example.com"
+        );
+        assert_eq!(
+            validation::sanitize_input("'; DROP TABLE--"),
+            " DROP TABLE--"
+        );
     }
 }

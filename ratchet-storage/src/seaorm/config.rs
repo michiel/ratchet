@@ -7,10 +7,10 @@ use std::time::Duration;
 pub struct DatabaseConfig {
     /// Database URL
     pub url: String,
-    
+
     /// Maximum number of connections in the pool
     pub max_connections: u32,
-    
+
     /// Connection timeout
     pub connection_timeout: Duration,
 }

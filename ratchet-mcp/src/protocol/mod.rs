@@ -51,7 +51,7 @@ pub enum StandardMethod {
     ToolsList,
     #[serde(rename = "tools/call")]
     ToolsCall,
-    
+
     // Batch methods
     #[serde(rename = "batch")]
     Batch,
@@ -123,4 +123,3 @@ impl StandardMethod {
         }
     }
 }
-

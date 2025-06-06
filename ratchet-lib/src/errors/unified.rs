@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::time::Duration;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -90,9 +90,18 @@ pub struct RetryInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BackoffStrategy {
-    Fixed { delay: Duration },
-    Linear { base: Duration, increment: Duration },
-    Exponential { base: Duration, factor: f64, max: Duration },
+    Fixed {
+        delay: Duration,
+    },
+    Linear {
+        base: Duration,
+        increment: Duration,
+    },
+    Exponential {
+        base: Duration,
+        factor: f64,
+        max: Duration,
+    },
 }
 
 impl Default for RetryInfo {
@@ -117,8 +126,12 @@ pub trait RatchetErrorExt: std::error::Error {
     fn user_message(&self) -> String;
     fn retry_info(&self) -> RetryInfo;
     fn context(&self) -> Option<&ErrorContext>;
-    fn should_log(&self) -> bool { true }
-    fn should_notify(&self) -> bool { self.severity().should_alert() }
+    fn should_log(&self) -> bool {
+        true
+    }
+    fn should_notify(&self) -> bool {
+        self.severity().should_alert()
+    }
 }
 
 /// Contextual error wrapper
@@ -133,7 +146,11 @@ pub struct ContextualError<E: std::error::Error + Send + Sync + 'static> {
 
 impl<E: std::error::Error + Send + Sync + 'static> std::fmt::Display for ContextualError<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}:{}] {}", self.context.component, self.context.operation, self.source)
+        write!(
+            f,
+            "[{}:{}] {}",
+            self.context.component, self.context.operation, self.source
+        )
     }
 }
 
@@ -167,19 +184,31 @@ impl<E: std::error::Error + Send + Sync + 'static> ContextualError<E> {
 #[derive(Debug, Error)]
 pub enum TransientError {
     #[error("Database connection lost: {message}")]
-    DatabaseConnection { message: String, retry_after: Duration },
+    DatabaseConnection {
+        message: String,
+        retry_after: Duration,
+    },
 
     #[error("Network timeout: {message}")]
-    NetworkTimeout { message: String, retry_after: Duration },
+    NetworkTimeout {
+        message: String,
+        retry_after: Duration,
+    },
 
     #[error("Resource temporarily unavailable: {message}")]
-    ResourceBusy { message: String, retry_after: Duration },
+    ResourceBusy {
+        message: String,
+        retry_after: Duration,
+    },
 
     #[error("Rate limit exceeded")]
     RateLimited { retry_after: Duration },
 
     #[error("Service temporarily unavailable: {message}")]
-    ServiceUnavailable { message: String, retry_after: Duration },
+    ServiceUnavailable {
+        message: String,
+        retry_after: Duration,
+    },
 }
 
 impl RatchetErrorExt for TransientError {
@@ -247,7 +276,10 @@ impl RatchetErrorExt for TransientError {
 #[derive(Debug, Error)]
 pub enum PermanentError {
     #[error("Resource not found: {resource_type} with id {resource_id}")]
-    NotFound { resource_type: String, resource_id: String },
+    NotFound {
+        resource_type: String,
+        resource_id: String,
+    },
 
     #[error("Invalid configuration: {field} = {value}")]
     Configuration { field: String, value: String },
@@ -296,7 +328,9 @@ impl RatchetErrorExt for PermanentError {
         match self {
             Self::NotFound { resource_type, .. } => format!("{} not found", resource_type),
             Self::Configuration { .. } => "System configuration error".to_string(),
-            Self::Unsupported { operation, .. } => format!("Operation '{}' is not supported", operation),
+            Self::Unsupported { operation, .. } => {
+                format!("Operation '{}' is not supported", operation)
+            }
             Self::PermissionDenied { .. } => "Permission denied".to_string(),
             Self::InvalidInput { field, reason } => format!("Invalid {}: {}", field, reason),
             Self::BusinessRuleViolation { rule } => format!("Business rule violation: {}", rule),
@@ -321,10 +355,10 @@ pub enum SecurityError {
     AuthenticationFailed { reason: String },
 
     #[error("Authorization failed: user {user_id} cannot {action} {resource}")]
-    AuthorizationFailed { 
-        user_id: String, 
-        action: String, 
-        resource: String 
+    AuthorizationFailed {
+        user_id: String,
+        action: String,
+        resource: String,
     },
 
     #[error("Security policy violation: {policy}")]
@@ -368,7 +402,9 @@ impl RatchetErrorExt for SecurityError {
             Self::AuthorizationFailed { .. } => "Access denied".to_string(),
             Self::PolicyViolation { .. } => "Security policy violation".to_string(),
             Self::SuspiciousActivity { .. } => "Access temporarily restricted".to_string(),
-            Self::RateLimitExceeded { .. } => "Too many requests, please try again later".to_string(),
+            Self::RateLimitExceeded { .. } => {
+                "Too many requests, please try again later".to_string()
+            }
         }
     }
 
@@ -403,13 +439,13 @@ macro_rules! contextual_error {
         let context = $crate::errors::unified::ErrorContext::new($component, $operation);
         $crate::errors::unified::ContextualError::new($error, context)
     }};
-    
+
     ($error:expr, $component:expr, $operation:expr, $severity:expr) => {{
         let context = $crate::errors::unified::ErrorContext::new($component, $operation);
         $crate::errors::unified::ContextualError::new($error, context)
             .with_severity($severity)
     }};
-    
+
     ($error:expr, $component:expr, $operation:expr, $($key:expr => $value:expr),*) => {{
         let mut context = $crate::errors::unified::ErrorContext::new($component, $operation);
         $(
@@ -480,12 +516,10 @@ mod tests {
             resource_id: "123".to_string(),
         };
 
-        let contextual = ContextualError::new(
-            base_error,
-            ErrorContext::new("task_service", "get_task"),
-        )
-        .with_severity(ErrorSeverity::High)
-        .with_metadata("user_id", "user123");
+        let contextual =
+            ContextualError::new(base_error, ErrorContext::new("task_service", "get_task"))
+                .with_severity(ErrorSeverity::High)
+                .with_metadata("user_id", "user123");
 
         assert_eq!(contextual.severity, ErrorSeverity::High);
         assert_eq!(contextual.context.component, "task_service");

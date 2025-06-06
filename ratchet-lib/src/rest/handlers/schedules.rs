@@ -4,20 +4,23 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, QuerySelect, ColumnTrait, QueryFilter, QueryOrder, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect,
+};
 use std::str::FromStr;
 
 use crate::{
     database::{
         entities::{
             schedules::{self, Entity as Schedules},
-            tasks::{Entity as Tasks},
+            tasks::Entity as Tasks,
         },
         repositories::RepositoryFactory,
     },
     rest::{
-        middleware::error_handler::RestError,
         extractors::ListQueryExtractor,
+        middleware::error_handler::RestError,
         middleware::pagination::WithPaginationHeaders,
         models::{
             common::ApiResponse,
@@ -39,7 +42,7 @@ pub async fn list_schedules(
     ListQueryExtractor(query): ListQueryExtractor,
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
-    
+
     let mut schedules_query = Schedules::find();
 
     // Apply filters
@@ -54,7 +57,8 @@ pub async fn list_schedules(
                 schedules_query = schedules_query.filter(schedules::Column::Enabled.eq(enabled));
             }
             if let Some(name_like) = schedule_filters.name_like {
-                schedules_query = schedules_query.filter(schedules::Column::Name.contains(&name_like));
+                schedules_query =
+                    schedules_query.filter(schedules::Column::Name.contains(&name_like));
             }
         }
     }
@@ -74,7 +78,10 @@ pub async fn list_schedules(
             _ => schedules::Column::Id,
         };
 
-        if matches!(sort.sort_direction(), crate::rest::models::common::SortDirection::Desc) {
+        if matches!(
+            sort.sort_direction(),
+            crate::rest::models::common::SortDirection::Desc
+        ) {
             schedules_query = schedules_query.order_by_desc(column);
         } else {
             schedules_query = schedules_query.order_by_asc(column);
@@ -100,8 +107,15 @@ pub async fn list_schedules(
 
     let schedule_responses: Vec<ScheduleResponse> = schedules.into_iter().map(Into::into).collect();
 
-    Ok(Json(ApiResponse { data: schedule_responses })
-        .with_pagination_headers(total, query.pagination().offset(), query.pagination().limit(), "schedules"))
+    Ok(Json(ApiResponse {
+        data: schedule_responses,
+    })
+    .with_pagination_headers(
+        total,
+        query.pagination().offset(),
+        query.pagination().limit(),
+        "schedules",
+    ))
 }
 
 pub async fn get_schedule(
@@ -109,7 +123,7 @@ pub async fn get_schedule(
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
-    
+
     let schedule = Schedules::find_by_id(id)
         .one(db)
         .await
@@ -131,7 +145,11 @@ pub async fn get_schedule(
 
     let runs_remaining = schedule.max_executions.map(|max| {
         let remaining = max - schedule.execution_count;
-        if remaining > 0 { remaining } else { 0 }
+        if remaining > 0 {
+            remaining
+        } else {
+            0
+        }
     });
 
     let response = ScheduleDetailResponse {
@@ -203,16 +221,17 @@ pub async fn create_schedule(
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     // Calculate next run time
-    let next_run = created_schedule.calculate_next_run()
+    let next_run = created_schedule
+        .calculate_next_run()
         .map_err(RestError::BadRequest)?
         .ok_or_else(|| RestError::BadRequest("Schedule is exhausted or disabled".to_string()))?;
-    
+
     // Update next run time
     schedule_repo
         .update_next_run(created_schedule.id, Some(next_run))
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
-    
+
     // Get updated schedule
     let updated_schedule = schedule_repo
         .find_by_id(created_schedule.id)
@@ -220,7 +239,10 @@ pub async fn create_schedule(
         .map_err(|e| RestError::InternalError(e.to_string()))?
         .ok_or_else(|| RestError::NotFound("Schedule not found".to_string()))?;
 
-    Ok((StatusCode::CREATED, Json(ScheduleResponse::from(updated_schedule))))
+    Ok((
+        StatusCode::CREATED,
+        Json(ScheduleResponse::from(updated_schedule)),
+    ))
 }
 
 pub async fn update_schedule(
@@ -230,7 +252,7 @@ pub async fn update_schedule(
 ) -> Result<impl IntoResponse, RestError> {
     let schedule_repo = ctx.repository.schedule_repository();
     let db = ctx.repository.database().get_connection();
-    
+
     let schedule = Schedules::find_by_id(id)
         .one(db)
         .await
@@ -273,14 +295,15 @@ pub async fn update_schedule(
 
     // If cron expression changed, recalculate next run time
     let final_schedule = if cron_changed {
-        let next_run = updated_schedule.calculate_next_run()
+        let next_run = updated_schedule
+            .calculate_next_run()
             .map_err(RestError::BadRequest)?;
-        
+
         schedule_repo
             .update_next_run(id, next_run)
             .await
             .map_err(|e| RestError::InternalError(e.to_string()))?;
-        
+
         schedule_repo
             .find_by_id(id)
             .await
@@ -299,7 +322,7 @@ pub async fn delete_schedule(
 ) -> Result<impl IntoResponse, RestError> {
     let schedule_repo = ctx.repository.schedule_repository();
     let db = ctx.repository.database().get_connection();
-    
+
     let _schedule = Schedules::find_by_id(id)
         .one(db)
         .await
@@ -319,7 +342,7 @@ pub async fn enable_schedule(
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, RestError> {
     let schedule_repo = ctx.repository.schedule_repository();
-    
+
     schedule_repo
         .set_enabled(id, true)
         .await
@@ -339,7 +362,7 @@ pub async fn disable_schedule(
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, RestError> {
     let schedule_repo = ctx.repository.schedule_repository();
-    
+
     schedule_repo
         .set_enabled(id, false)
         .await
@@ -361,7 +384,7 @@ pub async fn trigger_schedule(
     let schedule_repo = ctx.repository.schedule_repository();
     let job_repo = ctx.repository.job_repository();
     let db = ctx.repository.database().get_connection();
-    
+
     let schedule = Schedules::find_by_id(id)
         .one(db)
         .await
@@ -375,7 +398,9 @@ pub async fn trigger_schedule(
     // Check if exhausted
     if let Some(max_executions) = schedule.max_executions {
         if schedule.execution_count >= max_executions {
-            return Err(RestError::BadRequest("Schedule has reached maximum executions".to_string()));
+            return Err(RestError::BadRequest(
+                "Schedule has reached maximum executions".to_string(),
+            ));
         }
     }
 
@@ -384,7 +409,7 @@ pub async fn trigger_schedule(
     let input_data: serde_json::Value = serde_json::to_value(&schedule.input_data)
         .and_then(serde_json::from_value)
         .unwrap_or(serde_json::Value::Null);
-    
+
     let new_job = crate::database::entities::jobs::Model::new_scheduled(
         schedule.task_id,
         schedule.id,
@@ -403,9 +428,12 @@ pub async fn trigger_schedule(
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 
-    Ok((StatusCode::CREATED, Json(serde_json::json!({
-        "message": "Schedule triggered successfully",
-        "job_id": created_job.id,
-        "job_uuid": created_job.uuid
-    }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "message": "Schedule triggered successfully",
+            "job_id": created_job.id,
+            "job_uuid": created_job.uuid
+        })),
+    ))
 }

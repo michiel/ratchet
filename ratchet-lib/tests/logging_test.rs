@@ -1,10 +1,11 @@
-use ratchet_lib::logging::{
-    init_logger, logger, LoggerBuilder, LogLevel, LogContext, LogEvent,
-    sinks::{ConsoleSink, FileSink},
-    enrichment::{SystemEnricher, ProcessEnricher},
-    logger::LogSink,
-};
 use ratchet_lib::errors::RatchetError;
+use ratchet_lib::logging::{
+    enrichment::{ProcessEnricher, SystemEnricher},
+    init_logger, logger,
+    logger::LogSink,
+    sinks::{ConsoleSink, FileSink},
+    LogContext, LogEvent, LogLevel, LoggerBuilder,
+};
 use std::sync::Arc;
 use tempfile::tempdir;
 
@@ -35,12 +36,10 @@ fn test_error_logging() {
     // Create logger with file sink
     let temp_dir = tempdir().unwrap();
     let log_path = temp_dir.path().join("test.log");
-    
-    let file_sink = Arc::new(
-        FileSink::new(&log_path, LogLevel::Info)
-            .expect("Failed to create file sink")
-    );
-    
+
+    let file_sink =
+        Arc::new(FileSink::new(&log_path, LogLevel::Info).expect("Failed to create file sink"));
+
     let logger = LoggerBuilder::new()
         .with_min_level(LogLevel::Info)
         .add_sink(file_sink.clone())
@@ -89,7 +88,8 @@ fn test_context_propagation() {
     contextualized_logger.log(event);
 
     // Create child context
-    let child_context = parent_context.child()
+    let child_context = parent_context
+        .child()
         .with_field("operation", "task_execution");
 
     let child_logger = logger.with_context(child_context);
@@ -104,7 +104,7 @@ fn test_structured_error_info() {
     let error_info = ErrorInfo::new(
         "DatabaseError",
         "DB_CONN_TIMEOUT",
-        "Connection to database timed out"
+        "Connection to database timed out",
     )
     .with_severity(ratchet_lib::errors::ErrorSeverity::High)
     .with_retryable(true)
@@ -136,19 +136,21 @@ async fn test_async_context_scope() {
         .with_field("user_id", 456);
 
     // Use context scope for async operation
-    let result = context.scope(async {
-        // Simulate some async work
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        
-        // Log within the context
-        if let Some(global_logger) = logger() {
-            let event = LogEvent::new(LogLevel::Info, "Async operation completed")
-                .with_field("duration_ms", 10);
-            global_logger.log(event);
-        }
-        
-        42
-    }).await;
+    let result = context
+        .scope(async {
+            // Simulate some async work
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+            // Log within the context
+            if let Some(global_logger) = logger() {
+                let event = LogEvent::new(LogLevel::Info, "Async operation completed")
+                    .with_field("duration_ms", 10);
+                global_logger.log(event);
+            }
+
+            42
+        })
+        .await;
 
     assert_eq!(result, 42);
 }

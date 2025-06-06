@@ -1,8 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{warn, debug, info};
-use serde::{Deserialize, Serialize};
+use tracing::{debug, info, warn};
 
 /// Retry policy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,12 +103,12 @@ impl RetryPolicy {
 pub trait Retryable {
     /// Whether this error is retryable
     fn is_retryable(&self) -> bool;
-    
+
     /// Whether this is a transient error that should be retried immediately
     fn is_transient(&self) -> bool {
         false
     }
-    
+
     /// Custom retry delay for this error type
     fn retry_delay(&self) -> Option<Duration> {
         None
@@ -135,7 +135,10 @@ impl RetryExecutor {
         let mut attempt = 1;
 
         loop {
-            debug!("Executing attempt {} of {}", attempt, self.policy.max_attempts);
+            debug!(
+                "Executing attempt {} of {}",
+                attempt, self.policy.max_attempts
+            );
 
             match f().await {
                 Ok(result) => {
@@ -145,7 +148,6 @@ impl RetryExecutor {
                     return Ok(result);
                 }
                 Err(error) => {
-
                     if attempt >= self.policy.max_attempts {
                         warn!("Operation failed after {} attempts: {}", attempt, error);
                         return Err(RetryError::MaxAttemptsExceeded {
@@ -160,7 +162,8 @@ impl RetryExecutor {
                     }
 
                     // Calculate delay
-                    let delay = error.retry_delay()
+                    let delay = error
+                        .retry_delay()
                         .unwrap_or_else(|| self.policy.delay_for_attempt(attempt));
 
                     warn!(
@@ -416,13 +419,14 @@ mod tests {
         let executor = RetryExecutor::new(policy);
 
         let result: Result<(), RetryError<ExecutionError>> = executor
-            .execute(|| async {
-                Err(ExecutionError::Network("Always fails".to_string()))
-            })
+            .execute(|| async { Err(ExecutionError::Network("Always fails".to_string())) })
             .await;
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), RetryError::MaxAttemptsExceeded { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            RetryError::MaxAttemptsExceeded { .. }
+        ));
     }
 
     #[tokio::test]
@@ -431,13 +435,14 @@ mod tests {
         let executor = RetryExecutor::new(policy);
 
         let result: Result<(), RetryError<ExecutionError>> = executor
-            .execute(|| async {
-                Err(ExecutionError::InvalidInput("Bad input".to_string()))
-            })
+            .execute(|| async { Err(ExecutionError::InvalidInput("Bad input".to_string())) })
             .await;
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), RetryError::NonRetryableError(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            RetryError::NonRetryableError(_)
+        ));
     }
 
     #[test]

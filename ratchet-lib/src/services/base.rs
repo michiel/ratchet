@@ -1,8 +1,8 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 /// Base service trait that all services should implement
 #[async_trait]
@@ -193,7 +193,9 @@ impl ServiceRegistry {
         results
     }
 
-    pub async fn shutdown_all(&self) -> Result<(), Vec<(String, Box<dyn std::error::Error + Send + Sync>)>> {
+    pub async fn shutdown_all(
+        &self,
+    ) -> Result<(), Vec<(String, Box<dyn std::error::Error + Send + Sync>)>> {
         let mut errors = Vec::new();
 
         for (name, service) in &self.services {
@@ -228,7 +230,8 @@ impl Default for ServiceRegistry {
 #[async_trait]
 trait ServiceInfo: Send + Sync {
     fn as_any(&self) -> &dyn std::any::Any;
-    async fn health_check(&self) -> Result<ServiceHealth, Box<dyn std::error::Error + Send + Sync>>;
+    async fn health_check(&self)
+        -> Result<ServiceHealth, Box<dyn std::error::Error + Send + Sync>>;
     async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
     fn get_metrics(&self) -> Option<ServiceMetrics>;
 }
@@ -253,7 +256,9 @@ where
         self
     }
 
-    async fn health_check(&self) -> Result<ServiceHealth, Box<dyn std::error::Error + Send + Sync>> {
+    async fn health_check(
+        &self,
+    ) -> Result<ServiceHealth, Box<dyn std::error::Error + Send + Sync>> {
         self.service
             .health_check()
             .await
@@ -302,7 +307,9 @@ macro_rules! impl_service_base {
                 $name
             }
 
-            async fn health_check(&self) -> Result<$crate::services::base::ServiceHealth, Self::Error> {
+            async fn health_check(
+                &self,
+            ) -> Result<$crate::services::base::ServiceHealth, Self::Error> {
                 // Default implementation - override if needed
                 Ok($crate::services::base::ServiceHealth::healthy())
             }
@@ -332,9 +339,7 @@ impl ServiceBuilder {
         S: Service + 'static,
         F: FnOnce() -> Result<Arc<S>, S::Error>,
     {
-        let service = factory().map_err(|e| {
-            RegistryError::InitializationFailed(Box::new(e))
-        })?;
+        let service = factory().map_err(|e| RegistryError::InitializationFailed(Box::new(e)))?;
 
         self.registry.register(service)?;
         Ok(self)
@@ -424,10 +429,7 @@ mod tests {
         // Health check
         let health_results = registry.health_check_all().await;
         assert_eq!(health_results.len(), 1);
-        assert_eq!(
-            health_results["test-service"].status,
-            HealthStatus::Healthy
-        );
+        assert_eq!(health_results["test-service"].status, HealthStatus::Healthy);
 
         // Metrics
         let metrics = registry.get_metrics("test-service").unwrap();

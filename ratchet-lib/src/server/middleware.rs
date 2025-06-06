@@ -33,4 +33,3 @@ pub fn trace_layer(
 {
     TraceLayer::new_for_http()
 }
-

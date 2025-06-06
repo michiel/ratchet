@@ -1,8 +1,8 @@
 //! Backoff strategies for retry policies
 
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use rand::Rng;
 
 /// Backoff strategy for retries
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,19 +10,19 @@ use rand::Rng;
 pub enum BackoffStrategy {
     /// Fixed delay between retries
     Fixed,
-    
+
     /// Linear increase: delay = initial_delay * attempt
     Linear,
-    
+
     /// Exponential increase: delay = initial_delay * base^(attempt-1)
-    Exponential { 
+    Exponential {
         /// Base for exponential calculation (e.g., 2.0 for doubling)
-        base: f64 
+        base: f64,
     },
-    
+
     /// Fibonacci sequence backoff
     Fibonacci,
-    
+
     /// Custom delay sequence
     Custom {
         /// Delays in milliseconds for each attempt
@@ -58,7 +58,7 @@ impl BackoffCalculator {
     pub fn calculate_delay(&self, attempt: u32) -> Duration {
         let base_delay = self.calculate_base_delay(attempt);
         let capped_delay = base_delay.min(self.max_delay);
-        
+
         if self.jitter {
             self.add_jitter(capped_delay)
         } else {
@@ -69,11 +69,9 @@ impl BackoffCalculator {
     fn calculate_base_delay(&self, attempt: u32) -> Duration {
         match &self.strategy {
             BackoffStrategy::Fixed => self.initial_delay,
-            
-            BackoffStrategy::Linear => {
-                self.initial_delay * attempt
-            }
-            
+
+            BackoffStrategy::Linear => self.initial_delay * attempt,
+
             BackoffStrategy::Exponential { base } => {
                 if attempt == 0 {
                     return Duration::ZERO;
@@ -81,19 +79,22 @@ impl BackoffCalculator {
                 let multiplier = base.powi(attempt as i32 - 1);
                 Duration::from_nanos((self.initial_delay.as_nanos() as f64 * multiplier) as u64)
             }
-            
+
             BackoffStrategy::Fibonacci => {
                 let fib_number = fibonacci(attempt);
-                Duration::from_nanos((self.initial_delay.as_nanos() as f64 * fib_number as f64) as u64)
+                Duration::from_nanos(
+                    (self.initial_delay.as_nanos() as f64 * fib_number as f64) as u64,
+                )
             }
-            
+
             BackoffStrategy::Custom { delays_ms } => {
                 let index = (attempt as usize).saturating_sub(1);
                 if index < delays_ms.len() {
                     Duration::from_millis(delays_ms[index])
                 } else {
                     // Use last delay for attempts beyond the custom sequence
-                    delays_ms.last()
+                    delays_ms
+                        .last()
                         .map(|&ms| Duration::from_millis(ms))
                         .unwrap_or(self.max_delay)
                 }
@@ -103,7 +104,7 @@ impl BackoffCalculator {
 
     fn add_jitter(&self, delay: Duration) -> Duration {
         let mut rng = rand::thread_rng();
-        
+
         // Add ±20% jitter
         let jitter_factor = rng.gen_range(0.8..1.2);
         Duration::from_nanos((delay.as_nanos() as f64 * jitter_factor) as u64)
@@ -130,7 +131,7 @@ fn fibonacci(n: u32) -> u32 {
 }
 
 /// Decorrelated jitter backoff calculator
-/// 
+///
 /// This implements the "decorrelated jitter" algorithm which provides
 /// better distributed retry times across multiple clients.
 pub struct DecorrelatedJitterCalculator {
@@ -152,23 +153,25 @@ impl DecorrelatedJitterCalculator {
     /// Calculate the next delay using decorrelated jitter
     pub fn next_delay(&mut self) -> Duration {
         let mut rng = rand::thread_rng();
-        
+
         let delay = match self.last_delay {
             None => self.base_delay,
             Some(last) => {
                 let min_delay = self.base_delay;
                 let max_delay = (last * 3).min(self.max_delay);
-                
+
                 if min_delay >= max_delay {
                     max_delay
                 } else {
                     let range = max_delay.as_nanos() - min_delay.as_nanos();
                     let jitter = rng.gen_range(0..=range);
-                    Duration::from_nanos((min_delay.as_nanos() + jitter).min(u64::MAX as u128) as u64)
+                    Duration::from_nanos(
+                        (min_delay.as_nanos() + jitter).min(u64::MAX as u128) as u64
+                    )
                 }
             }
         };
-        
+
         self.last_delay = Some(delay);
         delay
     }
@@ -236,11 +239,11 @@ mod tests {
             false,
         );
 
-        assert_eq!(calc.calculate_delay(1), Duration::from_millis(100));  // 1 * 100
-        assert_eq!(calc.calculate_delay(2), Duration::from_millis(100));  // 1 * 100
-        assert_eq!(calc.calculate_delay(3), Duration::from_millis(200));  // 2 * 100
-        assert_eq!(calc.calculate_delay(4), Duration::from_millis(300));  // 3 * 100
-        assert_eq!(calc.calculate_delay(5), Duration::from_millis(500));  // 5 * 100
+        assert_eq!(calc.calculate_delay(1), Duration::from_millis(100)); // 1 * 100
+        assert_eq!(calc.calculate_delay(2), Duration::from_millis(100)); // 1 * 100
+        assert_eq!(calc.calculate_delay(3), Duration::from_millis(200)); // 2 * 100
+        assert_eq!(calc.calculate_delay(4), Duration::from_millis(300)); // 3 * 100
+        assert_eq!(calc.calculate_delay(5), Duration::from_millis(500)); // 5 * 100
     }
 
     #[test]
@@ -294,10 +297,8 @@ mod tests {
 
     #[test]
     fn test_decorrelated_jitter() {
-        let mut calc = DecorrelatedJitterCalculator::new(
-            Duration::from_millis(100),
-            Duration::from_secs(10),
-        );
+        let mut calc =
+            DecorrelatedJitterCalculator::new(Duration::from_millis(100), Duration::from_secs(10));
 
         // First delay should be base delay
         let delay1 = calc.next_delay();

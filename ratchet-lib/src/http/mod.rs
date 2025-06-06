@@ -1,10 +1,10 @@
-pub mod manager;
 pub mod errors;
 pub mod fetch;
+pub mod manager;
 
 #[cfg(test)]
 mod tests;
 
-pub use manager::{HttpManager, create_http_manager, call_http};
 pub use errors::HttpError;
 pub use fetch::register_fetch;
+pub use manager::{call_http, create_http_manager, HttpManager};

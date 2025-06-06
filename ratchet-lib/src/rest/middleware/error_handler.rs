@@ -7,8 +7,8 @@ use thiserror::Error;
 
 use crate::{
     api::errors::ApiError as UnifiedApiError,
+    database::{ErrorCode, SafeDatabaseError},
     rest::models::common::ApiError,
-    database::{SafeDatabaseError, ErrorCode},
 };
 
 /// REST API specific error type
@@ -16,34 +16,34 @@ use crate::{
 pub enum RestError {
     #[error("Resource not found: {0}")]
     NotFound(String),
-    
+
     #[error("Bad request: {0}")]
     BadRequest(String),
-    
+
     #[error("Internal server error: {0}")]
     InternalError(String),
-    
+
     #[error("Method not allowed: {0}")]
     MethodNotAllowed(String),
-    
+
     #[error("Service unavailable: {0}")]
     ServiceUnavailable(String),
-    
+
     #[error("Conflict: {0}")]
     Conflict(String),
-    
+
     #[error("Request timeout: {0}")]
     Timeout(String),
-    
+
     #[error("Safe database error")]
     SafeDatabase(#[from] SafeDatabaseError),
-    
+
     #[error("Database error: {0}")]
     Database(#[from] sea_orm::DbErr),
-    
+
     #[error("Task error: {0}")]
     Task(#[from] crate::task::TaskError),
-    
+
     #[error("Ratchet error: {0}")]
     Ratchet(#[from] crate::errors::RatchetError),
 }
@@ -52,11 +52,12 @@ impl IntoResponse for RestError {
     fn into_response(self) -> Response {
         // Convert to unified error first, then to legacy format for backward compatibility
         let unified_error = self.to_unified_error();
-        let status = StatusCode::from_u16(unified_error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        
+        let status = StatusCode::from_u16(unified_error.http_status_code())
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
         // For now, convert back to legacy format for compatibility
         let legacy_error = self.to_legacy_error();
-        
+
         (status, Json(legacy_error)).into_response()
     }
 }
@@ -68,36 +69,36 @@ impl RestError {
             RestError::NotFound(msg) => UnifiedApiError::not_found("Resource", msg),
             RestError::BadRequest(msg) => UnifiedApiError::bad_request(msg),
             RestError::InternalError(msg) => UnifiedApiError::internal_error(msg),
-            RestError::MethodNotAllowed(msg) => UnifiedApiError::bad_request(format!("Method not allowed: {}", msg)),
+            RestError::MethodNotAllowed(msg) => {
+                UnifiedApiError::bad_request(format!("Method not allowed: {}", msg))
+            }
             RestError::ServiceUnavailable(msg) => UnifiedApiError::service_unavailable(Some(msg)),
             RestError::Conflict(msg) => UnifiedApiError::conflict("Resource", msg),
             RestError::Timeout(_msg) => UnifiedApiError::timeout("Request"),
-            RestError::SafeDatabase(safe_err) => {
-                match safe_err.code {
-                    ErrorCode::NotFound => UnifiedApiError::not_found("Resource", &safe_err.message),
-                    ErrorCode::Conflict => UnifiedApiError::conflict("Resource", &safe_err.message),
-                    ErrorCode::ValidationError => UnifiedApiError::validation_error("field", &safe_err.message),
-                    ErrorCode::Timeout => UnifiedApiError::timeout("Database operation"),
-                    _ => UnifiedApiError::internal_error(&safe_err.message),
+            RestError::SafeDatabase(safe_err) => match safe_err.code {
+                ErrorCode::NotFound => UnifiedApiError::not_found("Resource", &safe_err.message),
+                ErrorCode::Conflict => UnifiedApiError::conflict("Resource", &safe_err.message),
+                ErrorCode::ValidationError => {
+                    UnifiedApiError::validation_error("field", &safe_err.message)
                 }
+                ErrorCode::Timeout => UnifiedApiError::timeout("Database operation"),
+                _ => UnifiedApiError::internal_error(&safe_err.message),
             },
-            RestError::Database(err) => UnifiedApiError::internal_error(format!("Database error: {}", err)),
+            RestError::Database(err) => {
+                UnifiedApiError::internal_error(format!("Database error: {}", err))
+            }
             RestError::Task(err) => UnifiedApiError::validation_error("task", &err.to_string()),
-            RestError::Ratchet(err) => UnifiedApiError::internal_error(format!("System error: {}", err)),
+            RestError::Ratchet(err) => {
+                UnifiedApiError::internal_error(format!("System error: {}", err))
+            }
         }
     }
-    
+
     /// Convert to legacy API error for backward compatibility
     pub fn to_legacy_error(&self) -> ApiError {
         let (_status, error_response) = match self {
-            RestError::NotFound(msg) => (
-                StatusCode::NOT_FOUND,
-                ApiError::not_found(msg),
-            ),
-            RestError::BadRequest(msg) => (
-                StatusCode::BAD_REQUEST,
-                ApiError::bad_request(msg),
-            ),
+            RestError::NotFound(msg) => (StatusCode::NOT_FOUND, ApiError::not_found(msg)),
+            RestError::BadRequest(msg) => (StatusCode::BAD_REQUEST, ApiError::bad_request(msg)),
             RestError::MethodNotAllowed(msg) => (
                 StatusCode::METHOD_NOT_ALLOWED,
                 ApiError::method_not_allowed(msg),
@@ -110,14 +111,8 @@ impl RestError {
                 StatusCode::SERVICE_UNAVAILABLE,
                 ApiError::service_unavailable(msg),
             ),
-            RestError::Conflict(msg) => (
-                StatusCode::CONFLICT,
-                ApiError::conflict(msg),
-            ),
-            RestError::Timeout(msg) => (
-                StatusCode::REQUEST_TIMEOUT,
-                ApiError::timeout(msg),
-            ),
+            RestError::Conflict(msg) => (StatusCode::CONFLICT, ApiError::conflict(msg)),
+            RestError::Timeout(msg) => (StatusCode::REQUEST_TIMEOUT, ApiError::timeout(msg)),
             RestError::SafeDatabase(safe_err) => {
                 let status_code = match safe_err.code {
                     ErrorCode::NotFound => StatusCode::NOT_FOUND,
@@ -139,23 +134,36 @@ impl RestError {
                 };
 
                 (status_code, api_error)
-            },
+            }
             RestError::Database(err) => {
                 // For database errors, we can't directly convert to SafeDatabaseError from a reference
                 // Instead, we'll create an appropriate API error based on the error message
                 let error_msg = err.to_string();
-                let (status_code, api_error) = if error_msg.contains("not found") || error_msg.contains("No row found") {
-                    (StatusCode::NOT_FOUND, ApiError::not_found("Database record not found"))
-                } else if error_msg.contains("constraint") || error_msg.contains("duplicate") {
-                    (StatusCode::CONFLICT, ApiError::conflict("Database constraint violation"))
-                } else if error_msg.contains("timeout") {
-                    (StatusCode::REQUEST_TIMEOUT, ApiError::timeout("Database operation timed out"))
-                } else {
-                    (StatusCode::INTERNAL_SERVER_ERROR, ApiError::internal_error(format!("Database error: {}", error_msg)))
-                };
-                
+                let (status_code, api_error) =
+                    if error_msg.contains("not found") || error_msg.contains("No row found") {
+                        (
+                            StatusCode::NOT_FOUND,
+                            ApiError::not_found("Database record not found"),
+                        )
+                    } else if error_msg.contains("constraint") || error_msg.contains("duplicate") {
+                        (
+                            StatusCode::CONFLICT,
+                            ApiError::conflict("Database constraint violation"),
+                        )
+                    } else if error_msg.contains("timeout") {
+                        (
+                            StatusCode::REQUEST_TIMEOUT,
+                            ApiError::timeout("Database operation timed out"),
+                        )
+                    } else {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            ApiError::internal_error(format!("Database error: {}", error_msg)),
+                        )
+                    };
+
                 (status_code, api_error)
-            },
+            }
             RestError::Task(err) => (
                 StatusCode::BAD_REQUEST,
                 ApiError::bad_request(format!("Task error: {}", err)),
@@ -165,7 +173,7 @@ impl RestError {
                 ApiError::internal_error(format!("System error: {}", err)),
             ),
         };
-        
+
         error_response
     }
 }

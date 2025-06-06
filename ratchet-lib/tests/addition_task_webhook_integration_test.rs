@@ -1,15 +1,16 @@
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    routing::post,
+    Router,
+};
+use chrono::Utc;
 use ratchet_lib::{
     config::DatabaseConfig,
     database::{connection::DatabaseConnection, repositories::RepositoryFactory},
-    task::loader::load_from_directory,
     output::OutputDestinationConfig,
+    task::loader::load_from_directory,
     types::HttpMethod,
-};
-use axum::{
-    routing::post,
-    extract::{Json, State},
-    Router,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -20,7 +21,6 @@ use std::{
     time::Duration,
 };
 use tokio::net::TcpListener;
-use chrono::Utc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WebhookPayload {
@@ -37,9 +37,13 @@ async fn webhook_handler(
     Json(payload): Json<Value>,
 ) -> StatusCode {
     println!("Webhook received: {:?}", payload);
-    state.received_payloads.lock().unwrap().push(WebhookPayload {
-        result: Some(payload),
-    });
+    state
+        .received_payloads
+        .lock()
+        .unwrap()
+        .push(WebhookPayload {
+            result: Some(payload),
+        });
     StatusCode::OK
 }
 
@@ -47,14 +51,14 @@ async fn start_webhook_server() -> (SocketAddr, WebhookState) {
     let state = WebhookState {
         received_payloads: Arc::new(Mutex::new(Vec::new())),
     };
-    
+
     let app = Router::new()
         .route("/webhook", post(webhook_handler))
         .with_state(state.clone());
-    
+
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    
+
     tokio::spawn(async move {
         axum::Server::from_tcp(listener.into_std().unwrap())
             .unwrap()
@@ -62,10 +66,10 @@ async fn start_webhook_server() -> (SocketAddr, WebhookState) {
             .await
             .unwrap();
     });
-    
+
     // Give the server a moment to start
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     (addr, state)
 }
 
@@ -75,39 +79,45 @@ async fn test_addition_task_with_webhook() {
     let (webhook_addr, webhook_state) = start_webhook_server().await;
     let webhook_url = format!("http://{}/webhook", webhook_addr);
     println!("Webhook server listening on: {}", webhook_url);
-    
+
     // Set up test database
     let db_config = DatabaseConfig {
         url: "sqlite::memory:".to_string(),
         max_connections: 5,
         connection_timeout: Duration::from_secs(10),
     };
-    
+
     let db_connection = DatabaseConnection::new(db_config.clone()).await.unwrap();
     let repositories = RepositoryFactory::new(db_connection.clone());
-    
+
     // Run migrations
     use ratchet_lib::database::migrations::Migrator;
     use sea_orm_migration::MigratorTrait;
     Migrator::up(db_connection.get_connection(), None)
         .await
         .unwrap();
-    
+
     // Get the path to sample tasks
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
-    
+
     // Load the addition task directly
     let addition_task_path = sample_tasks_path.join("addition");
-    let addition_task = load_from_directory(&addition_task_path)
-        .expect("Failed to load addition task");
-    
-    println!("Loaded task: {} ({})", addition_task.metadata.label, addition_task.metadata.uuid);
-    
+    let addition_task =
+        load_from_directory(&addition_task_path).expect("Failed to load addition task");
+
+    println!(
+        "Loaded task: {} ({})",
+        addition_task.metadata.label, addition_task.metadata.uuid
+    );
+
     // Create task in database
     use ratchet_lib::database::entities::tasks::ActiveModel as TaskActiveModel;
     use sea_orm::{ActiveModelTrait, Set};
-    
+
     let task_model = TaskActiveModel {
         uuid: Set(addition_task.uuid()),
         name: Set(addition_task.metadata.label.clone()),
@@ -123,25 +133,26 @@ async fn test_addition_task_with_webhook() {
         validated_at: Set(Some(Utc::now())),
         ..Default::default()
     };
-    
-    let created_task = task_model.insert(db_connection.get_connection()).await.unwrap();
+
+    let created_task = task_model
+        .insert(db_connection.get_connection())
+        .await
+        .unwrap();
     println!("Created task with ID: {}", created_task.id);
-    
+
     // Create a job with webhook output destination
-    use ratchet_lib::database::entities::jobs::{Model as Job, JobPriority};
-    
-    let output_destinations = vec![
-        OutputDestinationConfig::Webhook {
-            url: webhook_url.clone(),
-            method: HttpMethod::Post,
-            headers: std::collections::HashMap::new(),
-            timeout: Duration::from_secs(30),
-            retry_policy: ratchet_lib::output::RetryPolicy::default(),
-            auth: None,
-            content_type: Some("application/json".to_string()),
-        }
-    ];
-    
+    use ratchet_lib::database::entities::jobs::{JobPriority, Model as Job};
+
+    let output_destinations = vec![OutputDestinationConfig::Webhook {
+        url: webhook_url.clone(),
+        method: HttpMethod::Post,
+        headers: std::collections::HashMap::new(),
+        timeout: Duration::from_secs(30),
+        retry_policy: ratchet_lib::output::RetryPolicy::default(),
+        auth: None,
+        content_type: Some("application/json".to_string()),
+    }];
+
     let mut job = Job::new(
         created_task.id,
         json!({
@@ -151,39 +162,42 @@ async fn test_addition_task_with_webhook() {
         JobPriority::Normal,
     );
     job.output_destinations = Some(serde_json::to_value(&output_destinations).unwrap());
-    
-    let created_job = repositories.job_repository()
-        .create(job)
-        .await
-        .unwrap();
-    
-    println!("Created job with ID: {} (UUID: {})", created_job.id, created_job.uuid);
-    
+
+    let created_job = repositories.job_repository().create(job).await.unwrap();
+
+    println!(
+        "Created job with ID: {} (UUID: {})",
+        created_job.id, created_job.uuid
+    );
+
     // Execute the task using the JS executor directly
-    use ratchet_lib::js_executor::execute_task;
     use ratchet_lib::http::HttpManager;
-    
+    use ratchet_lib::js_executor::execute_task;
+
     let http_manager = HttpManager::new();
     let input_data = json!({
         "num1": 1,
         "num2": 2
     });
-    
+
     match execute_task(
         &mut addition_task.clone(),
         input_data.clone(),
         &http_manager,
-    ).await {
+    )
+    .await
+    {
         Ok(result) => {
             println!("Task execution succeeded: {:?}", result);
             assert_eq!(result, json!({"sum": 3}));
-            
+
             // Mark job as completed
-            repositories.job_repository()
+            repositories
+                .job_repository()
                 .mark_completed(created_job.id)
                 .await
                 .unwrap();
-            
+
             // Manually deliver the output to webhook
             let webhook_payload = json!({
                 "job_id": created_job.uuid.to_string(),
@@ -193,7 +207,7 @@ async fn test_addition_task_with_webhook() {
                 "output": result,
                 "timestamp": Utc::now().to_rfc3339(),
             });
-            
+
             // Send to webhook
             let client = reqwest::Client::new();
             let response = client
@@ -202,19 +216,19 @@ async fn test_addition_task_with_webhook() {
                 .send()
                 .await
                 .unwrap();
-            
+
             assert_eq!(response.status(), 200);
-            
+
             // Wait a bit for processing
             tokio::time::sleep(Duration::from_millis(100)).await;
-            
+
             // Check that the webhook was called
             let payloads = webhook_state.received_payloads.lock().unwrap();
             assert!(!payloads.is_empty(), "No webhook payloads received");
-            
+
             let payload = &payloads[0].result;
             assert!(payload.is_some());
-            
+
             let webhook_data = payload.as_ref().unwrap();
             assert_eq!(webhook_data["status"], "completed");
             assert_eq!(webhook_data["output"]["sum"], 3);
@@ -223,7 +237,7 @@ async fn test_addition_task_with_webhook() {
             panic!("Task execution failed: {:?}", e);
         }
     }
-    
+
     println!("Integration test completed successfully!");
 }
 
@@ -233,39 +247,45 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
     let (webhook_addr, webhook_state) = start_webhook_server().await;
     let webhook_url = format!("http://{}/webhook", webhook_addr);
     println!("Webhook server listening on: {}", webhook_url);
-    
+
     // Set up test database
     let db_config = DatabaseConfig {
         url: "sqlite::memory:".to_string(),
         max_connections: 5,
         connection_timeout: Duration::from_secs(10),
     };
-    
+
     let db_connection = DatabaseConnection::new(db_config.clone()).await.unwrap();
     let repositories = RepositoryFactory::new(db_connection.clone());
-    
+
     // Run migrations
     use ratchet_lib::database::migrations::Migrator;
     use sea_orm_migration::MigratorTrait;
     Migrator::up(db_connection.get_connection(), None)
         .await
         .unwrap();
-    
+
     // Get the path to sample tasks
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
-    
+
     // Load the addition task directly and create it in the database
     let addition_task_path = sample_tasks_path.join("addition");
-    let addition_task = load_from_directory(&addition_task_path)
-        .expect("Failed to load addition task");
-    
-    println!("Loaded task: {} ({})", addition_task.metadata.label, addition_task.metadata.uuid);
-    
+    let addition_task =
+        load_from_directory(&addition_task_path).expect("Failed to load addition task");
+
+    println!(
+        "Loaded task: {} ({})",
+        addition_task.metadata.label, addition_task.metadata.uuid
+    );
+
     // Create task in database
     use ratchet_lib::database::entities::tasks::ActiveModel as TaskActiveModel;
     use sea_orm::{ActiveModelTrait, Set};
-    
+
     let task_model = TaskActiveModel {
         uuid: Set(addition_task.uuid()),
         name: Set(addition_task.metadata.label.clone()),
@@ -281,19 +301,22 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
         validated_at: Set(Some(Utc::now())),
         ..Default::default()
     };
-    
-    let created_task = task_model.insert(db_connection.get_connection()).await.unwrap();
+
+    let created_task = task_model
+        .insert(db_connection.get_connection())
+        .await
+        .unwrap();
     println!("Created task with ID: {}", created_task.id);
-    
+
     // Set up GraphQL schema and context
-    use ratchet_lib::graphql::schema::create_schema;
+    use ratchet_lib::config::RatchetConfig;
     use ratchet_lib::execution::{
         job_queue::{JobQueueConfig, JobQueueManager},
         process_executor::ProcessTaskExecutor,
     };
-    use ratchet_lib::config::RatchetConfig;
+    use ratchet_lib::graphql::schema::create_schema;
     use std::sync::Arc;
-    
+
     // Create required components for GraphQL schema
     let job_queue_config = JobQueueConfig {
         max_dequeue_batch_size: 10,
@@ -302,20 +325,25 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
         default_max_retries: 3,
     };
     let job_queue = Arc::new(JobQueueManager::new(repositories.clone(), job_queue_config));
-    
+
     let ratchet_config = RatchetConfig::default();
-    let task_executor = Arc::new(ProcessTaskExecutor::new(repositories.clone(), ratchet_config).await.unwrap());
-    
+    let task_executor = Arc::new(
+        ProcessTaskExecutor::new(repositories.clone(), ratchet_config)
+            .await
+            .unwrap(),
+    );
+
     let schema = create_schema(
         repositories.clone(),
         job_queue,
         task_executor,
-        None,  // registry
-        None,  // task_sync_service
+        None, // registry
+        None, // task_sync_service
     );
-    
+
     // Create GraphQL mutation to execute task with webhook output destination
-    let mutation = format!(r#"
+    let mutation = format!(
+        r#"
         mutation {{
             executeTask(input: {{
                 taskId: "{}"
@@ -349,57 +377,67 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
                 }}
             }}
         }}
-    "#, created_task.id, webhook_url);
-    
+    "#,
+        created_task.id, webhook_url
+    );
+
     // Execute the GraphQL mutation
     use async_graphql::{Request, Variables};
-    
+
     let request = Request::new(mutation).variables(Variables::default());
     let response = schema.execute(request).await;
-    
+
     println!("GraphQL Response: {:?}", response);
-    
+
     // Check if the mutation was successful
     if response.is_err() {
         println!("GraphQL mutation failed as expected in test environment (no worker processes)");
-        
+
         // In test environment, the task execution might fail due to worker processes not being available
         // This is expected - we're testing the API workflow structure, not the actual execution
         let errors = response.errors;
         for error in &errors {
             println!("GraphQL Error: {}", error.message);
         }
-        
+
         // The important thing is that the GraphQL schema accepts the mutation structure
         // Let's check if it at least recognized the mutation (not "Unknown field" error)
         let has_unknown_field_error = errors.iter().any(|e| e.message.contains("Unknown field"));
-        assert!(!has_unknown_field_error, "GraphQL mutation structure should be valid");
-        
+        assert!(
+            !has_unknown_field_error,
+            "GraphQL mutation structure should be valid"
+        );
     } else {
         // If execution succeeds, verify the result
         let data = response.data.into_json().unwrap();
         let execute_result = &data["executeTask"];
-        
-        assert!(execute_result["id"].as_str().is_some(), "Job should have an ID");
+
+        assert!(
+            execute_result["id"].as_str().is_some(),
+            "Job should have an ID"
+        );
         let job_id_str = execute_result["id"].as_str().unwrap();
         let job_id = job_id_str.parse::<i32>().unwrap();
         println!("Created and executed job via GraphQL with ID: {}", job_id);
-        
+
         // Verify the job was created with webhook output destination
-        let job = repositories.job_repository()
+        let job = repositories
+            .job_repository()
             .find_by_id(job_id)
             .await
             .unwrap()
             .expect("Job should exist");
-        
-        assert!(job.output_destinations.is_some(), "Job should have output destinations");
-        
-        let destinations: Vec<OutputDestinationConfig> = serde_json::from_value(
-            job.output_destinations.unwrap()
-        ).unwrap();
-        
+
+        assert!(
+            job.output_destinations.is_some(),
+            "Job should have output destinations"
+        );
+
+        let destinations: Vec<OutputDestinationConfig> =
+            serde_json::from_value(job.output_destinations.unwrap()).unwrap();
+
         assert_eq!(destinations.len(), 1, "Should have one output destination");
-        
+
         match &destinations[0] {
             OutputDestinationConfig::Webhook { url, method, .. } => {
                 assert_eq!(url, &webhook_url);
@@ -407,16 +445,16 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
             }
             _ => panic!("Expected webhook destination"),
         }
-        
+
         // Wait a bit for potential webhook delivery
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
+
         // Check if the webhook was called
         let payloads = webhook_state.received_payloads.lock().unwrap();
         if !payloads.is_empty() {
             let payload = &payloads[0].result;
             assert!(payload.is_some());
-            
+
             let webhook_data = payload.as_ref().unwrap();
             println!("Webhook received via GraphQL API: {:?}", webhook_data);
             // The webhook payload structure might be different when delivered through the actual system
@@ -424,7 +462,7 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
             println!("No webhook payloads received - this may be expected in test environment");
         }
     }
-    
+
     println!("GraphQL API integration test completed successfully!");
 }
 
@@ -434,39 +472,45 @@ async fn test_addition_task_with_webhook_via_rest_api() {
     let (webhook_addr, _webhook_state) = start_webhook_server().await;
     let webhook_url = format!("http://{}/webhook", webhook_addr);
     println!("Webhook server listening on: {}", webhook_url);
-    
+
     // Set up test database
     let db_config = DatabaseConfig {
         url: "sqlite::memory:".to_string(),
         max_connections: 5,
         connection_timeout: Duration::from_secs(10),
     };
-    
+
     let db_connection = DatabaseConnection::new(db_config.clone()).await.unwrap();
     let repositories = RepositoryFactory::new(db_connection.clone());
-    
+
     // Run migrations
     use ratchet_lib::database::migrations::Migrator;
     use sea_orm_migration::MigratorTrait;
     Migrator::up(db_connection.get_connection(), None)
         .await
         .unwrap();
-    
+
     // Get the path to sample tasks
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
-    
+
     // Load the addition task directly and create it in the database
     let addition_task_path = sample_tasks_path.join("addition");
-    let addition_task = load_from_directory(&addition_task_path)
-        .expect("Failed to load addition task");
-    
-    println!("Loaded task: {} ({})", addition_task.metadata.label, addition_task.metadata.uuid);
-    
+    let addition_task =
+        load_from_directory(&addition_task_path).expect("Failed to load addition task");
+
+    println!(
+        "Loaded task: {} ({})",
+        addition_task.metadata.label, addition_task.metadata.uuid
+    );
+
     // Create task in database
     use ratchet_lib::database::entities::tasks::ActiveModel as TaskActiveModel;
     use sea_orm::{ActiveModelTrait, Set};
-    
+
     let task_model = TaskActiveModel {
         uuid: Set(addition_task.uuid()),
         name: Set(addition_task.metadata.label.clone()),
@@ -482,19 +526,22 @@ async fn test_addition_task_with_webhook_via_rest_api() {
         validated_at: Set(Some(Utc::now())),
         ..Default::default()
     };
-    
-    let created_task = task_model.insert(db_connection.get_connection()).await.unwrap();
+
+    let created_task = task_model
+        .insert(db_connection.get_connection())
+        .await
+        .unwrap();
     println!("Created task with ID: {}", created_task.id);
-    
+
     // Set up REST API application
-    use ratchet_lib::rest::app::create_rest_app;
+    use ratchet_lib::config::RatchetConfig;
     use ratchet_lib::execution::{
         job_queue::{JobQueueConfig, JobQueueManager},
         process_executor::ProcessTaskExecutor,
     };
-    use ratchet_lib::config::RatchetConfig;
+    use ratchet_lib::rest::app::create_rest_app;
     use std::sync::Arc;
-    
+
     // Create required components for REST API
     let job_queue_config = JobQueueConfig {
         max_dequeue_batch_size: 10,
@@ -503,22 +550,26 @@ async fn test_addition_task_with_webhook_via_rest_api() {
         default_max_retries: 3,
     };
     let job_queue = Arc::new(JobQueueManager::new(repositories.clone(), job_queue_config));
-    
+
     let ratchet_config = RatchetConfig::default();
-    let task_executor = Arc::new(ProcessTaskExecutor::new(repositories.clone(), ratchet_config).await.unwrap());
-    
+    let task_executor = Arc::new(
+        ProcessTaskExecutor::new(repositories.clone(), ratchet_config)
+            .await
+            .unwrap(),
+    );
+
     let app = create_rest_app(
         repositories.clone(),
         job_queue,
         task_executor,
-        None,  // registry
-        None,  // task_sync_service
+        None, // registry
+        None, // task_sync_service
     );
-    
+
     // Start the REST API server
     use axum_test::TestServer;
     let server = TestServer::new(app).unwrap();
-    
+
     // Create job with webhook output destination via REST API
     let job_request = json!({
         "task_id": created_task.id,
@@ -544,40 +595,43 @@ async fn test_addition_task_with_webhook_via_rest_api() {
             "content_type": "application/json"
         }]
     });
-    
+
     // Send POST request to create job
-    let response = server
-        .post("/jobs")
-        .json(&job_request)
-        .await;
-    
+    let response = server.post("/jobs").json(&job_request).await;
+
     println!("REST API Response Status: {}", response.status_code());
     println!("REST API Response Body: {}", response.text());
-    
+
     // Check if the request was successful
     assert_eq!(response.status_code(), 201, "Job creation should succeed");
-    
+
     let job_response: Value = response.json();
-    assert!(job_response["id"].as_i64().is_some(), "Job should have an ID");
-    
+    assert!(
+        job_response["id"].as_i64().is_some(),
+        "Job should have an ID"
+    );
+
     let job_id = job_response["id"].as_i64().unwrap() as i32;
     println!("Created job via REST API with ID: {}", job_id);
-    
+
     // Verify the job was created with webhook output destination
-    let job = repositories.job_repository()
+    let job = repositories
+        .job_repository()
         .find_by_id(job_id)
         .await
         .unwrap()
         .expect("Job should exist");
-    
-    assert!(job.output_destinations.is_some(), "Job should have output destinations");
-    
-    let destinations: Vec<OutputDestinationConfig> = serde_json::from_value(
-        job.output_destinations.unwrap()
-    ).unwrap();
-    
+
+    assert!(
+        job.output_destinations.is_some(),
+        "Job should have output destinations"
+    );
+
+    let destinations: Vec<OutputDestinationConfig> =
+        serde_json::from_value(job.output_destinations.unwrap()).unwrap();
+
     assert_eq!(destinations.len(), 1, "Should have one output destination");
-    
+
     match &destinations[0] {
         OutputDestinationConfig::Webhook { url, method, .. } => {
             assert_eq!(url, &webhook_url);
@@ -585,10 +639,10 @@ async fn test_addition_task_with_webhook_via_rest_api() {
         }
         _ => panic!("Expected webhook destination"),
     }
-    
+
     // Since the REST API only creates the job (doesn't execute it immediately),
     // we would need to trigger execution separately or have a job queue processor running
     // For this test, we'll verify the job was created correctly with the webhook configuration
-    
+
     println!("REST API integration test completed successfully!");
 }

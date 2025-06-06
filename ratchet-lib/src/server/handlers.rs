@@ -2,8 +2,8 @@
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     extract::State,
-    response::{Html, IntoResponse},
     http::StatusCode,
+    response::{Html, IntoResponse},
 };
 
 // use crate::database::repositories::Repository; // Unused due to Send/Sync constraints
@@ -255,7 +255,7 @@ pub async fn graphql_playground() -> impl IntoResponse {
     </script>
 </body>
 </html>"#;
-    
+
     Html(html)
 }
 
@@ -272,6 +272,6 @@ pub async fn version_handler() -> impl IntoResponse {
         "name": env!("CARGO_PKG_NAME"),
         "description": env!("CARGO_PKG_DESCRIPTION"),
     });
-    
+
     axum::Json(version_info)
 }

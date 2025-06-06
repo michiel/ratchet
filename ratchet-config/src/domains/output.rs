@@ -1,10 +1,12 @@
 //! Output destinations configuration
 
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
-use std::collections::HashMap;
-use crate::validation::{Validatable, validate_required_string, validate_positive, validate_enum_choice, validate_url};
 use crate::error::ConfigResult;
+use crate::validation::{
+    validate_enum_choice, validate_positive, validate_required_string, validate_url, Validatable,
+};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::Duration;
 
 /// Output destinations configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,23 +15,26 @@ pub struct OutputConfig {
     /// Maximum number of concurrent deliveries
     #[serde(default = "default_max_concurrent_deliveries")]
     pub max_concurrent_deliveries: usize,
-    
+
     /// Default timeout for deliveries
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_delivery_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_delivery_timeout"
+    )]
     pub default_timeout: Duration,
-    
+
     /// Whether to validate destination configurations on startup
     #[serde(default = "crate::domains::utils::default_true")]
     pub validate_on_startup: bool,
-    
+
     /// Global output destination templates
     #[serde(default)]
     pub global_destinations: Vec<OutputDestinationTemplate>,
-    
+
     /// Default retry policy for failed deliveries
     #[serde(default)]
     pub default_retry_policy: RetryPolicyConfig,
-    
+
     /// Output formatting configuration
     #[serde(default)]
     pub formatting: OutputFormattingConfig,
@@ -40,10 +45,10 @@ pub struct OutputConfig {
 pub struct OutputDestinationTemplate {
     /// Template name for reference
     pub name: String,
-    
+
     /// Template description
     pub description: Option<String>,
-    
+
     /// Destination configuration
     pub destination: OutputDestinationConfigTemplate,
 }
@@ -120,17 +125,9 @@ pub enum OutputDestinationConfigTemplate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum WebhookAuthConfig {
-    Bearer {
-        token: String,
-    },
-    Basic {
-        username: String,
-        password: String,
-    },
-    ApiKey {
-        header: String,
-        value: String,
-    },
+    Bearer { token: String },
+    Basic { username: String, password: String },
+    ApiKey { header: String, value: String },
 }
 
 /// Database pool configuration
@@ -140,13 +137,19 @@ pub struct DatabasePoolConfig {
     /// Maximum number of connections
     #[serde(default = "default_db_max_connections")]
     pub max_connections: u32,
-    
+
     /// Connection timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_db_connection_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_db_connection_timeout"
+    )]
     pub connection_timeout: Duration,
-    
+
     /// Idle timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_db_idle_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_db_idle_timeout"
+    )]
     pub idle_timeout: Duration,
 }
 
@@ -157,15 +160,15 @@ pub struct RetryPolicyConfig {
     /// Maximum number of retry attempts
     #[serde(default = "default_max_retries")]
     pub max_attempts: i32,
-    
+
     /// Initial delay between retries in milliseconds
     #[serde(default = "default_initial_delay_ms")]
     pub initial_delay_ms: u64,
-    
+
     /// Maximum delay between retries in milliseconds
     #[serde(default = "default_max_delay_ms")]
     pub max_delay_ms: u64,
-    
+
     /// Backoff multiplier for exponential backoff
     #[serde(default = "default_backoff_multiplier")]
     pub backoff_multiplier: f64,
@@ -178,11 +181,11 @@ pub struct OutputFormattingConfig {
     /// Default timestamp format
     #[serde(default = "default_timestamp_format")]
     pub timestamp_format: String,
-    
+
     /// Whether to include metadata in output
     #[serde(default = "crate::domains::utils::default_true")]
     pub include_metadata: bool,
-    
+
     /// Whether to pretty-print JSON
     #[serde(default = "crate::domains::utils::default_false")]
     pub pretty_json: bool,
@@ -237,26 +240,26 @@ impl Validatable for OutputConfig {
         validate_positive(
             self.max_concurrent_deliveries,
             "max_concurrent_deliveries",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
+
         validate_positive(
             self.default_timeout.as_secs(),
             "default_timeout",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
+
         self.default_retry_policy.validate()?;
         self.formatting.validate()?;
-        
+
         // Validate global destination templates
         for (index, template) in self.global_destinations.iter().enumerate() {
             template.validate_with_context(&format!("global_destinations[{}]", index))?;
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "output"
     }
@@ -265,24 +268,26 @@ impl Validatable for OutputConfig {
 impl Validatable for RetryPolicyConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_positive(self.max_attempts, "max_attempts", self.domain_name())?;
-        validate_positive(self.initial_delay_ms, "initial_delay_ms", self.domain_name())?;
+        validate_positive(
+            self.initial_delay_ms,
+            "initial_delay_ms",
+            self.domain_name(),
+        )?;
         validate_positive(self.max_delay_ms, "max_delay_ms", self.domain_name())?;
-        
+
         if self.max_delay_ms < self.initial_delay_ms {
             return Err(self.validation_error(
-                "max_delay_ms must be greater than or equal to initial_delay_ms"
+                "max_delay_ms must be greater than or equal to initial_delay_ms",
             ));
         }
-        
+
         if self.backoff_multiplier <= 1.0 {
-            return Err(self.validation_error(
-                "backoff_multiplier must be greater than 1.0"
-            ));
+            return Err(self.validation_error("backoff_multiplier must be greater than 1.0"));
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "output.retry_policy"
     }
@@ -290,10 +295,14 @@ impl Validatable for RetryPolicyConfig {
 
 impl Validatable for OutputFormattingConfig {
     fn validate(&self) -> ConfigResult<()> {
-        validate_required_string(&self.timestamp_format, "timestamp_format", self.domain_name())?;
+        validate_required_string(
+            &self.timestamp_format,
+            "timestamp_format",
+            self.domain_name(),
+        )?;
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "output.formatting"
     }
@@ -307,25 +316,31 @@ impl OutputDestinationTemplate {
                 message: format!("{} has empty name", context),
             });
         }
-        
-        self.destination.validate_with_context(&format!("{}.{}", context, self.name))
+
+        self.destination
+            .validate_with_context(&format!("{}.{}", context, self.name))
     }
 }
 
 impl OutputDestinationConfigTemplate {
     pub fn validate_with_context(&self, context: &str) -> ConfigResult<()> {
         match self {
-            Self::Filesystem { path, format, permissions, .. } => {
+            Self::Filesystem {
+                path,
+                format,
+                permissions,
+                ..
+            } => {
                 if path.is_empty() {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "output".to_string(),
                         message: format!("{} filesystem destination has empty path", context),
                     });
                 }
-                
+
                 let valid_formats = ["json", "json_compact", "yaml", "csv", "raw", "template"];
                 validate_enum_choice(format, &valid_formats, "format", "output")?;
-                
+
                 // Validate permissions format (octal)
                 if !permissions.chars().all(|c| c.is_ascii_digit() && c <= '7') {
                     return Err(crate::error::ConfigError::DomainError {
@@ -333,39 +348,67 @@ impl OutputDestinationConfigTemplate {
                         message: format!("{} has invalid file permissions format", context),
                     });
                 }
-            },
-            
-            Self::Webhook { url, method, timeout_seconds, auth, .. } => {
+            }
+
+            Self::Webhook {
+                url,
+                method,
+                timeout_seconds,
+                auth,
+                ..
+            } => {
                 validate_url(url, "url", "output")?;
-                
+
                 let valid_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
                 validate_enum_choice(method, &valid_methods, "method", "output")?;
-                
+
                 validate_positive(*timeout_seconds, "timeout_seconds", "output")?;
-                
+
                 if let Some(ref auth_config) = auth {
                     auth_config.validate()?;
                 }
-            },
-            
-            Self::Database { connection_string, table_name, pool_config, .. } => {
+            }
+
+            Self::Database {
+                connection_string,
+                table_name,
+                pool_config,
+                ..
+            } => {
                 validate_required_string(connection_string, "connection_string", "output")?;
                 validate_required_string(table_name, "table_name", "output")?;
                 pool_config.validate()?;
-            },
-            
-            Self::S3 { bucket, key_template, region, storage_class, .. } => {
+            }
+
+            Self::S3 {
+                bucket,
+                key_template,
+                region,
+                storage_class,
+                ..
+            } => {
                 validate_required_string(bucket, "bucket", "output")?;
                 validate_required_string(key_template, "key_template", "output")?;
                 validate_required_string(region, "region", "output")?;
-                
-                let valid_storage_classes = ["STANDARD", "REDUCED_REDUNDANCY", "STANDARD_IA", 
-                                           "ONEZONE_IA", "INTELLIGENT_TIERING", "GLACIER", 
-                                           "DEEP_ARCHIVE"];
-                validate_enum_choice(storage_class, &valid_storage_classes, "storage_class", "output")?;
+
+                let valid_storage_classes = [
+                    "STANDARD",
+                    "REDUCED_REDUNDANCY",
+                    "STANDARD_IA",
+                    "ONEZONE_IA",
+                    "INTELLIGENT_TIERING",
+                    "GLACIER",
+                    "DEEP_ARCHIVE",
+                ];
+                validate_enum_choice(
+                    storage_class,
+                    &valid_storage_classes,
+                    "storage_class",
+                    "output",
+                )?;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -375,20 +418,20 @@ impl Validatable for WebhookAuthConfig {
         match self {
             Self::Bearer { token } => {
                 validate_required_string(token, "token", self.domain_name())?;
-            },
+            }
             Self::Basic { username, password } => {
                 validate_required_string(username, "username", self.domain_name())?;
                 validate_required_string(password, "password", self.domain_name())?;
-            },
+            }
             Self::ApiKey { header, value } => {
                 validate_required_string(header, "header", self.domain_name())?;
                 validate_required_string(value, "value", self.domain_name())?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "output.webhook.auth"
     }
@@ -397,11 +440,19 @@ impl Validatable for WebhookAuthConfig {
 impl Validatable for DatabasePoolConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_positive(self.max_connections, "max_connections", self.domain_name())?;
-        validate_positive(self.connection_timeout.as_secs(), "connection_timeout", self.domain_name())?;
-        validate_positive(self.idle_timeout.as_secs(), "idle_timeout", self.domain_name())?;
+        validate_positive(
+            self.connection_timeout.as_secs(),
+            "connection_timeout",
+            self.domain_name(),
+        )?;
+        validate_positive(
+            self.idle_timeout.as_secs(),
+            "idle_timeout",
+            self.domain_name(),
+        )?;
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "output.database.pool"
     }
@@ -484,11 +535,11 @@ mod tests {
     fn test_retry_policy_validation() {
         let mut policy = RetryPolicyConfig::default();
         assert!(policy.validate().is_ok());
-        
+
         // Test invalid backoff multiplier
         policy.backoff_multiplier = 0.5;
         assert!(policy.validate().is_err());
-        
+
         // Test invalid delay relationship
         policy = RetryPolicyConfig::default();
         policy.max_delay_ms = 500;
@@ -502,7 +553,7 @@ mod tests {
             token: "test-token".to_string(),
         };
         assert!(auth.validate().is_ok());
-        
+
         let invalid_auth = WebhookAuthConfig::Bearer {
             token: String::new(),
         };

@@ -3,7 +3,9 @@ use crate::database::{
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, Order, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, Set,
+};
 
 /// Repository for schedule-related database operations
 #[derive(Clone)]
@@ -82,13 +84,17 @@ impl ScheduleRepository {
     pub async fn update(&self, schedule: Schedule) -> Result<Schedule, DatabaseError> {
         let mut active_model: ScheduleActiveModel = schedule.into();
         active_model.updated_at = Set(chrono::Utc::now());
-        
+
         let updated_schedule = active_model.update(self.db.get_connection()).await?;
         Ok(updated_schedule)
     }
 
     /// Update schedule next run time
-    pub async fn update_next_run(&self, id: i32, next_run_at: Option<chrono::DateTime<chrono::Utc>>) -> Result<(), DatabaseError> {
+    pub async fn update_next_run(
+        &self,
+        id: i32,
+        next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<(), DatabaseError> {
         let active_model = ScheduleActiveModel {
             id: Set(id),
             next_run_at: Set(next_run_at),
@@ -106,7 +112,7 @@ impl ScheduleRepository {
         let schedule = self.find_by_id(id).await?;
         if let Some(mut schedule) = schedule {
             schedule.record_execution();
-            
+
             let active_model = ScheduleActiveModel {
                 id: Set(id),
                 last_run_at: Set(schedule.last_run_at),

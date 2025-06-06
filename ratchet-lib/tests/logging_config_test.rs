@@ -1,5 +1,5 @@
 use ratchet_lib::config::RatchetConfig;
-use ratchet_lib::logging::{LogLevel, init_logger};
+use ratchet_lib::logging::{init_logger, LogLevel};
 use tempfile::tempdir;
 
 #[test]
@@ -31,16 +31,16 @@ logging:
 "#;
 
     let config: RatchetConfig = serde_yaml::from_str(yaml_config).unwrap();
-    
+
     // Verify config was parsed correctly
     assert_eq!(config.logging.level, LogLevel::Debug);
     assert_eq!(config.logging.sinks.len(), 2);
     assert_eq!(config.logging.sampling.info_rate, 0.5);
-    
+
     // Build and initialize logger from config
     let built_logger = config.logging.build_logger().unwrap();
     init_logger(built_logger).ok();
-    
+
     // Verify logger is available
     assert!(ratchet_lib::logging::logger().is_some());
 }
@@ -53,7 +53,7 @@ execution:
 "#;
 
     let config: RatchetConfig = serde_yaml::from_str(yaml_config).unwrap();
-    
+
     // Should use defaults
     assert_eq!(config.logging.level, LogLevel::Info);
     assert_eq!(config.logging.sinks.len(), 1); // Default console sink
@@ -65,8 +65,9 @@ execution:
 async fn test_config_with_buffered_file_sink() {
     let temp_dir = tempdir().unwrap();
     let log_path = temp_dir.path().join("test.log");
-    
-    let yaml_config = format!(r#"
+
+    let yaml_config = format!(
+        r#"
 logging:
   level: trace
   sinks:
@@ -78,13 +79,15 @@ logging:
         flush_interval: 2s
       rotation:
         max_size: 10MB
-"#, log_path);
+"#,
+        log_path
+    );
 
     let config: RatchetConfig = serde_yaml::from_str(&yaml_config).unwrap();
-    
+
     assert_eq!(config.logging.level, LogLevel::Trace);
     assert_eq!(config.logging.sinks.len(), 1);
-    
+
     // Build logger should succeed
     let built_logger = config.logging.build_logger().unwrap();
     assert_eq!(built_logger.min_level(), LogLevel::Trace);

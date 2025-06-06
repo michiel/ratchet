@@ -23,7 +23,7 @@ impl HttpMethod {
     pub fn as_str(&self) -> &'static str {
         match self {
             HttpMethod::Get => "GET",
-            HttpMethod::Post => "POST", 
+            HttpMethod::Post => "POST",
             HttpMethod::Put => "PUT",
             HttpMethod::Delete => "DELETE",
             HttpMethod::Patch => "PATCH",
@@ -45,7 +45,6 @@ impl HttpMethod {
         ]
     }
 }
-
 
 impl fmt::Display for HttpMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -121,7 +120,6 @@ impl LogLevel {
     }
 }
 
-
 impl fmt::Display for LogLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
@@ -181,12 +179,18 @@ impl TaskStatus {
 
     /// Check if the task is in a terminal state (completed, failed, or cancelled)
     pub fn is_terminal(&self) -> bool {
-        matches!(self, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled)
+        matches!(
+            self,
+            TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled
+        )
     }
 
     /// Check if the task is in an active state (running, validating, or loading)
     pub fn is_active(&self) -> bool {
-        matches!(self, TaskStatus::Running | TaskStatus::Validating | TaskStatus::Loading)
+        matches!(
+            self,
+            TaskStatus::Running | TaskStatus::Validating | TaskStatus::Loading
+        )
     }
 
     /// Get all supported task statuses
@@ -202,7 +206,6 @@ impl TaskStatus {
         ]
     }
 }
-
 
 impl fmt::Display for TaskStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -260,8 +263,11 @@ mod tests {
         assert_eq!("delete".parse::<HttpMethod>().unwrap(), HttpMethod::Delete);
         assert_eq!("PATCH".parse::<HttpMethod>().unwrap(), HttpMethod::Patch);
         assert_eq!("head".parse::<HttpMethod>().unwrap(), HttpMethod::Head);
-        assert_eq!("OPTIONS".parse::<HttpMethod>().unwrap(), HttpMethod::Options);
-        
+        assert_eq!(
+            "OPTIONS".parse::<HttpMethod>().unwrap(),
+            HttpMethod::Options
+        );
+
         assert!("INVALID".parse::<HttpMethod>().is_err());
     }
 
@@ -279,12 +285,27 @@ mod tests {
     #[test]
     fn test_http_method_to_reqwest() {
         assert_eq!(reqwest::Method::from(HttpMethod::Get), reqwest::Method::GET);
-        assert_eq!(reqwest::Method::from(HttpMethod::Post), reqwest::Method::POST);
+        assert_eq!(
+            reqwest::Method::from(HttpMethod::Post),
+            reqwest::Method::POST
+        );
         assert_eq!(reqwest::Method::from(HttpMethod::Put), reqwest::Method::PUT);
-        assert_eq!(reqwest::Method::from(HttpMethod::Delete), reqwest::Method::DELETE);
-        assert_eq!(reqwest::Method::from(HttpMethod::Patch), reqwest::Method::PATCH);
-        assert_eq!(reqwest::Method::from(HttpMethod::Head), reqwest::Method::HEAD);
-        assert_eq!(reqwest::Method::from(HttpMethod::Options), reqwest::Method::OPTIONS);
+        assert_eq!(
+            reqwest::Method::from(HttpMethod::Delete),
+            reqwest::Method::DELETE
+        );
+        assert_eq!(
+            reqwest::Method::from(HttpMethod::Patch),
+            reqwest::Method::PATCH
+        );
+        assert_eq!(
+            reqwest::Method::from(HttpMethod::Head),
+            reqwest::Method::HEAD
+        );
+        assert_eq!(
+            reqwest::Method::from(HttpMethod::Options),
+            reqwest::Method::OPTIONS
+        );
     }
 
     #[test]
@@ -294,7 +315,7 @@ mod tests {
         assert_eq!("Info".parse::<LogLevel>().unwrap(), LogLevel::Info);
         assert_eq!("WARN".parse::<LogLevel>().unwrap(), LogLevel::Warn);
         assert_eq!("error".parse::<LogLevel>().unwrap(), LogLevel::Error);
-        
+
         assert!("invalid".parse::<LogLevel>().is_err());
     }
 
@@ -309,14 +330,32 @@ mod tests {
 
     #[test]
     fn test_task_status_from_str() {
-        assert_eq!("pending".parse::<TaskStatus>().unwrap(), TaskStatus::Pending);
-        assert_eq!("RUNNING".parse::<TaskStatus>().unwrap(), TaskStatus::Running);
-        assert_eq!("Completed".parse::<TaskStatus>().unwrap(), TaskStatus::Completed);
+        assert_eq!(
+            "pending".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Pending
+        );
+        assert_eq!(
+            "RUNNING".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Running
+        );
+        assert_eq!(
+            "Completed".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Completed
+        );
         assert_eq!("FAILED".parse::<TaskStatus>().unwrap(), TaskStatus::Failed);
-        assert_eq!("cancelled".parse::<TaskStatus>().unwrap(), TaskStatus::Cancelled);
-        assert_eq!("validating".parse::<TaskStatus>().unwrap(), TaskStatus::Validating);
-        assert_eq!("loading".parse::<TaskStatus>().unwrap(), TaskStatus::Loading);
-        
+        assert_eq!(
+            "cancelled".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Cancelled
+        );
+        assert_eq!(
+            "validating".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Validating
+        );
+        assert_eq!(
+            "loading".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Loading
+        );
+
         assert!("invalid".parse::<TaskStatus>().is_err());
     }
 

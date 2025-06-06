@@ -1,4 +1,4 @@
-use super::{LogEvent, LogLevel, LogContext, Enricher, LogEnricher};
+use super::{Enricher, LogContext, LogEnricher, LogEvent, LogLevel};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -6,10 +6,10 @@ use std::sync::Arc;
 pub trait StructuredLogger: Send + Sync {
     /// Log an event
     fn log(&self, event: LogEvent);
-    
+
     /// Create a new logger with additional context
     fn with_context(&self, context: LogContext) -> Box<dyn StructuredLogger>;
-    
+
     /// Get the minimum log level
     fn min_level(&self) -> LogLevel;
 }
@@ -80,7 +80,7 @@ impl StructuredLogger for DefaultLogger {
 pub trait LogSink: Send + Sync {
     /// Write a log event
     fn log(&self, event: LogEvent);
-    
+
     /// Flush any buffered events
     fn flush(&self);
 }
@@ -118,8 +118,7 @@ impl LoggerBuilder {
 
     pub fn build(self) -> Arc<dyn StructuredLogger> {
         let enricher = Arc::new(LogEnricher::new(self.enrichers));
-        let logger = DefaultLogger::new(self.min_level, self.sinks)
-            .with_enricher(enricher);
+        let logger = DefaultLogger::new(self.min_level, self.sinks).with_enricher(enricher);
         Arc::new(logger)
     }
 }

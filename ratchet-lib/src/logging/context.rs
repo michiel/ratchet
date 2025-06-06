@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 tokio::task_local! {
@@ -49,7 +49,8 @@ impl LogContext {
 
     /// Get the current context from task-local storage
     pub fn current() -> Self {
-        CURRENT_CONTEXT.try_with(|ctx| ctx.clone())
+        CURRENT_CONTEXT
+            .try_with(|ctx| ctx.clone())
             .unwrap_or_else(|_| Self::new())
     }
 
@@ -111,7 +112,7 @@ where
     ) -> std::task::Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
         let future = unsafe { std::pin::Pin::new_unchecked(&mut this.future) };
-        
+
         // This would need proper implementation with task-local storage
         // For now, just poll the inner future
         future.poll(cx)

@@ -8,13 +8,13 @@ use crate::StorageResult;
 pub trait Migration {
     /// Apply the migration
     async fn up(&self) -> StorageResult<()>;
-    
+
     /// Rollback the migration
     async fn down(&self) -> StorageResult<()>;
-    
+
     /// Get migration version
     fn version(&self) -> &str;
-    
+
     /// Get migration name
     fn name(&self) -> &str;
 }

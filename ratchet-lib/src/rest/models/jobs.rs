@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::database::entities::jobs::{JobStatus, JobPriority as Priority};
+use crate::database::entities::jobs::{JobPriority as Priority, JobStatus};
 use crate::output::OutputDestinationConfig;
 
 #[derive(Debug, Serialize)]
@@ -127,9 +127,10 @@ pub struct TestOutputDestinationsResponse {
 
 impl From<crate::database::entities::jobs::Model> for JobResponse {
     fn from(job: crate::database::entities::jobs::Model) -> Self {
-        let output_destinations = job.output_destinations
+        let output_destinations = job
+            .output_destinations
             .and_then(|json| serde_json::from_value(json).ok());
-        
+
         Self {
             id: job.id,
             uuid: job.uuid,

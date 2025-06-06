@@ -1,12 +1,15 @@
 use crate::seaorm::{
-    entities::{tasks, Task, TaskActiveModel, Tasks},
     connection::{DatabaseConnection, DatabaseError},
-    filters::{SafeFilterBuilder, validation},
+    entities::{tasks, Task, TaskActiveModel, Tasks},
+    filters::{validation, SafeFilterBuilder},
 };
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set, PaginatorTrait, QueryOrder};
-use uuid::Uuid;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
+};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Filter criteria for task queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,9 +65,7 @@ impl TaskRepository {
 
     /// Find task by ID
     pub async fn find_by_id(&self, id: i32) -> Result<Option<Task>, DatabaseError> {
-        let task = Tasks::find_by_id(id)
-            .one(self.db.get_connection())
-            .await?;
+        let task = Tasks::find_by_id(id).one(self.db.get_connection()).await?;
         Ok(task)
     }
 
@@ -118,7 +119,7 @@ impl TaskRepository {
             updated_at: Set(chrono::Utc::now()), // Update the timestamp
             validated_at: Set(task.validated_at),
         };
-        
+
         let updated_task = active_model.update(self.db.get_connection()).await?;
         Ok(updated_task)
     }
@@ -198,7 +199,7 @@ impl TaskRepository {
             .await?;
         Ok(count > 0)
     }
-    
+
     /// Find tasks with safe filtering and pagination
     pub async fn find_with_filters(
         &self,
@@ -220,9 +221,9 @@ impl TaskRepository {
         if let Some(name) = filters.name {
             filter_builder.add_like_filter(tasks::Column::Name, &name);
         }
-        
+
         filter_builder.add_optional_filter(tasks::Column::Enabled, filters.enabled);
-        
+
         if let Some(version) = filters.version {
             filter_builder.add_exact_filter(tasks::Column::Version, version);
         }
@@ -299,9 +300,9 @@ impl TaskRepository {
         if let Some(name) = filters.name {
             filter_builder.add_like_filter(tasks::Column::Name, &name);
         }
-        
+
         filter_builder.add_optional_filter(tasks::Column::Enabled, filters.enabled);
-        
+
         if let Some(version) = filters.version {
             filter_builder.add_exact_filter(tasks::Column::Version, version);
         }
@@ -340,10 +341,10 @@ impl super::Repository for TaskRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::seaorm::config::DatabaseConfig;
     use crate::database::entities::Task;
     use crate::database::repositories::Repository;
-    
+    use crate::seaorm::config::DatabaseConfig;
+
     use serde_json::json;
     use std::time::Duration;
 
@@ -381,20 +382,20 @@ mod tests {
     async fn test_create_and_find_task() {
         let db = create_test_db().await;
         let repo = TaskRepository::new(db);
-        
+
         let task = create_sample_task();
         let task_uuid = task.uuid;
-        
+
         // Create task
         let created_task = repo.create(task).await.unwrap();
         assert!(created_task.id > 0);
         assert_eq!(created_task.uuid, task_uuid);
-        
+
         // Find by ID
         let found_task = repo.find_by_id(created_task.id).await.unwrap();
         assert!(found_task.is_some());
         assert_eq!(found_task.unwrap().uuid, task_uuid);
-        
+
         // Find by UUID
         let found_task = repo.find_by_uuid(task_uuid).await.unwrap();
         assert!(found_task.is_some());
@@ -405,15 +406,15 @@ mod tests {
     async fn test_update_task() {
         let db = create_test_db().await;
         let repo = TaskRepository::new(db);
-        
+
         let task = create_sample_task();
         let created_task = repo.create(task).await.unwrap();
-        
+
         // Update task
         let mut updated_task = created_task.clone();
         updated_task.name = "updated-task".to_string();
         updated_task.description = Some("Updated description".to_string());
-        
+
         let result = repo.update(updated_task).await.unwrap();
         assert_eq!(result.name, "updated-task");
         assert_eq!(result.description, Some("Updated description".to_string()));
@@ -423,15 +424,15 @@ mod tests {
     async fn test_enable_disable_task() {
         let db = create_test_db().await;
         let repo = TaskRepository::new(db);
-        
+
         let task = create_sample_task();
         let created_task = repo.create(task).await.unwrap();
-        
+
         // Disable task
         repo.set_enabled(created_task.id, false).await.unwrap();
         let found_task = repo.find_by_id(created_task.id).await.unwrap().unwrap();
         assert!(!found_task.enabled);
-        
+
         // Enable task
         repo.set_enabled(created_task.id, true).await.unwrap();
         let found_task = repo.find_by_id(created_task.id).await.unwrap().unwrap();
@@ -442,16 +443,16 @@ mod tests {
     async fn test_count_and_exists() {
         let db = create_test_db().await;
         let repo = TaskRepository::new(db);
-        
+
         assert_eq!(repo.count().await.unwrap(), 0);
         assert_eq!(repo.count_enabled().await.unwrap(), 0);
-        
+
         let task = create_sample_task();
         let task_uuid = task.uuid;
         let task_name = task.name.clone();
-        
+
         repo.create(task).await.unwrap();
-        
+
         assert_eq!(repo.count().await.unwrap(), 1);
         assert_eq!(repo.count_enabled().await.unwrap(), 1);
         assert!(repo.uuid_exists(task_uuid).await.unwrap());
@@ -462,7 +463,7 @@ mod tests {
     async fn test_health_check() {
         let db = create_test_db().await;
         let repo = TaskRepository::new(db);
-        
+
         assert!(repo.health_check().await.is_ok());
     }
 }

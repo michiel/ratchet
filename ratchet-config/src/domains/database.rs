@@ -1,9 +1,9 @@
 //! Database configuration
 
+use crate::error::ConfigResult;
+use crate::validation::{validate_positive, validate_required_string, Validatable};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use crate::validation::{Validatable, validate_required_string, validate_positive};
-use crate::error::ConfigResult;
 
 /// Database configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,31 +12,40 @@ pub struct DatabaseConfig {
     /// Database URL (e.g., "sqlite://ratchet.db", "postgres://user:pass@host/db")
     #[serde(default = "default_database_url")]
     pub url: String,
-    
+
     /// Maximum number of database connections in the pool
     #[serde(default = "default_max_connections")]
     pub max_connections: u32,
-    
+
     /// Minimum number of idle connections in the pool
     #[serde(default = "default_min_connections")]
     pub min_connections: u32,
-    
+
     /// Connection timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_connection_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_connection_timeout"
+    )]
     pub connection_timeout: Duration,
-    
+
     /// Idle timeout for connections
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_idle_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_idle_timeout"
+    )]
     pub idle_timeout: Duration,
-    
+
     /// Maximum lifetime for connections
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_max_lifetime")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_max_lifetime"
+    )]
     pub max_lifetime: Duration,
-    
+
     /// Database-specific configuration
     #[serde(default)]
     pub database_specific: DatabaseSpecificConfig,
-    
+
     /// Migration configuration
     #[serde(default)]
     pub migrations: MigrationConfig,
@@ -49,10 +58,10 @@ pub struct DatabaseConfig {
 pub struct DatabaseSpecificConfig {
     /// SQLite-specific configuration
     pub sqlite: SqliteConfig,
-    
+
     /// PostgreSQL-specific configuration
     pub postgres: PostgresConfig,
-    
+
     /// MySQL-specific configuration
     pub mysql: MysqlConfig,
 }
@@ -64,15 +73,15 @@ pub struct SqliteConfig {
     /// Journal mode
     #[serde(default = "default_sqlite_journal_mode")]
     pub journal_mode: String,
-    
+
     /// Synchronous mode
     #[serde(default = "default_sqlite_synchronous")]
     pub synchronous: String,
-    
+
     /// Cache size in KB
     #[serde(default = "default_sqlite_cache_size")]
     pub cache_size_kb: i32,
-    
+
     /// Busy timeout in milliseconds
     #[serde(default = "default_sqlite_busy_timeout")]
     pub busy_timeout_ms: u32,
@@ -85,15 +94,21 @@ pub struct PostgresConfig {
     /// Application name for connection
     #[serde(default = "default_postgres_application_name")]
     pub application_name: String,
-    
+
     /// Statement timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_postgres_statement_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_postgres_statement_timeout"
+    )]
     pub statement_timeout: Duration,
-    
+
     /// Lock timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_postgres_lock_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_postgres_lock_timeout"
+    )]
     pub lock_timeout: Duration,
-    
+
     /// Whether to use SSL
     #[serde(default = "default_postgres_ssl")]
     pub ssl_mode: String,
@@ -106,17 +121,20 @@ pub struct MysqlConfig {
     /// Character set
     #[serde(default = "default_mysql_charset")]
     pub charset: String,
-    
+
     /// Collation
     #[serde(default = "default_mysql_collation")]
     pub collation: String,
-    
+
     /// SQL mode
     #[serde(default = "default_mysql_sql_mode")]
     pub sql_mode: String,
-    
+
     /// Connection timeout
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_mysql_connect_timeout")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_mysql_connect_timeout"
+    )]
     pub connect_timeout: Duration,
 }
 
@@ -127,15 +145,15 @@ pub struct MigrationConfig {
     /// Whether to run migrations automatically on startup
     #[serde(default = "crate::domains::utils::default_true")]
     pub auto_migrate: bool,
-    
+
     /// Directory containing migration files
     #[serde(default = "default_migration_dir")]
     pub migration_dir: String,
-    
+
     /// Migration table name
     #[serde(default = "default_migration_table")]
     pub table_name: String,
-    
+
     /// Whether to validate migration checksums
     #[serde(default = "crate::domains::utils::default_true")]
     pub validate_checksums: bool,
@@ -155,7 +173,6 @@ impl Default for DatabaseConfig {
         }
     }
 }
-
 
 impl Default for SqliteConfig {
     fn default() -> Self {
@@ -205,23 +222,35 @@ impl Validatable for DatabaseConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_required_string(&self.url, "url", self.domain_name())?;
         validate_positive(self.max_connections, "max_connections", self.domain_name())?;
-        validate_positive(self.connection_timeout.as_secs(), "connection_timeout", self.domain_name())?;
-        validate_positive(self.idle_timeout.as_secs(), "idle_timeout", self.domain_name())?;
-        validate_positive(self.max_lifetime.as_secs(), "max_lifetime", self.domain_name())?;
-        
+        validate_positive(
+            self.connection_timeout.as_secs(),
+            "connection_timeout",
+            self.domain_name(),
+        )?;
+        validate_positive(
+            self.idle_timeout.as_secs(),
+            "idle_timeout",
+            self.domain_name(),
+        )?;
+        validate_positive(
+            self.max_lifetime.as_secs(),
+            "max_lifetime",
+            self.domain_name(),
+        )?;
+
         // Validate that min_connections <= max_connections
         if self.min_connections > self.max_connections {
-            return Err(self.validation_error(
-                "min_connections cannot be greater than max_connections"
-            ));
+            return Err(
+                self.validation_error("min_connections cannot be greater than max_connections")
+            );
         }
-        
+
         self.database_specific.validate()?;
         self.migrations.validate()?;
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "database"
     }
@@ -234,7 +263,7 @@ impl Validatable for DatabaseSpecificConfig {
         self.mysql.validate()?;
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "database.specific"
     }
@@ -245,26 +274,26 @@ impl Validatable for SqliteConfig {
         // Validate journal mode
         let valid_journal_modes = ["DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"];
         crate::validation::validate_enum_choice(
-            &self.journal_mode, 
-            &valid_journal_modes, 
-            "journal_mode", 
-            self.domain_name()
+            &self.journal_mode,
+            &valid_journal_modes,
+            "journal_mode",
+            self.domain_name(),
         )?;
-        
+
         // Validate synchronous mode
         let valid_sync_modes = ["OFF", "NORMAL", "FULL", "EXTRA"];
         crate::validation::validate_enum_choice(
-            &self.synchronous, 
-            &valid_sync_modes, 
-            "synchronous", 
-            self.domain_name()
+            &self.synchronous,
+            &valid_sync_modes,
+            "synchronous",
+            self.domain_name(),
         )?;
-        
+
         validate_positive(self.busy_timeout_ms, "busy_timeout_ms", self.domain_name())?;
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "database.sqlite"
     }
@@ -272,22 +301,41 @@ impl Validatable for SqliteConfig {
 
 impl Validatable for PostgresConfig {
     fn validate(&self) -> ConfigResult<()> {
-        validate_required_string(&self.application_name, "application_name", self.domain_name())?;
-        validate_positive(self.statement_timeout.as_secs(), "statement_timeout", self.domain_name())?;
-        validate_positive(self.lock_timeout.as_secs(), "lock_timeout", self.domain_name())?;
-        
-        // Validate SSL mode
-        let valid_ssl_modes = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
-        crate::validation::validate_enum_choice(
-            &self.ssl_mode, 
-            &valid_ssl_modes, 
-            "ssl_mode", 
-            self.domain_name()
+        validate_required_string(
+            &self.application_name,
+            "application_name",
+            self.domain_name(),
         )?;
-        
+        validate_positive(
+            self.statement_timeout.as_secs(),
+            "statement_timeout",
+            self.domain_name(),
+        )?;
+        validate_positive(
+            self.lock_timeout.as_secs(),
+            "lock_timeout",
+            self.domain_name(),
+        )?;
+
+        // Validate SSL mode
+        let valid_ssl_modes = [
+            "disable",
+            "allow",
+            "prefer",
+            "require",
+            "verify-ca",
+            "verify-full",
+        ];
+        crate::validation::validate_enum_choice(
+            &self.ssl_mode,
+            &valid_ssl_modes,
+            "ssl_mode",
+            self.domain_name(),
+        )?;
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "database.postgres"
     }
@@ -297,11 +345,15 @@ impl Validatable for MysqlConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_required_string(&self.charset, "charset", self.domain_name())?;
         validate_required_string(&self.collation, "collation", self.domain_name())?;
-        validate_positive(self.connect_timeout.as_secs(), "connect_timeout", self.domain_name())?;
-        
+        validate_positive(
+            self.connect_timeout.as_secs(),
+            "connect_timeout",
+            self.domain_name(),
+        )?;
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "database.mysql"
     }
@@ -311,10 +363,10 @@ impl Validatable for MigrationConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_required_string(&self.migration_dir, "migration_dir", self.domain_name())?;
         validate_required_string(&self.table_name, "table_name", self.domain_name())?;
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "database.migrations"
     }
@@ -418,12 +470,12 @@ mod tests {
     fn test_database_config_validation() {
         let mut config = DatabaseConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test min > max connections
         config.min_connections = 20;
         config.max_connections = 10;
         assert!(config.validate().is_err());
-        
+
         // Test empty URL
         config = DatabaseConfig::default();
         config.url = String::new();
@@ -434,7 +486,7 @@ mod tests {
     fn test_sqlite_config_validation() {
         let mut config = SqliteConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test invalid journal mode
         config.journal_mode = "INVALID".to_string();
         assert!(config.validate().is_err());
@@ -444,7 +496,7 @@ mod tests {
     fn test_postgres_config_validation() {
         let mut config = PostgresConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test invalid SSL mode
         config.ssl_mode = "invalid".to_string();
         assert!(config.validate().is_err());

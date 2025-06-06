@@ -4,9 +4,9 @@ pub mod auth;
 pub mod permissions;
 pub mod rate_limit;
 
-pub use auth::{McpAuth, McpAuthManager, AuthResult, ClientContext};
-pub use permissions::{ClientPermissions, ResourceQuotas, RateLimits, PermissionChecker};
-pub use rate_limit::{RateLimiter, RateLimitConfig};
+pub use auth::{AuthResult, ClientContext, McpAuth, McpAuthManager};
+pub use permissions::{ClientPermissions, PermissionChecker, RateLimits, ResourceQuotas};
+pub use rate_limit::{RateLimitConfig, RateLimiter};
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -16,28 +16,28 @@ use std::time::Duration;
 pub struct SecurityConfig {
     /// Maximum execution time for any single operation
     pub max_execution_time: Duration,
-    
+
     /// Maximum number of log entries that can be retrieved in one request
     pub max_log_entries: usize,
-    
+
     /// Whether to allow execution of potentially dangerous tasks
     pub allow_dangerous_tasks: bool,
-    
+
     /// Whether audit logging is enabled
     pub audit_log_enabled: bool,
-    
+
     /// Whether to sanitize inputs
     pub input_sanitization: bool,
-    
+
     /// Maximum request size in bytes
     pub max_request_size: usize,
-    
+
     /// Maximum response size in bytes
     pub max_response_size: usize,
-    
+
     /// Session timeout duration
     pub session_timeout: Duration,
-    
+
     /// Whether to require encrypted connections
     pub require_encryption: bool,
 }
@@ -50,8 +50,8 @@ impl Default for SecurityConfig {
             allow_dangerous_tasks: false,
             audit_log_enabled: true,
             input_sanitization: true,
-            max_request_size: 1024 * 1024, // 1MB
-            max_response_size: 10 * 1024 * 1024, // 10MB
+            max_request_size: 1024 * 1024,              // 1MB
+            max_response_size: 10 * 1024 * 1024,        // 10MB
             session_timeout: Duration::from_secs(3600), // 1 hour
             require_encryption: true,
         }
@@ -63,10 +63,10 @@ impl Default for SecurityConfig {
 pub struct SecurityContext {
     /// Client that made the request
     pub client: ClientContext,
-    
+
     /// Security configuration
     pub config: SecurityConfig,
-    
+
     /// Request start time for timeout enforcement
     pub request_start: std::time::Instant,
 }
@@ -80,12 +80,12 @@ impl SecurityContext {
             request_start: std::time::Instant::now(),
         }
     }
-    
+
     /// Check if the current operation has timed out
     pub fn is_timed_out(&self) -> bool {
         self.request_start.elapsed() > self.config.max_execution_time
     }
-    
+
     /// Get remaining time before timeout
     pub fn remaining_time(&self) -> Option<Duration> {
         let elapsed = self.request_start.elapsed();
@@ -106,12 +106,10 @@ impl InputSanitizer {
         // Remove null bytes and control characters (except newlines and tabs)
         let cleaned: String = input
             .chars()
-            .filter(|&c| {
-                c == '\n' || c == '\t' || (c >= ' ' && c != '\u{7f}')
-            })
+            .filter(|&c| c == '\n' || c == '\t' || (c >= ' ' && c != '\u{7f}'))
             .take(max_length)
             .collect();
-        
+
         // Basic script injection prevention
         cleaned
             .replace("<script", "&lt;script")
@@ -119,24 +117,26 @@ impl InputSanitizer {
             .replace("javascript:", "")
             .replace("data:text/html", "")
     }
-    
+
     /// Validate that a task name is safe
     pub fn validate_task_name(name: &str) -> bool {
         // Task names should only contain alphanumeric, dash, underscore
-        name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        name.chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
             && !name.is_empty()
             && name.len() <= 100
     }
-    
+
     /// Validate that a resource URI is safe
     pub fn validate_resource_uri(uri: &str) -> bool {
         // Basic URI validation - no dangerous schemes
-        if uri.starts_with("javascript:") || 
-           uri.starts_with("data:text/html") ||
-           uri.starts_with("file://") {
+        if uri.starts_with("javascript:")
+            || uri.starts_with("data:text/html")
+            || uri.starts_with("file://")
+        {
             return false;
         }
-        
+
         // Check for path traversal
         !uri.contains("../") && !uri.contains("..\\")
     }
@@ -147,19 +147,19 @@ impl InputSanitizer {
 pub struct AuditEvent {
     /// Event timestamp
     pub timestamp: chrono::DateTime<chrono::Utc>,
-    
+
     /// Client identifier
     pub client_id: String,
-    
+
     /// Event type
     pub event_type: AuditEventType,
-    
+
     /// Event details
     pub details: serde_json::Value,
-    
+
     /// Request ID for correlation
     pub request_id: Option<String>,
-    
+
     /// Whether the event represents a security violation
     pub is_security_violation: bool,
 }
@@ -170,25 +170,25 @@ pub struct AuditEvent {
 pub enum AuditEventType {
     /// Authentication attempt
     Authentication,
-    
+
     /// Authorization check
     Authorization,
-    
+
     /// Tool execution
     ToolExecution,
-    
+
     /// Resource access
     ResourceAccess,
-    
+
     /// Rate limit hit
     RateLimitExceeded,
-    
+
     /// Security violation
     SecurityViolation,
-    
+
     /// Configuration change
     ConfigurationChange,
-    
+
     /// Connection event
     Connection,
 }
@@ -203,13 +203,13 @@ impl AuditLogger {
     pub fn new(enabled: bool) -> Self {
         Self { enabled }
     }
-    
+
     /// Log an audit event
     pub async fn log_event(&self, event: AuditEvent) {
         if !self.enabled {
             return;
         }
-        
+
         // In a real implementation, this would write to a secure audit log
         if event.is_security_violation {
             tracing::warn!(
@@ -228,7 +228,7 @@ impl AuditLogger {
             );
         }
     }
-    
+
     /// Log authentication event
     pub async fn log_authentication(
         &self,
@@ -248,10 +248,10 @@ impl AuditLogger {
             request_id,
             is_security_violation: !success,
         };
-        
+
         self.log_event(event).await;
     }
-    
+
     /// Log authorization event
     pub async fn log_authorization(
         &self,
@@ -273,10 +273,10 @@ impl AuditLogger {
             request_id,
             is_security_violation: !allowed,
         };
-        
+
         self.log_event(event).await;
     }
-    
+
     /// Log tool execution
     pub async fn log_tool_execution(
         &self,
@@ -298,7 +298,7 @@ impl AuditLogger {
             request_id,
             is_security_violation: false,
         };
-        
+
         self.log_event(event).await;
     }
 }
@@ -313,16 +313,22 @@ mod tests {
         let dangerous = "<script>alert('xss')</script>";
         let safe = InputSanitizer::sanitize_string(dangerous, 1000);
         assert!(!safe.contains("<script>"));
-        
+
         // Test task name validation
         assert!(InputSanitizer::validate_task_name("valid-task_name"));
         assert!(!InputSanitizer::validate_task_name("invalid task name"));
         assert!(!InputSanitizer::validate_task_name(""));
-        
+
         // Test resource URI validation
-        assert!(InputSanitizer::validate_resource_uri("https://example.com/resource"));
-        assert!(!InputSanitizer::validate_resource_uri("javascript:alert(1)"));
-        assert!(!InputSanitizer::validate_resource_uri("../../../etc/passwd"));
+        assert!(InputSanitizer::validate_resource_uri(
+            "https://example.com/resource"
+        ));
+        assert!(!InputSanitizer::validate_resource_uri(
+            "javascript:alert(1)"
+        ));
+        assert!(!InputSanitizer::validate_resource_uri(
+            "../../../etc/passwd"
+        ));
     }
 
     #[test]
@@ -334,10 +340,10 @@ mod tests {
             authenticated_at: chrono::Utc::now(),
             session_id: "session-123".to_string(),
         };
-        
+
         let config = SecurityConfig::default();
         let context = SecurityContext::new(client, config);
-        
+
         assert!(!context.is_timed_out());
         assert!(context.remaining_time().is_some());
     }
@@ -345,20 +351,19 @@ mod tests {
     #[tokio::test]
     async fn test_audit_logger() {
         let logger = AuditLogger::new(true);
-        
-        logger.log_authentication(
-            "test-client",
-            true,
-            "api_key",
-            Some("req-123".to_string()),
-        ).await;
-        
-        logger.log_tool_execution(
-            "test-client",
-            "test-tool",
-            true,
-            100,
-            Some("req-124".to_string()),
-        ).await;
+
+        logger
+            .log_authentication("test-client", true, "api_key", Some("req-123".to_string()))
+            .await;
+
+        logger
+            .log_tool_execution(
+                "test-client",
+                "test-tool",
+                true,
+                100,
+                Some("req-124".to_string()),
+            )
+            .await;
     }
 }

@@ -1,11 +1,11 @@
 use axum::{
-    http::{Request, HeaderMap, HeaderValue},
+    http::{HeaderMap, HeaderValue, Request},
     middleware::Next,
     response::Response,
 };
 use std::sync::Arc;
-use uuid::Uuid;
 use tracing::Instrument;
+use uuid::Uuid;
 
 /// Request ID header name
 pub const REQUEST_ID_HEADER: &str = "X-Request-ID";
@@ -54,7 +54,9 @@ pub async fn request_id_middleware<B>(
         .unwrap_or_default();
 
     // Store request ID in request extensions for handlers to access
-    request.extensions_mut().insert(Arc::new(request_id.clone()));
+    request
+        .extensions_mut()
+        .insert(Arc::new(request_id.clone()));
 
     // Add request ID to tracing span
     let span = tracing::info_span!(
@@ -64,18 +66,20 @@ pub async fn request_id_middleware<B>(
         uri = %request.uri(),
     );
 
-    
-
     async move {
         let mut response = next.run(request).await;
 
         // Add request ID to response headers
         if let Ok(header_value) = HeaderValue::from_str(&request_id.0) {
-            response.headers_mut().insert(REQUEST_ID_HEADER, header_value);
+            response
+                .headers_mut()
+                .insert(REQUEST_ID_HEADER, header_value);
         }
 
         response
-    }.instrument(span).await
+    }
+    .instrument(span)
+    .await
 }
 
 /// Extension trait for extracting request ID from axum requests
@@ -134,10 +138,7 @@ mod tests {
             .route("/test", get(test_handler))
             .layer(middleware::from_fn(request_id_middleware));
 
-        let request = Request::builder()
-            .uri("/test")
-            .body(Body::empty())
-            .unwrap();
+        let request = Request::builder().uri("/test").body(Body::empty()).unwrap();
 
         let response = app.oneshot(request).await.unwrap();
 

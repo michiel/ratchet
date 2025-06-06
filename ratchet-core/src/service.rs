@@ -1,18 +1,18 @@
 //! Service registry and dependency injection
 
+use async_trait::async_trait;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
-use async_trait::async_trait;
 
-use crate::error::{ServiceError, Result};
+use crate::error::{Result, ServiceError};
 
 /// Service provider trait for dependency injection
 #[async_trait]
 pub trait ServiceProvider: Send + Sync {
     /// Get a service by type
     async fn get<T: Send + Sync + 'static>(&self) -> Result<Arc<T>>;
-    
+
     /// Check if a service is registered
     fn has<T: Send + Sync + 'static>(&self) -> bool;
 }
@@ -21,10 +21,10 @@ pub trait ServiceProvider: Send + Sync {
 pub struct ServiceRegistry {
     /// Singleton services
     singletons: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
-    
+
     /// Service factories
     factories: HashMap<TypeId, Box<dyn ServiceFactory>>,
-    
+
     /// Service aliases for interface-to-implementation mapping
     aliases: HashMap<TypeId, TypeId>,
 }
@@ -95,9 +95,9 @@ impl ServiceRegistry {
         // Check singletons first
         if let Some(service) = self.singletons.get(&type_id) {
             let any_arc = service.clone();
-            return any_arc
-                .downcast::<T>()
-                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
+            return any_arc.downcast::<T>().map_err(|_| {
+                ServiceError::NotFound(std::any::type_name::<T>().to_string()).into()
+            });
         }
 
         // Try factory
@@ -106,7 +106,9 @@ impl ServiceRegistry {
             return service
                 .downcast::<T>()
                 .map(|boxed| Arc::from(*boxed))
-                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
+                .map_err(|_| {
+                    ServiceError::NotFound(std::any::type_name::<T>().to_string()).into()
+                });
         }
 
         Err(ServiceError::NotFound(std::any::type_name::<T>().to_string()).into())
@@ -238,9 +240,9 @@ impl<'a> ServiceScope<'a> {
         // Check scoped services first
         if let Some(service) = self.scoped_services.get(&type_id) {
             let any_arc = service.clone();
-            return any_arc
-                .downcast::<T>()
-                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
+            return any_arc.downcast::<T>().map_err(|_| {
+                ServiceError::NotFound(std::any::type_name::<T>().to_string()).into()
+            });
         }
 
         // Fall back to parent registry
@@ -368,9 +370,9 @@ mod tests {
         let service = TestService {
             value: "test".to_string(),
         };
-        
+
         registry.register_singleton(service.clone());
-        
+
         let resolved = registry.resolve::<TestService>().await.unwrap();
         assert_eq!(resolved.value, "test");
     }
@@ -378,13 +380,13 @@ mod tests {
     #[tokio::test]
     async fn test_factory_registration() {
         let mut registry = ServiceRegistry::new();
-        
+
         registry.register_factory(|| {
             Ok(TestService {
                 value: "factory".to_string(),
             })
         });
-        
+
         let resolved = registry.resolve::<TestService>().await.unwrap();
         assert_eq!(resolved.value, "factory");
     }
@@ -392,13 +394,13 @@ mod tests {
     #[tokio::test]
     async fn test_async_factory_registration() {
         let mut registry = ServiceRegistry::new();
-        
+
         registry.register_async_factory(|| async {
             Ok(TestService {
                 value: "async_factory".to_string(),
             })
         });
-        
+
         let resolved = registry.resolve::<TestService>().await.unwrap();
         assert_eq!(resolved.value, "async_factory");
     }
@@ -409,12 +411,12 @@ mod tests {
         registry.register_singleton(TestService {
             value: "parent".to_string(),
         });
-        
+
         let mut scope = registry.create_scope();
         scope.register_scoped(TestService {
             value: "scoped".to_string(),
         });
-        
+
         let resolved = scope.resolve::<TestService>().await.unwrap();
         assert_eq!(resolved.value, "scoped");
     }
@@ -426,7 +428,7 @@ mod tests {
                 value: "builder".to_string(),
             })
             .build();
-        
+
         let service = provider.get::<TestService>().await.unwrap();
         assert_eq!(service.value, "builder");
         assert!(provider.has::<TestService>());

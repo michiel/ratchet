@@ -4,27 +4,30 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, QuerySelect, ColumnTrait, QueryFilter, QueryOrder, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect,
+};
 
 use crate::{
     database::{
         entities::{
-            jobs::{self, Entity as Jobs, JobStatus, JobPriority as Priority},
-            tasks::{Entity as Tasks},
+            jobs::{self, Entity as Jobs, JobPriority as Priority, JobStatus},
+            tasks::Entity as Tasks,
         },
         repositories::RepositoryFactory,
     },
     output::OutputDeliveryManager,
     rest::{
-        middleware::error_handler::RestError,
         extractors::ListQueryExtractor,
+        middleware::error_handler::RestError,
         middleware::pagination::WithPaginationHeaders,
         models::{
             common::ApiResponse,
             jobs::{
                 JobCreateRequest, JobDetailResponse, JobFilters, JobQueueStats, JobResponse,
-                JobUpdateRequest, PriorityStats, TestOutputDestinationsRequest,
-                TestOutputDestinationsResponse, TestDestinationResult,
+                JobUpdateRequest, PriorityStats, TestDestinationResult,
+                TestOutputDestinationsRequest, TestOutputDestinationsResponse,
             },
         },
     },
@@ -40,7 +43,7 @@ pub async fn list_jobs(
     ListQueryExtractor(query): ListQueryExtractor,
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
-    
+
     let mut jobs_query = Jobs::find();
 
     // Apply filters
@@ -80,7 +83,10 @@ pub async fn list_jobs(
             _ => jobs::Column::Id,
         };
 
-        if matches!(sort_query.sort_direction(), crate::rest::models::common::SortDirection::Desc) {
+        if matches!(
+            sort_query.sort_direction(),
+            crate::rest::models::common::SortDirection::Desc
+        ) {
             jobs_query = jobs_query.order_by_desc(column);
         } else {
             jobs_query = jobs_query.order_by_asc(column);
@@ -107,8 +113,10 @@ pub async fn list_jobs(
 
     let job_responses: Vec<JobResponse> = jobs.into_iter().map(Into::into).collect();
 
-    Ok(Json(ApiResponse { data: job_responses })
-        .with_pagination_headers(total, pagination.offset(), pagination.limit(), "jobs"))
+    Ok(Json(ApiResponse {
+        data: job_responses,
+    })
+    .with_pagination_headers(total, pagination.offset(), pagination.limit(), "jobs"))
 }
 
 pub async fn get_job(
@@ -116,7 +124,7 @@ pub async fn get_job(
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
-    
+
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
@@ -143,9 +151,10 @@ pub async fn get_job(
         None
     };
 
-    let output_destinations = job.output_destinations
+    let output_destinations = job
+        .output_destinations
         .and_then(|json| serde_json::from_value(json).ok());
-    
+
     let response = JobDetailResponse {
         id: job.id,
         uuid: job.uuid,
@@ -209,7 +218,8 @@ pub async fn create_job(
         active_job.metadata = ActiveValue::Set(Some(metadata));
     }
     if let Some(destinations) = payload.output_destinations {
-        active_job.output_destinations = ActiveValue::Set(Some(serde_json::to_value(destinations).unwrap()));
+        active_job.output_destinations =
+            ActiveValue::Set(Some(serde_json::to_value(destinations).unwrap()));
     }
 
     let created_job = active_job
@@ -226,7 +236,7 @@ pub async fn update_job(
     Json(payload): Json<JobUpdateRequest>,
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
-    
+
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
@@ -269,7 +279,7 @@ pub async fn delete_job(
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
     let job_repo = ctx.repository.job_repository();
-    
+
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
@@ -297,7 +307,7 @@ pub async fn cancel_job(
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
     let job_repo = ctx.repository.job_repository();
-    
+
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
@@ -330,7 +340,7 @@ pub async fn retry_job(
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, RestError> {
     let db = ctx.repository.database().get_connection();
-    
+
     let job = Jobs::find_by_id(id)
         .one(db)
         .await
@@ -364,7 +374,7 @@ pub async fn get_queue_stats(
     State(ctx): State<JobsContext>,
 ) -> Result<impl IntoResponse, RestError> {
     let job_repo = ctx.repository.job_repository();
-    
+
     let stats = job_repo
         .get_queue_stats()
         .await
@@ -396,16 +406,16 @@ pub async fn test_output_destinations(
     let test_results = OutputDeliveryManager::test_configurations(&payload.destinations)
         .await
         .map_err(|e| RestError::BadRequest(format!("Invalid destination configurations: {}", e)))?;
-    
+
     let mut results = Vec::new();
     let mut overall_success = true;
-    
+
     for test_result in test_results {
         let success = test_result.success;
         if !success {
             overall_success = false;
         }
-        
+
         results.push(TestDestinationResult {
             index: test_result.index,
             destination_type: test_result.destination_type,
@@ -414,11 +424,11 @@ pub async fn test_output_destinations(
             estimated_time_ms: test_result.estimated_time.as_millis() as u64,
         });
     }
-    
+
     let response = TestOutputDestinationsResponse {
         results,
         overall_success,
     };
-    
+
     Ok(Json(response))
 }

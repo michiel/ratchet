@@ -1,6 +1,6 @@
 use super::LogEvent;
 use serde_json::json;
-use sysinfo::{System, SystemExt, ProcessExt};
+use sysinfo::{ProcessExt, System, SystemExt};
 
 /// Trait for log enrichment
 pub trait Enricher: Send + Sync {
@@ -57,9 +57,15 @@ impl SystemEnricher {
 
 impl Enricher for SystemEnricher {
     fn enrich(&self, event: &mut LogEvent) {
-        event.fields.insert("hostname".to_string(), json!(self.hostname));
-        event.fields.insert("os".to_string(), json!(std::env::consts::OS));
-        event.fields.insert("arch".to_string(), json!(std::env::consts::ARCH));
+        event
+            .fields
+            .insert("hostname".to_string(), json!(self.hostname));
+        event
+            .fields
+            .insert("os".to_string(), json!(std::env::consts::OS));
+        event
+            .fields
+            .insert("arch".to_string(), json!(std::env::consts::ARCH));
     }
 }
 
@@ -92,9 +98,13 @@ impl ProcessEnricher {
 
 impl Enricher for ProcessEnricher {
     fn enrich(&self, event: &mut LogEvent) {
-        event.fields.insert("process_id".to_string(), json!(self.process_id));
-        event.fields.insert("process_name".to_string(), json!(self.process_name));
-        
+        event
+            .fields
+            .insert("process_id".to_string(), json!(self.process_id));
+        event
+            .fields
+            .insert("process_name".to_string(), json!(self.process_name));
+
         // Add memory usage if available
         let mut system = System::new_all();
         system.refresh_process(sysinfo::Pid::from(self.process_id as usize));
@@ -103,10 +113,9 @@ impl Enricher for ProcessEnricher {
                 "memory_usage_mb".to_string(),
                 json!(process.memory() / 1024 / 1024),
             );
-            event.fields.insert(
-                "cpu_usage_percent".to_string(),
-                json!(process.cpu_usage()),
-            );
+            event
+                .fields
+                .insert("cpu_usage_percent".to_string(), json!(process.cpu_usage()));
         }
     }
 }
@@ -132,7 +141,9 @@ impl Enricher for TaskContextEnricher {
         // For now, we just ensure task-related fields are present
         if event.fields.contains_key("task_id") {
             // Add a marker that this event is task-related
-            event.fields.insert("context_type".to_string(), json!("task_execution"));
+            event
+                .fields
+                .insert("context_type".to_string(), json!("task_execution"));
         }
     }
 }
@@ -167,11 +178,17 @@ impl Enricher for ExecutionContextEnricher {
             if let Some(completed_at) = event.fields.get("completed_at") {
                 // Calculate duration if both timestamps are available
                 if let (Some(start), Some(end)) = (
-                    started_at.as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()),
-                    completed_at.as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()),
+                    started_at
+                        .as_str()
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()),
+                    completed_at
+                        .as_str()
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()),
                 ) {
                     let duration_ms = (end.timestamp_millis() - start.timestamp_millis()).max(0);
-                    event.fields.insert("duration_ms".to_string(), json!(duration_ms));
+                    event
+                        .fields
+                        .insert("duration_ms".to_string(), json!(duration_ms));
                 }
             }
         }

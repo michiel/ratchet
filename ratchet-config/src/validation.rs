@@ -6,10 +6,10 @@ use crate::error::{ConfigError, ConfigResult};
 pub trait Validatable {
     /// Validate the configuration
     fn validate(&self) -> ConfigResult<()>;
-    
+
     /// Get the domain name for error reporting
     fn domain_name(&self) -> &'static str;
-    
+
     /// Helper to create a domain-specific validation error
     fn validation_error(&self, message: impl Into<String>) -> ConfigError {
         ConfigError::DomainError {
@@ -52,23 +52,28 @@ pub fn validate_url(url: &str, field_name: &str, domain: &str) -> ConfigResult<(
             message: format!("{} cannot be empty", field_name),
         });
     }
-    
+
     // Parse URL to validate format
     url::Url::parse(url).map_err(|e| ConfigError::DomainError {
         domain: domain.to_string(),
         message: format!("{} has invalid URL format: {}", field_name, e),
     })?;
-    
+
     Ok(())
 }
 
 /// Validate an enum choice
-pub fn validate_enum_choice<T>(value: &str, valid_choices: &[T], field_name: &str, domain: &str) -> ConfigResult<()>
+pub fn validate_enum_choice<T>(
+    value: &str,
+    valid_choices: &[T],
+    field_name: &str,
+    domain: &str,
+) -> ConfigResult<()>
 where
     T: AsRef<str>,
 {
     let valid: Vec<&str> = valid_choices.iter().map(|c| c.as_ref()).collect();
-    
+
     if !valid.iter().any(|&v| v.eq_ignore_ascii_case(value)) {
         return Err(ConfigError::DomainError {
             domain: domain.to_string(),
@@ -80,7 +85,7 @@ where
             ),
         });
     }
-    
+
     Ok(())
 }
 
@@ -92,11 +97,15 @@ pub fn validate_port_range(port: u16, field_name: &str, domain: &str) -> ConfigR
             message: format!("{} cannot be 0", field_name),
         });
     }
-    
+
     // Port 1-1023 are typically reserved for system services
     if port <= 1023 {
-        log::warn!("{} port {} is in the reserved range (1-1023)", field_name, port);
+        log::warn!(
+            "{} port {} is in the reserved range (1-1023)",
+            field_name,
+            port
+        );
     }
-    
+
     Ok(())
 }

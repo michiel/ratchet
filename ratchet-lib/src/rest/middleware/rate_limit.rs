@@ -1,6 +1,6 @@
 use axum::{
     extract::ConnectInfo,
-    http::{Request, HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
@@ -75,7 +75,7 @@ impl TokenBucket {
 
     fn try_consume(&mut self, tokens: f64) -> bool {
         self.refill();
-        
+
         if self.tokens >= tokens {
             self.tokens -= tokens;
             true
@@ -87,7 +87,7 @@ impl TokenBucket {
     fn refill(&mut self) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill).as_secs_f64();
-        
+
         let tokens_to_add = elapsed * self.refill_rate;
         self.tokens = (self.tokens + tokens_to_add).min(self.max_tokens);
         self.last_refill = now;
@@ -100,7 +100,7 @@ impl TokenBucket {
 
     fn time_until_available(&mut self) -> Duration {
         self.refill();
-        
+
         if self.tokens >= 1.0 {
             Duration::from_secs(0)
         } else {
@@ -124,7 +124,7 @@ struct ClientInfo {
 impl ClientInfo {
     fn new(config: &RateLimitConfig) -> Self {
         let refill_rate = config.requests_per_minute as f64 / 60.0;
-        
+
         Self {
             bucket: TokenBucket::new(config.burst_size, refill_rate),
             first_seen: Instant::now(),
@@ -159,14 +159,14 @@ impl RateLimiter {
 
         // Start cleanup task
         rate_limiter.start_cleanup_task();
-        
+
         rate_limiter
     }
 
     /// Check if request should be allowed
     pub async fn check_rate_limit(&self, client_id: &str) -> RateLimitResult {
         let mut clients = self.clients.write().await;
-        
+
         let client_info = clients
             .entry(client_id.to_string())
             .or_insert_with(|| ClientInfo::new(&self.config));
@@ -182,12 +182,12 @@ impl RateLimiter {
         } else {
             client_info.record_blocked();
             let retry_after = client_info.bucket.time_until_available();
-            
+
             warn!(
                 "Rate limit exceeded for client: {} (total: {}, blocked: {})",
                 client_id, client_info.total_requests, client_info.blocked_requests
             );
-            
+
             RateLimitResult::RateLimited { retry_after }
         }
     }
@@ -207,11 +207,11 @@ impl RateLimiter {
     /// Get global rate limiter statistics
     pub async fn get_global_stats(&self) -> GlobalStats {
         let clients = self.clients.read().await;
-        
+
         let total_clients = clients.len();
         let total_requests: u64 = clients.values().map(|c| c.total_requests).sum();
         let total_blocked: u64 = clients.values().map(|c| c.blocked_requests).sum();
-        
+
         GlobalStats {
             total_clients,
             total_requests,
@@ -228,24 +228,23 @@ impl RateLimiter {
         let clients = self.clients.clone();
         let cleanup_interval = self.config.cleanup_interval;
         let window_size = self.config.window_size;
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(cleanup_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let mut clients_guard = clients.write().await;
                 let now = Instant::now();
-                
+
                 // Remove clients that haven't been seen for twice the window size
                 let cleanup_threshold = window_size * 2;
                 let initial_count = clients_guard.len();
-                
-                clients_guard.retain(|_, client| {
-                    now.duration_since(client.last_seen) < cleanup_threshold
-                });
-                
+
+                clients_guard
+                    .retain(|_, client| now.duration_since(client.last_seen) < cleanup_threshold);
+
                 let removed_count = initial_count - clients_guard.len();
                 if removed_count > 0 {
                     debug!("Cleaned up {} inactive rate limit entries", removed_count);
@@ -293,36 +292,36 @@ pub struct GlobalStats {
 /// Extract client identifier from request
 fn extract_client_id(headers: &HeaderMap, connect_info: Option<ConnectInfo<SocketAddr>>) -> String {
     // Try to get client ID from various sources
-    
+
     // 1. API Key header
     if let Some(api_key) = headers.get("X-API-Key").and_then(|h| h.to_str().ok()) {
         return format!("api_key:{}", api_key);
     }
-    
+
     // 2. Authorization header
     if let Some(auth) = headers.get("Authorization").and_then(|h| h.to_str().ok()) {
         if let Some(token) = auth.strip_prefix("Bearer ") {
             return format!("bearer:{}", token);
         }
     }
-    
+
     // 3. X-Forwarded-For header (for proxy setups)
     if let Some(forwarded) = headers.get("X-Forwarded-For").and_then(|h| h.to_str().ok()) {
         if let Some(ip) = forwarded.split(',').next() {
             return format!("ip:{}", ip.trim());
         }
     }
-    
+
     // 4. X-Real-IP header
     if let Some(real_ip) = headers.get("X-Real-IP").and_then(|h| h.to_str().ok()) {
         return format!("ip:{}", real_ip);
     }
-    
+
     // 5. Connection info (direct IP)
     if let Some(ConnectInfo(addr)) = connect_info {
         return format!("ip:{}", addr.ip());
     }
-    
+
     // 6. Fallback to a default identifier
     "unknown".to_string()
 }
@@ -343,48 +342,56 @@ pub async fn rate_limit_middleware<B>(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ApiError::internal_error("Rate limiter not configured")),
-            ).into_response()
+            )
+                .into_response()
         })?
         .clone();
 
     let client_id = extract_client_id(&headers, connect_info);
-    
+
     match rate_limiter.check_rate_limit(&client_id).await {
-        RateLimitResult::Allowed { remaining, reset_at } => {
+        RateLimitResult::Allowed {
+            remaining,
+            reset_at,
+        } => {
             let mut response = next.run(request).await;
-            
+
             // Add rate limit headers
             let headers = response.headers_mut();
-            
+
             if let Ok(remaining_value) = HeaderValue::from_str(&remaining.to_string()) {
                 headers.insert("X-RateLimit-Remaining", remaining_value);
             }
-            
-            if let Ok(reset_value) = HeaderValue::from_str(&reset_at.elapsed().as_secs().to_string()) {
+
+            if let Ok(reset_value) =
+                HeaderValue::from_str(&reset_at.elapsed().as_secs().to_string())
+            {
                 headers.insert("X-RateLimit-Reset", reset_value);
             }
-            
+
             Ok(response)
         }
         RateLimitResult::RateLimited { retry_after } => {
-            let error_response = ApiError::new("Rate limit exceeded")
-                .with_code("RATE_LIMIT_EXCEEDED");
-            
+            let error_response =
+                ApiError::new("Rate limit exceeded").with_code("RATE_LIMIT_EXCEEDED");
+
             let response = (StatusCode::TOO_MANY_REQUESTS, Json(error_response)).into_response();
-            
+
             let mut final_response = response;
             let headers = final_response.headers_mut();
-            
+
             if let Ok(retry_value) = HeaderValue::from_str(&retry_after.as_secs().to_string()) {
                 headers.insert("Retry-After", retry_value);
             }
-            
-            if let Ok(limit_value) = HeaderValue::from_str(&rate_limiter.config.requests_per_minute.to_string()) {
+
+            if let Ok(limit_value) =
+                HeaderValue::from_str(&rate_limiter.config.requests_per_minute.to_string())
+            {
                 headers.insert("X-RateLimit-Limit", limit_value);
             }
-            
+
             headers.insert("X-RateLimit-Remaining", HeaderValue::from_static("0"));
-            
+
             Err(final_response)
         }
     }
@@ -404,42 +411,52 @@ pub async fn rate_limit_middleware_with_state<B>(
     next: Next<B>,
 ) -> Result<Response, Response> {
     let client_id = extract_client_id(&headers, connect_info);
-    
+
     match rate_limiter.check_rate_limit(&client_id).await {
-        RateLimitResult::Allowed { remaining, reset_at } => {
+        RateLimitResult::Allowed {
+            remaining,
+            reset_at,
+        } => {
             let mut response = next.run(request).await;
-            
+
             // Add rate limit headers
             let headers = response.headers_mut();
-            
+
             if let Ok(remaining_value) = HeaderValue::from_str(&remaining.to_string()) {
                 headers.insert("X-RateLimit-Remaining", remaining_value);
             }
-            
-            if let Ok(reset_value) = HeaderValue::from_str(&reset_at.elapsed().as_secs().to_string()) {
+
+            if let Ok(reset_value) =
+                HeaderValue::from_str(&reset_at.elapsed().as_secs().to_string())
+            {
                 headers.insert("X-RateLimit-Reset", reset_value);
             }
-            
+
             Ok(response)
         }
         RateLimitResult::RateLimited { retry_after } => {
             // Rate limited - return 429 with retry information
-            let error_response = ApiError::new("Rate limit exceeded. You have exceeded the rate limit. Please try again later.")
-                .with_code("RATE_LIMIT_EXCEEDED");
+            let error_response = ApiError::new(
+                "Rate limit exceeded. You have exceeded the rate limit. Please try again later.",
+            )
+            .with_code("RATE_LIMIT_EXCEEDED");
 
-            let mut final_response = (StatusCode::TOO_MANY_REQUESTS, Json(error_response)).into_response();
-            
+            let mut final_response =
+                (StatusCode::TOO_MANY_REQUESTS, Json(error_response)).into_response();
+
             let headers = final_response.headers_mut();
             if let Ok(retry_value) = HeaderValue::from_str(&retry_after.as_secs().to_string()) {
                 headers.insert("Retry-After", retry_value);
             }
-            
-            if let Ok(limit_value) = HeaderValue::from_str(&rate_limiter.config.requests_per_minute.to_string()) {
+
+            if let Ok(limit_value) =
+                HeaderValue::from_str(&rate_limiter.config.requests_per_minute.to_string())
+            {
                 headers.insert("X-RateLimit-Limit", limit_value);
             }
-            
+
             headers.insert("X-RateLimit-Remaining", HeaderValue::from_static("0"));
-            
+
             Err(final_response)
         }
     }
@@ -452,17 +469,17 @@ mod tests {
     #[test]
     fn test_token_bucket() {
         let mut bucket = TokenBucket::new(5, 1.0); // 5 tokens, 1 token per second
-        
+
         // Should start with full bucket
         assert!(bucket.try_consume(1.0));
         assert!(bucket.try_consume(1.0));
         assert!(bucket.try_consume(1.0));
         assert!(bucket.try_consume(1.0));
         assert!(bucket.try_consume(1.0));
-        
+
         // Should be empty now
         assert!(!bucket.try_consume(1.0));
-        
+
         // Wait and try again (in real test, would need actual time passage)
         // For unit test, we can't easily test time-based refilling
     }
@@ -475,20 +492,24 @@ mod tests {
             window_size: Duration::from_secs(60),
             cleanup_interval: Duration::from_secs(300),
         };
-        
+
         let limiter = RateLimiter::new(config);
         let client_id = "test_client";
-        
+
         // First few requests should be allowed
         for i in 0..5 {
             let result = limiter.check_rate_limit(client_id).await;
-            assert!(matches!(result, RateLimitResult::Allowed { .. }), "Request {} failed", i);
+            assert!(
+                matches!(result, RateLimitResult::Allowed { .. }),
+                "Request {} failed",
+                i
+            );
         }
-        
+
         // Next request should be rate limited (burst exhausted)
         let result = limiter.check_rate_limit(client_id).await;
         assert!(matches!(result, RateLimitResult::RateLimited { .. }));
-        
+
         // Stats should reflect the requests
         let stats = limiter.get_client_stats(client_id).await.unwrap();
         assert_eq!(stats.total_requests, 6);
@@ -499,12 +520,12 @@ mod tests {
     async fn test_global_stats() {
         let config = RateLimitConfig::default();
         let limiter = RateLimiter::new(config);
-        
+
         // Make requests from different clients
         limiter.check_rate_limit("client1").await;
         limiter.check_rate_limit("client2").await;
         limiter.check_rate_limit("client1").await;
-        
+
         let stats = limiter.get_global_stats().await;
         assert_eq!(stats.total_clients, 2);
         assert_eq!(stats.total_requests, 3);
@@ -514,18 +535,21 @@ mod tests {
     #[test]
     fn test_client_id_extraction() {
         let mut headers = HeaderMap::new();
-        
+
         // Test API key extraction
         headers.insert("X-API-Key", HeaderValue::from_static("test-key"));
         let client_id = extract_client_id(&headers, None);
         assert_eq!(client_id, "api_key:test-key");
-        
+
         // Test Authorization header
         headers.clear();
-        headers.insert("Authorization", HeaderValue::from_static("Bearer test-token"));
+        headers.insert(
+            "Authorization",
+            HeaderValue::from_static("Bearer test-token"),
+        );
         let client_id = extract_client_id(&headers, None);
         assert_eq!(client_id, "bearer:test-token");
-        
+
         // Test IP address
         headers.clear();
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();

@@ -138,7 +138,11 @@ pub trait Hook: Send + Sync {
     }
 
     /// Execute the hook
-    async fn execute(&self, context: &mut PluginContext, data: &mut serde_json::Value) -> PluginResult<()>;
+    async fn execute(
+        &self,
+        context: &mut PluginContext,
+        data: &mut serde_json::Value,
+    ) -> PluginResult<()>;
 
     /// Handle hook execution errors
     async fn handle_error(&self, error: &PluginError, context: &PluginContext) -> PluginResult<()> {
@@ -157,31 +161,51 @@ pub trait Hook: Send + Sync {
 #[async_trait]
 pub trait TaskHook: Hook {
     /// Called before task validation
-    async fn pre_validate(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
+    async fn pre_validate(
+        &self,
+        context: &mut PluginContext,
+        data: &mut TaskExecutionData,
+    ) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called before task execution
-    async fn pre_execute(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
+    async fn pre_execute(
+        &self,
+        context: &mut PluginContext,
+        data: &mut TaskExecutionData,
+    ) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called after task execution (success or failure)
-    async fn post_execute(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
+    async fn post_execute(
+        &self,
+        context: &mut PluginContext,
+        data: &mut TaskExecutionData,
+    ) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called when task execution succeeds
-    async fn on_success(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
+    async fn on_success(
+        &self,
+        context: &mut PluginContext,
+        data: &mut TaskExecutionData,
+    ) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called when task execution fails
-    async fn on_failure(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
+    async fn on_failure(
+        &self,
+        context: &mut PluginContext,
+        data: &mut TaskExecutionData,
+    ) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
@@ -203,19 +227,31 @@ pub trait ExecutionHook: Hook {
     }
 
     /// Called on configuration changes
-    async fn on_config_change(&self, context: &mut PluginContext, config: &serde_json::Value) -> PluginResult<()> {
+    async fn on_config_change(
+        &self,
+        context: &mut PluginContext,
+        config: &serde_json::Value,
+    ) -> PluginResult<()> {
         let _ = (context, config);
         Ok(())
     }
 
     /// Called on plugin loaded
-    async fn on_plugin_loaded(&self, context: &mut PluginContext, plugin_id: &str) -> PluginResult<()> {
+    async fn on_plugin_loaded(
+        &self,
+        context: &mut PluginContext,
+        plugin_id: &str,
+    ) -> PluginResult<()> {
         let _ = (context, plugin_id);
         Ok(())
     }
 
     /// Called on plugin unloaded
-    async fn on_plugin_unloaded(&self, context: &mut PluginContext, plugin_id: &str) -> PluginResult<()> {
+    async fn on_plugin_unloaded(
+        &self,
+        context: &mut PluginContext,
+        plugin_id: &str,
+    ) -> PluginResult<()> {
         let _ = (context, plugin_id);
         Ok(())
     }
@@ -414,7 +450,7 @@ impl HookRegistry {
         data: &mut TaskExecutionData,
     ) -> PluginResult<()> {
         let hooks = self.task_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -432,7 +468,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -457,7 +493,7 @@ impl HookRegistry {
         data: &mut TaskExecutionData,
     ) -> PluginResult<()> {
         let hooks = self.task_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -475,7 +511,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -500,7 +536,7 @@ impl HookRegistry {
         data: &mut TaskExecutionData,
     ) -> PluginResult<()> {
         let hooks = self.task_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -518,7 +554,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -543,7 +579,7 @@ impl HookRegistry {
         data: &mut TaskExecutionData,
     ) -> PluginResult<()> {
         let hooks = self.task_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -561,7 +597,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -586,7 +622,7 @@ impl HookRegistry {
         data: &mut TaskExecutionData,
     ) -> PluginResult<()> {
         let hooks = self.task_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -604,7 +640,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -625,7 +661,7 @@ impl HookRegistry {
     /// Execute startup hooks
     pub async fn execute_startup_hooks(&self, context: &mut PluginContext) -> PluginResult<()> {
         let hooks = self.execution_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -643,7 +679,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -664,7 +700,7 @@ impl HookRegistry {
     /// Execute shutdown hooks
     pub async fn execute_shutdown_hooks(&self, context: &mut PluginContext) -> PluginResult<()> {
         let hooks = self.execution_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -682,7 +718,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -701,9 +737,13 @@ impl HookRegistry {
     }
 
     /// Execute plugin loaded hooks
-    pub async fn execute_plugin_loaded_hooks(&self, context: &mut PluginContext, plugin_id: &str) -> PluginResult<()> {
+    pub async fn execute_plugin_loaded_hooks(
+        &self,
+        context: &mut PluginContext,
+        plugin_id: &str,
+    ) -> PluginResult<()> {
         let hooks = self.execution_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -721,7 +761,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -740,9 +780,13 @@ impl HookRegistry {
     }
 
     /// Execute plugin unloaded hooks
-    pub async fn execute_plugin_unloaded_hooks(&self, context: &mut PluginContext, plugin_id: &str) -> PluginResult<()> {
+    pub async fn execute_plugin_unloaded_hooks(
+        &self,
+        context: &mut PluginContext,
+        plugin_id: &str,
+    ) -> PluginResult<()> {
         let hooks = self.execution_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -760,7 +804,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -779,9 +823,13 @@ impl HookRegistry {
     }
 
     /// Execute config change hooks
-    pub async fn execute_config_change_hooks(&self, context: &mut PluginContext, config: &serde_json::Value) -> PluginResult<()> {
+    pub async fn execute_config_change_hooks(
+        &self,
+        context: &mut PluginContext,
+        config: &serde_json::Value,
+    ) -> PluginResult<()> {
         let hooks = self.execution_hooks.read().await;
-        
+
         for (_, priority_hooks) in hooks.iter() {
             for (registration, hook) in priority_hooks {
                 if !registration.enabled {
@@ -799,7 +847,7 @@ impl HookRegistry {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 let hook_stats = stats.entry(registration.name.clone()).or_default();
-                
+
                 match result {
                     Ok(()) => hook_stats.record_success(duration_us),
                     Err(ref e) => {
@@ -849,7 +897,8 @@ impl HookRegistry {
         {
             let mut task_hooks = self.task_hooks.write().await;
             for (_, hooks) in task_hooks.iter_mut() {
-                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id) {
+                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id)
+                {
                     registration.enabled = enabled;
                     return Ok(true);
                 }
@@ -860,7 +909,8 @@ impl HookRegistry {
         {
             let mut execution_hooks = self.execution_hooks.write().await;
             for (_, hooks) in execution_hooks.iter_mut() {
-                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id) {
+                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id)
+                {
                     registration.enabled = enabled;
                     return Ok(true);
                 }
@@ -907,7 +957,11 @@ mod tests {
             self.priority
         }
 
-        async fn execute(&self, _context: &mut PluginContext, _data: &mut serde_json::Value) -> PluginResult<()> {
+        async fn execute(
+            &self,
+            _context: &mut PluginContext,
+            _data: &mut serde_json::Value,
+        ) -> PluginResult<()> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -915,7 +969,11 @@ mod tests {
 
     #[async_trait]
     impl TaskHook for TestTaskHook {
-        async fn pre_execute(&self, _context: &mut PluginContext, _data: &mut TaskExecutionData) -> PluginResult<()> {
+        async fn pre_execute(
+            &self,
+            _context: &mut PluginContext,
+            _data: &mut TaskExecutionData,
+        ) -> PluginResult<()> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -930,9 +988,18 @@ mod tests {
         let hook3 = Arc::new(TestTaskHook::new("hook3", HookPriority::Normal));
 
         // Register hooks in different order
-        registry.register_task_hook(hook1.clone(), "plugin1").await.unwrap();
-        registry.register_task_hook(hook2.clone(), "plugin2").await.unwrap();
-        registry.register_task_hook(hook3.clone(), "plugin3").await.unwrap();
+        registry
+            .register_task_hook(hook1.clone(), "plugin1")
+            .await
+            .unwrap();
+        registry
+            .register_task_hook(hook2.clone(), "plugin2")
+            .await
+            .unwrap();
+        registry
+            .register_task_hook(hook3.clone(), "plugin3")
+            .await
+            .unwrap();
 
         let mut context = PluginContext::new(
             Uuid::new_v4(),
@@ -959,7 +1026,10 @@ mod tests {
         let hook = Arc::new(TestTaskHook::new("test-hook", HookPriority::Normal));
 
         // Register hook
-        let hook_id = registry.register_task_hook(hook.clone(), "test-plugin").await.unwrap();
+        let hook_id = registry
+            .register_task_hook(hook.clone(), "test-plugin")
+            .await
+            .unwrap();
 
         // List hooks
         let hooks = registry.list_hooks().await;
@@ -980,7 +1050,10 @@ mod tests {
         let registry = HookRegistry::new();
         let hook = Arc::new(TestTaskHook::new("test-hook", HookPriority::Normal));
 
-        let hook_id = registry.register_task_hook(hook.clone(), "test-plugin").await.unwrap();
+        let hook_id = registry
+            .register_task_hook(hook.clone(), "test-plugin")
+            .await
+            .unwrap();
 
         // Disable hook
         let success = registry.set_hook_enabled(hook_id, false).await.unwrap();
@@ -1032,7 +1105,7 @@ mod tests {
     #[test]
     fn test_task_execution_data() {
         let mut data = TaskExecutionData::new("test-task", serde_json::json!({"input": "value"}));
-        
+
         data = data.with_metadata("key", serde_json::json!("value"));
         data = data.with_output(serde_json::json!({"output": "result"}));
         data = data.with_result(true, 1000);
@@ -1050,7 +1123,10 @@ mod tests {
         let registry = HookRegistry::new();
         let hook = Arc::new(TestTaskHook::new("test-hook", HookPriority::Normal));
 
-        registry.register_task_hook(hook.clone(), "test-plugin").await.unwrap();
+        registry
+            .register_task_hook(hook.clone(), "test-plugin")
+            .await
+            .unwrap();
 
         let mut context = PluginContext::new(
             Uuid::new_v4(),
@@ -1069,7 +1145,7 @@ mod tests {
 
         let stats = registry.get_stats().await;
         let hook_stats = stats.get("test-hook").unwrap();
-        
+
         assert_eq!(hook_stats.executions, 3);
         assert_eq!(hook_stats.successes, 3);
         assert_eq!(hook_stats.failures, 0);

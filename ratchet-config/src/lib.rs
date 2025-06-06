@@ -19,16 +19,9 @@ pub use loader::ConfigLoader;
 
 // Re-export domain configurations
 pub use domains::{
-    RatchetConfig,
-    execution::ExecutionConfig,
-    http::HttpConfig,
-    cache::CacheConfig,
-    logging::LoggingConfig,
-    output::OutputConfig,
-    server::ServerConfig,
-    database::DatabaseConfig,
-    registry::RegistryConfig,
-    mcp::McpConfig,
+    cache::CacheConfig, database::DatabaseConfig, execution::ExecutionConfig, http::HttpConfig,
+    logging::LoggingConfig, mcp::McpConfig, output::OutputConfig, registry::RegistryConfig,
+    server::ServerConfig, RatchetConfig,
 };
 
 // Re-export utilities

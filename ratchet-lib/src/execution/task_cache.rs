@@ -1,8 +1,8 @@
+use crate::task::Task;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
-use crate::task::Task;
 
 /// LRU cache node for doubly linked list
 #[derive(Debug)]
@@ -68,10 +68,10 @@ impl TaskCache {
     pub fn get(&mut self, key: &str) -> Option<Task> {
         if let Some(node) = self.cache.get(key) {
             let task = node.task.clone();
-            
+
             // Move to head (mark as most recently used)
             self.move_to_head(key);
-            
+
             self.stats.hits += 1;
             debug!("Cache hit for task: {}", key);
             Some(task)
@@ -97,7 +97,7 @@ impl TaskCache {
 
         // Ensure cache constraints are met
         self.enforce_constraints();
-        
+
         self.update_stats();
     }
 
@@ -106,13 +106,13 @@ impl TaskCache {
         if let Some(node) = self.cache.remove(key) {
             let task = node.task.clone();
             let task_size = self.estimate_task_size(&task);
-            
+
             // Update linked list
             self.remove_from_list(key);
-            
+
             // Update memory usage
             self.current_memory_bytes = self.current_memory_bytes.saturating_sub(task_size);
-            
+
             self.update_stats();
             Some(task)
         } else {
@@ -156,16 +156,17 @@ impl TaskCache {
         } else {
             return;
         };
-        
+
         if let Some(node) = self.cache.get_mut(key) {
             // Update task
             node.task = task;
-            
+
             // Update memory usage
-            self.current_memory_bytes = self.current_memory_bytes
+            self.current_memory_bytes = self
+                .current_memory_bytes
                 .saturating_sub(old_size)
                 .saturating_add(new_size);
-            
+
             // Move to head
             self.move_to_head(key);
         }
@@ -180,16 +181,16 @@ impl TaskCache {
 
         // Insert into cache
         self.cache.insert(key.clone(), node);
-        
+
         // Update linked list
         if let Some(old_head) = &self.head {
             if let Some(old_head_node) = self.cache.get_mut(old_head) {
                 old_head_node.prev = Some(key.clone());
             }
         }
-        
+
         self.head = Some(key.clone());
-        
+
         if self.tail.is_none() {
             self.tail = Some(key);
         }
@@ -205,7 +206,7 @@ impl TaskCache {
 
         // Remove from current position
         self.remove_from_list(key);
-        
+
         // Add to head
         if let Some(node) = self.cache.get_mut(key) {
             node.prev = None;
@@ -219,7 +220,7 @@ impl TaskCache {
         }
 
         self.head = Some(key.to_string());
-        
+
         if self.tail.is_none() {
             self.tail = Some(key.to_string());
         }
@@ -265,23 +266,25 @@ impl TaskCache {
     }
 
     fn should_evict(&self) -> bool {
-        self.cache.len() > self.max_entries || 
-        self.current_memory_bytes > self.max_memory_bytes
+        self.cache.len() > self.max_entries || self.current_memory_bytes > self.max_memory_bytes
     }
 
     fn evict_entry(&mut self, key: &str) {
         if let Some(node) = self.cache.remove(key) {
             let task_size = self.estimate_task_size(&node.task);
-            
+
             // Remove from linked list
             self.remove_from_list(key);
-            
+
             // Update memory usage
             self.current_memory_bytes = self.current_memory_bytes.saturating_sub(task_size);
-            
+
             self.stats.evictions += 1;
-            
-            debug!("Evicted task from cache: {} (size: {} bytes)", key, task_size);
+
+            debug!(
+                "Evicted task from cache: {} (size: {} bytes)",
+                key, task_size
+            );
         }
     }
 
@@ -292,11 +295,11 @@ impl TaskCache {
         let description_size = task.metadata.description.len();
         let version_size = task.metadata.version.len();
         let path_size = task.path.to_string_lossy().len();
-        
+
         // Estimate JSON schema sizes
         let input_schema_size = task.input_schema.to_string().len();
         let output_schema_size = task.output_schema.to_string().len();
-        
+
         // Estimate task type size
         let task_type_size = match &task.task_type {
             crate::task::TaskType::JsTask { path, content } => {
@@ -304,14 +307,14 @@ impl TaskCache {
             }
         };
 
-        base_size + 
-        label_size + 
-        description_size + 
-        version_size + 
-        path_size + 
-        input_schema_size + 
-        output_schema_size + 
-        task_type_size
+        base_size
+            + label_size
+            + description_size
+            + version_size
+            + path_size
+            + input_schema_size
+            + output_schema_size
+            + task_type_size
     }
 
     fn update_stats(&mut self) {
@@ -383,9 +386,9 @@ mod tests {
     use uuid::Uuid;
 
     fn create_test_task(name: &str) -> Task {
-        use std::path::PathBuf;
         use crate::task::{TaskMetadata, TaskType};
-        
+        use std::path::PathBuf;
+
         Task {
             metadata: TaskMetadata {
                 uuid: Uuid::new_v4(),
@@ -407,21 +410,21 @@ mod tests {
     #[test]
     fn test_cache_basic_operations() {
         let mut cache = TaskCache::new(3, 10); // 3 entries, 10MB
-        
+
         let task1 = create_test_task("task1");
         let task2 = create_test_task("task2");
-        
+
         // Test put and get
         cache.put("key1".to_string(), task1.clone());
         cache.put("key2".to_string(), task2.clone());
-        
+
         assert_eq!(cache.len(), 2);
         assert!(cache.contains_key("key1"));
         assert!(cache.contains_key("key2"));
-        
+
         let retrieved = cache.get("key1").unwrap();
         assert_eq!(retrieved.metadata.label, task1.metadata.label);
-        
+
         // Test remove
         let removed = cache.remove("key1").unwrap();
         assert_eq!(removed.metadata.label, task1.metadata.label);
@@ -432,20 +435,20 @@ mod tests {
     #[test]
     fn test_lru_eviction() {
         let mut cache = TaskCache::new(2, 100); // Only 2 entries allowed
-        
+
         let task1 = create_test_task("task1");
         let task2 = create_test_task("task2");
         let task3 = create_test_task("task3");
-        
+
         cache.put("key1".to_string(), task1);
         cache.put("key2".to_string(), task2);
         cache.put("key3".to_string(), task3); // Should evict key1
-        
+
         assert_eq!(cache.len(), 2);
         assert!(!cache.contains_key("key1")); // Evicted
         assert!(cache.contains_key("key2"));
         assert!(cache.contains_key("key3"));
-        
+
         let stats = cache.stats();
         assert_eq!(stats.evictions, 1);
     }
@@ -453,22 +456,22 @@ mod tests {
     #[test]
     fn test_lru_ordering() {
         let mut cache = TaskCache::new(3, 100);
-        
+
         let task1 = create_test_task("task1");
         let task2 = create_test_task("task2");
         let task3 = create_test_task("task3");
         let task4 = create_test_task("task4");
-        
+
         cache.put("key1".to_string(), task1);
         cache.put("key2".to_string(), task2);
         cache.put("key3".to_string(), task3);
-        
+
         // Access key1 to make it most recently used
         cache.get("key1");
-        
+
         // Add key4, should evict key2 (least recently used)
         cache.put("key4".to_string(), task4);
-        
+
         assert!(cache.contains_key("key1")); // Recently accessed
         assert!(!cache.contains_key("key2")); // Evicted
         assert!(cache.contains_key("key3"));
@@ -478,18 +481,18 @@ mod tests {
     #[tokio::test]
     async fn test_shared_cache() {
         let cache = SharedTaskCache::new(2, 10);
-        
+
         let task1 = create_test_task("task1");
         let task2 = create_test_task("task2");
-        
+
         cache.put("key1".to_string(), task1.clone()).await;
         cache.put("key2".to_string(), task2.clone()).await;
-        
+
         assert_eq!(cache.len().await, 2);
-        
+
         let retrieved = cache.get("key1").await.unwrap();
         assert_eq!(retrieved.metadata.label, task1.metadata.label);
-        
+
         let stats = cache.stats().await;
         assert_eq!(stats.entries, 2);
         assert_eq!(stats.hits, 1);

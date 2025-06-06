@@ -1,7 +1,7 @@
 //! Integration tests for ratchet-config
 
+use ratchet_config::domains::logging::{LogFormat, LogLevel};
 use ratchet_config::*;
-use ratchet_config::domains::logging::{LogLevel, LogFormat};
 use std::time::Duration;
 use temp_env::with_vars;
 
@@ -19,15 +19,18 @@ fn test_config_loader_from_env() {
         ("RATCHET_LOG_LEVEL", Some("debug")),
         ("RATCHET_MAX_EXECUTION_SECONDS", Some("600")),
     ];
-    
+
     with_vars(vars, || {
         let loader = ConfigLoader::new();
         let config = loader.from_env().unwrap();
-        
+
         assert_eq!(config.http.timeout, Duration::from_secs(60));
         assert_eq!(config.cache.task_cache.task_content_cache_size, 200);
         assert_eq!(config.logging.level, LogLevel::Debug);
-        assert_eq!(config.execution.max_execution_duration, Duration::from_secs(600));
+        assert_eq!(
+            config.execution.max_execution_duration,
+            Duration::from_secs(600)
+        );
     });
 }
 
@@ -35,7 +38,7 @@ fn test_config_loader_from_env() {
 fn test_yaml_config_serialization() {
     let config = RatchetConfig::default();
     let yaml = serde_yaml::to_string(&config).unwrap();
-    
+
     // Parse it back
     let parsed: RatchetConfig = serde_yaml::from_str(&yaml).unwrap();
     assert!(parsed.validate_all().is_ok());
@@ -107,7 +110,7 @@ server:
 
     let config: RatchetConfig = serde_yaml::from_str(yaml).unwrap();
     assert!(config.validate_all().is_ok());
-    
+
     // Verify specific values
     assert_eq!(config.execution.max_concurrent_tasks, 5);
     assert_eq!(config.http.timeout, Duration::from_secs(45));
@@ -117,14 +120,14 @@ server:
     assert_eq!(config.logging.format, LogFormat::Json);
     assert_eq!(config.output.max_concurrent_deliveries, 5);
     assert_eq!(config.output.default_retry_policy.max_attempts, 5);
-    
+
     if let Some(server) = config.server {
         assert_eq!(server.bind_address, "0.0.0.0");
         assert_eq!(server.port, 9090);
         assert_eq!(server.database.max_connections, 20);
         assert!(server.cors.allow_credentials);
     }
-    
+
     // Registry tests commented out
     // if let Some(registry) = config.registry {
     //     assert_eq!(registry.sources.len(), 1);
@@ -140,12 +143,12 @@ fn test_validation_errors() {
     let mut config = RatchetConfig::default();
     config.http.timeout = Duration::from_secs(0);
     assert!(config.validate_all().is_err());
-    
+
     // Test invalid cache size
     config = RatchetConfig::default();
     config.cache.task_cache.task_content_cache_size = 0;
     assert!(config.validate_all().is_err());
-    
+
     // Test invalid execution duration
     config = RatchetConfig::default();
     config.execution.max_execution_duration = Duration::from_secs(0);
@@ -158,11 +161,11 @@ fn test_custom_prefix_loader() {
         ("CUSTOM_HTTP_TIMEOUT", Some("120")),
         ("CUSTOM_CACHE_SIZE", Some("300")),
     ];
-    
+
     with_vars(vars, || {
         let loader = ConfigLoader::with_prefix("CUSTOM");
         let config = loader.from_env().unwrap();
-        
+
         assert_eq!(config.http.timeout, Duration::from_secs(120));
         assert_eq!(config.cache.task_cache.task_content_cache_size, 300);
     });
@@ -170,31 +173,27 @@ fn test_custom_prefix_loader() {
 
 #[test]
 fn test_domain_specific_validation() {
-    use domains::{
-        cache::CacheConfig,
-        http::HttpConfig,
-        logging::LoggingConfig,
-    };
+    use domains::{cache::CacheConfig, http::HttpConfig, logging::LoggingConfig};
     use validation::Validatable;
-    
+
     // Test cache config validation
     let mut cache = CacheConfig::default();
     assert!(cache.validate().is_ok());
-    
+
     cache.task_cache.cache_type = "invalid".to_string();
     assert!(cache.validate().is_err());
-    
+
     // Test HTTP config validation
     let mut http = HttpConfig::default();
     assert!(http.validate().is_ok());
-    
+
     http.user_agent = String::new();
     assert!(http.validate().is_err());
-    
+
     // Test logging config validation
     let mut logging = LoggingConfig::default();
     assert!(logging.validate().is_ok());
-    
+
     logging.targets.clear();
     assert!(logging.validate().is_err());
 }
@@ -208,7 +207,7 @@ fn test_generate_sample_config() {
     assert!(sample.contains("cache:"));
     assert!(sample.contains("logging:"));
     assert!(sample.contains("output:"));
-    
+
     // Verify the sample is valid YAML
     let parsed: RatchetConfig = serde_yaml::from_str(&sample).unwrap();
     assert!(parsed.validate_all().is_ok());
@@ -218,7 +217,7 @@ fn test_generate_sample_config() {
 mod output_destination_tests {
     use super::*;
     use domains::output::*;
-    
+
     #[test]
     fn test_output_destination_template_validation() {
         let template = OutputDestinationTemplate {
@@ -235,9 +234,9 @@ mod output_destination_tests {
                 }),
             },
         };
-        
+
         assert!(template.validate_with_context("test").is_ok());
-        
+
         // Test invalid webhook URL
         let invalid = OutputDestinationTemplate {
             name: "test-webhook".to_string(),
@@ -251,7 +250,7 @@ mod output_destination_tests {
                 auth: None,
             },
         };
-        
+
         assert!(invalid.validate_with_context("test").is_err());
     }
 }

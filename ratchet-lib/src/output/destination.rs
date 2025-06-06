@@ -17,18 +17,18 @@ pub trait OutputDestination: Send + Sync {
         output: &TaskOutput,
         context: &DeliveryContext,
     ) -> Result<DeliveryResult, DeliveryError>;
-    
+
     /// Validate destination configuration
     fn validate_config(&self) -> Result<(), ValidationError>;
-    
+
     /// Get destination type for metrics/logging
     fn destination_type(&self) -> &'static str;
-    
+
     /// Check if destination supports retries
-    fn supports_retry(&self) -> bool { 
-        true 
+    fn supports_retry(&self) -> bool {
+        true
     }
-    
+
     /// Get estimated delivery time (for scheduling)
     fn estimated_delivery_time(&self) -> Duration {
         Duration::from_secs(5) // Default 5 seconds
@@ -87,11 +87,7 @@ impl DeliveryResult {
         }
     }
 
-    pub fn failure(
-        destination_id: String,
-        delivery_time: Duration,
-        error: DeliveryError,
-    ) -> Self {
+    pub fn failure(destination_id: String, delivery_time: Duration, error: DeliveryError) -> Self {
         Self {
             success: false,
             destination_id,

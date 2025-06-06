@@ -25,7 +25,7 @@ impl HttpMethod {
     pub fn as_str(&self) -> &'static str {
         match self {
             HttpMethod::Get => "GET",
-            HttpMethod::Post => "POST", 
+            HttpMethod::Post => "POST",
             HttpMethod::Put => "PUT",
             HttpMethod::Delete => "DELETE",
             HttpMethod::Patch => "PATCH",
@@ -47,7 +47,6 @@ impl HttpMethod {
         ]
     }
 }
-
 
 impl fmt::Display for HttpMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -109,7 +108,6 @@ impl LogLevel {
     }
 }
 
-
 impl fmt::Display for LogLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
@@ -165,7 +163,6 @@ impl Priority {
     }
 }
 
-
 impl fmt::Display for Priority {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
@@ -191,10 +188,10 @@ impl FromStr for Priority {
 pub enum ParseError {
     #[error("Invalid HTTP method: '{0}'. Supported methods are: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS")]
     InvalidHttpMethod(String),
-    
+
     #[error("Invalid log level: '{0}'. Supported levels are: trace, debug, info, warn, error")]
     InvalidLogLevel(String),
-    
+
     #[error("Invalid priority: '{0}'. Supported priorities are: low, normal, high, urgent")]
     InvalidPriority(String),
 }
@@ -223,7 +220,7 @@ mod tests {
         assert!(Priority::Low < Priority::Normal);
         assert!(Priority::Normal < Priority::High);
         assert!(Priority::High < Priority::Urgent);
-        
+
         assert_eq!(Priority::Low.as_u8(), 0);
         assert_eq!(Priority::Urgent.as_u8(), 3);
     }
@@ -233,11 +230,11 @@ mod tests {
         let method = HttpMethod::Post;
         let json = serde_json::to_string(&method).unwrap();
         assert_eq!(json, "\"POST\"");
-        
+
         let level = LogLevel::Debug;
         let json = serde_json::to_string(&level).unwrap();
         assert_eq!(json, "\"debug\"");
-        
+
         let priority = Priority::High;
         let json = serde_json::to_string(&priority).unwrap();
         assert_eq!(json, "\"high\"");

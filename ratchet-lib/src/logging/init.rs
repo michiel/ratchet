@@ -1,8 +1,8 @@
-use super::{LoggingConfig, init_logger};
+use super::{init_logger, LoggingConfig};
 use crate::errors::RatchetError;
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 /// Initialize logging from configuration
 pub fn init_logging_from_config(config: &LoggingConfig) -> Result<(), RatchetError> {
@@ -23,9 +23,10 @@ pub fn init_logging_from_config(config: &LoggingConfig) -> Result<(), RatchetErr
     }
 
     // Use structured logging for complex configurations
-    let logger = config.build_logger()
+    let logger = config
+        .build_logger()
         .map_err(|e| RatchetError::Configuration(format!("Failed to build logger: {}", e)))?;
-    
+
     init_logger(logger)
         .map_err(|e| RatchetError::Configuration(format!("Failed to initialize logger: {}", e)))?;
 
@@ -37,11 +38,9 @@ pub fn init_simple_tracing(log_level: &str) -> Result<(), RatchetError> {
     let env_filter = EnvFilter::try_new(log_level)
         .or_else(|_| EnvFilter::try_from_default_env())
         .unwrap_or_else(|_| EnvFilter::new("info"));
-    
-    tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
-        .init();
-    
+
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+
     Ok(())
 }
 
@@ -65,12 +64,18 @@ pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<(), RatchetError> {
         .init();
 
     // Also initialize structured logger for file outputs
-    if config.sinks.iter().any(|s| !matches!(s, super::config::SinkConfig::Console { .. })) {
-        let logger = config.build_logger()
-            .map_err(|e| RatchetError::Configuration(format!("Failed to build structured logger: {}", e)))?;
-        
-        init_logger(logger)
-            .map_err(|e| RatchetError::Configuration(format!("Failed to initialize structured logger: {}", e)))?;
+    if config
+        .sinks
+        .iter()
+        .any(|s| !matches!(s, super::config::SinkConfig::Console { .. }))
+    {
+        let logger = config.build_logger().map_err(|e| {
+            RatchetError::Configuration(format!("Failed to build structured logger: {}", e))
+        })?;
+
+        init_logger(logger).map_err(|e| {
+            RatchetError::Configuration(format!("Failed to initialize structured logger: {}", e))
+        })?;
     }
 
     Ok(())

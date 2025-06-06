@@ -10,9 +10,9 @@ pub mod stats;
 pub mod stores;
 
 // Specialized cache implementations
-pub mod task_cache;
 pub mod http_cache;
 pub mod result_cache;
+pub mod task_cache;
 
 // Re-export main types
 pub use cache::{Cache, CacheKey, CacheValue};
@@ -33,9 +33,9 @@ pub use stores::TtlCache;
 pub use stores::MokaCache;
 
 // Re-export specialized caches
-pub use task_cache::TaskCache;
 pub use http_cache::HttpCache;
 pub use result_cache::ResultCache;
+pub use task_cache::TaskCache;
 
 /// Create a default in-memory cache
 pub fn create_default_cache<K, V>() -> impl Cache<K, V>

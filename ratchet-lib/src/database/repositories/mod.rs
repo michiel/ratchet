@@ -1,12 +1,12 @@
-pub mod task_repository;
 pub mod execution_repository;
-pub mod schedule_repository;
 pub mod job_repository;
+pub mod schedule_repository;
+pub mod task_repository;
 
-pub use task_repository::TaskRepository;
 pub use execution_repository::ExecutionRepository;
-pub use schedule_repository::ScheduleRepository;
 pub use job_repository::JobRepository;
+pub use schedule_repository::ScheduleRepository;
+pub use task_repository::TaskRepository;
 
 use crate::database::DatabaseError;
 use async_trait::async_trait;
@@ -39,27 +39,27 @@ impl RepositoryFactory {
             db,
         }
     }
-    
+
     /// Get the database connection
     pub fn database(&self) -> &crate::database::DatabaseConnection {
         &self.db
     }
-    
+
     /// Get the execution repository
     pub fn execution_repository(&self) -> ExecutionRepository {
         self.execution_repo.clone()
     }
-    
+
     /// Get the task repository
     pub fn task_repository(&self) -> TaskRepository {
         self.task_repo.clone()
     }
-    
+
     /// Get the schedule repository
     pub fn schedule_repository(&self) -> ScheduleRepository {
         self.schedule_repo.clone()
     }
-    
+
     /// Get the job repository
     pub fn job_repository(&self) -> JobRepository {
         self.job_repo.clone()

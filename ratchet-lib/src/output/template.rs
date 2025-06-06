@@ -1,8 +1,8 @@
 //! Template engine for dynamic paths and URLs
 
 use crate::output::errors::DeliveryError;
-use std::collections::HashMap;
 use regex::Regex;
+use std::collections::HashMap;
 
 /// Simple template engine for variable substitution
 #[derive(Debug, Clone)]
@@ -26,12 +26,12 @@ impl TemplateEngine {
         variables: &HashMap<String, String>,
     ) -> Result<String, DeliveryError> {
         let mut result = template.to_string();
-        
+
         // Find all variable references
         for capture in self.variable_regex.captures_iter(template) {
             let full_match = &capture[0]; // {{variable_name}}
             let variable_name = &capture[1]; // variable_name
-            
+
             if let Some(value) = variables.get(variable_name) {
                 result = result.replace(full_match, value);
             } else {
@@ -40,7 +40,7 @@ impl TemplateEngine {
                 });
             }
         }
-        
+
         Ok(result)
     }
 
@@ -50,7 +50,7 @@ impl TemplateEngine {
         let mut brace_count = 0;
         let chars: Vec<char> = template.chars().collect();
         let mut i = 0;
-        
+
         while i < chars.len() {
             if i + 1 < chars.len() && chars[i] == '{' && chars[i + 1] == '{' {
                 brace_count += 1;
@@ -64,29 +64,34 @@ impl TemplateEngine {
                 }
             } else if chars[i] == '{' || chars[i] == '}' {
                 // Single brace not part of {{ or }}
-                return Err(format!("Single brace '{}' not allowed, use {{{{ or }}}}", chars[i]).into());
+                return Err(
+                    format!("Single brace '{}' not allowed, use {{{{ or }}}}", chars[i]).into(),
+                );
             } else {
                 i += 1;
             }
         }
-        
+
         if brace_count != 0 {
             return Err("Unmatched template braces".into());
         }
-        
+
         // Validate variable names
         for capture in self.variable_regex.captures_iter(template) {
             let variable_name = &capture[1];
             if variable_name.is_empty() {
                 return Err("Empty variable name".into());
             }
-            
+
             // Check for valid variable name (letters, numbers, underscores)
-            if !variable_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            if !variable_name
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_')
+            {
                 return Err(format!("Invalid variable name: {}", variable_name).into());
             }
         }
-        
+
         // Check for any {{ }} patterns that don't contain valid variable names
         // This catches things like {{}} or {{123}} that don't match our variable pattern
         let empty_var_regex = Regex::new(r"\{\{[^}]*\}\}").unwrap();
@@ -97,7 +102,7 @@ impl TemplateEngine {
                 return Err(format!("Invalid template variable: {}", matched).into());
             }
         }
-        
+
         Ok(())
     }
 
@@ -135,7 +140,7 @@ mod tests {
 
         let template = "/results/{{env}}/{{job_id}}/{{timestamp}}.json";
         let result = engine.render(template, &vars).unwrap();
-        
+
         assert_eq!(result, "/results/production/123/20240106_143000.json");
     }
 
@@ -146,7 +151,7 @@ mod tests {
 
         let template = "/results/{{missing_var}}/output.json";
         let result = engine.render(template, &vars);
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             DeliveryError::InvalidTemplateVariable { variable } => {
@@ -177,14 +182,14 @@ mod tests {
         let engine = TemplateEngine::new();
         let template = "{{var1}}/{{var2}}/{{var1}}"; // var1 appears twice
         let variables = engine.extract_variables(template);
-        
+
         assert_eq!(variables, vec!["var1", "var2", "var1"]);
     }
 
     #[test]
     fn test_has_variables() {
         let engine = TemplateEngine::new();
-        
+
         assert!(engine.has_variables("{{var}}"));
         assert!(engine.has_variables("prefix/{{var}}/suffix"));
         assert!(!engine.has_variables("no variables here"));

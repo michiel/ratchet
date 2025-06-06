@@ -1,9 +1,9 @@
 //! Schedule entity definition
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use super::Entity;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Schedule entity for cron-based task scheduling
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,14 +38,27 @@ pub enum ScheduleStatus {
 }
 
 impl Entity for Schedule {
-    fn id(&self) -> i32 { self.id }
-    fn uuid(&self) -> Uuid { self.uuid }
-    fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    fn id(&self) -> i32 {
+        self.id
+    }
+    fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 }
 
 impl Schedule {
-    pub fn new(task_id: i32, name: String, cron_expression: String, input_data: serde_json::Value) -> Self {
+    pub fn new(
+        task_id: i32,
+        name: String,
+        cron_expression: String,
+        input_data: serde_json::Value,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id: 0,
@@ -66,12 +79,13 @@ impl Schedule {
             updated_at: now,
         }
     }
-    
+
     pub fn is_ready_to_run(&self) -> bool {
-        self.enabled && 
-        matches!(self.status, ScheduleStatus::Active) &&
-        self.next_run_at.is_some_and(|next| Utc::now() >= next) &&
-        self.max_executions.map_or(true, |max| self.execution_count < max)
+        self.enabled
+            && matches!(self.status, ScheduleStatus::Active)
+            && self.next_run_at.is_some_and(|next| Utc::now() >= next)
+            && self
+                .max_executions
+                .map_or(true, |max| self.execution_count < max)
     }
 }
-

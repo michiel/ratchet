@@ -128,35 +128,31 @@ impl StorageError {
 impl From<ratchet_core::RatchetError> for StorageError {
     fn from(err: ratchet_core::RatchetError) -> Self {
         match err {
-            ratchet_core::RatchetError::Storage(storage_err) => {
-                match storage_err {
-                    ratchet_core::error::StorageError::ConnectionFailed(msg) => {
-                        StorageError::ConnectionFailed(msg)
-                    }
-                    ratchet_core::error::StorageError::QueryFailed(msg) => {
-                        StorageError::QueryFailed(msg)
-                    }
-                    ratchet_core::error::StorageError::TransactionFailed(msg) => {
-                        StorageError::TransactionFailed(msg)
-                    }
-                    ratchet_core::error::StorageError::MigrationFailed(msg) => {
-                        StorageError::MigrationFailed(msg)
-                    }
-                    ratchet_core::error::StorageError::NotFound => StorageError::NotFound,
-                    ratchet_core::error::StorageError::DuplicateKey(msg) => {
-                        StorageError::DuplicateKey(msg)
-                    }
+            ratchet_core::RatchetError::Storage(storage_err) => match storage_err {
+                ratchet_core::error::StorageError::ConnectionFailed(msg) => {
+                    StorageError::ConnectionFailed(msg)
                 }
-            }
+                ratchet_core::error::StorageError::QueryFailed(msg) => {
+                    StorageError::QueryFailed(msg)
+                }
+                ratchet_core::error::StorageError::TransactionFailed(msg) => {
+                    StorageError::TransactionFailed(msg)
+                }
+                ratchet_core::error::StorageError::MigrationFailed(msg) => {
+                    StorageError::MigrationFailed(msg)
+                }
+                ratchet_core::error::StorageError::NotFound => StorageError::NotFound,
+                ratchet_core::error::StorageError::DuplicateKey(msg) => {
+                    StorageError::DuplicateKey(msg)
+                }
+            },
             ratchet_core::RatchetError::Validation(validation_err) => {
                 StorageError::ValidationFailed(validation_err.to_string())
             }
             ratchet_core::RatchetError::Config(config_err) => {
                 StorageError::ConfigError(config_err.to_string())
             }
-            ratchet_core::RatchetError::Serialization(msg) => {
-                StorageError::SerializationError(msg)
-            }
+            ratchet_core::RatchetError::Serialization(msg) => StorageError::SerializationError(msg),
             ratchet_core::RatchetError::Io(io_err) => StorageError::Io(io_err),
             _ => StorageError::Other(err.to_string()),
         }
@@ -190,7 +186,10 @@ mod tests {
 
     #[test]
     fn test_user_messages() {
-        assert_eq!(StorageError::NotFound.user_message(), "Requested item not found");
+        assert_eq!(
+            StorageError::NotFound.user_message(),
+            "Requested item not found"
+        );
         assert_eq!(
             StorageError::ConnectionFailed("test".to_string()).user_message(),
             "Database connection unavailable"

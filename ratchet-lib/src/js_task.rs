@@ -1,9 +1,9 @@
 use crate::errors::JsExecutionError;
 use crate::task::{Task, TaskError, TaskType};
 use serde_json::Value as JsonValue;
+use thiserror::Error;
 use tokio::runtime::Runtime;
 use tracing::debug;
-use thiserror::Error;
 
 /// Errors that can occur when running a JS task
 #[derive(Error, Debug)]
@@ -28,7 +28,10 @@ pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsTaskError> {
 
     // Ensure it's a JavaScript task
     match &task.task_type {
-        TaskType::JsTask { path: _, content: _ } => {},
+        TaskType::JsTask {
+            path: _,
+            content: _,
+        } => {}
     }
 
     // Execute the task inside the runtime
@@ -45,7 +48,8 @@ pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsTaskError> {
 
         // Use the new execute_task function from js_executor with mutable task
         let http_manager = crate::http::HttpManager::new();
-        crate::js_executor::execute_task(&mut task, input_data, &http_manager).await
+        crate::js_executor::execute_task(&mut task, input_data, &http_manager)
+            .await
             .map_err(JsTaskError::from)
     })
 }
@@ -60,8 +64,8 @@ pub async fn add_two_numbers(num1: i32, num2: i32) -> Result<i32, JsExecutionErr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio_test::block_on;
     use crate::task::Task;
+    use tokio_test::block_on;
 
     #[test]
     fn test_run_task_from_fs() {
@@ -75,7 +79,7 @@ mod tests {
         // First verify we can load the task
         let task = Task::from_fs(test_path).unwrap();
         assert_eq!(task.metadata.label, "Addition Task");
-        
+
         // Then run the task
         let result = run_task_from_fs(test_path).unwrap();
 

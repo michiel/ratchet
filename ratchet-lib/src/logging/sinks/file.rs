@@ -1,9 +1,9 @@
-use crate::logging::{LogEvent, LogLevel, logger::LogSink};
+use crate::logging::{logger::LogSink, LogEvent, LogLevel};
+use chrono::Local;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use chrono::Local;
 
 pub struct FileSink {
     path: PathBuf,
@@ -16,16 +16,13 @@ pub struct FileSink {
 impl FileSink {
     pub fn new(path: impl AsRef<Path>, min_level: LogLevel) -> std::io::Result<Self> {
         let path = path.as_ref().to_path_buf();
-        
+
         // Create parent directory if it doesn't exist
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
 
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        let file = OpenOptions::new().create(true).append(true).open(&path)?;
 
         let current_size = file.metadata()?.len();
         let writer = BufWriter::new(file);
@@ -56,13 +53,11 @@ impl FileSink {
 
     fn rotate_file(&self) -> std::io::Result<()> {
         let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-        let rotated_path = self.path.with_file_name(
-            format!(
-                "{}.{}",
-                self.path.file_stem().unwrap().to_string_lossy(),
-                timestamp
-            )
-        );
+        let rotated_path = self.path.with_file_name(format!(
+            "{}.{}",
+            self.path.file_stem().unwrap().to_string_lossy(),
+            timestamp
+        ));
 
         // Close current file and rename it
         {
@@ -81,7 +76,7 @@ impl FileSink {
 
         let mut writer = self.writer.lock().unwrap();
         *writer = BufWriter::new(new_file);
-        
+
         let mut current_size = self.current_size.lock().unwrap();
         *current_size = 0;
 
@@ -91,11 +86,11 @@ impl FileSink {
     fn write_event(&self, event: &LogEvent) -> std::io::Result<()> {
         let json = serde_json::to_string(event)?;
         let bytes = json.as_bytes();
-        
+
         let mut writer = self.writer.lock().unwrap();
         writer.write_all(bytes)?;
         writer.write_all(b"\n")?;
-        
+
         let mut current_size = self.current_size.lock().unwrap();
         *current_size += bytes.len() as u64 + 1; // +1 for newline
 

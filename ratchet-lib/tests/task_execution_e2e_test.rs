@@ -14,24 +14,28 @@ use std::time::Duration;
 use uuid::Uuid;
 
 /// Helper to create a test environment
-async fn create_test_environment() -> (RepositoryFactory, Arc<JobQueueManager>, Arc<ProcessTaskExecutor>) {
+async fn create_test_environment() -> (
+    RepositoryFactory,
+    Arc<JobQueueManager>,
+    Arc<ProcessTaskExecutor>,
+) {
     // Setup in-memory database
     let db_config = DatabaseConfig {
         url: "sqlite::memory:".to_string(),
         max_connections: 5,
         connection_timeout: Duration::from_secs(5),
     };
-    
+
     let db_connection = DatabaseConnection::new(db_config).await.unwrap();
     let repositories = RepositoryFactory::new(db_connection);
-    
+
     // Run migrations
     use ratchet_lib::database::migrations::Migrator;
     use sea_orm_migration::MigratorTrait;
     Migrator::up(repositories.database().get_connection(), None)
         .await
         .unwrap();
-    
+
     // Create job queue
     let job_queue_config = JobQueueConfig {
         max_dequeue_batch_size: 10,
@@ -40,18 +44,22 @@ async fn create_test_environment() -> (RepositoryFactory, Arc<JobQueueManager>, 
         default_max_retries: 3,
     };
     let job_queue = Arc::new(JobQueueManager::new(repositories.clone(), job_queue_config));
-    
+
     // Create task executor with test config
     let config = RatchetConfig::default();
-    let task_executor = Arc::new(ProcessTaskExecutor::new(repositories.clone(), config).await.unwrap());
-    
+    let task_executor = Arc::new(
+        ProcessTaskExecutor::new(repositories.clone(), config)
+            .await
+            .unwrap(),
+    );
+
     (repositories, job_queue, task_executor)
 }
 
 #[tokio::test]
 async fn test_job_queue_enqueue_dequeue() {
     let (repos, job_queue, _executor) = create_test_environment().await;
-    
+
     // Create a test task first
     use ratchet_lib::database::entities::tasks;
     let task_model = tasks::ActiveModel {
@@ -66,11 +74,14 @@ async fn test_job_queue_enqueue_dequeue() {
         enabled: Set(true),
         ..Default::default()
     };
-    let task = task_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let task = task_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Create a job
-    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
     use ratchet_lib::database::entities::jobs;
+    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
     let job_model = jobs::ActiveModel {
         uuid: Set(Uuid::new_v4()),
         task_id: Set(task.id),
@@ -82,8 +93,11 @@ async fn test_job_queue_enqueue_dequeue() {
         retry_delay_seconds: Set(60),
         ..Default::default()
     };
-    let job = job_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let job = job_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Test job queue operations
     let jobs = job_queue.dequeue_jobs(5).await.unwrap();
     assert_eq!(jobs.len(), 1);
@@ -93,7 +107,7 @@ async fn test_job_queue_enqueue_dequeue() {
 #[tokio::test]
 async fn test_job_status_transitions() {
     let (repos, job_queue, _executor) = create_test_environment().await;
-    
+
     // Create a test task
     use ratchet_lib::database::entities::tasks;
     let task_model = tasks::ActiveModel {
@@ -108,11 +122,14 @@ async fn test_job_status_transitions() {
         enabled: Set(true),
         ..Default::default()
     };
-    let task = task_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let task = task_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Create a job
-    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
     use ratchet_lib::database::entities::jobs;
+    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
     let job_model = jobs::ActiveModel {
         uuid: Set(Uuid::new_v4()),
         task_id: Set(task.id),
@@ -124,8 +141,11 @@ async fn test_job_status_transitions() {
         retry_delay_seconds: Set(60),
         ..Default::default()
     };
-    let job = job_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let job = job_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Create an execution first
     use ratchet_lib::database::entities::executions;
     let exec_model = executions::ActiveModel {
@@ -135,11 +155,18 @@ async fn test_job_status_transitions() {
         input: Set(json!({"value": 100})),
         ..Default::default()
     };
-    let execution = exec_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let execution = exec_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Test status update using job repository directly
-    repos.job_repository().mark_processing(job.id, execution.id).await.unwrap();
-    
+    repos
+        .job_repository()
+        .mark_processing(job.id, execution.id)
+        .await
+        .unwrap();
+
     // Verify status changed
     use sea_orm::EntityTrait;
     let updated_job = jobs::Entity::find_by_id(job.id)
@@ -147,7 +174,7 @@ async fn test_job_status_transitions() {
         .await
         .unwrap()
         .unwrap();
-    
+
     assert_eq!(updated_job.status, JobStatus::Processing);
     assert!(updated_job.started_at.is_some());
 }
@@ -155,7 +182,7 @@ async fn test_job_status_transitions() {
 #[tokio::test]
 async fn test_multiple_priority_jobs() {
     let (repos, job_queue, _executor) = create_test_environment().await;
-    
+
     // Create a test task
     use ratchet_lib::database::entities::tasks;
     let task_model = tasks::ActiveModel {
@@ -170,15 +197,23 @@ async fn test_multiple_priority_jobs() {
         enabled: Set(true),
         ..Default::default()
     };
-    let task = task_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let task = task_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Create jobs with different priorities
-    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
     use ratchet_lib::database::entities::jobs;
-    
-    let priorities = vec![JobPriority::Low, JobPriority::Urgent, JobPriority::Normal, JobPriority::High];
+    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
+
+    let priorities = vec![
+        JobPriority::Low,
+        JobPriority::Urgent,
+        JobPriority::Normal,
+        JobPriority::High,
+    ];
     let mut job_ids = vec![];
-    
+
     for priority in priorities {
         let job_model = jobs::ActiveModel {
             uuid: Set(Uuid::new_v4()),
@@ -191,19 +226,22 @@ async fn test_multiple_priority_jobs() {
             retry_delay_seconds: Set(60),
             ..Default::default()
         };
-        let job = job_model.insert(repos.database().get_connection()).await.unwrap();
+        let job = job_model
+            .insert(repos.database().get_connection())
+            .await
+            .unwrap();
         job_ids.push((job.id, priority));
     }
-    
+
     // Dequeue jobs - should come back in priority order
     let jobs = job_queue.dequeue_jobs(4).await.unwrap();
     assert_eq!(jobs.len(), 4);
-    
+
     // Note: Database orders by string value alphabetically DESC
     // "urgent" > "normal" > "low" > "high" alphabetically
     // This is a known limitation of the current implementation
     // TODO: Consider using numeric priority values in database
-    
+
     // For now, just verify we got all 4 jobs
     let priorities: Vec<JobPriority> = jobs.iter().map(|j| j.priority).collect();
     assert!(priorities.contains(&JobPriority::Urgent));
@@ -215,7 +253,7 @@ async fn test_multiple_priority_jobs() {
 #[tokio::test]
 async fn test_job_retry_logic() {
     let (repos, job_queue, _executor) = create_test_environment().await;
-    
+
     // Create a test task
     use ratchet_lib::database::entities::tasks;
     let task_model = tasks::ActiveModel {
@@ -230,11 +268,14 @@ async fn test_job_retry_logic() {
         enabled: Set(true),
         ..Default::default()
     };
-    let task = task_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let task = task_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Create a job
-    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
     use ratchet_lib::database::entities::jobs;
+    use ratchet_lib::database::entities::jobs::{JobPriority, JobStatus};
     let job_model = jobs::ActiveModel {
         uuid: Set(Uuid::new_v4()),
         task_id: Set(task.id),
@@ -246,8 +287,11 @@ async fn test_job_retry_logic() {
         retry_delay_seconds: Set(1),
         ..Default::default()
     };
-    let job = job_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let job = job_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Create an execution first
     use ratchet_lib::database::entities::executions;
     let exec_model = executions::ActiveModel {
@@ -257,12 +301,23 @@ async fn test_job_retry_logic() {
         input: Set(json!({"value": 42})),
         ..Default::default()
     };
-    let execution = exec_model.insert(repos.database().get_connection()).await.unwrap();
-    
+    let execution = exec_model
+        .insert(repos.database().get_connection())
+        .await
+        .unwrap();
+
     // Mark job as processing then failed using job repository
-    repos.job_repository().mark_processing(job.id, execution.id).await.unwrap();
-    repos.job_repository().mark_failed(job.id, "Test failure".to_string(), None).await.unwrap();
-    
+    repos
+        .job_repository()
+        .mark_processing(job.id, execution.id)
+        .await
+        .unwrap();
+    repos
+        .job_repository()
+        .mark_failed(job.id, "Test failure".to_string(), None)
+        .await
+        .unwrap();
+
     // Verify retry status
     use sea_orm::EntityTrait;
     let failed_job = jobs::Entity::find_by_id(job.id)
@@ -270,7 +325,7 @@ async fn test_job_retry_logic() {
         .await
         .unwrap()
         .unwrap();
-    
+
     assert_eq!(failed_job.status, JobStatus::Retrying);
     assert_eq!(failed_job.retry_count, 1);
     assert!(failed_job.error_message.is_some());
@@ -279,17 +334,20 @@ async fn test_job_retry_logic() {
 #[tokio::test]
 async fn test_executor_lifecycle() {
     let (_repos, _job_queue, executor) = create_test_environment().await;
-    
+
     // Test that executor can start and stop
     let executor_clone = executor.clone();
     let handle = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         executor_clone.stop().await;
     });
-    
+
     // Start executor (this will block until stopped)
-    executor.start().await.expect("Executor should start successfully");
-    
+    executor
+        .start()
+        .await
+        .expect("Executor should start successfully");
+
     // Wait for stop task
     handle.await.unwrap();
 }

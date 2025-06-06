@@ -9,16 +9,16 @@ use std::time::Duration;
 pub struct StorageConfig {
     /// Storage backend type
     pub backend: StorageBackend,
-    
+
     /// Connection configuration
     pub connection: ConnectionConfig,
-    
+
     /// Performance and reliability settings
     pub performance: PerformanceConfig,
-    
+
     /// Security settings
     pub security: SecurityConfig,
-    
+
     /// Migration settings
     pub migrations: MigrationConfig,
 }
@@ -34,7 +34,7 @@ pub enum StorageBackend {
         /// Auto-create directory if it doesn't exist
         auto_create_dir: bool,
     },
-    
+
     /// PostgreSQL backend
     #[cfg(feature = "postgres")]
     Postgres {
@@ -43,7 +43,7 @@ pub enum StorageBackend {
         /// SSL mode
         ssl_mode: PostgresSslMode,
     },
-    
+
     /// MySQL backend
     #[cfg(feature = "mysql")]
     Mysql {
@@ -52,7 +52,7 @@ pub enum StorageBackend {
         /// SSL configuration
         ssl_ca: Option<PathBuf>,
     },
-    
+
     /// In-memory backend (for testing)
     InMemory,
 }
@@ -75,25 +75,25 @@ pub enum PostgresSslMode {
 pub struct ConnectionConfig {
     /// Maximum number of connections in the pool
     pub max_connections: u32,
-    
+
     /// Minimum number of connections to maintain
     pub min_connections: u32,
-    
+
     /// Connection timeout
     pub connect_timeout: Duration,
-    
+
     /// Query timeout
     pub query_timeout: Duration,
-    
+
     /// Idle timeout before closing connections
     pub idle_timeout: Option<Duration>,
-    
+
     /// Maximum lifetime of a connection
     pub max_lifetime: Option<Duration>,
-    
+
     /// Enable connection health checks
     pub health_check_enabled: bool,
-    
+
     /// Health check interval
     pub health_check_interval: Duration,
 }
@@ -103,19 +103,19 @@ pub struct ConnectionConfig {
 pub struct PerformanceConfig {
     /// Enable query logging
     pub query_logging: bool,
-    
+
     /// Log slow queries above this threshold
     pub slow_query_threshold: Duration,
-    
+
     /// Enable connection pool metrics
     pub pool_metrics: bool,
-    
+
     /// Enable statement preparation caching
     pub statement_cache: bool,
-    
+
     /// Maximum prepared statements to cache
     pub statement_cache_size: usize,
-    
+
     /// Enable row-level locking where supported
     pub row_level_locking: bool,
 }
@@ -125,16 +125,16 @@ pub struct PerformanceConfig {
 pub struct SecurityConfig {
     /// Enable input validation and sanitization
     pub input_validation: bool,
-    
+
     /// Enable SQL injection protection
     pub sql_injection_protection: bool,
-    
+
     /// Enable audit logging
     pub audit_logging: bool,
-    
+
     /// Maximum query complexity (prevent DoS)
     pub max_query_complexity: Option<u32>,
-    
+
     /// Enable data encryption at rest (if supported)
     pub encryption_at_rest: bool,
 }
@@ -144,16 +144,16 @@ pub struct SecurityConfig {
 pub struct MigrationConfig {
     /// Auto-run migrations on startup
     pub auto_migrate: bool,
-    
+
     /// Migration timeout
     pub migration_timeout: Duration,
-    
+
     /// Enable migration rollback on failure
     pub rollback_on_failure: bool,
-    
+
     /// Maximum number of migration retries
     pub max_retries: u32,
-    
+
     /// Migration retry delay
     pub retry_delay: Duration,
 }
@@ -236,7 +236,7 @@ impl StorageConfig {
             ..Default::default()
         }
     }
-    
+
     /// Create a new in-memory configuration (for testing)
     pub fn in_memory() -> Self {
         Self {
@@ -244,53 +244,54 @@ impl StorageConfig {
             ..Default::default()
         }
     }
-    
+
     /// Get the connection URL for the backend
     pub fn connection_url(&self) -> crate::StorageResult<String> {
         match &self.backend {
             StorageBackend::Sqlite { database_path, .. } => {
                 Ok(format!("sqlite://{}?mode=rwc", database_path.display()))
             }
-            
+
             #[cfg(feature = "postgres")]
             StorageBackend::Postgres { url, .. } => Ok(url.clone()),
-            
+
             #[cfg(feature = "mysql")]
             StorageBackend::Mysql { url, .. } => Ok(url.clone()),
-            
+
             StorageBackend::InMemory => Ok("sqlite://:memory:".to_string()),
         }
     }
-    
+
     /// Validate the configuration
     pub fn validate(&self) -> crate::StorageResult<()> {
         // Validate connection settings
         if self.connection.max_connections == 0 {
             return Err(crate::StorageError::ConfigError(
-                "max_connections must be greater than 0".to_string()
+                "max_connections must be greater than 0".to_string(),
             ));
         }
-        
+
         if self.connection.min_connections > self.connection.max_connections {
             return Err(crate::StorageError::ConfigError(
-                "min_connections cannot be greater than max_connections".to_string()
+                "min_connections cannot be greater than max_connections".to_string(),
             ));
         }
-        
+
         // Validate performance settings
         if self.performance.statement_cache_size == 0 && self.performance.statement_cache {
             return Err(crate::StorageError::ConfigError(
-                "statement_cache_size must be greater than 0 when statement_cache is enabled".to_string()
+                "statement_cache_size must be greater than 0 when statement_cache is enabled"
+                    .to_string(),
             ));
         }
-        
+
         // Validate migration settings
         if self.migrations.max_retries == 0 {
             return Err(crate::StorageError::ConfigError(
-                "migration max_retries must be greater than 0".to_string()
+                "migration max_retries must be greater than 0".to_string(),
             ));
         }
-        
+
         Ok(())
     }
 }
@@ -298,47 +299,50 @@ impl StorageConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_config() {
         let config = StorageConfig::default();
         assert!(config.validate().is_ok());
-        
+
         match config.backend {
-            StorageBackend::Sqlite { database_path, auto_create_dir } => {
+            StorageBackend::Sqlite {
+                database_path,
+                auto_create_dir,
+            } => {
                 assert_eq!(database_path, PathBuf::from("ratchet.db"));
                 assert!(auto_create_dir);
             }
             _ => panic!("Expected SQLite backend"),
         }
     }
-    
+
     #[test]
     fn test_sqlite_config() {
         let config = StorageConfig::sqlite("/tmp/test.db");
         assert!(config.validate().is_ok());
-        
+
         let url = config.connection_url().unwrap();
         assert!(url.starts_with("sqlite://"));
     }
-    
+
     #[test]
     fn test_in_memory_config() {
         let config = StorageConfig::in_memory();
         assert!(config.validate().is_ok());
-        
+
         let url = config.connection_url().unwrap();
         assert_eq!(url, "sqlite://:memory:");
     }
-    
+
     #[test]
     fn test_config_validation() {
         let mut config = StorageConfig::default();
-        
+
         // Test invalid max_connections
         config.connection.max_connections = 0;
         assert!(config.validate().is_err());
-        
+
         // Test invalid min/max connection relationship
         config.connection.max_connections = 5;
         config.connection.min_connections = 10;

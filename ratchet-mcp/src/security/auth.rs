@@ -1,11 +1,11 @@
 //! Authentication management for MCP connections
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
-use crate::McpError;
 use super::permissions::ClientPermissions;
+use crate::McpError;
 
 /// Authentication result
 pub type AuthResult<T> = Result<T, AuthError>;
@@ -15,23 +15,25 @@ pub type AuthResult<T> = Result<T, AuthError>;
 pub enum AuthError {
     #[error("Invalid credentials")]
     InvalidCredentials,
-    
+
     #[error("Authentication method not supported: {method}")]
     UnsupportedMethod { method: String },
-    
+
     #[error("Token expired")]
     TokenExpired,
-    
+
     #[error("Client not found: {client_id}")]
     ClientNotFound { client_id: String },
-    
+
     #[error("Authentication required")]
     AuthenticationRequired,
 }
 
 impl From<AuthError> for McpError {
     fn from(err: AuthError) -> Self {
-        McpError::AuthenticationFailed { reason: err.to_string() }
+        McpError::AuthenticationFailed {
+            reason: err.to_string(),
+        }
     }
 }
 
@@ -46,7 +48,7 @@ pub enum McpAuth {
         /// List of valid API keys with their associated client info
         keys: HashMap<String, ApiKeyInfo>,
     },
-    
+
     /// OAuth2 token authentication
     #[serde(rename = "oauth2")]
     OAuth2 {
@@ -55,7 +57,7 @@ pub enum McpAuth {
         audience: String,
         jwks_uri: String,
     },
-    
+
     /// Certificate-based authentication
     #[serde(rename = "certificate")]
     Certificate {
@@ -64,7 +66,7 @@ pub enum McpAuth {
         /// Whether to require client certificates
         require_client_cert: bool,
     },
-    
+
     /// No authentication (insecure - for development only)
     #[serde(rename = "none")]
     #[default]
@@ -76,16 +78,16 @@ pub enum McpAuth {
 pub struct ApiKeyInfo {
     /// Human-readable name for this key
     pub name: String,
-    
+
     /// Client permissions
     pub permissions: ClientPermissions,
-    
+
     /// When this key was created
     pub created_at: DateTime<Utc>,
-    
+
     /// When this key expires (if any)
     pub expires_at: Option<DateTime<Utc>>,
-    
+
     /// Whether this key is currently active
     pub active: bool,
 }
@@ -95,16 +97,16 @@ pub struct ApiKeyInfo {
 pub struct ClientContext {
     /// Unique client identifier
     pub id: String,
-    
+
     /// Human-readable client name
     pub name: String,
-    
+
     /// Client permissions
     pub permissions: ClientPermissions,
-    
+
     /// When the client was authenticated
     pub authenticated_at: DateTime<Utc>,
-    
+
     /// Session identifier
     pub session_id: String,
 }
@@ -113,7 +115,7 @@ pub struct ClientContext {
 pub struct McpAuthManager {
     /// Authentication configuration
     config: McpAuth,
-    
+
     /// Active sessions
     sessions: tokio::sync::RwLock<HashMap<String, ClientContext>>,
 }
@@ -126,7 +128,7 @@ impl McpAuthManager {
             sessions: tokio::sync::RwLock::new(HashMap::new()),
         }
     }
-    
+
     /// Authenticate a client request
     pub async fn authenticate(&self, auth_header: Option<&str>) -> AuthResult<ClientContext> {
         match &self.config {
@@ -158,11 +160,11 @@ impl McpAuthManager {
             }
         }
     }
-    
+
     /// Extract API key from authorization header
     fn extract_api_key(&self, auth_header: Option<&str>) -> AuthResult<String> {
         let header = auth_header.ok_or(AuthError::AuthenticationRequired)?;
-        
+
         if let Some(key) = header.strip_prefix("Bearer ") {
             Ok(key.to_string())
         } else if let Some(key) = header.strip_prefix("ApiKey ") {
@@ -171,7 +173,7 @@ impl McpAuthManager {
             Err(AuthError::InvalidCredentials)
         }
     }
-    
+
     /// Authenticate using API key
     async fn authenticate_api_key(
         &self,
@@ -179,19 +181,19 @@ impl McpAuthManager {
         keys: &HashMap<String, ApiKeyInfo>,
     ) -> AuthResult<ClientContext> {
         let key_info = keys.get(api_key).ok_or(AuthError::InvalidCredentials)?;
-        
+
         // Check if key is active
         if !key_info.active {
             return Err(AuthError::InvalidCredentials);
         }
-        
+
         // Check if key is expired
         if let Some(expires_at) = key_info.expires_at {
             if Utc::now() > expires_at {
                 return Err(AuthError::TokenExpired);
             }
         }
-        
+
         // Create client context
         let client_context = ClientContext {
             id: format!("api_key:{}", &api_key[..8]), // Use first 8 chars as ID
@@ -200,41 +202,40 @@ impl McpAuthManager {
             authenticated_at: Utc::now(),
             session_id: uuid::Uuid::new_v4().to_string(),
         };
-        
+
         // Store session
         let mut sessions = self.sessions.write().await;
         sessions.insert(client_context.session_id.clone(), client_context.clone());
-        
+
         Ok(client_context)
     }
-    
+
     /// Get client context for a session
     pub async fn get_session(&self, session_id: &str) -> Option<ClientContext> {
         let sessions = self.sessions.read().await;
         sessions.get(session_id).cloned()
     }
-    
+
     /// Remove a session
     pub async fn remove_session(&self, session_id: &str) {
         let mut sessions = self.sessions.write().await;
         sessions.remove(session_id);
     }
-    
+
     /// List active sessions
     pub async fn list_sessions(&self) -> Vec<ClientContext> {
         let sessions = self.sessions.read().await;
         sessions.values().cloned().collect()
     }
-    
+
     /// Clean up expired sessions
     pub async fn cleanup_sessions(&self, max_age: chrono::Duration) {
         let mut sessions = self.sessions.write().await;
         let cutoff = Utc::now() - max_age;
-        
+
         sessions.retain(|_, context| context.authenticated_at > cutoff);
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -260,7 +261,7 @@ mod tests {
                 active: true,
             },
         );
-        
+
         McpAuth::ApiKey { keys }
     }
 
@@ -268,23 +269,19 @@ mod tests {
     async fn test_api_key_authentication() {
         let config = create_test_api_key_config();
         let auth_manager = McpAuthManager::new(config);
-        
+
         // Test valid API key
-        let result = auth_manager
-            .authenticate(Some("Bearer test-key-123"))
-            .await;
+        let result = auth_manager.authenticate(Some("Bearer test-key-123")).await;
         assert!(result.is_ok());
-        
+
         let client = result.unwrap();
         assert_eq!(client.name, "Test Client");
         assert!(client.permissions.can_execute_tasks);
-        
+
         // Test invalid API key
-        let result = auth_manager
-            .authenticate(Some("Bearer invalid-key"))
-            .await;
+        let result = auth_manager.authenticate(Some("Bearer invalid-key")).await;
         assert!(result.is_err());
-        
+
         // Test missing auth header
         let result = auth_manager.authenticate(None).await;
         assert!(result.is_err());
@@ -294,18 +291,18 @@ mod tests {
     async fn test_session_management() {
         let config = create_test_api_key_config();
         let auth_manager = McpAuthManager::new(config);
-        
+
         // Authenticate and create session
         let client = auth_manager
             .authenticate(Some("Bearer test-key-123"))
             .await
             .unwrap();
-        
+
         // Get session
         let session = auth_manager.get_session(&client.session_id).await;
         assert!(session.is_some());
         assert_eq!(session.unwrap().id, client.id);
-        
+
         // Remove session
         auth_manager.remove_session(&client.session_id).await;
         let session = auth_manager.get_session(&client.session_id).await;
@@ -315,10 +312,10 @@ mod tests {
     #[tokio::test]
     async fn test_no_auth() {
         let auth_manager = McpAuthManager::new(McpAuth::None);
-        
+
         let result = auth_manager.authenticate(None).await;
         assert!(result.is_ok());
-        
+
         let client = result.unwrap();
         assert_eq!(client.id, "anonymous");
     }

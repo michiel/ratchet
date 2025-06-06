@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use tracing::warn;
 
-use crate::errors::{Result, RatchetError};
-use crate::registry::{TaskSource, loaders::TaskLoader};
+use crate::errors::{RatchetError, Result};
+use crate::registry::{loaders::TaskLoader, TaskSource};
 use crate::task::Task;
 
 pub struct HttpTaskLoader;
@@ -25,9 +25,13 @@ impl TaskLoader for HttpTaskLoader {
         match source {
             TaskSource::Http { url } => {
                 warn!("HTTP task loading not yet implemented for URL: {}", url);
-                Err(RatchetError::NotImplemented("HTTP task loading is not yet implemented".to_string()))
-            },
-            _ => Err(RatchetError::NotImplemented("HttpTaskLoader only supports HTTP sources".to_string())),
+                Err(RatchetError::NotImplemented(
+                    "HTTP task loading is not yet implemented".to_string(),
+                ))
+            }
+            _ => Err(RatchetError::NotImplemented(
+                "HttpTaskLoader only supports HTTP sources".to_string(),
+            )),
         }
     }
 }

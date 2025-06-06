@@ -1,16 +1,13 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    api::types::{UnifiedExecution, ExecutionStatus, ApiId},
-};
+use crate::api::types::{ApiId, ExecutionStatus, UnifiedExecution};
 
 /// Execution response model for REST API (now unified)
 pub type ExecutionResponse = UnifiedExecution;
 
 /// Detailed execution response with additional metadata (now unified)
 pub type ExecutionDetailResponse = UnifiedExecution;
-
 
 /// Request model for creating a new execution
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,13 +78,13 @@ impl ExecutionFilters {
     pub fn get_valid_sort_fields() -> Vec<&'static str> {
         vec![
             "id",
-            "uuid", 
+            "uuid",
             "task_id",
             "status",
             "queued_at",
-            "started_at", 
+            "started_at",
             "completed_at",
-            "duration_ms"
+            "duration_ms",
         ]
     }
 }

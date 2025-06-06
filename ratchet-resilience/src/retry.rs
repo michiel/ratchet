@@ -1,10 +1,10 @@
 //! Retry policy and executor
 
+use log::{debug, info, warn};
+use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::time::Duration;
 use tokio::time::sleep;
-use log::{warn, debug, info};
-use serde::{Deserialize, Serialize};
 
 use crate::backoff::BackoffCalculator;
 use crate::circuit_breaker::CircuitBreaker;
@@ -14,18 +14,18 @@ use crate::circuit_breaker::CircuitBreaker;
 pub struct RetryPolicy {
     /// Maximum number of retry attempts
     pub max_attempts: u32,
-    
+
     /// Initial delay between retries
     #[serde(with = "humantime_serde")]
     pub initial_delay: Duration,
-    
+
     /// Maximum delay between retries
     #[serde(with = "humantime_serde")]
     pub max_delay: Duration,
-    
+
     /// Backoff strategy
     pub backoff_strategy: crate::backoff::BackoffStrategy,
-    
+
     /// Whether to add jitter to retry delays
     pub jitter: bool,
 }
@@ -84,7 +84,7 @@ impl RetryPolicy {
             self.max_delay,
             self.jitter,
         );
-        
+
         calculator.calculate_delay(attempt)
     }
 }
@@ -93,12 +93,12 @@ impl RetryPolicy {
 pub trait Retryable {
     /// Whether this error is retryable
     fn is_retryable(&self) -> bool;
-    
+
     /// Whether this is a transient error that should be retried immediately
     fn is_transient(&self) -> bool {
         false
     }
-    
+
     /// Custom retry delay for this error type
     fn retry_delay(&self) -> Option<Duration> {
         None
@@ -115,7 +115,7 @@ impl RetryExecutor {
     pub fn new(policy: RetryPolicy) -> Self {
         Self { policy }
     }
-    
+
     /// Create with default policy
     pub fn with_default_policy() -> Self {
         Self::new(RetryPolicy::default())
@@ -141,7 +141,10 @@ impl RetryExecutor {
         let mut attempt = 1;
 
         loop {
-            debug!("Executing attempt {} of {}", attempt, self.policy.max_attempts);
+            debug!(
+                "Executing attempt {} of {}",
+                attempt, self.policy.max_attempts
+            );
 
             match f(attempt).await {
                 Ok(result) => {
@@ -165,7 +168,8 @@ impl RetryExecutor {
                     }
 
                     // Calculate delay
-                    let delay = error.retry_delay()
+                    let delay = error
+                        .retry_delay()
                         .unwrap_or_else(|| self.policy.delay_for_attempt(attempt));
 
                     if error.is_transient() && delay < Duration::from_millis(10) {
@@ -177,7 +181,7 @@ impl RetryExecutor {
                         );
                         sleep(delay).await;
                     }
-                    
+
                     attempt += 1;
                 }
             }
@@ -237,7 +241,7 @@ impl<E> RetryError<E> {
             RetryError::CircuitBreakerOpen => None,
         }
     }
-    
+
     /// Check if this represents a circuit breaker open error
     pub fn is_circuit_breaker_open(&self) -> bool {
         matches!(self, RetryError::CircuitBreakerOpen)
@@ -326,7 +330,10 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), RetryError::MaxAttemptsExceeded { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            RetryError::MaxAttemptsExceeded { .. }
+        ));
     }
 
     #[tokio::test]
@@ -343,7 +350,10 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), RetryError::NonRetryableError(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            RetryError::NonRetryableError(_)
+        ));
     }
 
     #[tokio::test]

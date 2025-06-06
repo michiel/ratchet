@@ -49,15 +49,13 @@ impl StaticPluginLoader {
 
     /// Discover static plugins using inventory
     pub fn discover_static_plugins() -> Self {
-        
-        
         // TODO: Use inventory to collect static plugins when needed
         // The inventory crate pattern would be:
         // for plugin_factory in inventory::iter::<PluginFactory> {
         //     loader.add_factory(plugin_factory.create);
         // }
         // This requires setting up proper inventory submission patterns.
-        
+
         Self::new()
     }
 }
@@ -88,7 +86,7 @@ impl PluginLoader for StaticPluginLoader {
                     return Ok(plugin);
                 }
             }
-            
+
             Err(PluginError::PluginNotFound {
                 name: source.to_string(),
             })
@@ -190,7 +188,7 @@ impl PluginLoader for DynamicPluginLoader {
         // Check if it's a manifest file
         if path.extension().and_then(|s| s.to_str()) == Some("json") {
             let manifest = self.load_manifest_from_file(path).await?;
-            
+
             if let Some(entry_point) = manifest.entry_point {
                 let lib_path = path.parent().unwrap_or(Path::new(".")).join(entry_point);
                 self.load_from_library(&lib_path).await
@@ -220,7 +218,7 @@ impl PluginLoader for DynamicPluginLoader {
 
     fn can_load(&self, source: &str) -> bool {
         let path = Path::new(source);
-        
+
         // Check for supported file extensions
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
             matches!(ext, "so" | "dll" | "dylib" | "json")
@@ -472,7 +470,10 @@ mod tests {
             &self.metadata
         }
 
-        async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
+        async fn execute(
+            &mut self,
+            _context: &mut PluginContext,
+        ) -> PluginResult<serde_json::Value> {
             Ok(serde_json::json!({"status": "success"}))
         }
 
@@ -542,10 +543,10 @@ mod tests {
     #[tokio::test]
     async fn test_composite_plugin_loader() {
         let mut composite = CompositePluginLoader::new();
-        
+
         let mut static_loader = StaticPluginLoader::new();
         static_loader.add_factory(test_plugin_factory);
-        
+
         composite.add_loader(Box::new(static_loader));
         composite.add_loader(Box::new(DynamicPluginLoader::new()));
 
@@ -562,7 +563,7 @@ mod tests {
     #[tokio::test]
     async fn test_loader_config() {
         let config = LoaderConfig::default();
-        
+
         assert!(config.enable_static);
         assert!(config.enable_dynamic);
         assert!(!config.search_paths.is_empty());

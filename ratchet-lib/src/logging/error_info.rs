@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use serde_json::Value as JsonValue;
 use crate::errors::unified::ErrorSeverity;
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorInfo {
@@ -19,8 +19,7 @@ pub struct ErrorInfo {
     pub related_errors: Vec<RelatedError>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ErrorSuggestions {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub immediate: Vec<String>,
@@ -91,4 +90,3 @@ impl ErrorInfo {
         self
     }
 }
-

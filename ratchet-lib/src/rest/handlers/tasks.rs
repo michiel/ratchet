@@ -3,20 +3,20 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::{
+    registry::TaskRegistry,
     rest::{
+        extractors::ListQueryExtractor,
         middleware::{RestError, WithPaginationHeaders},
         models::{
-            common::{ApiResponse, ApiError},
-            tasks::{TaskResponse, TaskUpdateRequest, TaskFilters},
+            common::{ApiError, ApiResponse},
+            tasks::{TaskFilters, TaskResponse, TaskUpdateRequest},
         },
-        extractors::ListQueryExtractor,
     },
     services::TaskSyncService,
-    registry::TaskRegistry,
 };
 
 /// REST API context for tasks
@@ -31,11 +31,14 @@ pub async fn list_tasks(
     State(ctx): State<TasksContext>,
     ListQueryExtractor(query): ListQueryExtractor,
 ) -> Result<impl IntoResponse, RestError> {
-    let sync_service = ctx.sync_service
+    let sync_service = ctx
+        .sync_service
         .ok_or_else(|| RestError::InternalError("Task sync service not available".to_string()))?;
 
     // Get all tasks from unified service
-    let all_tasks = sync_service.list_all_tasks().await
+    let all_tasks = sync_service
+        .list_all_tasks()
+        .await
         .map_err(|e| RestError::InternalError(format!("Failed to list tasks: {}", e)))?;
 
     // Parse filters from query
@@ -44,9 +47,9 @@ pub async fn list_tasks(
         uuid: filter.get_filter("uuid").cloned(),
         name: filter.get_filter("name").cloned(),
         version: filter.get_filter("version").cloned(),
-        enabled: filter.get_filter("enabled")
-            .and_then(|s| s.parse().ok()),
-        registry_source: filter.get_filter("registrySource")
+        enabled: filter.get_filter("enabled").and_then(|s| s.parse().ok()),
+        registry_source: filter
+            .get_filter("registrySource")
             .and_then(|s| s.parse().ok()),
         name_like: filter.get_like_filter("name").cloned(),
     };
@@ -55,11 +58,11 @@ pub async fn list_tasks(
     let filtered_tasks: Vec<_> = all_tasks
         .into_iter()
         .filter(|task| {
-            filters.matches_uuid(&task.uuid) &&
-            filters.matches_name(&task.label) &&
-            filters.matches_version(&task.version) &&
-            filters.matches_enabled(task.enabled) &&
-            filters.matches_registry_source(task.registry_source)
+            filters.matches_uuid(&task.uuid)
+                && filters.matches_name(&task.label)
+                && filters.matches_version(&task.version)
+                && filters.matches_enabled(task.enabled)
+                && filters.matches_registry_source(task.registry_source)
         })
         .collect();
 
@@ -75,32 +78,40 @@ pub async fn list_tasks(
                     crate::rest::models::common::SortDirection::Asc => a.label.cmp(&b.label),
                     crate::rest::models::common::SortDirection::Desc => b.label.cmp(&a.label),
                 });
-            },
+            }
             "version" => {
                 sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.version.cmp(&b.version),
                     crate::rest::models::common::SortDirection::Desc => b.version.cmp(&a.version),
                 });
-            },
+            }
             "createdAt" => {
                 sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
-                    crate::rest::models::common::SortDirection::Asc => a.created_at.cmp(&b.created_at),
-                    crate::rest::models::common::SortDirection::Desc => b.created_at.cmp(&a.created_at),
+                    crate::rest::models::common::SortDirection::Asc => {
+                        a.created_at.cmp(&b.created_at)
+                    }
+                    crate::rest::models::common::SortDirection::Desc => {
+                        b.created_at.cmp(&a.created_at)
+                    }
                 });
-            },
+            }
             "updatedAt" => {
                 sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
-                    crate::rest::models::common::SortDirection::Asc => a.updated_at.cmp(&b.updated_at),
-                    crate::rest::models::common::SortDirection::Desc => b.updated_at.cmp(&a.updated_at),
+                    crate::rest::models::common::SortDirection::Asc => {
+                        a.updated_at.cmp(&b.updated_at)
+                    }
+                    crate::rest::models::common::SortDirection::Desc => {
+                        b.updated_at.cmp(&a.updated_at)
+                    }
                 });
-            },
+            }
             _ => {
                 // Default sort by UUID
                 sorted_tasks.sort_by(|a, b| match sort.sort_direction() {
                     crate::rest::models::common::SortDirection::Asc => a.uuid.cmp(&b.uuid),
                     crate::rest::models::common::SortDirection::Desc => b.uuid.cmp(&a.uuid),
                 });
-            },
+            }
         }
     }
 
@@ -124,7 +135,8 @@ pub async fn get_task(
     State(ctx): State<TasksContext>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, RestError> {
-    let sync_service = ctx.sync_service
+    let sync_service = ctx
+        .sync_service
         .ok_or_else(|| RestError::InternalError("Task sync service not available".to_string()))?;
 
     // Parse UUID
@@ -132,7 +144,9 @@ pub async fn get_task(
         .map_err(|_| RestError::BadRequest("Invalid task ID format".to_string()))?;
 
     // Get task from unified service
-    let unified_task = sync_service.get_task(uuid, None).await
+    let unified_task = sync_service
+        .get_task(uuid, None)
+        .await
         .map_err(|e| RestError::InternalError(format!("Failed to get task: {}", e)))?
         .ok_or_else(|| RestError::NotFound("Task not found".to_string()))?;
 
@@ -156,7 +170,8 @@ pub async fn update_task(
     Path(id): Path<String>,
     Json(update): Json<TaskUpdateRequest>,
 ) -> Result<axum::Json<ApiError>, RestError> {
-    let _sync_service = ctx.sync_service
+    let _sync_service = ctx
+        .sync_service
         .ok_or_else(|| RestError::InternalError("Task sync service not available".to_string()))?;
 
     // Parse UUID
@@ -167,11 +182,14 @@ pub async fn update_task(
     // In a full implementation, this would update the database record
     if update.enabled.is_some() {
         return Err(RestError::MethodNotAllowed(
-            "Task modification not yet implemented. Tasks are managed through the registry system.".to_string()
+            "Task modification not yet implemented. Tasks are managed through the registry system."
+                .to_string(),
         ));
     }
 
-    Err(RestError::BadRequest("No valid updates provided".to_string()))
+    Err(RestError::BadRequest(
+        "No valid updates provided".to_string(),
+    ))
 }
 
 /// POST /api/v1/tasks - Create a task (not supported for registry tasks)
@@ -184,6 +202,7 @@ pub async fn create_task() -> Result<axum::Json<ApiError>, RestError> {
 /// DELETE /api/v1/tasks/{id} - Delete a task (not supported for registry tasks)
 pub async fn delete_task(Path(_id): Path<String>) -> Result<axum::Json<ApiError>, RestError> {
     Err(RestError::MethodNotAllowed(
-        "Tasks are managed through the registry system. Remove tasks from the source registry.".to_string()
+        "Tasks are managed through the registry system. Remove tasks from the source registry."
+            .to_string(),
     ))
 }

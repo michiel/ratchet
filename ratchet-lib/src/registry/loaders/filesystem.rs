@@ -1,10 +1,10 @@
-use std::path::Path;
 use async_trait::async_trait;
-use tracing::{info, warn};
+use std::path::Path;
 use tokio::fs;
+use tracing::{info, warn};
 
-use crate::errors::{Result, RatchetError};
-use crate::registry::{TaskSource, loaders::TaskLoader};
+use crate::errors::{RatchetError, Result};
+use crate::registry::{loaders::TaskLoader, TaskSource};
 use crate::task::Task;
 
 pub struct FilesystemTaskLoader;
@@ -37,7 +37,10 @@ impl FilesystemTaskLoader {
         let mut tasks = Vec::new();
 
         if !path.exists() {
-            return Err(RatchetError::TaskNotFound(format!("Path does not exist: {:?}", path)));
+            return Err(RatchetError::TaskNotFound(format!(
+                "Path does not exist: {:?}",
+                path
+            )));
         }
 
         let metadata = fs::metadata(path).await?;
@@ -61,11 +64,11 @@ impl FilesystemTaskLoader {
                 // Scan directory for tasks
                 info!("Scanning directory for tasks: {:?}", path);
                 let mut entries = fs::read_dir(path).await?;
-                
+
                 while let Some(entry) = entries.next_entry().await? {
                     let entry_path = entry.path();
                     let entry_metadata = entry.metadata().await?;
-                    
+
                     if entry_metadata.is_dir() && Self::is_task_directory(&entry_path).await {
                         info!("Found task directory: {:?}", entry_path);
                         match Task::from_fs(&entry_path) {
@@ -93,7 +96,9 @@ impl TaskLoader for FilesystemTaskLoader {
     async fn load_tasks(&self, source: &TaskSource) -> Result<Vec<Task>> {
         match source {
             TaskSource::Filesystem { path } => self.load_from_path(path).await,
-            _ => Err(RatchetError::NotImplemented("FilesystemTaskLoader only supports filesystem sources".to_string())),
+            _ => Err(RatchetError::NotImplemented(
+                "FilesystemTaskLoader only supports filesystem sources".to_string(),
+            )),
         }
     }
 }

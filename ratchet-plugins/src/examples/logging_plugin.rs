@@ -1,8 +1,8 @@
 //! Example logging plugin that demonstrates basic plugin functionality
 
 use async_trait::async_trait;
-use ratchet_plugin::*;
 use ratchet_plugin::types::PluginStatus;
+use ratchet_plugin::*;
 use std::any::Any;
 use tracing::info;
 
@@ -42,22 +42,22 @@ impl Plugin for LoggingPlugin {
     async fn initialize(&mut self, context: &mut PluginContext) -> PluginResult<()> {
         info!("🔧 Initializing Logging Plugin v{}", self.metadata.version);
         info!("📋 Plugin will log system events and task executions");
-        
+
         // Set status to active (normally done by parent)
         context.set_status(PluginStatus::Active);
-        
+
         info!("✅ Logging Plugin initialized successfully");
         Ok(())
     }
 
     async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
         info!("🚀 Logging Plugin execute called");
-        
+
         // In a real plugin, this might:
-        // - Set up log forwarding 
+        // - Set up log forwarding
         // - Configure logging destinations
         // - Register event listeners
-        
+
         // For this example, just return some status information
         let result = serde_json::json!({
             "status": "active",
@@ -65,17 +65,20 @@ impl Plugin for LoggingPlugin {
             "log_level": "info",
             "timestamp": chrono::Utc::now().to_rfc3339()
         });
-        
-        info!("📊 Logging Plugin execution completed with result: {}", result);
+
+        info!(
+            "📊 Logging Plugin execution completed with result: {}",
+            result
+        );
         Ok(result)
     }
 
     async fn shutdown(&mut self, context: &mut PluginContext) -> PluginResult<()> {
         info!("🛑 Shutting down Logging Plugin");
-        
+
         // Set status to unloaded (normally done by parent)
         context.set_status(PluginStatus::Unloaded);
-        
+
         info!("✅ Logging Plugin shutdown complete");
         Ok(())
     }
@@ -97,7 +100,7 @@ mod tests {
     use super::*;
     use ratchet_config::RatchetConfig;
     use uuid::Uuid;
-    
+
     #[tokio::test]
     async fn test_logging_plugin_creation() {
         let plugin = LoggingPlugin::new();
@@ -105,7 +108,7 @@ mod tests {
         assert_eq!(plugin.metadata().name, "Task Execution Logger");
         assert_eq!(plugin.metadata().plugin_type, PluginType::Logging);
     }
-    
+
     #[tokio::test]
     async fn test_logging_plugin_lifecycle() {
         let mut plugin = LoggingPlugin::new();
@@ -114,15 +117,15 @@ mod tests {
             serde_json::json!({}),
             RatchetConfig::default(),
         );
-        
+
         // Test initialization
         assert!(plugin.initialize(&mut context).await.is_ok());
-        
+
         // Test execution
         let result = plugin.execute(&mut context).await.unwrap();
         assert!(result.is_object());
         assert_eq!(result["status"], "active");
-        
+
         // Test shutdown
         assert!(plugin.shutdown(&mut context).await.is_ok());
     }

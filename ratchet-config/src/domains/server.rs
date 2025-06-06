@@ -1,9 +1,9 @@
 //! Server configuration for REST and GraphQL APIs
 
+use crate::error::ConfigResult;
+use crate::validation::{validate_positive, validate_required_string, validate_url, Validatable};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use crate::validation::{Validatable, validate_required_string, validate_positive, validate_url};
-use crate::error::ConfigResult;
 
 /// Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,27 +12,27 @@ pub struct ServerConfig {
     /// Server bind address
     #[serde(default = "default_bind_address")]
     pub bind_address: String,
-    
+
     /// Server port
     #[serde(default = "default_port")]
     pub port: u16,
-    
+
     /// Database configuration
     #[serde(default)]
     pub database: super::database::DatabaseConfig,
-    
+
     /// Authentication configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth: Option<AuthConfig>,
-    
+
     /// CORS configuration
     #[serde(default)]
     pub cors: CorsConfig,
-    
+
     /// Rate limiting configuration
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
-    
+
     /// TLS configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls: Option<TlsConfig>,
@@ -43,15 +43,15 @@ pub struct ServerConfig {
 pub struct AuthConfig {
     /// JWT secret key
     pub jwt_secret: String,
-    
+
     /// Token expiration time
     #[serde(with = "crate::domains::utils::serde_duration")]
     pub token_expiration: Duration,
-    
+
     /// Token issuer
     #[serde(default = "default_token_issuer")]
     pub issuer: String,
-    
+
     /// Token audience
     #[serde(default = "default_token_audience")]
     pub audience: String,
@@ -64,21 +64,24 @@ pub struct CorsConfig {
     /// Allowed origins
     #[serde(default = "default_cors_origins")]
     pub allowed_origins: Vec<String>,
-    
+
     /// Allowed methods
     #[serde(default = "default_cors_methods")]
     pub allowed_methods: Vec<String>,
-    
+
     /// Allowed headers
     #[serde(default = "default_cors_headers")]
     pub allowed_headers: Vec<String>,
-    
+
     /// Whether to allow credentials
     #[serde(default = "crate::domains::utils::default_false")]
     pub allow_credentials: bool,
-    
+
     /// Max age for preflight requests
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_cors_max_age")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_cors_max_age"
+    )]
     pub max_age: Duration,
 }
 
@@ -89,17 +92,20 @@ pub struct RateLimitConfig {
     /// Whether rate limiting is enabled
     #[serde(default = "crate::domains::utils::default_true")]
     pub enabled: bool,
-    
+
     /// Requests per minute per IP
     #[serde(default = "default_requests_per_minute")]
     pub requests_per_minute: u32,
-    
+
     /// Burst size
     #[serde(default = "default_burst_size")]
     pub burst_size: u32,
-    
+
     /// Time window for rate limiting
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_time_window")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_time_window"
+    )]
     pub time_window: Duration,
 }
 
@@ -108,14 +114,14 @@ pub struct RateLimitConfig {
 pub struct TlsConfig {
     /// Path to certificate file
     pub cert_file: String,
-    
+
     /// Path to private key file
     pub key_file: String,
-    
+
     /// Minimum TLS version
     #[serde(default = "default_min_tls_version")]
     pub min_version: String,
-    
+
     /// Certificate chain file (optional)
     pub chain_file: Option<String>,
 }
@@ -161,22 +167,22 @@ impl Validatable for ServerConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_required_string(&self.bind_address, "bind_address", self.domain_name())?;
         validate_positive(self.port, "port", self.domain_name())?;
-        
+
         self.database.validate()?;
         self.cors.validate()?;
         self.rate_limit.validate()?;
-        
+
         if let Some(ref auth) = self.auth {
             auth.validate()?;
         }
-        
+
         if let Some(ref tls) = self.tls {
             tls.validate()?;
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "server"
     }
@@ -187,23 +193,21 @@ impl Validatable for AuthConfig {
         validate_required_string(&self.jwt_secret, "jwt_secret", self.domain_name())?;
         validate_required_string(&self.issuer, "issuer", self.domain_name())?;
         validate_required_string(&self.audience, "audience", self.domain_name())?;
-        
+
         validate_positive(
             self.token_expiration.as_secs(),
             "token_expiration",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
+
         // Validate JWT secret strength
         if self.jwt_secret.len() < 32 {
-            return Err(self.validation_error(
-                "jwt_secret must be at least 32 characters long"
-            ));
+            return Err(self.validation_error("jwt_secret must be at least 32 characters long"));
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "server.auth"
     }
@@ -217,22 +221,23 @@ impl Validatable for CorsConfig {
                 validate_url(origin, "allowed_origins", self.domain_name())?;
             }
         }
-        
+
         // Validate methods
         let valid_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
         for method in &self.allowed_methods {
             if !valid_methods.contains(&method.as_str()) {
-                return Err(self.validation_error(
-                    format!("Invalid HTTP method in allowed_methods: {}", method)
-                ));
+                return Err(self.validation_error(format!(
+                    "Invalid HTTP method in allowed_methods: {}",
+                    method
+                )));
             }
         }
-        
+
         validate_positive(self.max_age.as_secs(), "max_age", self.domain_name())?;
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "server.cors"
     }
@@ -241,14 +246,22 @@ impl Validatable for CorsConfig {
 impl Validatable for RateLimitConfig {
     fn validate(&self) -> ConfigResult<()> {
         if self.enabled {
-            validate_positive(self.requests_per_minute, "requests_per_minute", self.domain_name())?;
+            validate_positive(
+                self.requests_per_minute,
+                "requests_per_minute",
+                self.domain_name(),
+            )?;
             validate_positive(self.burst_size, "burst_size", self.domain_name())?;
-            validate_positive(self.time_window.as_secs(), "time_window", self.domain_name())?;
+            validate_positive(
+                self.time_window.as_secs(),
+                "time_window",
+                self.domain_name(),
+            )?;
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "server.rate_limit"
     }
@@ -259,32 +272,33 @@ impl Validatable for TlsConfig {
         validate_required_string(&self.cert_file, "cert_file", self.domain_name())?;
         validate_required_string(&self.key_file, "key_file", self.domain_name())?;
         validate_required_string(&self.min_version, "min_version", self.domain_name())?;
-        
+
         // Validate TLS version
         let valid_versions = ["1.0", "1.1", "1.2", "1.3"];
         if !valid_versions.contains(&self.min_version.as_str()) {
-            return Err(self.validation_error(
-                format!("Invalid TLS version: {}. Valid versions: {}", 
-                    self.min_version, valid_versions.join(", "))
-            ));
+            return Err(self.validation_error(format!(
+                "Invalid TLS version: {}. Valid versions: {}",
+                self.min_version,
+                valid_versions.join(", ")
+            )));
         }
-        
+
         // Check if files exist
         if !std::path::Path::new(&self.cert_file).exists() {
-            return Err(self.validation_error(
-                format!("Certificate file not found: {}", self.cert_file)
-            ));
+            return Err(
+                self.validation_error(format!("Certificate file not found: {}", self.cert_file))
+            );
         }
-        
+
         if !std::path::Path::new(&self.key_file).exists() {
-            return Err(self.validation_error(
-                format!("Private key file not found: {}", self.key_file)
-            ));
+            return Err(
+                self.validation_error(format!("Private key file not found: {}", self.key_file))
+            );
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "server.tls"
     }
@@ -312,7 +326,12 @@ fn default_cors_origins() -> Vec<String> {
 }
 
 fn default_cors_methods() -> Vec<String> {
-    vec!["GET".to_string(), "POST".to_string(), "PUT".to_string(), "DELETE".to_string()]
+    vec![
+        "GET".to_string(),
+        "POST".to_string(),
+        "PUT".to_string(),
+        "DELETE".to_string(),
+    ]
 }
 
 fn default_cors_headers() -> Vec<String> {
@@ -364,7 +383,7 @@ mod tests {
             audience: "test".to_string(),
         };
         assert!(auth.validate().is_ok());
-        
+
         // Test short secret
         auth.jwt_secret = "short".to_string();
         assert!(auth.validate().is_err());
@@ -374,7 +393,7 @@ mod tests {
     fn test_cors_config_validation() {
         let mut cors = CorsConfig::default();
         assert!(cors.validate().is_ok());
-        
+
         // Test invalid method
         cors.allowed_methods.push("INVALID".to_string());
         assert!(cors.validate().is_err());
@@ -384,15 +403,15 @@ mod tests {
     fn test_rate_limit_config_validation() {
         let mut rate_limit = RateLimitConfig::default();
         assert!(rate_limit.validate().is_ok());
-        
+
         // Test zero requests per minute
         rate_limit.requests_per_minute = 0;
         assert!(rate_limit.validate().is_err());
-        
+
         // Test disabled rate limiting
         rate_limit = RateLimitConfig::default();
         rate_limit.enabled = false;
-        rate_limit.requests_per_minute = 0;  // Should be ok when disabled
+        rate_limit.requests_per_minute = 0; // Should be ok when disabled
         assert!(rate_limit.validate().is_ok());
     }
 }

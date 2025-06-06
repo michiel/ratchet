@@ -1,12 +1,12 @@
 //! Progress notification handling for streaming task execution
 
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
-use serde_json::Value;
 
-use crate::protocol::messages::{McpNotification, McpMethod, TaskProgressNotification};
+use crate::protocol::messages::{McpMethod, McpNotification, TaskProgressNotification};
 use crate::transport::connection::TransportConnection;
 
 /// Progress update information
@@ -27,7 +27,7 @@ pub struct ProgressUpdate {
 pub struct ProgressNotificationManager {
     /// Active progress subscriptions
     subscriptions: Arc<RwLock<HashMap<String, Vec<ProgressSubscription>>>>,
-    
+
     /// Notification sender channel
     notification_sender: mpsc::UnboundedSender<ProgressNotification>,
 }
@@ -37,13 +37,13 @@ pub struct ProgressNotificationManager {
 struct ProgressSubscription {
     /// Subscription ID
     id: String,
-    
+
     /// Client connection
     connection: Arc<dyn TransportConnection>,
-    
+
     /// Optional filter criteria
     filter: Option<ProgressFilter>,
-    
+
     /// Subscription timestamp
     created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -63,13 +63,13 @@ impl std::fmt::Debug for ProgressSubscription {
 pub struct ProgressFilter {
     /// Minimum progress change to trigger notification (0.0-1.0)
     pub min_progress_delta: Option<f32>,
-    
+
     /// Maximum notification frequency (milliseconds)
     pub max_frequency_ms: Option<u64>,
-    
+
     /// Include only specific steps
     pub step_filter: Option<Vec<String>>,
-    
+
     /// Include data in notifications
     pub include_data: bool,
 }
@@ -85,21 +85,21 @@ impl ProgressNotificationManager {
     /// Create a new progress notification manager
     pub fn new() -> Self {
         let (notification_sender, notification_receiver) = mpsc::unbounded_channel();
-        
+
         let subscriptions = Arc::new(RwLock::new(HashMap::new()));
-        
+
         // Start the notification processing task
         let subscriptions_clone = subscriptions.clone();
         tokio::spawn(async move {
             Self::process_notifications(subscriptions_clone, notification_receiver).await;
         });
-        
+
         Self {
             subscriptions,
             notification_sender,
         }
     }
-    
+
     /// Subscribe to progress updates for a specific execution
     pub async fn subscribe_to_execution(
         &self,
@@ -108,69 +108,85 @@ impl ProgressNotificationManager {
         filter: Option<ProgressFilter>,
     ) -> String {
         let subscription_id = Uuid::new_v4().to_string();
-        
+
         let subscription = ProgressSubscription {
             id: subscription_id.clone(),
             connection,
             filter,
             created_at: chrono::Utc::now(),
         };
-        
+
         let mut subscriptions = self.subscriptions.write().await;
         subscriptions
             .entry(execution_id.clone())
             .or_insert_with(Vec::new)
             .push(subscription);
-        
-        tracing::debug!("Created progress subscription {} for execution {}", subscription_id, execution_id);
-        
+
+        tracing::debug!(
+            "Created progress subscription {} for execution {}",
+            subscription_id,
+            execution_id
+        );
+
         subscription_id
     }
-    
+
     /// Unsubscribe from progress updates
     pub async fn unsubscribe(&self, execution_id: &str, subscription_id: &str) {
         let mut subscriptions = self.subscriptions.write().await;
-        
+
         if let Some(subs) = subscriptions.get_mut(execution_id) {
             subs.retain(|s| s.id != subscription_id);
-            
+
             // Clean up empty subscription lists
             if subs.is_empty() {
                 subscriptions.remove(execution_id);
             }
         }
-        
-        tracing::debug!("Removed progress subscription {} for execution {}", subscription_id, execution_id);
+
+        tracing::debug!(
+            "Removed progress subscription {} for execution {}",
+            subscription_id,
+            execution_id
+        );
     }
-    
+
     /// Send a progress update for an execution
     pub async fn send_progress_update(&self, update: ProgressUpdate) -> Result<(), String> {
         let notification = ProgressNotification {
             execution_id: update.execution_id.clone(),
             update,
         };
-        
-        self.notification_sender.send(notification)
+
+        self.notification_sender
+            .send(notification)
             .map_err(|e| format!("Failed to send progress notification: {}", e))?;
-        
+
         Ok(())
     }
-    
+
     /// Get number of active subscriptions for an execution
     pub async fn get_subscription_count(&self, execution_id: &str) -> usize {
         let subscriptions = self.subscriptions.read().await;
-        subscriptions.get(execution_id).map(|subs| subs.len()).unwrap_or(0)
+        subscriptions
+            .get(execution_id)
+            .map(|subs| subs.len())
+            .unwrap_or(0)
     }
-    
+
     /// Clean up subscriptions for completed executions
     pub async fn cleanup_execution(&self, execution_id: &str) {
         let mut subscriptions = self.subscriptions.write().await;
-        
+
         if let Some(subs) = subscriptions.remove(execution_id) {
-            tracing::debug!("Cleaned up {} progress subscriptions for execution {}", subs.len(), execution_id);
+            tracing::debug!(
+                "Cleaned up {} progress subscriptions for execution {}",
+                subs.len(),
+                execution_id
+            );
         }
     }
-    
+
     /// Process notifications and send them to subscribers
     async fn process_notifications(
         subscriptions: Arc<RwLock<HashMap<String, Vec<ProgressSubscription>>>>,
@@ -178,7 +194,7 @@ impl ProgressNotificationManager {
     ) {
         while let Some(notification) = receiver.recv().await {
             let subscriptions_guard = subscriptions.read().await;
-            
+
             if let Some(subs) = subscriptions_guard.get(&notification.execution_id) {
                 for subscription in subs {
                     // Apply filter if present
@@ -187,7 +203,7 @@ impl ProgressNotificationManager {
                             continue;
                         }
                     }
-                    
+
                     // Create MCP notification
                     let task_progress = TaskProgressNotification {
                         execution_id: notification.update.execution_id.clone(),
@@ -197,28 +213,41 @@ impl ProgressNotificationManager {
                         step_number: notification.update.step_number,
                         total_steps: notification.update.total_steps,
                         message: notification.update.message.clone(),
-                        data: if subscription.filter.as_ref().map(|f| f.include_data).unwrap_or(true) {
+                        data: if subscription
+                            .filter
+                            .as_ref()
+                            .map(|f| f.include_data)
+                            .unwrap_or(true)
+                        {
                             notification.update.data.clone()
                         } else {
                             None
                         },
                         timestamp: notification.update.timestamp.to_rfc3339(),
                     };
-                    
+
                     let mcp_notification = McpNotification {
                         jsonrpc: "2.0".to_string(),
                         method: McpMethod::NotificationsTaskProgress(task_progress),
                     };
-                    
+
                     // Send notification to client
-                    if let Err(e) = subscription.connection.send_notification(mcp_notification).await {
-                        tracing::warn!("Failed to send progress notification to subscription {}: {}", subscription.id, e);
+                    if let Err(e) = subscription
+                        .connection
+                        .send_notification(mcp_notification)
+                        .await
+                    {
+                        tracing::warn!(
+                            "Failed to send progress notification to subscription {}: {}",
+                            subscription.id,
+                            e
+                        );
                     }
                 }
             }
         }
     }
-    
+
     /// Check if a notification should be sent based on filter criteria
     fn should_send_notification(update: &ProgressUpdate, filter: &ProgressFilter) -> bool {
         // Check step filter
@@ -229,10 +258,10 @@ impl ProgressNotificationManager {
                 }
             }
         }
-        
+
         // TODO: Implement progress delta and frequency filtering
         // This would require tracking last notification state per subscription
-        
+
         true
     }
 }
@@ -267,7 +296,7 @@ impl TaskProgressTracker {
             start_time: chrono::Utc::now(),
         }
     }
-    
+
     /// Update progress
     pub async fn update_progress(
         &mut self,
@@ -275,9 +304,10 @@ impl TaskProgressTracker {
         step: Option<String>,
         message: Option<String>,
     ) -> Result<(), String> {
-        self.update_progress_detailed(progress, step, None, None, message, None).await
+        self.update_progress_detailed(progress, step, None, None, message, None)
+            .await
     }
-    
+
     /// Update progress with detailed information
     pub async fn update_progress_detailed(
         &mut self,
@@ -290,7 +320,7 @@ impl TaskProgressTracker {
     ) -> Result<(), String> {
         // Clamp progress to valid range
         let progress = progress.max(0.0).min(1.0);
-        
+
         let update = ProgressUpdate {
             execution_id: self.execution_id.clone(),
             task_id: self.task_id.clone(),
@@ -302,32 +332,36 @@ impl TaskProgressTracker {
             data,
             timestamp: chrono::Utc::now(),
         };
-        
-        self.notification_manager.send_progress_update(update).await?;
+
+        self.notification_manager
+            .send_progress_update(update)
+            .await?;
         self.last_progress = progress;
-        
+
         Ok(())
     }
-    
+
     /// Mark task as completed
     pub async fn complete(&mut self, message: Option<String>) -> Result<(), String> {
-        self.update_progress(1.0, Some("completed".to_string()), message).await
+        self.update_progress(1.0, Some("completed".to_string()), message)
+            .await
     }
-    
+
     /// Mark task as failed
     pub async fn fail(&mut self, error_message: String) -> Result<(), String> {
         self.update_progress(
-            self.last_progress, 
-            Some("failed".to_string()), 
-            Some(error_message)
-        ).await
+            self.last_progress,
+            Some("failed".to_string()),
+            Some(error_message),
+        )
+        .await
     }
-    
+
     /// Get current progress
     pub fn get_progress(&self) -> f32 {
         self.last_progress
     }
-    
+
     /// Get elapsed time since start
     pub fn get_elapsed_time(&self) -> chrono::Duration {
         chrono::Utc::now().signed_duration_since(self.start_time)
@@ -338,49 +372,50 @@ impl TaskProgressTracker {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    
+
     struct MockTransportConnection {
         notifications: Arc<RwLock<Vec<McpNotification>>>,
     }
-    
+
     impl MockTransportConnection {
         fn new() -> Self {
             Self {
                 notifications: Arc::new(RwLock::new(Vec::new())),
             }
         }
-        
+
         async fn get_notifications(&self) -> Vec<McpNotification> {
             self.notifications.read().await.clone()
         }
     }
-    
+
     #[async_trait]
     impl TransportConnection for MockTransportConnection {
-        async fn send_notification(&self, notification: McpNotification) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        async fn send_notification(
+            &self,
+            notification: McpNotification,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             self.notifications.write().await.push(notification);
             Ok(())
         }
-        
+
         async fn close(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(())
         }
     }
-    
+
     #[tokio::test]
     async fn test_progress_notification_manager() {
         let manager = ProgressNotificationManager::new();
         let connection = Arc::new(MockTransportConnection::new());
-        
+
         let execution_id = "test-execution-123".to_string();
-        
+
         // Subscribe to progress updates
-        let _subscription_id = manager.subscribe_to_execution(
-            execution_id.clone(),
-            connection.clone(),
-            None,
-        ).await;
-        
+        let _subscription_id = manager
+            .subscribe_to_execution(execution_id.clone(), connection.clone(), None)
+            .await;
+
         // Send a progress update
         let update = ProgressUpdate {
             execution_id: execution_id.clone(),
@@ -393,24 +428,24 @@ mod tests {
             data: Some(serde_json::json!({"processed": 50})),
             timestamp: chrono::Utc::now(),
         };
-        
+
         manager.send_progress_update(update).await.unwrap();
-        
+
         // Give some time for async processing
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         // Check that notification was sent
         let notifications = connection.get_notifications().await;
         assert_eq!(notifications.len(), 1);
-        
+
         // Verify subscription count
         assert_eq!(manager.get_subscription_count(&execution_id).await, 1);
-        
+
         // Cleanup
         manager.cleanup_execution(&execution_id).await;
         assert_eq!(manager.get_subscription_count(&execution_id).await, 0);
     }
-    
+
     #[tokio::test]
     async fn test_task_progress_tracker() {
         let manager = Arc::new(ProgressNotificationManager::new());
@@ -419,28 +454,45 @@ mod tests {
             "test-task".to_string(),
             manager.clone(),
         );
-        
+
         // Test progress updates
-        assert!(tracker.update_progress(0.25, Some("step1".to_string()), Some("Starting".to_string())).await.is_ok());
+        assert!(tracker
+            .update_progress(
+                0.25,
+                Some("step1".to_string()),
+                Some("Starting".to_string())
+            )
+            .await
+            .is_ok());
         assert_eq!(tracker.get_progress(), 0.25);
-        
-        assert!(tracker.update_progress(0.75, Some("step2".to_string()), Some("Almost done".to_string())).await.is_ok());
+
+        assert!(tracker
+            .update_progress(
+                0.75,
+                Some("step2".to_string()),
+                Some("Almost done".to_string())
+            )
+            .await
+            .is_ok());
         assert_eq!(tracker.get_progress(), 0.75);
-        
-        assert!(tracker.complete(Some("Finished successfully".to_string())).await.is_ok());
+
+        assert!(tracker
+            .complete(Some("Finished successfully".to_string()))
+            .await
+            .is_ok());
         assert_eq!(tracker.get_progress(), 1.0);
-        
+
         // Test elapsed time
         assert!(tracker.get_elapsed_time().num_milliseconds() >= 0);
     }
-    
+
     #[tokio::test]
     async fn test_progress_filter() {
         let manager = ProgressNotificationManager::new();
         let connection = Arc::new(MockTransportConnection::new());
-        
+
         let execution_id = "test-execution-filtered".to_string();
-        
+
         // Subscribe with step filter
         let filter = ProgressFilter {
             min_progress_delta: None,
@@ -448,13 +500,11 @@ mod tests {
             step_filter: Some(vec!["important".to_string()]),
             include_data: false,
         };
-        
-        let _subscription_id = manager.subscribe_to_execution(
-            execution_id.clone(),
-            connection.clone(),
-            Some(filter),
-        ).await;
-        
+
+        let _subscription_id = manager
+            .subscribe_to_execution(execution_id.clone(), connection.clone(), Some(filter))
+            .await;
+
         // Send updates - one matching filter, one not
         let update1 = ProgressUpdate {
             execution_id: execution_id.clone(),
@@ -467,7 +517,7 @@ mod tests {
             data: None,
             timestamp: chrono::Utc::now(),
         };
-        
+
         let update2 = ProgressUpdate {
             execution_id: execution_id.clone(),
             task_id: "test-task".to_string(),
@@ -479,17 +529,17 @@ mod tests {
             data: Some(serde_json::json!({"key": "value"})),
             timestamp: chrono::Utc::now(),
         };
-        
+
         manager.send_progress_update(update1).await.unwrap();
         manager.send_progress_update(update2).await.unwrap();
-        
+
         // Give some time for async processing
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         // Check that only the important step notification was sent
         let notifications = connection.get_notifications().await;
         assert_eq!(notifications.len(), 1);
-        
+
         // Verify the notification doesn't include data (due to filter)
         if let McpMethod::NotificationsTaskProgress(task_progress) = &notifications[0].method {
             assert_eq!(task_progress.step, Some("important".to_string()));

@@ -1,10 +1,12 @@
+use super::enrichment::{
+    ExecutionContextEnricher, ProcessEnricher, SystemEnricher, TaskContextEnricher,
+};
+use super::sinks::{BufferedSink, ConsoleSink, FileSink};
+use super::{logger::LogSink, LogLevel, LoggerBuilder};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::time::Duration;
-use super::{LogLevel, LoggerBuilder, logger::LogSink};
-use super::sinks::{ConsoleSink, FileSink, BufferedSink};
-use super::enrichment::{SystemEnricher, ProcessEnricher, TaskContextEnricher, ExecutionContextEnricher};
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -12,19 +14,19 @@ pub struct LoggingConfig {
     /// Minimum log level
     #[serde(default = "default_log_level")]
     pub level: LogLevel,
-    
+
     /// Output format
     #[serde(default = "default_format")]
     pub format: LogFormat,
-    
+
     /// Log sinks configuration
     #[serde(default)]
     pub sinks: Vec<SinkConfig>,
-    
+
     /// Enrichment configuration
     #[serde(default)]
     pub enrichment: EnrichmentConfig,
-    
+
     /// Sampling configuration
     #[serde(default)]
     pub sampling: SamplingConfig,
@@ -113,12 +115,10 @@ impl Default for LoggingConfig {
         Self {
             level: default_log_level(),
             format: default_format(),
-            sinks: vec![
-                SinkConfig::Console {
-                    level: LogLevel::Info,
-                    use_json: false,
-                }
-            ],
+            sinks: vec![SinkConfig::Console {
+                level: LogLevel::Info,
+                use_json: false,
+            }],
             enrichment: EnrichmentConfig::default(),
             sampling: SamplingConfig::default(),
         }
@@ -151,8 +151,7 @@ impl Default for SamplingConfig {
 impl LoggingConfig {
     /// Build a logger from this configuration
     pub fn build_logger(&self) -> Result<Arc<dyn super::StructuredLogger>, ConfigError> {
-        let mut builder = LoggerBuilder::new()
-            .with_min_level(self.level);
+        let mut builder = LoggerBuilder::new().with_min_level(self.level);
 
         // Add sinks
         for sink_config in &self.sinks {
@@ -188,9 +187,15 @@ impl LoggingConfig {
                 }
                 Ok(Arc::new(sink))
             }
-            SinkConfig::File { path, level, rotation, buffered } => {
-                let mut file_sink = FileSink::new(path, *level)
-                    .map_err(|e| ConfigError::SinkCreation(format!("Failed to create file sink: {}", e)))?;
+            SinkConfig::File {
+                path,
+                level,
+                rotation,
+                buffered,
+            } => {
+                let mut file_sink = FileSink::new(path, *level).map_err(|e| {
+                    ConfigError::SinkCreation(format!("Failed to create file sink: {}", e))
+                })?;
 
                 if let Some(rotation_config) = rotation {
                     let max_size = parse_size(&rotation_config.max_size)?;
@@ -209,9 +214,9 @@ impl LoggingConfig {
                     Ok(sink)
                 }
             }
-            SinkConfig::Database { .. } => {
-                Err(ConfigError::NotImplemented("Database sink not yet implemented".to_string()))
-            }
+            SinkConfig::Database { .. } => Err(ConfigError::NotImplemented(
+                "Database sink not yet implemented".to_string(),
+            )),
         }
     }
 }
@@ -220,10 +225,10 @@ impl LoggingConfig {
 pub enum ConfigError {
     #[error("Failed to create sink: {0}")]
     SinkCreation(String),
-    
+
     #[error("Invalid size format: {0}")]
     InvalidSize(String),
-    
+
     #[error("Not implemented: {0}")]
     NotImplemented(String),
 }
@@ -247,21 +252,28 @@ fn default_flush_interval() -> Duration {
 
 fn parse_size(size_str: &str) -> Result<u64, ConfigError> {
     let size_str = size_str.trim().to_uppercase();
-    
+
     if let Some(kb_str) = size_str.strip_suffix("KB") {
-        kb_str.trim().parse::<u64>()
+        kb_str
+            .trim()
+            .parse::<u64>()
             .map(|n| n * 1024)
             .map_err(|_| ConfigError::InvalidSize(size_str))
     } else if let Some(mb_str) = size_str.strip_suffix("MB") {
-        mb_str.trim().parse::<u64>()
+        mb_str
+            .trim()
+            .parse::<u64>()
             .map(|n| n * 1024 * 1024)
             .map_err(|_| ConfigError::InvalidSize(size_str))
     } else if let Some(gb_str) = size_str.strip_suffix("GB") {
-        gb_str.trim().parse::<u64>()
+        gb_str
+            .trim()
+            .parse::<u64>()
             .map(|n| n * 1024 * 1024 * 1024)
             .map_err(|_| ConfigError::InvalidSize(size_str))
     } else {
-        size_str.parse::<u64>()
+        size_str
+            .parse::<u64>()
             .map_err(|_| ConfigError::InvalidSize(size_str))
     }
 }
@@ -309,7 +321,7 @@ sampling:
   error_rate: 1.0
   info_rate: 0.5
 "#;
-        
+
         let config: LoggingConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.level, LogLevel::Debug);
         assert_eq!(config.sinks.len(), 2);

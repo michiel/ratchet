@@ -9,24 +9,25 @@ pub mod logger;
 pub mod patterns;
 pub mod sinks;
 
-pub use config::{LoggingConfig, ConfigError};
+pub use config::{ConfigError, LoggingConfig};
 pub use context::LogContext;
 pub use enrichment::{Enricher, LogEnricher};
 pub use error_info::{ErrorInfo, ErrorSuggestions, RelatedError};
 pub use event::{LogEvent, LogLevel};
-pub use init::{init_logging_from_config, init_simple_tracing, init_hybrid_logging};
-pub use llm_export::{LLMExporter, LLMExportConfig, LLMErrorReport, format_markdown_report};
-pub use logger::{StructuredLogger, LoggerBuilder};
-pub use patterns::{ErrorPattern, ErrorPatternMatcher, ErrorCategory, MatchingRule};
+pub use init::{init_hybrid_logging, init_logging_from_config, init_simple_tracing};
+pub use llm_export::{format_markdown_report, LLMErrorReport, LLMExportConfig, LLMExporter};
+pub use logger::{LoggerBuilder, StructuredLogger};
+pub use patterns::{ErrorCategory, ErrorPattern, ErrorPatternMatcher, MatchingRule};
 
-use std::sync::Arc;
 use once_cell::sync::OnceCell;
+use std::sync::Arc;
 
 static GLOBAL_LOGGER: OnceCell<Arc<dyn StructuredLogger>> = OnceCell::new();
 
 /// Initialize the global logger
 pub fn init_logger(logger: Arc<dyn StructuredLogger>) -> Result<(), &'static str> {
-    GLOBAL_LOGGER.set(logger)
+    GLOBAL_LOGGER
+        .set(logger)
         .map_err(|_| "Logger already initialized")
 }
 

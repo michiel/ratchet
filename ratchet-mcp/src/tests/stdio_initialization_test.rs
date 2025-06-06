@@ -1,13 +1,13 @@
 //! Integration test for MCP server stdio initialization behavior
-//! 
+//!
 //! This test verifies that the MCP server correctly handles initialization
 //! and maintains session state across multiple requests via stdio transport.
 
-use std::process::{Command, Stdio};
+use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
+use std::process::{Command, Stdio};
 use std::time::Duration;
 use tokio::time::timeout;
-use serde_json::{json, Value};
 
 /// Test that the MCP server properly initializes and handles subsequent requests
 /// over stdio transport without requiring the 'initialized' notification.
@@ -15,7 +15,15 @@ use serde_json::{json, Value};
 async fn test_mcp_server_stdio_initialization_compatibility() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
-        .args(["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
+        .args([
+            "run",
+            "--package",
+            "ratchet",
+            "--bin",
+            "ratchet",
+            "--",
+            "mcp-serve",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -51,17 +59,22 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
 
     // Read initialize response
     let mut response_line = String::new();
-    reader.read_line(&mut response_line).expect("Failed to read initialize response");
-    
-    let init_response: Value = serde_json::from_str(response_line.trim())
-        .expect("Failed to parse initialize response");
+    reader
+        .read_line(&mut response_line)
+        .expect("Failed to read initialize response");
+
+    let init_response: Value =
+        serde_json::from_str(response_line.trim()).expect("Failed to parse initialize response");
 
     // Verify initialize response
     assert_eq!(init_response["jsonrpc"], "2.0");
     assert_eq!(init_response["id"], 1);
     assert!(init_response["result"].is_object());
     assert!(init_response["result"]["capabilities"]["tools"].is_object());
-    assert_eq!(init_response["result"]["serverInfo"]["name"], "Ratchet MCP Server");
+    assert_eq!(
+        init_response["result"]["serverInfo"]["name"],
+        "Ratchet MCP Server"
+    );
 
     // 2. Send tools/list request immediately (without 'initialized' notification)
     let tools_request = json!({
@@ -75,26 +88,32 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
 
     // Read tools/list response
     response_line.clear();
-    reader.read_line(&mut response_line).expect("Failed to read tools/list response");
-    
-    let tools_response: Value = serde_json::from_str(response_line.trim())
-        .expect("Failed to parse tools/list response");
+    reader
+        .read_line(&mut response_line)
+        .expect("Failed to read tools/list response");
+
+    let tools_response: Value =
+        serde_json::from_str(response_line.trim()).expect("Failed to parse tools/list response");
 
     // Verify tools/list response (should NOT be "Server not initialized" error)
     assert_eq!(tools_response["jsonrpc"], "2.0");
     assert_eq!(tools_response["id"], 2);
-    assert!(tools_response["error"].is_null(), 
-        "Expected successful tools/list response, got error: {}", tools_response["error"]);
+    assert!(
+        tools_response["error"].is_null(),
+        "Expected successful tools/list response, got error: {}",
+        tools_response["error"]
+    );
     assert!(tools_response["result"]["tools"].is_array());
-    
+
     let tools = tools_response["result"]["tools"].as_array().unwrap();
     assert!(!tools.is_empty(), "Expected non-empty tools list");
 
     // Verify we have the expected Ratchet tools
-    let tool_names: Vec<String> = tools.iter()
+    let tool_names: Vec<String> = tools
+        .iter()
         .map(|tool| tool["name"].as_str().unwrap().to_string())
         .collect();
-    
+
     assert!(tool_names.contains(&"ratchet.execute_task".to_string()));
     assert!(tool_names.contains(&"ratchet.list_available_tasks".to_string()));
 
@@ -114,18 +133,23 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
     let request_json = serde_json::to_string(&call_request).unwrap();
     writeln!(stdin, "{}", request_json).expect("Failed to write tools/call request");
 
-    // Read tools/call response  
+    // Read tools/call response
     response_line.clear();
-    reader.read_line(&mut response_line).expect("Failed to read tools/call response");
-    
-    let call_response: Value = serde_json::from_str(response_line.trim())
-        .expect("Failed to parse tools/call response");
+    reader
+        .read_line(&mut response_line)
+        .expect("Failed to read tools/call response");
+
+    let call_response: Value =
+        serde_json::from_str(response_line.trim()).expect("Failed to parse tools/call response");
 
     // Verify tools/call response
     assert_eq!(call_response["jsonrpc"], "2.0");
     assert_eq!(call_response["id"], 3);
-    assert!(call_response["error"].is_null(), 
-        "Expected successful tools/call response, got error: {}", call_response["error"]);
+    assert!(
+        call_response["error"].is_null(),
+        "Expected successful tools/call response, got error: {}",
+        call_response["error"]
+    );
     assert!(call_response["result"]["content"].is_array());
     assert_eq!(call_response["result"]["isError"], false);
 
@@ -145,7 +169,8 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
                 Err(e) => panic!("Error waiting for child process: {}", e),
             }
         }
-    }).await;
+    })
+    .await;
 
     match exit_status {
         Ok(status) => {
@@ -164,7 +189,15 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
 async fn test_mcp_server_stdio_with_initialized_notification() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
-        .args(["run", "--package", "ratchet", "--bin", "ratchet", "--", "mcp-serve"])
+        .args([
+            "run",
+            "--package",
+            "ratchet",
+            "--bin",
+            "ratchet",
+            "--",
+            "mcp-serve",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -199,10 +232,12 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
 
     // Read initialize response
     let mut response_line = String::new();
-    reader.read_line(&mut response_line).expect("Failed to read initialize response");
-    
-    let init_response: Value = serde_json::from_str(response_line.trim())
-        .expect("Failed to parse initialize response");
+    reader
+        .read_line(&mut response_line)
+        .expect("Failed to read initialize response");
+
+    let init_response: Value =
+        serde_json::from_str(response_line.trim()).expect("Failed to parse initialize response");
 
     assert_eq!(init_response["jsonrpc"], "2.0");
     assert_eq!(init_response["id"], 1);
@@ -231,10 +266,12 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
 
     // Read tools/list response
     response_line.clear();
-    reader.read_line(&mut response_line).expect("Failed to read tools/list response");
-    
-    let tools_response: Value = serde_json::from_str(response_line.trim())
-        .expect("Failed to parse tools/list response");
+    reader
+        .read_line(&mut response_line)
+        .expect("Failed to read tools/list response");
+
+    let tools_response: Value =
+        serde_json::from_str(response_line.trim()).expect("Failed to parse tools/list response");
 
     // Verify tools/list response works correctly
     assert_eq!(tools_response["jsonrpc"], "2.0");
@@ -244,7 +281,7 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
 
     // Close stdin and cleanup
     drop(stdin);
-    
+
     let timeout_duration = Duration::from_secs(5);
     let exit_status = timeout(timeout_duration, async {
         loop {
@@ -257,7 +294,8 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
                 Err(e) => panic!("Error waiting for child process: {}", e),
             }
         }
-    }).await;
+    })
+    .await;
 
     match exit_status {
         Ok(status) => {

@@ -119,7 +119,11 @@ impl PluginContext {
             shared_data: HashMap::new(),
             system_config,
             status: PluginStatus::Loading,
-            logger: tracing::span!(tracing::Level::INFO, "plugin", id = execution_id.to_string()),
+            logger: tracing::span!(
+                tracing::Level::INFO,
+                "plugin",
+                id = execution_id.to_string()
+            ),
         }
     }
 
@@ -200,7 +204,11 @@ pub trait Plugin: Send + Sync {
     }
 
     /// Handle plugin errors
-    async fn handle_error(&mut self, error: &PluginError, context: &mut PluginContext) -> PluginResult<()> {
+    async fn handle_error(
+        &mut self,
+        error: &PluginError,
+        context: &mut PluginContext,
+    ) -> PluginResult<()> {
         tracing::error!(
             target: "plugin",
             plugin = %self.metadata().name,
@@ -305,7 +313,7 @@ impl PluginManifest {
         // Validate API version compatibility
         let api_version = semver::Version::parse(&self.plugin.api_version)
             .map_err(|e| PluginError::generic(format!("Invalid API version: {}", e)))?;
-        
+
         let min_version = semver::Version::parse(crate::MIN_PLUGIN_API_VERSION)
             .map_err(|e| PluginError::generic(format!("Invalid minimum API version: {}", e)))?;
 
@@ -351,7 +359,10 @@ mod tests {
             &self.metadata
         }
 
-        async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
+        async fn execute(
+            &mut self,
+            _context: &mut PluginContext,
+        ) -> PluginResult<serde_json::Value> {
             Ok(serde_json::json!({"status": "success"}))
         }
 
@@ -413,7 +424,7 @@ mod tests {
         let system_config = ratchet_config::RatchetConfig::default();
 
         let mut context = PluginContext::new(execution_id, config, system_config);
-        
+
         // Test shared data
         context.set_shared_data("test_key", "test_value".to_string());
         let value: Option<&String> = context.get_shared_data("test_key");

@@ -9,22 +9,22 @@ use thiserror::Error;
 pub enum ExecutionError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] DatabaseError),
-    
+
     #[error("Service error: {0}")]
     ServiceError(#[from] ServiceError),
-    
+
     #[error("Task not found: {0}")]
     TaskNotFound(String),
-    
+
     #[error("Execution failed: {0}")]
     ExecutionFailed(String),
-    
+
     #[error("Job not found: {0}")]
     JobNotFound(i32),
-    
+
     #[error("Task execution error: {0}")]
     TaskExecutionError(String),
-    
+
     #[error("Invalid execution state: {0}")]
     InvalidState(String),
 }
@@ -61,10 +61,10 @@ pub trait TaskExecutor {
         input_data: JsonValue,
         context: Option<crate::execution::ipc::ExecutionContext>,
     ) -> Result<ExecutionResult, ExecutionError>;
-    
+
     /// Execute a job from the job queue
     async fn execute_job(&self, job_id: i32) -> Result<ExecutionResult, ExecutionError>;
-    
+
     /// Check if executor is healthy
     async fn health_check(&self) -> Result<(), ExecutionError>;
 }

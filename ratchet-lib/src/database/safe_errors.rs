@@ -1,8 +1,8 @@
+use chrono::{DateTime, Utc};
 use sea_orm::DbErr;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Safe database error that doesn't expose internal details
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,43 +82,28 @@ impl From<DbErr> for SafeDatabaseError {
         let (code, safe_message) = match &err {
             DbErr::ConnectionAcquire(_) => (
                 ErrorCode::ServiceUnavailable,
-                "Database connection unavailable"
+                "Database connection unavailable",
             ),
-            DbErr::RecordNotFound(_) => (
-                ErrorCode::NotFound,
-                "Requested resource not found"
-            ),
-            DbErr::RecordNotInserted => (
-                ErrorCode::InternalError,
-                "Failed to create resource"
-            ),
-            DbErr::RecordNotUpdated => (
-                ErrorCode::NotFound,
-                "Resource not found or no changes made"
-            ),
-            DbErr::Custom(msg) if msg.contains("UNIQUE constraint") => (
-                ErrorCode::Conflict,
-                "Resource already exists"
-            ),
+            DbErr::RecordNotFound(_) => (ErrorCode::NotFound, "Requested resource not found"),
+            DbErr::RecordNotInserted => (ErrorCode::InternalError, "Failed to create resource"),
+            DbErr::RecordNotUpdated => {
+                (ErrorCode::NotFound, "Resource not found or no changes made")
+            }
+            DbErr::Custom(msg) if msg.contains("UNIQUE constraint") => {
+                (ErrorCode::Conflict, "Resource already exists")
+            }
             DbErr::Custom(msg) if msg.contains("FOREIGN KEY constraint") => (
                 ErrorCode::ValidationError,
-                "Invalid reference to related resource"
+                "Invalid reference to related resource",
             ),
-            DbErr::Custom(msg) if msg.contains("timeout") => (
-                ErrorCode::Timeout,
-                "Database operation timed out"
-            ),
-            DbErr::Exec(_) => (
-                ErrorCode::InternalError,
-                "Database operation failed"
-            ),
-            DbErr::Query(_) => (
-                ErrorCode::ValidationError,
-                "Invalid query parameters"
-            ),
+            DbErr::Custom(msg) if msg.contains("timeout") => {
+                (ErrorCode::Timeout, "Database operation timed out")
+            }
+            DbErr::Exec(_) => (ErrorCode::InternalError, "Database operation failed"),
+            DbErr::Query(_) => (ErrorCode::ValidationError, "Invalid query parameters"),
             _ => (
                 ErrorCode::InternalError,
-                "An unexpected database error occurred"
+                "An unexpected database error occurred",
             ),
         };
 
@@ -147,23 +132,20 @@ impl From<crate::database::DatabaseError> for SafeDatabaseError {
             crate::database::DatabaseError::DbError(db_err) => SafeDatabaseError::from(db_err),
             crate::database::DatabaseError::SerializationError(ser_err) => {
                 tracing::error!(error = %ser_err, "Serialization error");
-                SafeDatabaseError::new(
-                    ErrorCode::InternalError,
-                    "Data processing error"
-                )
+                SafeDatabaseError::new(ErrorCode::InternalError, "Data processing error")
             }
             crate::database::DatabaseError::MigrationError(msg) => {
                 tracing::error!(error = %msg, "Migration error");
                 SafeDatabaseError::new(
                     ErrorCode::ServiceUnavailable,
-                    "Database migration in progress"
+                    "Database migration in progress",
                 )
             }
             crate::database::DatabaseError::ConfigError(msg) => {
                 tracing::error!(error = %msg, "Database configuration error");
                 SafeDatabaseError::new(
                     ErrorCode::ServiceUnavailable,
-                    "Database configuration error"
+                    "Database configuration error",
                 )
             }
             crate::database::DatabaseError::ValidationError(validation_err) => {
@@ -181,10 +163,7 @@ impl From<crate::database::filters::validation::ValidationError> for SafeDatabas
             "Input validation failed"
         );
 
-        SafeDatabaseError::new(
-            ErrorCode::ValidationError,
-            "Invalid input parameters"
-        )
+        SafeDatabaseError::new(ErrorCode::ValidationError, "Invalid input parameters")
     }
 }
 
@@ -203,23 +182,20 @@ impl<T> ToSafeResult<T> for Result<T, crate::database::DatabaseError> {
             crate::database::DatabaseError::DbError(db_err) => SafeDatabaseError::from(db_err),
             crate::database::DatabaseError::SerializationError(ser_err) => {
                 tracing::error!(error = %ser_err, "Serialization error");
-                SafeDatabaseError::new(
-                    ErrorCode::InternalError,
-                    "Data processing error"
-                )
+                SafeDatabaseError::new(ErrorCode::InternalError, "Data processing error")
             }
             crate::database::DatabaseError::MigrationError(msg) => {
                 tracing::error!(error = %msg, "Migration error");
                 SafeDatabaseError::new(
                     ErrorCode::ServiceUnavailable,
-                    "Database migration in progress"
+                    "Database migration in progress",
                 )
             }
             crate::database::DatabaseError::ConfigError(msg) => {
                 tracing::error!(error = %msg, "Database configuration error");
                 SafeDatabaseError::new(
                     ErrorCode::ServiceUnavailable,
-                    "Database configuration error"
+                    "Database configuration error",
                 )
             }
             crate::database::DatabaseError::ValidationError(validation_err) => {
@@ -260,7 +236,7 @@ mod tests {
     fn test_db_err_conversion() {
         let db_err = DbErr::RecordNotFound("test".to_string());
         let safe_err = SafeDatabaseError::from(db_err);
-        
+
         assert_eq!(safe_err.code.to_http_status(), 404);
         assert_eq!(safe_err.message, "Requested resource not found");
     }

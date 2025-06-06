@@ -1,13 +1,13 @@
 //! Graceful shutdown coordination
-//! 
+//!
 //! This module provides graceful shutdown capabilities with escalating urgency,
 //! task tracking, and process management.
 
+use log::{error, info, warn};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{broadcast, RwLock};
 use tokio::time::timeout;
-use log::{info, warn, error};
 
 /// Shutdown signal types with escalating urgency
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,7 +48,7 @@ impl ShutdownCoordinator {
     /// Create a new shutdown coordinator with custom timeouts
     pub fn with_timeouts(graceful_timeout: Duration, urgent_timeout: Duration) -> Self {
         let (sender, _) = broadcast::channel(16);
-        
+
         Self {
             sender,
             is_shutting_down: Arc::new(RwLock::new(false)),
@@ -101,7 +101,8 @@ impl ShutdownCoordinator {
         info!("Starting graceful shutdown");
 
         // Phase 1: Graceful shutdown
-        self.sender.send(ShutdownSignal::Graceful)
+        self.sender
+            .send(ShutdownSignal::Graceful)
             .map_err(|_| ShutdownError::BroadcastError)?;
 
         if self.wait_for_tasks(self.graceful_timeout).await {
@@ -111,7 +112,8 @@ impl ShutdownCoordinator {
 
         // Phase 2: Urgent shutdown
         warn!("Graceful shutdown timeout, escalating to urgent shutdown");
-        self.sender.send(ShutdownSignal::Urgent)
+        self.sender
+            .send(ShutdownSignal::Urgent)
             .map_err(|_| ShutdownError::BroadcastError)?;
 
         if self.wait_for_tasks(self.urgent_timeout).await {
@@ -121,7 +123,8 @@ impl ShutdownCoordinator {
 
         // Phase 3: Forced shutdown
         error!("Urgent shutdown timeout, forcing shutdown");
-        self.sender.send(ShutdownSignal::Forced)
+        self.sender
+            .send(ShutdownSignal::Forced)
             .map_err(|_| ShutdownError::BroadcastError)?;
 
         // Give a brief moment for forced shutdown to take effect
@@ -129,7 +132,10 @@ impl ShutdownCoordinator {
 
         let remaining_tasks = self.active_task_count().await;
         if remaining_tasks > 0 {
-            warn!("Forced shutdown completed with {} tasks still active", remaining_tasks);
+            warn!(
+                "Forced shutdown completed with {} tasks still active",
+                remaining_tasks
+            );
             Err(ShutdownError::TasksRemaining(remaining_tasks))
         } else {
             info!("Forced shutdown completed successfully");
@@ -140,23 +146,23 @@ impl ShutdownCoordinator {
     /// Wait for all tasks to complete within the given timeout
     async fn wait_for_tasks(&self, timeout_duration: Duration) -> bool {
         let start = tokio::time::Instant::now();
-        
+
         while start.elapsed() < timeout_duration {
             let active = self.active_task_count().await;
             if active == 0 {
                 return true;
             }
-            
+
             // Adaptive sleep based on task count
             let sleep_duration = if active > 10 {
                 Duration::from_millis(100)
             } else {
                 Duration::from_millis(50)
             };
-            
+
             tokio::time::sleep(sleep_duration).await;
         }
-        
+
         false
     }
 }
@@ -191,7 +197,7 @@ where
     /// Create a new shutdown-aware task
     pub fn new(task: T, coordinator: Arc<ShutdownCoordinator>) -> Self {
         let shutdown_rx = coordinator.subscribe();
-        
+
         Self {
             task,
             shutdown_rx,
@@ -217,7 +223,7 @@ where
             result = &mut task_future => {
                 result
             }
-            
+
             // Shutdown signal handling
             signal = self.shutdown_rx.recv() => {
                 match signal {
@@ -286,23 +292,23 @@ pub enum ShutdownError {
     /// Broadcast channel error
     #[error("Failed to send shutdown signal")]
     BroadcastError,
-    
+
     /// Task was cancelled during shutdown
     #[error("Task was cancelled during shutdown")]
     TaskCancelled,
-    
+
     /// Shutdown channel closed
     #[error("Shutdown channel closed")]
     ChannelClosed,
-    
+
     /// Task execution error
     #[error("Task execution error: {0}")]
     TaskError(String),
-    
+
     /// Shutdown already in progress
     #[error("Shutdown already in progress")]
     AlreadyShuttingDown,
-    
+
     /// Tasks remaining after forced shutdown
     #[error("Forced shutdown completed with {0} tasks still active")]
     TasksRemaining(u32),
@@ -320,22 +326,25 @@ impl ProcessShutdownManager {
         // Phase 1: Try graceful termination (SIGTERM on Unix)
         if let Some(id) = child.id() {
             info!("Initiating graceful shutdown for process {}", id);
-            
+
             #[cfg(unix)]
             {
                 use nix::sys::signal::{self, Signal};
                 use nix::unistd::Pid;
-                
+
                 if let Err(e) = signal::kill(Pid::from_raw(id as i32), Signal::SIGTERM) {
                     warn!("Failed to send SIGTERM to process {}: {}", id, e);
                 }
             }
-            
+
             #[cfg(windows)]
             {
                 // On Windows, we'll try to terminate gracefully first
                 // This is less graceful than Unix signals but better than nothing
-                warn!("Windows graceful shutdown: sending terminate signal to process {}", id);
+                warn!(
+                    "Windows graceful shutdown: sending terminate signal to process {}",
+                    id
+                );
             }
         }
 
@@ -372,7 +381,9 @@ impl ProcessShutdownManager {
             }
             Err(_) => {
                 error!("Process did not terminate even after force kill");
-                Err(ShutdownError::TaskError("Process unresponsive to termination".to_string()))
+                Err(ShutdownError::TaskError(
+                    "Process unresponsive to termination".to_string(),
+                ))
             }
         }
     }
@@ -382,9 +393,9 @@ impl ProcessShutdownManager {
         children: Vec<tokio::process::Child>,
         graceful_timeout: Duration,
     ) -> Vec<Result<std::process::ExitStatus, ShutdownError>> {
-        let futures = children.into_iter().map(|child| {
-            Self::shutdown_process(child, graceful_timeout)
-        });
+        let futures = children
+            .into_iter()
+            .map(|child| Self::shutdown_process(child, graceful_timeout));
 
         futures::future::join_all(futures).await
     }
@@ -425,22 +436,22 @@ mod tests {
     #[tokio::test]
     async fn test_shutdown_coordinator_basic() {
         let coordinator = Arc::new(ShutdownCoordinator::new());
-        
+
         // Test initial state
         assert!(!coordinator.is_shutting_down().await);
         assert_eq!(coordinator.active_task_count().await, 0);
-        
+
         // Test task counting
         coordinator.task_started().await;
         coordinator.task_started().await;
         assert_eq!(coordinator.active_task_count().await, 2);
-        
+
         coordinator.task_completed().await;
         assert_eq!(coordinator.active_task_count().await, 1);
-        
+
         coordinator.task_completed().await;
         assert_eq!(coordinator.active_task_count().await, 0);
-        
+
         // Test extra completion doesn't go negative
         coordinator.task_completed().await;
         assert_eq!(coordinator.active_task_count().await, 0);
@@ -450,7 +461,7 @@ mod tests {
     async fn test_shutdown_signals() {
         let coordinator = Arc::new(ShutdownCoordinator::new());
         let mut receiver = coordinator.subscribe();
-        
+
         // Start shutdown in background
         let coordinator_clone = coordinator.clone();
         tokio::spawn(async move {
@@ -458,7 +469,7 @@ mod tests {
             coordinator_clone.task_started().await;
             coordinator_clone.shutdown().await.ok();
         });
-        
+
         // Should receive graceful signal first
         let signal = receiver.recv().await.unwrap();
         assert_eq!(signal, ShutdownSignal::Graceful);
@@ -470,21 +481,23 @@ mod tests {
             Duration::from_millis(100),
             Duration::from_millis(50),
         ));
-        
+
         let task = TestTask::new();
         let shutdown_task = ShutdownAwareTask::new(task, coordinator.clone());
 
         // Start a long-running task
         let handle = tokio::spawn(async move {
-            shutdown_task.run(|task| async move {
-                for _ in 0..100 {
-                    if !task.should_continue().await {
-                        break;
+            shutdown_task
+                .run(|task| async move {
+                    for _ in 0..100 {
+                        if !task.should_continue().await {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_millis(10)).await;
                     }
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-                Ok(())
-            }).await
+                    Ok(())
+                })
+                .await
         });
 
         // Give the task time to start
@@ -494,11 +507,11 @@ mod tests {
         // Initiate shutdown
         let shutdown_result = coordinator.shutdown().await;
         assert!(shutdown_result.is_ok());
-        
+
         // Task should have completed
         let task_result = handle.await.unwrap();
         assert!(task_result.is_err()); // Should be cancelled
-        
+
         // Note: With current implementation, handle_shutdown is not called when task is cancelled
         // This is acceptable behavior for this design pattern
         assert_eq!(coordinator.active_task_count().await, 0);
@@ -510,30 +523,28 @@ mod tests {
             Duration::from_millis(100),
             Duration::from_millis(50),
         ));
-        
+
         // Create a subscriber to prevent broadcast error
         let _receiver = coordinator.subscribe();
-        
+
         // Add a task to delay shutdown
         coordinator.task_started().await;
-        
+
         // Start first shutdown
         let coordinator_clone = coordinator.clone();
-        let handle1 = tokio::spawn(async move {
-            coordinator_clone.shutdown().await
-        });
-        
+        let handle1 = tokio::spawn(async move { coordinator_clone.shutdown().await });
+
         // Give the first shutdown time to start
         tokio::time::sleep(Duration::from_millis(10)).await;
-        
+
         // Try second shutdown - should fail because first is in progress
         let result2 = coordinator.shutdown().await;
         assert!(matches!(result2, Err(ShutdownError::AlreadyShuttingDown)));
-        
+
         // Complete the task to allow first shutdown to finish
         coordinator.task_completed().await;
-        
-        // First should succeed 
+
+        // First should succeed
         let result1 = handle1.await.unwrap();
         assert!(result1.is_ok());
     }
@@ -543,30 +554,32 @@ mod tests {
         let coordinator = Arc::new(ShutdownCoordinator::new());
         let task = TestTask::new();
         let shutdown_task = ShutdownAwareTask::new(task, coordinator.clone());
-        
+
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
-        
+
         // Start periodic task
         let handle = tokio::spawn(async move {
-            shutdown_task.run_periodic(|_task| {
-                let counter = counter_clone.clone();
-                async move {
-                    let count = counter.fetch_add(1, Ordering::Relaxed);
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                    
-                    if count >= 5 {
-                        Ok(Some(count))
-                    } else {
-                        Ok(None)
+            shutdown_task
+                .run_periodic(|_task| {
+                    let counter = counter_clone.clone();
+                    async move {
+                        let count = counter.fetch_add(1, Ordering::Relaxed);
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+
+                        if count >= 5 {
+                            Ok(Some(count))
+                        } else {
+                            Ok(None)
+                        }
                     }
-                }
-            }).await
+                })
+                .await
         });
-        
+
         // Let it run a few iterations
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         // Should complete naturally
         let result = handle.await.unwrap();
         assert!(result.is_ok());

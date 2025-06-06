@@ -26,7 +26,11 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Schedules::TaskId).integer().not_null())
                     .col(ColumnDef::new(Schedules::Name).string().not_null())
-                    .col(ColumnDef::new(Schedules::CronExpression).string().not_null())
+                    .col(
+                        ColumnDef::new(Schedules::CronExpression)
+                            .string()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Schedules::InputData).json().not_null())
                     .col(
                         ColumnDef::new(Schedules::Enabled)

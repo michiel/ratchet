@@ -1,7 +1,7 @@
 /// Conversion utilities between internal types and unified API types
 use crate::{
     api::types::*,
-    database::entities::{Task, Execution, Job, Schedule},
+    database::entities::{Execution, Job, Schedule, Task},
     services::UnifiedTask as ServiceUnifiedTask,
 };
 
@@ -14,13 +14,13 @@ impl From<Task> for UnifiedTask {
             name: task.name,
             description: task.description,
             version: task.version.clone(),
-            enabled: true, // Tasks are enabled by default in the database
+            enabled: true,          // Tasks are enabled by default in the database
             registry_source: false, // TODO: Add this field to database
             available_versions: vec![task.version], // TODO: Implement version tracking
             created_at: task.created_at,
             updated_at: task.updated_at,
             validated_at: None, // TODO: Add validation tracking
-            in_sync: true, // TODO: Add sync tracking
+            in_sync: true,      // TODO: Add sync tracking
             input_schema: Some(task.input_schema.clone()),
             output_schema: Some(task.output_schema.clone()),
             metadata: Some(task.metadata.clone()),
@@ -32,7 +32,10 @@ impl From<Task> for UnifiedTask {
 impl From<ServiceUnifiedTask> for UnifiedTask {
     fn from(task: ServiceUnifiedTask) -> Self {
         Self {
-            id: task.id.map(ApiId::from_i32).unwrap_or_else(|| ApiId::from_uuid(task.uuid)),
+            id: task
+                .id
+                .map(ApiId::from_i32)
+                .unwrap_or_else(|| ApiId::from_uuid(task.uuid)),
             uuid: task.uuid,
             name: task.label, // Service uses 'label' field
             description: Some(task.description),
@@ -44,9 +47,9 @@ impl From<ServiceUnifiedTask> for UnifiedTask {
             updated_at: task.updated_at.unwrap_or_else(chrono::Utc::now),
             validated_at: task.validated_at,
             in_sync: task.in_sync,
-            input_schema: None, // Not included in service type
+            input_schema: None,  // Not included in service type
             output_schema: None, // Not included in service type
-            metadata: None, // Not included in service type
+            metadata: None,      // Not included in service type
         }
     }
 }
@@ -57,15 +60,15 @@ impl From<Execution> for UnifiedExecution {
         // Calculate computed fields
         let can_retry = matches!(
             execution.status,
-            crate::database::entities::executions::ExecutionStatus::Failed |
-            crate::database::entities::executions::ExecutionStatus::Cancelled
+            crate::database::entities::executions::ExecutionStatus::Failed
+                | crate::database::entities::executions::ExecutionStatus::Cancelled
         );
         let can_cancel = matches!(
             execution.status,
-            crate::database::entities::executions::ExecutionStatus::Pending |
-            crate::database::entities::executions::ExecutionStatus::Running
+            crate::database::entities::executions::ExecutionStatus::Pending
+                | crate::database::entities::executions::ExecutionStatus::Running
         );
-        
+
         Self {
             id: ApiId::from_i32(execution.id),
             uuid: execution.uuid,
@@ -101,14 +104,17 @@ impl From<Job> for UnifiedJob {
             queued_at: job.queued_at,
             scheduled_for: job.process_at,
             error_message: job.error_message,
-            output_destinations: job.output_destinations
-                .clone()
-                .and_then(|value| {
-                    // Try to deserialize as Vec<OutputDestinationConfig> first (internal format)
-                    serde_json::from_value::<Vec<crate::output::OutputDestinationConfig>>(value)
-                        .ok()
-                        .map(|configs| configs.into_iter().map(UnifiedOutputDestination::from).collect())
-                }),
+            output_destinations: job.output_destinations.clone().and_then(|value| {
+                // Try to deserialize as Vec<OutputDestinationConfig> first (internal format)
+                serde_json::from_value::<Vec<crate::output::OutputDestinationConfig>>(value)
+                    .ok()
+                    .map(|configs| {
+                        configs
+                            .into_iter()
+                            .map(UnifiedOutputDestination::from)
+                            .collect()
+                    })
+            }),
         }
     }
 }
@@ -209,7 +215,12 @@ impl From<JobStatus> for crate::database::entities::jobs::JobStatus {
 impl From<crate::output::OutputDestinationConfig> for UnifiedOutputDestination {
     fn from(config: crate::output::OutputDestinationConfig) -> Self {
         match config {
-            crate::output::OutputDestinationConfig::Filesystem { path, format, permissions, .. } => Self {
+            crate::output::OutputDestinationConfig::Filesystem {
+                path,
+                format,
+                permissions,
+                ..
+            } => Self {
                 destination_type: "filesystem".to_string(),
                 template: None,
                 filesystem: Some(UnifiedFilesystemConfig {
@@ -220,7 +231,14 @@ impl From<crate::output::OutputDestinationConfig> for UnifiedOutputDestination {
                 }),
                 webhook: None,
             },
-            crate::output::OutputDestinationConfig::Webhook { url, method, timeout, content_type, retry_policy, .. } => Self {
+            crate::output::OutputDestinationConfig::Webhook {
+                url,
+                method,
+                timeout,
+                content_type,
+                retry_policy,
+                ..
+            } => Self {
                 destination_type: "webhook".to_string(),
                 template: None,
                 filesystem: None,
@@ -257,10 +275,14 @@ impl From<crate::output::RetryPolicy> for UnifiedRetryPolicy {
 impl From<crate::output::OutputFormat> for OutputFormat {
     fn from(format: crate::output::OutputFormat) -> Self {
         match format {
-            crate::output::OutputFormat::Json | crate::output::OutputFormat::JsonCompact => Self::Json,
+            crate::output::OutputFormat::Json | crate::output::OutputFormat::JsonCompact => {
+                Self::Json
+            }
             crate::output::OutputFormat::Yaml => Self::Yaml,
             crate::output::OutputFormat::Csv => Self::Csv,
-            crate::output::OutputFormat::Raw | crate::output::OutputFormat::Template(_) => Self::Json, // Default to JSON
+            crate::output::OutputFormat::Raw | crate::output::OutputFormat::Template(_) => {
+                Self::Json
+            } // Default to JSON
         }
     }
 }

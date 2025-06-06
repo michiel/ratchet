@@ -11,11 +11,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Jobs::Table)
-                    .add_column(
-                        ColumnDef::new(Jobs::OutputDestinations)
-                            .text()
-                            .null()
-                    )
+                    .add_column(ColumnDef::new(Jobs::OutputDestinations).text().null())
                     .to_owned(),
             )
             .await?;
@@ -25,11 +21,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Schedules::Table)
-                    .add_column(
-                        ColumnDef::new(Schedules::OutputDestinations)
-                            .text()
-                            .null()
-                    )
+                    .add_column(ColumnDef::new(Schedules::OutputDestinations).text().null())
                     .to_owned(),
             )
             .await?;
@@ -47,11 +39,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(DeliveryResults::JobId)
-                            .integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(DeliveryResults::JobId).integer().not_null())
                     .col(
                         ColumnDef::new(DeliveryResults::ExecutionId)
                             .integer()
@@ -82,16 +70,8 @@ impl MigrationTrait for Migration {
                             .integer()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(DeliveryResults::ResponseInfo)
-                            .text()
-                            .null(),
-                    )
-                    .col(
-                        ColumnDef::new(DeliveryResults::ErrorMessage)
-                            .text()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(DeliveryResults::ResponseInfo).text().null())
+                    .col(ColumnDef::new(DeliveryResults::ErrorMessage).text().null())
                     .col(
                         ColumnDef::new(DeliveryResults::CreatedAt)
                             .timestamp()

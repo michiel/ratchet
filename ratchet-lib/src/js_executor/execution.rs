@@ -1,9 +1,11 @@
 use crate::errors::JsExecutionError;
-use crate::js_executor::conversion::{prepare_input_argument, convert_js_result_to_json};
-use crate::js_executor::error_handling::{register_error_types, parse_js_error};
-use crate::js_executor::http_integration::{check_fetch_call, handle_fetch_processing, handle_fetch_processing_with_context};
-use ratchet_core::validation::{validate_json, parse_schema};
+use crate::js_executor::conversion::{convert_js_result_to_json, prepare_input_argument};
+use crate::js_executor::error_handling::{parse_js_error, register_error_types};
+use crate::js_executor::http_integration::{
+    check_fetch_call, handle_fetch_processing, handle_fetch_processing_with_context,
+};
 use boa_engine::{Context as BoaContext, Source};
+use ratchet_core::validation::{parse_schema, validate_json};
 use serde_json::Value as JsonValue;
 use tracing::{debug, info, trace, warn};
 
@@ -98,7 +100,7 @@ pub async fn call_js_function_with_context(
 ) -> Result<JsonValue, JsExecutionError> {
     // Prepare input argument
     let input_arg = prepare_input_argument(context, input_data)?;
-    
+
     // Prepare context argument if provided
     let context_arg = if let Some(exec_ctx) = execution_context {
         // Build context object as JSON first, then parse it
@@ -107,11 +109,11 @@ pub async fn call_js_function_with_context(
             "taskId": exec_ctx.task_id,
             "taskVersion": exec_ctx.task_version
         });
-        
+
         if let Some(job_id) = exec_ctx.job_id {
             ctx_json["jobId"] = serde_json::Value::String(job_id);
         }
-        
+
         // Convert JSON to JavaScript object
         let ctx_arg = prepare_input_argument(context, &ctx_json)?;
         Some(ctx_arg)
@@ -131,14 +133,21 @@ pub async fn call_js_function_with_context(
         // Handle HTTP fetch processing and re-execute function
         let result = if let Some(ref ctx_arg) = context_arg {
             handle_fetch_processing_with_context(
-                context, func, &input_arg, ctx_arg, http_manager, url, params, body
-            ).await?
+                context,
+                func,
+                &input_arg,
+                ctx_arg,
+                http_manager,
+                url,
+                params,
+                body,
+            )
+            .await?
         } else {
-            handle_fetch_processing(
-                context, func, &input_arg, http_manager, url, params, body
-            ).await?
+            handle_fetch_processing(context, func, &input_arg, http_manager, url, params, body)
+                .await?
         };
-        
+
         debug!("HTTP call completed successfully");
         convert_js_result_to_json(context, result)
     } else {
@@ -191,7 +200,7 @@ pub async fn execute_task(
             debug!("Validating input data against schema");
             // Validate input against schema
             validate_json(&input_data, &input_schema)?;
-            
+
             // Record input if recording is active
             if crate::recording::is_recording() {
                 crate::recording::record_input(&input_data).map_err(|e| {
@@ -217,7 +226,10 @@ pub async fn execute_task(
 
             // Initialize fetch variables
             debug!("Initializing fetch variables");
-            context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
+            context
+                .eval(Source::from_bytes(
+                    "var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;",
+                ))
                 .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
 
             debug!("Compiling JavaScript code");
@@ -233,7 +245,7 @@ pub async fn execute_task(
             debug!("Validating output against schema");
             // Validate output against schema
             validate_json(&result, &output_schema)?;
-            
+
             // Record output if recording is active
             if crate::recording::is_recording() {
                 crate::recording::record_output(&result).map_err(|e| {
@@ -300,7 +312,7 @@ pub async fn execute_task_with_context(
             debug!("Validating input data against schema");
             // Validate input against schema
             validate_json(&input_data, &input_schema)?;
-            
+
             // Record input if recording is active
             if crate::recording::is_recording() {
                 crate::recording::record_input(&input_data).map_err(|e| {
@@ -326,7 +338,10 @@ pub async fn execute_task_with_context(
 
             // Initialize fetch variables
             debug!("Initializing fetch variables");
-            context.eval(Source::from_bytes("var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;"))
+            context
+                .eval(Source::from_bytes(
+                    "var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;",
+                ))
                 .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
 
             debug!("Compiling JavaScript code");
@@ -337,12 +352,19 @@ pub async fn execute_task_with_context(
 
             debug!("Calling JavaScript function with context");
             // Call the JavaScript function with the input data and execution context
-            let result = call_js_function_with_context(&mut context, &func, &input_data, http_manager, execution_context).await?;
+            let result = call_js_function_with_context(
+                &mut context,
+                &func,
+                &input_data,
+                http_manager,
+                execution_context,
+            )
+            .await?;
 
             debug!("Validating output against schema");
             // Validate output against schema
             validate_json(&result, &output_schema)?;
-            
+
             // Record output if recording is active
             if crate::recording::is_recording() {
                 crate::recording::record_output(&result).map_err(|e| {

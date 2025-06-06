@@ -3,8 +3,8 @@ use thiserror::Error;
 pub mod unified;
 
 pub use unified::{
-    ErrorContext, ErrorSeverity, RetryInfo, BackoffStrategy,
-    RatchetErrorExt, ContextualError, TransientError, PermanentError, SecurityError,
+    BackoffStrategy, ContextualError, ErrorContext, ErrorSeverity, PermanentError, RatchetErrorExt,
+    RetryInfo, SecurityError, TransientError,
 };
 
 /// JavaScript error types that can be thrown from JS code
@@ -76,31 +76,30 @@ pub enum JsExecutionError {
 impl From<ratchet_core::error::RatchetError> for JsExecutionError {
     fn from(err: ratchet_core::error::RatchetError) -> Self {
         match err {
-            ratchet_core::error::RatchetError::Validation(validation_err) => {
-                match validation_err {
-                    ratchet_core::error::ValidationError::SchemaValidation(msg) => {
-                        JsExecutionError::SchemaValidationError(msg)
-                    },
-                    ratchet_core::error::ValidationError::InvalidFormat(msg) => {
-                        JsExecutionError::InvalidInputSchema(msg)
-                    },
-                    ratchet_core::error::ValidationError::InputValidation(msg) => {
-                        JsExecutionError::InvalidInputSchema(msg)
-                    },
-                    ratchet_core::error::ValidationError::OutputValidation(msg) => {
-                        JsExecutionError::InvalidOutputSchema(msg)
-                    },
-                    ratchet_core::error::ValidationError::RequiredFieldMissing(msg) => {
-                        JsExecutionError::SchemaValidationError(format!("Required field missing: {}", msg))
-                    },
+            ratchet_core::error::RatchetError::Validation(validation_err) => match validation_err {
+                ratchet_core::error::ValidationError::SchemaValidation(msg) => {
+                    JsExecutionError::SchemaValidationError(msg)
+                }
+                ratchet_core::error::ValidationError::InvalidFormat(msg) => {
+                    JsExecutionError::InvalidInputSchema(msg)
+                }
+                ratchet_core::error::ValidationError::InputValidation(msg) => {
+                    JsExecutionError::InvalidInputSchema(msg)
+                }
+                ratchet_core::error::ValidationError::OutputValidation(msg) => {
+                    JsExecutionError::InvalidOutputSchema(msg)
+                }
+                ratchet_core::error::ValidationError::RequiredFieldMissing(msg) => {
+                    JsExecutionError::SchemaValidationError(format!(
+                        "Required field missing: {}",
+                        msg
+                    ))
                 }
             },
             ratchet_core::error::RatchetError::Io(io_err) => {
                 JsExecutionError::FileReadError(io_err)
-            },
-            other => {
-                JsExecutionError::ExecutionError(format!("Core error: {}", other))
-            },
+            }
+            other => JsExecutionError::ExecutionError(format!("Core error: {}", other)),
         }
     }
 }
@@ -145,8 +144,8 @@ pub type Result<T> = std::result::Result<T, RatchetError>;
 impl RatchetError {
     /// Convert to a log event for structured logging
     pub fn to_log_event(&self, context: &crate::logging::LogContext) -> crate::logging::LogEvent {
-        use crate::logging::{LogEvent, LogLevel, ErrorInfo};
-        
+        use crate::logging::{ErrorInfo, LogEvent, LogLevel};
+
         let event = LogEvent::new(LogLevel::Error, self.to_string())
             .with_logger("ratchet.error")
             .with_trace_id(context.trace_id.clone())
@@ -180,7 +179,8 @@ impl RatchetError {
             Self::WatcherError(_) => "WatcherError",
             Self::LoadError(_) => "LoadError",
             Self::Other(_) => "Other",
-        }.to_string()
+        }
+        .to_string()
     }
 
     fn error_code(&self) -> String {
@@ -204,7 +204,8 @@ impl RatchetError {
             Self::WatcherError(_) => "WATCHER_ERROR",
             Self::LoadError(_) => "LOAD_ERROR",
             Self::Other(_) => "OTHER_ERROR",
-        }.to_string()
+        }
+        .to_string()
     }
 
     fn severity(&self) -> ErrorSeverity {
@@ -226,10 +227,11 @@ impl RatchetError {
         match self {
             Self::Io(_) => true,
             Self::Database(_) => true,
-            Self::JsExecution(e) => matches!(e, 
-                JsExecutionError::TypedJsError(JsErrorType::NetworkError(_)) |
-                JsExecutionError::TypedJsError(JsErrorType::TimeoutError(_)) |
-                JsExecutionError::TypedJsError(JsErrorType::ServiceUnavailableError(_))
+            Self::JsExecution(e) => matches!(
+                e,
+                JsExecutionError::TypedJsError(JsErrorType::NetworkError(_))
+                    | JsExecutionError::TypedJsError(JsErrorType::TimeoutError(_))
+                    | JsExecutionError::TypedJsError(JsErrorType::ServiceUnavailableError(_))
             ),
             _ => false,
         }
@@ -238,7 +240,7 @@ impl RatchetError {
     fn get_error_context(&self) -> std::collections::HashMap<String, serde_json::Value> {
         use serde_json::json;
         let mut context = std::collections::HashMap::new();
-        
+
         match self {
             Self::TaskNotFound(task) => {
                 context.insert("task_name".to_string(), json!(task));
@@ -248,31 +250,47 @@ impl RatchetError {
             }
             _ => {}
         }
-        
+
         context
     }
 
     fn get_suggestions(&self) -> crate::logging::ErrorSuggestions {
         let mut suggestions = crate::logging::ErrorSuggestions::default();
-        
+
         match self {
             Self::TaskNotFound(task) => {
-                suggestions.immediate.push(format!("Check if task '{}' exists in the registry", task));
-                suggestions.immediate.push("Run 'ratchet list' to see available tasks".to_string());
+                suggestions
+                    .immediate
+                    .push(format!("Check if task '{}' exists in the registry", task));
+                suggestions
+                    .immediate
+                    .push("Run 'ratchet list' to see available tasks".to_string());
             }
             Self::Configuration(msg) => {
-                suggestions.immediate.push("Check your configuration file for errors".to_string());
-                suggestions.immediate.push(format!("Configuration issue: {}", msg));
-                suggestions.preventive.push("Validate configuration on startup".to_string());
+                suggestions
+                    .immediate
+                    .push("Check your configuration file for errors".to_string());
+                suggestions
+                    .immediate
+                    .push(format!("Configuration issue: {}", msg));
+                suggestions
+                    .preventive
+                    .push("Validate configuration on startup".to_string());
             }
             Self::Database(msg) => {
-                suggestions.immediate.push("Check database connectivity".to_string());
-                suggestions.immediate.push(format!("Database error: {}", msg));
-                suggestions.preventive.push("Implement connection pooling and retries".to_string());
+                suggestions
+                    .immediate
+                    .push("Check database connectivity".to_string());
+                suggestions
+                    .immediate
+                    .push(format!("Database error: {}", msg));
+                suggestions
+                    .preventive
+                    .push("Implement connection pooling and retries".to_string());
             }
             _ => {}
         }
-        
+
         suggestions
     }
 }

@@ -1,9 +1,9 @@
 //! Caching configuration
 
+use crate::error::ConfigResult;
+use crate::validation::{validate_enum_choice, validate_positive, Validatable};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use crate::validation::{Validatable, validate_positive, validate_enum_choice};
-use crate::error::ConfigResult;
 
 /// Cache configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,15 +12,15 @@ pub struct CacheConfig {
     /// Whether caching is enabled globally
     #[serde(default = "crate::domains::utils::default_true")]
     pub enabled: bool,
-    
+
     /// Task cache configuration
     #[serde(default)]
     pub task_cache: TaskCacheConfig,
-    
+
     /// HTTP response cache configuration
     #[serde(default)]
     pub http_cache: HttpCacheConfig,
-    
+
     /// Result cache configuration
     #[serde(default)]
     pub result_cache: ResultCacheConfig,
@@ -33,17 +33,20 @@ pub struct TaskCacheConfig {
     /// Cache implementation type
     #[serde(default = "default_task_cache_type")]
     pub cache_type: String,
-    
+
     /// LRU cache size for task content
     #[serde(default = "default_task_content_cache_size")]
     pub task_content_cache_size: usize,
-    
+
     /// Memory limit in bytes
     #[serde(default = "default_task_memory_limit")]
     pub memory_limit_bytes: usize,
-    
+
     /// TTL for cached task definitions
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_task_ttl")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_task_ttl"
+    )]
     pub ttl: Duration,
 }
 
@@ -54,15 +57,18 @@ pub struct HttpCacheConfig {
     /// Whether HTTP response caching is enabled
     #[serde(default = "crate::domains::utils::default_true")]
     pub enabled: bool,
-    
+
     /// Maximum cache size in bytes
     #[serde(default = "default_http_cache_size")]
     pub max_size_bytes: usize,
-    
+
     /// Default TTL for responses without cache headers
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_http_ttl")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_http_ttl"
+    )]
     pub default_ttl: Duration,
-    
+
     /// Whether to respect cache-control headers
     #[serde(default = "crate::domains::utils::default_true")]
     pub respect_cache_control: bool,
@@ -75,17 +81,20 @@ pub struct ResultCacheConfig {
     /// Whether result caching is enabled
     #[serde(default = "crate::domains::utils::default_true")]
     pub enabled: bool,
-    
+
     /// Whether to cache only successful results
     #[serde(default = "crate::domains::utils::default_true")]
     pub cache_only_success: bool,
-    
+
     /// Maximum number of cached results
     #[serde(default = "default_result_cache_capacity")]
     pub max_entries: usize,
-    
+
     /// TTL for cached results
-    #[serde(with = "crate::domains::utils::serde_duration", default = "default_result_ttl")]
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_result_ttl"
+    )]
     pub ttl: Duration,
 }
 
@@ -140,7 +149,7 @@ impl Validatable for CacheConfig {
         self.result_cache.validate()?;
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "cache"
     }
@@ -150,29 +159,30 @@ impl Validatable for TaskCacheConfig {
     fn validate(&self) -> ConfigResult<()> {
         // Validate cache type
         let valid_types = ["lru", "ttl", "moka", "inmemory"];
-        validate_enum_choice(&self.cache_type, &valid_types, "cache_type", self.domain_name())?;
-        
+        validate_enum_choice(
+            &self.cache_type,
+            &valid_types,
+            "cache_type",
+            self.domain_name(),
+        )?;
+
         validate_positive(
             self.task_content_cache_size,
             "task_content_cache_size",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
+
         validate_positive(
             self.memory_limit_bytes,
             "memory_limit_bytes",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
-        validate_positive(
-            self.ttl.as_secs(),
-            "ttl",
-            self.domain_name()
-        )?;
-        
+
+        validate_positive(self.ttl.as_secs(), "ttl", self.domain_name())?;
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "cache.task_cache"
     }
@@ -180,21 +190,17 @@ impl Validatable for TaskCacheConfig {
 
 impl Validatable for HttpCacheConfig {
     fn validate(&self) -> ConfigResult<()> {
-        validate_positive(
-            self.max_size_bytes,
-            "max_size_bytes",
-            self.domain_name()
-        )?;
-        
+        validate_positive(self.max_size_bytes, "max_size_bytes", self.domain_name())?;
+
         validate_positive(
             self.default_ttl.as_secs(),
             "default_ttl",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "cache.http_cache"
     }
@@ -202,21 +208,13 @@ impl Validatable for HttpCacheConfig {
 
 impl Validatable for ResultCacheConfig {
     fn validate(&self) -> ConfigResult<()> {
-        validate_positive(
-            self.max_entries,
-            "max_entries",
-            self.domain_name()
-        )?;
-        
-        validate_positive(
-            self.ttl.as_secs(),
-            "ttl",
-            self.domain_name()
-        )?;
-        
+        validate_positive(self.max_entries, "max_entries", self.domain_name())?;
+
+        validate_positive(self.ttl.as_secs(), "ttl", self.domain_name())?;
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "cache.result_cache"
     }
@@ -271,11 +269,11 @@ mod tests {
     fn test_task_cache_validation() {
         let mut config = TaskCacheConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test invalid cache type
         config.cache_type = "invalid".to_string();
         assert!(config.validate().is_err());
-        
+
         // Test zero cache size
         config = TaskCacheConfig::default();
         config.task_content_cache_size = 0;
@@ -286,7 +284,7 @@ mod tests {
     fn test_http_cache_validation() {
         let mut config = HttpCacheConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test zero size
         config.max_size_bytes = 0;
         assert!(config.validate().is_err());
@@ -296,7 +294,7 @@ mod tests {
     fn test_result_cache_validation() {
         let mut config = ResultCacheConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test zero entries
         config.max_entries = 0;
         assert!(config.validate().is_err());

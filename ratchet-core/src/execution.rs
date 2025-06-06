@@ -1,10 +1,10 @@
 //! Execution domain model and related types
 
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::Duration;
+use uuid::Uuid;
 
 use crate::task::TaskId;
 use crate::types::Priority;
@@ -136,25 +136,25 @@ impl fmt::Display for ExecutionStatus {
 pub struct ExecutionContext {
     /// Unique execution ID
     pub execution_id: ExecutionId,
-    
+
     /// Optional job ID if part of a job
     pub job_id: Option<JobId>,
-    
+
     /// Task ID being executed
     pub task_id: TaskId,
-    
+
     /// Task version being executed
     pub task_version: String,
-    
+
     /// Priority of the execution
     pub priority: Priority,
-    
+
     /// Optional trace ID for distributed tracing
     pub trace_id: Option<String>,
-    
+
     /// Optional parent span ID for distributed tracing
     pub parent_span_id: Option<String>,
-    
+
     /// Additional metadata
     pub metadata: std::collections::HashMap<String, serde_json::Value>,
 }
@@ -164,37 +164,37 @@ pub struct ExecutionContext {
 pub struct Execution {
     /// Execution context
     pub context: ExecutionContext,
-    
+
     /// Current status
     pub status: ExecutionStatus,
-    
+
     /// Input data provided to the task
     pub input_data: serde_json::Value,
-    
+
     /// Output data from the task (if completed)
     pub output_data: Option<serde_json::Value>,
-    
+
     /// Error information (if failed)
     pub error: Option<ExecutionError>,
-    
+
     /// When the execution was created
     pub created_at: DateTime<Utc>,
-    
+
     /// When the execution started running
     pub started_at: Option<DateTime<Utc>>,
-    
+
     /// When the execution completed
     pub completed_at: Option<DateTime<Utc>>,
-    
+
     /// Execution duration
     pub duration: Option<Duration>,
-    
+
     /// Number of retry attempts
     pub retry_count: u32,
-    
+
     /// Worker that executed this task
     pub worker_id: Option<String>,
-    
+
     /// Output destinations for results
     pub output_destinations: Vec<OutputDestination>,
 }
@@ -204,16 +204,16 @@ pub struct Execution {
 pub struct ExecutionError {
     /// Error code or type
     pub code: String,
-    
+
     /// Human-readable error message
     pub message: String,
-    
+
     /// Detailed error description
     pub details: Option<String>,
-    
+
     /// Stack trace if available
     pub stack_trace: Option<String>,
-    
+
     /// Whether this error is retryable
     pub retryable: bool,
 }
@@ -228,7 +228,7 @@ pub enum OutputDestination {
         format: OutputFormat,
         permissions: Option<String>,
     },
-    
+
     /// Send to webhook
     Webhook {
         url: String,
@@ -236,13 +236,13 @@ pub enum OutputDestination {
         headers: std::collections::HashMap<String, String>,
         timeout_seconds: u32,
     },
-    
+
     /// Store in database
     Database {
         table: String,
         columns: std::collections::HashMap<String, String>,
     },
-    
+
     /// Upload to S3
     S3 {
         bucket: String,
@@ -340,14 +340,17 @@ impl Execution {
             self.duration = Some(
                 end.signed_duration_since(start)
                     .to_std()
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
             );
         }
     }
 
     /// Get a display name for the execution
     pub fn display_name(&self) -> String {
-        format!("Execution {} for task {}", self.context.execution_id, self.context.task_id)
+        format!(
+            "Execution {} for task {}",
+            self.context.execution_id, self.context.task_id
+        )
     }
 }
 
@@ -420,12 +423,12 @@ impl ExecutionBuilder {
             self.input_data,
             self.priority,
         );
-        
+
         execution.context.job_id = self.job_id;
         execution.context.trace_id = self.trace_id;
         execution.context.metadata = self.metadata;
         execution.output_destinations = self.output_destinations;
-        
+
         execution
     }
 }
@@ -478,17 +481,13 @@ mod tests {
     fn test_execution_builder() {
         let task_id = TaskId::new();
         let job_id = JobId::new();
-        
-        let execution = ExecutionBuilder::new(
-            task_id,
-            "2.0.0",
-            serde_json::json!({"test": true}),
-        )
-        .priority(Priority::High)
-        .job_id(job_id)
-        .trace_id("trace-123")
-        .metadata("environment", serde_json::json!("production"))
-        .build();
+
+        let execution = ExecutionBuilder::new(task_id, "2.0.0", serde_json::json!({"test": true}))
+            .priority(Priority::High)
+            .job_id(job_id)
+            .trace_id("trace-123")
+            .metadata("environment", serde_json::json!("production"))
+            .build();
 
         assert_eq!(execution.context.task_id, task_id);
         assert_eq!(execution.context.task_version, "2.0.0");

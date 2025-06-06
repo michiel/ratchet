@@ -16,7 +16,7 @@
 //! ```text
 //! ┌─────────────────────┐
 //! │   LLM/AI Agent      │
-//! │  (Claude, GPT-4)    │ 
+//! │  (Claude, GPT-4)    │
 //! │  ┌───────────────┐  │
 //! │  │ MCP Client    │  │
 //! │  └───────┬───────┘  │
@@ -51,15 +51,14 @@ pub mod server;
 #[cfg(feature = "client")]
 pub mod client;
 
-pub mod security;
-pub mod error;
 pub mod config;
+pub mod error;
+pub mod security;
 
 // Re-export commonly used types
 pub use error::{McpError, McpResult};
 pub use protocol::{
-    JsonRpcRequest, JsonRpcResponse, JsonRpcError,
-    McpMessage, McpMethod, McpCapabilities,
+    JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpCapabilities, McpMessage, McpMethod,
 };
 
 #[cfg(feature = "server")]
@@ -68,9 +67,9 @@ pub use server::{McpServer, McpServerConfig, McpTool, ToolRegistry};
 #[cfg(feature = "client")]
 pub use client::{McpClient, McpClientConfig, ServerConnection};
 
+pub use config::{ConnectionLimits, McpConfig, SimpleTransportType, Timeouts, ToolConfig};
+pub use security::{ClientPermissions, McpAuth, McpAuthManager};
 pub use transport::{McpTransport, TransportType};
-pub use security::{McpAuth, McpAuthManager, ClientPermissions};
-pub use config::{McpConfig, SimpleTransportType, ConnectionLimits, Timeouts, ToolConfig};
 
 /// MCP protocol version supported by this implementation
 pub const MCP_VERSION: &str = "1.0.0";

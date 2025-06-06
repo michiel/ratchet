@@ -7,43 +7,43 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
-use crate::{McpError, McpResult};
-use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use super::{McpTransport, SseAuth, TransportHealth};
+use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
+use crate::{McpError, McpResult};
 
 /// Server-Sent Events transport for HTTP-based MCP servers
 #[derive(Debug)]
 pub struct SseTransport {
     /// Base URL for SSE endpoint
     url: String,
-    
+
     /// HTTP headers
     headers: HashMap<String, String>,
-    
+
     /// Authentication configuration
     auth: Option<SseAuth>,
-    
+
     /// Request timeout
     _timeout: Duration,
-    
+
     /// Whether to verify SSL certificates
     verify_ssl: bool,
-    
+
     /// HTTP client
     client: Client,
-    
+
     /// Event stream
     event_stream: Option<tokio_stream::wrappers::ReceiverStream<String>>,
-    
+
     /// Transport health tracking
     health: Mutex<TransportHealth>,
-    
+
     /// Whether the transport is connected
     connected: bool,
-    
+
     /// Session ID for this connection
     session_id: Option<String>,
-    
+
     /// Pending responses waiting for correlation
     pending_responses: Mutex<HashMap<String, tokio::sync::oneshot::Sender<JsonRpcResponse>>>,
 }
@@ -96,7 +96,9 @@ impl SseTransport {
     fn apply_auth(&self, builder: RequestBuilder) -> RequestBuilder {
         match &self.auth {
             Some(SseAuth::Bearer { token }) => builder.bearer_auth(token),
-            Some(SseAuth::Basic { username, password }) => builder.basic_auth(username, Some(password)),
+            Some(SseAuth::Basic { username, password }) => {
+                builder.basic_auth(username, Some(password))
+            }
             Some(SseAuth::ApiKey { header, key }) => builder.header(header, key),
             None => builder,
         }
@@ -107,7 +109,7 @@ impl SseTransport {
         // Generate a session ID for this connection
         let session_id = uuid::Uuid::new_v4().to_string();
         self.session_id = Some(session_id.clone());
-        
+
         // Build SSE endpoint URL
         let sse_url = if self.url.ends_with('/') {
             format!("{}sse/{}", self.url, session_id)
@@ -131,9 +133,12 @@ impl SseTransport {
             .header("Cache-Control", "no-cache")
             .header("Connection", "keep-alive");
 
-        let response = builder.send().await.map_err(|e| McpError::ConnectionFailed {
-            reason: format!("Failed to connect to SSE endpoint: {}", e),
-        })?;
+        let response = builder
+            .send()
+            .await
+            .map_err(|e| McpError::ConnectionFailed {
+                reason: format!("Failed to connect to SSE endpoint: {}", e),
+            })?;
 
         if !response.status().is_success() {
             return Err(McpError::ConnectionFailed {
@@ -144,29 +149,32 @@ impl SseTransport {
         // Create event stream
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         let stream = response.bytes_stream();
-        
+
         // Spawn task to process SSE events
         tokio::spawn(async move {
             let mut stream = stream;
             let mut buffer = String::new();
-            
+
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(chunk) => {
                         if let Ok(text) = String::from_utf8(chunk.to_vec()) {
                             buffer.push_str(&text);
-                            
+
                             // Process complete SSE events (double newline separated)
                             while let Some(event_end) = buffer.find("\n\n") {
                                 let event_text = buffer[..event_end].trim().to_string();
                                 buffer = buffer[event_end + 2..].to_string();
-                                
+
                                 // Parse SSE event format
                                 for line in event_text.lines() {
                                     let line = line.trim();
                                     if line.starts_with("data: ") {
                                         let data = &line[6..]; // Remove "data: " prefix
-                                        if !data.trim().is_empty() && data != "keep-alive" && tx.send(data.to_string()).await.is_err() {
+                                        if !data.trim().is_empty()
+                                            && data != "keep-alive"
+                                            && tx.send(data.to_string()).await.is_err()
+                                        {
                                             return; // Receiver dropped
                                         }
                                     }
@@ -186,10 +194,13 @@ impl SseTransport {
     /// Send request via HTTP POST
     async fn send_http_request(&self, request: JsonRpcRequest) -> McpResult<()> {
         // Get the session ID
-        let session_id = self.session_id.as_ref().ok_or_else(|| McpError::Transport {
-            message: "No session ID available. Connect first.".to_string(),
-        })?;
-        
+        let session_id = self
+            .session_id
+            .as_ref()
+            .ok_or_else(|| McpError::Transport {
+                message: "No session ID available. Connect first.".to_string(),
+            })?;
+
         // For SSE client, send to the message endpoint
         let message_url = if self.url.ends_with('/') {
             format!("{}message/{}", self.url, session_id)
@@ -283,9 +294,12 @@ impl McpTransport for SseTransport {
             });
         }
 
-        let stream = self.event_stream.as_mut().ok_or_else(|| McpError::Transport {
-            message: "Event stream not available".to_string(),
-        })?;
+        let stream = self
+            .event_stream
+            .as_mut()
+            .ok_or_else(|| McpError::Transport {
+                message: "Event stream not available".to_string(),
+            })?;
 
         let start_time = Instant::now();
 
@@ -293,11 +307,10 @@ impl McpTransport for SseTransport {
         match stream.next().await {
             Some(data) => {
                 // Parse JSON response
-                let response: JsonRpcResponse = serde_json::from_str(&data).map_err(|e| {
-                    McpError::Serialization {
+                let response: JsonRpcResponse =
+                    serde_json::from_str(&data).map_err(|e| McpError::Serialization {
                         details: format!("Failed to parse SSE response: {}", e),
-                    }
-                })?;
+                    })?;
 
                 // Update health
                 let latency = start_time.elapsed();
@@ -310,7 +323,7 @@ impl McpTransport for SseTransport {
                 self.connected = false;
                 let mut health = self.health.lock().await;
                 health.mark_failure("SSE stream ended".to_string());
-                
+
                 Err(McpError::ConnectionFailed {
                     reason: "SSE stream ended".to_string(),
                 })
@@ -362,7 +375,7 @@ impl McpTransport for SseTransport {
 
         // Create a channel for the response
         let (tx, rx) = tokio::sync::oneshot::channel();
-        
+
         // Store the sender for this request ID
         {
             let mut pending = self.pending_responses.lock().await;
@@ -375,7 +388,9 @@ impl McpTransport for SseTransport {
         // Wait for response with timeout
         let response = tokio::time::timeout(timeout_duration, rx)
             .await
-            .map_err(|_| McpError::ServerTimeout { timeout: timeout_duration })?
+            .map_err(|_| McpError::ServerTimeout {
+                timeout: timeout_duration,
+            })?
             .map_err(|_| McpError::Internal {
                 message: "Response channel was dropped".to_string(),
             })?;
@@ -422,14 +437,16 @@ mod tests {
     #[test]
     fn test_auth_configuration() {
         let auth_configs = vec![
-            SseAuth::Bearer { token: "test-token".to_string() },
-            SseAuth::Basic { 
-                username: "user".to_string(), 
-                password: "pass".to_string() 
+            SseAuth::Bearer {
+                token: "test-token".to_string(),
             },
-            SseAuth::ApiKey { 
-                header: "X-API-Key".to_string(), 
-                key: "api-key".to_string() 
+            SseAuth::Basic {
+                username: "user".to_string(),
+                password: "pass".to_string(),
+            },
+            SseAuth::ApiKey {
+                header: "X-API-Key".to_string(),
+                key: "api-key".to_string(),
             },
         ];
 
@@ -453,10 +470,11 @@ mod tests {
             None,
             Duration::from_secs(30),
             true,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(!transport.is_connected().await);
-        
+
         let health = transport.health().await;
         assert!(!health.is_healthy());
         assert!(!health.connected);
@@ -470,10 +488,11 @@ mod tests {
             None,
             Duration::from_secs(30),
             false, // Don't verify SSL for test
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(transport.session_id.is_none());
-        
+
         // Connection will fail but session ID should be generated
         let _ = transport.create_sse_connection().await;
         assert!(transport.session_id.is_some());
@@ -487,7 +506,8 @@ mod tests {
             None,
             Duration::from_secs(30),
             false,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Test URL with trailing slash
         let transport_with_slash = SseTransport::new(
@@ -496,7 +516,8 @@ mod tests {
             None,
             Duration::from_secs(30),
             false,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Both should be valid
         assert!(transport.url.starts_with("http://"));

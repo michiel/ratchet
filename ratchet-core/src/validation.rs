@@ -44,16 +44,18 @@ pub fn validate_json(data: &JsonValue, schema: &JsonValue) -> ValidationResult<(
         .with_draft(Draft::Draft7)
         .compile(schema)
         .map_err(|e| {
-            RatchetError::Validation(ValidationError::SchemaValidation(
-                format!("Failed to compile schema: {}", e)
-            ))
+            RatchetError::Validation(ValidationError::SchemaValidation(format!(
+                "Failed to compile schema: {}",
+                e
+            )))
         })?;
 
     compiled_schema.validate(data).map_err(|errs| {
         let error_msgs: Vec<String> = errs.map(|e| e.to_string()).collect();
-        RatchetError::Validation(ValidationError::SchemaValidation(
-            format!("Schema validation failed: {}", error_msgs.join(", "))
-        ))
+        RatchetError::Validation(ValidationError::SchemaValidation(format!(
+            "Schema validation failed: {}",
+            error_msgs.join(", ")
+        )))
     })?;
 
     Ok(())
@@ -77,15 +79,19 @@ pub fn validate_json(data: &JsonValue, schema: &JsonValue) -> ValidationResult<(
 /// ```
 pub fn parse_schema(schema_path: &Path) -> ValidationResult<JsonValue> {
     let schema_str = fs::read_to_string(schema_path).map_err(|e| {
-        RatchetError::Validation(ValidationError::InvalidFormat(
-            format!("Failed to read schema file '{}': {}", schema_path.display(), e)
-        ))
+        RatchetError::Validation(ValidationError::InvalidFormat(format!(
+            "Failed to read schema file '{}': {}",
+            schema_path.display(),
+            e
+        )))
     })?;
 
     serde_json::from_str(&schema_str).map_err(|e| {
-        RatchetError::Validation(ValidationError::InvalidFormat(
-            format!("Failed to parse schema JSON from '{}': {}", schema_path.display(), e)
-        ))
+        RatchetError::Validation(ValidationError::InvalidFormat(format!(
+            "Failed to parse schema JSON from '{}': {}",
+            schema_path.display(),
+            e
+        )))
     })
 }
 
@@ -100,7 +106,10 @@ pub fn parse_schema(schema_path: &Path) -> ValidationResult<JsonValue> {
 /// # Returns
 /// * `Ok(())` if validation passes
 /// * `Err(RatchetError)` if schema loading or validation fails
-pub fn validate_json_with_schema_file(data: &JsonValue, schema_path: &Path) -> ValidationResult<()> {
+pub fn validate_json_with_schema_file(
+    data: &JsonValue,
+    schema_path: &Path,
+) -> ValidationResult<()> {
     let schema = parse_schema(schema_path)?;
     validate_json(data, &schema)
 }
@@ -117,7 +126,7 @@ pub fn validate_json_with_schema_file(data: &JsonValue, schema_path: &Path) -> V
 pub fn validate_json_type(data: &JsonValue, expected_type: &str) -> ValidationResult<()> {
     let actual_type = match data {
         JsonValue::Null => "null",
-        JsonValue::Bool(_) => "boolean", 
+        JsonValue::Bool(_) => "boolean",
         JsonValue::Number(_) => "number",
         JsonValue::String(_) => "string",
         JsonValue::Array(_) => "array",
@@ -126,7 +135,10 @@ pub fn validate_json_type(data: &JsonValue, expected_type: &str) -> ValidationRe
 
     if actual_type != expected_type {
         return Err(RatchetError::Validation(ValidationError::InvalidFormat(
-            format!("Expected JSON type '{}', but got '{}'", expected_type, actual_type)
+            format!(
+                "Expected JSON type '{}', but got '{}'",
+                expected_type, actual_type
+            ),
         )));
     }
 
@@ -142,18 +154,21 @@ pub fn validate_json_type(data: &JsonValue, expected_type: &str) -> ValidationRe
 /// # Returns
 /// * `Ok(())` if all required fields are present
 /// * `Err(RatchetError::Validation)` if any required fields are missing
-pub fn validate_required_fields(data: &JsonValue, required_fields: &[&str]) -> ValidationResult<()> {
+pub fn validate_required_fields(
+    data: &JsonValue,
+    required_fields: &[&str],
+) -> ValidationResult<()> {
     let obj = data.as_object().ok_or_else(|| {
         RatchetError::Validation(ValidationError::InvalidFormat(
-            "Expected JSON object for field validation".to_string()
+            "Expected JSON object for field validation".to_string(),
         ))
     })?;
 
     for field in required_fields {
         if !obj.contains_key(*field) {
-            return Err(RatchetError::Validation(ValidationError::RequiredFieldMissing(
-                field.to_string()
-            )));
+            return Err(RatchetError::Validation(
+                ValidationError::RequiredFieldMissing(field.to_string()),
+            ));
         }
     }
 
@@ -197,7 +212,7 @@ mod tests {
         let result = validate_json(&data, &schema);
         assert!(result.is_err());
         match result.unwrap_err() {
-            RatchetError::Validation(ValidationError::SchemaValidation(_)) => {},
+            RatchetError::Validation(ValidationError::SchemaValidation(_)) => {}
             _ => panic!("Expected ValidationError::SchemaValidation"),
         }
     }
@@ -212,7 +227,11 @@ mod tests {
         });
 
         let temp_file = NamedTempFile::new().unwrap();
-        fs::write(temp_file.path(), serde_json::to_string(&schema_content).unwrap()).unwrap();
+        fs::write(
+            temp_file.path(),
+            serde_json::to_string(&schema_content).unwrap(),
+        )
+        .unwrap();
 
         let parsed = parse_schema(temp_file.path()).unwrap();
         assert_eq!(parsed, schema_content);
@@ -223,7 +242,7 @@ mod tests {
         let result = parse_schema(Path::new("nonexistent.json"));
         assert!(result.is_err());
         match result.unwrap_err() {
-            RatchetError::Validation(ValidationError::InvalidFormat(_)) => {},
+            RatchetError::Validation(ValidationError::InvalidFormat(_)) => {}
             _ => panic!("Expected ValidationError::InvalidFormat"),
         }
     }
@@ -245,17 +264,17 @@ mod tests {
     #[test]
     fn test_validate_required_fields() {
         let data = json!({"name": "test", "age": 25, "email": "test@example.com"});
-        
+
         // All required fields present
         assert!(validate_required_fields(&data, &["name", "age"]).is_ok());
-        
+
         // Missing required field
         let result = validate_required_fields(&data, &["name", "phone"]);
         assert!(result.is_err());
         match result.unwrap_err() {
             RatchetError::Validation(ValidationError::RequiredFieldMissing(field)) => {
                 assert_eq!(field, "phone");
-            },
+            }
             _ => panic!("Expected ValidationError::RequiredFieldMissing"),
         }
 
@@ -263,7 +282,7 @@ mod tests {
         let result = validate_required_fields(&json!("not an object"), &["name"]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            RatchetError::Validation(ValidationError::InvalidFormat(_)) => {},
+            RatchetError::Validation(ValidationError::InvalidFormat(_)) => {}
             _ => panic!("Expected ValidationError::InvalidFormat"),
         }
     }

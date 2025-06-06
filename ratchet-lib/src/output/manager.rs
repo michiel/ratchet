@@ -1,21 +1,21 @@
 //! Output delivery manager for coordinating delivery to multiple destinations
 
+use futures::future::join_all;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
-use futures::future::join_all;
 
-use crate::output::{
-    destination::{OutputDestination, TaskOutput, DeliveryContext, DeliveryResult},
-    destinations::{FilesystemDestination, WebhookDestination},
-    template::TemplateEngine,
-    metrics::DeliveryMetrics,
-    errors::{DeliveryError, ConfigError},
-    OutputDestinationConfig, JobContext,
-};
 use crate::output::destinations::filesystem::FilesystemConfig;
 use crate::output::destinations::webhook::WebhookConfig;
+use crate::output::{
+    destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput},
+    destinations::{FilesystemDestination, WebhookDestination},
+    errors::{ConfigError, DeliveryError},
+    metrics::DeliveryMetrics,
+    template::TemplateEngine,
+    JobContext, OutputDestinationConfig,
+};
 
 /// Manages delivery to multiple output destinations
 pub struct OutputDeliveryManager {
@@ -35,30 +35,35 @@ impl OutputDeliveryManager {
             max_concurrent_deliveries: max_concurrent,
         }
     }
-    
+
     /// Create delivery manager from destination configurations
     pub fn from_configs(
         configs: &[OutputDestinationConfig],
         max_concurrent: usize,
     ) -> Result<Self, ConfigError> {
         let mut manager = Self::new(max_concurrent);
-        
+
         for config in configs {
             let destination = manager.create_destination(config)?;
-            destination.validate_config()
+            destination
+                .validate_config()
                 .map_err(|e| ConfigError::InvalidDestination {
                     destination_type: destination.destination_type().to_string(),
                     error: e,
                 })?;
             manager.destinations.push(destination);
         }
-        
+
         Ok(manager)
     }
 
     /// Add a destination to the manager
-    pub fn add_destination(&mut self, destination: Arc<dyn OutputDestination>) -> Result<(), ConfigError> {
-        destination.validate_config()
+    pub fn add_destination(
+        &mut self,
+        destination: Arc<dyn OutputDestination>,
+    ) -> Result<(), ConfigError> {
+        destination
+            .validate_config()
             .map_err(|e| ConfigError::InvalidDestination {
                 destination_type: destination.destination_type().to_string(),
                 error: e,
@@ -76,7 +81,7 @@ impl OutputDeliveryManager {
     pub fn metrics(&self) -> Arc<DeliveryMetrics> {
         self.metrics.clone()
     }
-    
+
     /// Deliver output to all configured destinations
     pub async fn deliver_output(
         &self,
@@ -86,58 +91,68 @@ impl OutputDeliveryManager {
         if self.destinations.is_empty() {
             return Ok(Vec::new());
         }
-        
+
         let context = self.build_delivery_context(&output, &job_context);
         let start_time = Instant::now();
-        
+
         // Execute deliveries concurrently with limit
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_deliveries));
         let mut handles = Vec::new();
-        
+
         for (idx, destination) in self.destinations.iter().enumerate() {
             let dest = destination.clone(); // Clone the Arc
             let output_clone = output.clone();
             let context_clone = context.clone();
             let metrics_clone = self.metrics.clone();
-            let permit = semaphore.clone().acquire_owned().await
-                .map_err(|e| DeliveryError::TaskJoin { error: e.to_string() })?;
-            
+            let permit =
+                semaphore
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .map_err(|e| DeliveryError::TaskJoin {
+                        error: e.to_string(),
+                    })?;
+
             let handle = tokio::spawn(async move {
                 let _permit = permit; // Hold permit for duration of task
-                
+
                 let delivery_start = Instant::now();
                 let dest_type = dest.destination_type();
-                
+
                 let result = dest.deliver(&output_clone, &context_clone).await;
-                
+
                 // Record metrics
                 let duration = delivery_start.elapsed();
                 match &result {
                     Ok(delivery_result) => {
-                        metrics_clone.record_success(dest_type, duration, delivery_result.size_bytes);
+                        metrics_clone.record_success(
+                            dest_type,
+                            duration,
+                            delivery_result.size_bytes,
+                        );
                     }
                     Err(error) => {
                         metrics_clone.record_failure(dest_type, duration, error);
                     }
                 }
-                
+
                 (idx, result)
             });
-            
+
             handles.push(handle);
         }
-        
+
         // Wait for all deliveries to complete
         let join_results = join_all(handles).await;
         let mut delivery_results = Vec::with_capacity(self.destinations.len());
-        
+
         // Initialize results vector with the correct size
         for _ in 0..self.destinations.len() {
-            delivery_results.push(Err(DeliveryError::TaskJoin { 
-                error: "Not executed".to_string() 
+            delivery_results.push(Err(DeliveryError::TaskJoin {
+                error: "Not executed".to_string(),
             }));
         }
-        
+
         // Process results in order
         for join_result in join_results {
             match join_result {
@@ -151,19 +166,19 @@ impl OutputDeliveryManager {
                 }
             }
         }
-        
+
         // Record overall metrics
         let total_duration = start_time.elapsed();
         let success_count = delivery_results.iter().filter(|r| r.is_ok()).count();
         let failure_count = delivery_results.len() - success_count;
-        
+
         self.metrics.record_batch_delivery(
             delivery_results.len(),
             success_count,
             failure_count,
             total_duration,
         );
-        
+
         delivery_results.into_iter().collect::<Result<Vec<_>, _>>()
     }
 
@@ -172,33 +187,31 @@ impl OutputDeliveryManager {
         configs: &[OutputDestinationConfig],
     ) -> Result<Vec<TestResult>, ConfigError> {
         let mut results = Vec::new();
-        
+
         for (idx, config) in configs.iter().enumerate() {
             let template_engine = TemplateEngine::new();
-            
+
             match Self::create_destination_from_config(config, &template_engine) {
-                Ok(destination) => {
-                    match destination.validate_config() {
-                        Ok(()) => {
-                            results.push(TestResult {
-                                index: idx,
-                                destination_type: destination.destination_type().to_string(),
-                                success: true,
-                                error: None,
-                                estimated_time: destination.estimated_delivery_time(),
-                            });
-                        }
-                        Err(e) => {
-                            results.push(TestResult {
-                                index: idx,
-                                destination_type: destination.destination_type().to_string(),
-                                success: false,
-                                error: Some(e.to_string()),
-                                estimated_time: Duration::ZERO,
-                            });
-                        }
+                Ok(destination) => match destination.validate_config() {
+                    Ok(()) => {
+                        results.push(TestResult {
+                            index: idx,
+                            destination_type: destination.destination_type().to_string(),
+                            success: true,
+                            error: None,
+                            estimated_time: destination.estimated_delivery_time(),
+                        });
                     }
-                }
+                    Err(e) => {
+                        results.push(TestResult {
+                            index: idx,
+                            destination_type: destination.destination_type().to_string(),
+                            success: false,
+                            error: Some(e.to_string()),
+                            estimated_time: Duration::ZERO,
+                        });
+                    }
+                },
                 Err(e) => {
                     results.push(TestResult {
                         index: idx,
@@ -210,10 +223,10 @@ impl OutputDeliveryManager {
                 }
             }
         }
-        
+
         Ok(results)
     }
-    
+
     /// Create a destination from configuration
     fn create_destination(
         &self,
@@ -228,8 +241,13 @@ impl OutputDeliveryManager {
         template_engine: &TemplateEngine,
     ) -> Result<Arc<dyn OutputDestination>, ConfigError> {
         match config {
-            OutputDestinationConfig::Filesystem { 
-                path, format, permissions, create_dirs, overwrite, backup_existing 
+            OutputDestinationConfig::Filesystem {
+                path,
+                format,
+                permissions,
+                create_dirs,
+                overwrite,
+                backup_existing,
             } => {
                 let fs_config = FilesystemConfig {
                     path_template: path.clone(),
@@ -239,15 +257,21 @@ impl OutputDeliveryManager {
                     overwrite: *overwrite,
                     backup_existing: *backup_existing,
                 };
-                
+
                 Ok(Arc::new(FilesystemDestination::new(
                     fs_config,
                     template_engine.clone(),
                 )))
             }
-            
-            OutputDestinationConfig::Webhook { 
-                url, method, headers, timeout, retry_policy, auth, content_type 
+
+            OutputDestinationConfig::Webhook {
+                url,
+                method,
+                headers,
+                timeout,
+                retry_policy,
+                auth,
+                content_type,
             } => {
                 let webhook_config = WebhookConfig {
                     url_template: url.clone(),
@@ -258,19 +282,19 @@ impl OutputDeliveryManager {
                     auth: auth.clone(),
                     content_type: content_type.clone(),
                 };
-                
+
                 let client = reqwest::Client::builder()
                     .timeout(webhook_config.timeout + Duration::from_secs(5)) // Add buffer
                     .build()
                     .map_err(|e| ConfigError::HttpClientCreate { source: e })?;
-                
+
                 Ok(Arc::new(WebhookDestination::new(
                     webhook_config,
                     client,
                     template_engine.clone(),
                 )))
             }
-            
+
             // Future implementations
             OutputDestinationConfig::Database { .. } => {
                 Err(ConfigError::UnsupportedDestination("database".to_string()))
@@ -280,7 +304,7 @@ impl OutputDeliveryManager {
             }
         }
     }
-    
+
     /// Build delivery context with template variables
     fn build_delivery_context(
         &self,
@@ -288,33 +312,70 @@ impl OutputDeliveryManager {
         job_context: &JobContext,
     ) -> DeliveryContext {
         let mut template_vars = HashMap::new();
-        
+
         // Basic variables
         template_vars.insert("job_id".to_string(), output.job_id.to_string());
         template_vars.insert("task_id".to_string(), output.task_id.to_string());
         template_vars.insert("execution_id".to_string(), output.execution_id.to_string());
         template_vars.insert("task_name".to_string(), job_context.task_name.clone());
         template_vars.insert("task_version".to_string(), job_context.task_version.clone());
-        template_vars.insert("timestamp".to_string(), output.completed_at.format("%Y%m%d_%H%M%S").to_string());
-        template_vars.insert("iso_timestamp".to_string(), output.completed_at.to_rfc3339());
-        template_vars.insert("unix_timestamp".to_string(), output.completed_at.timestamp().to_string());
-        template_vars.insert("date".to_string(), output.completed_at.format("%Y-%m-%d").to_string());
-        template_vars.insert("time".to_string(), output.completed_at.format("%H:%M:%S").to_string());
-        template_vars.insert("year".to_string(), output.completed_at.format("%Y").to_string());
-        template_vars.insert("month".to_string(), output.completed_at.format("%m").to_string());
-        template_vars.insert("day".to_string(), output.completed_at.format("%d").to_string());
-        template_vars.insert("hour".to_string(), output.completed_at.format("%H").to_string());
-        
+        template_vars.insert(
+            "timestamp".to_string(),
+            output.completed_at.format("%Y%m%d_%H%M%S").to_string(),
+        );
+        template_vars.insert(
+            "iso_timestamp".to_string(),
+            output.completed_at.to_rfc3339(),
+        );
+        template_vars.insert(
+            "unix_timestamp".to_string(),
+            output.completed_at.timestamp().to_string(),
+        );
+        template_vars.insert(
+            "date".to_string(),
+            output.completed_at.format("%Y-%m-%d").to_string(),
+        );
+        template_vars.insert(
+            "time".to_string(),
+            output.completed_at.format("%H:%M:%S").to_string(),
+        );
+        template_vars.insert(
+            "year".to_string(),
+            output.completed_at.format("%Y").to_string(),
+        );
+        template_vars.insert(
+            "month".to_string(),
+            output.completed_at.format("%m").to_string(),
+        );
+        template_vars.insert(
+            "day".to_string(),
+            output.completed_at.format("%d").to_string(),
+        );
+        template_vars.insert(
+            "hour".to_string(),
+            output.completed_at.format("%H").to_string(),
+        );
+
         // Environment variables
-        template_vars.insert("env".to_string(), 
-            std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()));
-        template_vars.insert("hostname".to_string(), 
-            gethostname::gethostname().to_string_lossy().to_string());
-        
+        template_vars.insert(
+            "env".to_string(),
+            std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()),
+        );
+        template_vars.insert(
+            "hostname".to_string(),
+            gethostname::gethostname().to_string_lossy().to_string(),
+        );
+
         // Execution information
-        template_vars.insert("duration_ms".to_string(), output.execution_duration.as_millis().to_string());
-        template_vars.insert("duration_secs".to_string(), output.execution_duration.as_secs().to_string());
-        
+        template_vars.insert(
+            "duration_ms".to_string(),
+            output.execution_duration.as_millis().to_string(),
+        );
+        template_vars.insert(
+            "duration_secs".to_string(),
+            output.execution_duration.as_secs().to_string(),
+        );
+
         // Custom metadata
         for (key, value) in &output.metadata {
             let safe_key = key.replace(|c: char| !c.is_alphanumeric() && c != '_', "_");
@@ -324,24 +385,27 @@ impl OutputDeliveryManager {
                 template_vars.insert(format!("meta_{}", safe_key), value.to_string());
             }
         }
-        
+
         // Environment variables with RATCHET_ prefix
         for (key, value) in std::env::vars() {
             if key.starts_with("RATCHET_") {
-                let clean_key = key.strip_prefix("RATCHET_")
-                    .unwrap_or(&key)
-                    .to_lowercase();
+                let clean_key = key.strip_prefix("RATCHET_").unwrap_or(&key).to_lowercase();
                 template_vars.insert(format!("env_{}", clean_key), value);
             }
         }
-        
+
         DeliveryContext {
             job_id: output.job_id,
             task_name: job_context.task_name.clone(),
             task_version: job_context.task_version.clone(),
             timestamp: output.completed_at,
             environment: template_vars.get("env").unwrap().clone(),
-            trace_id: format!("{}-{}-{}", output.job_id, output.execution_id, output.completed_at.timestamp()),
+            trace_id: format!(
+                "{}-{}-{}",
+                output.job_id,
+                output.execution_id,
+                output.completed_at.timestamp()
+            ),
             template_variables: template_vars,
         }
     }
@@ -360,9 +424,9 @@ pub struct TestResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::output::{OutputFormat, RetryPolicy};
     use std::collections::HashMap;
     use tempfile::TempDir;
-    use crate::output::{OutputFormat, RetryPolicy};
 
     fn create_test_output() -> TaskOutput {
         TaskOutput {
@@ -399,17 +463,15 @@ mod tests {
     async fn test_filesystem_delivery_manager() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("{{job_id}}_output.json");
-        
-        let configs = vec![
-            OutputDestinationConfig::Filesystem {
-                path: file_path.to_string_lossy().to_string(),
-                format: OutputFormat::Json,
-                permissions: 0o644,
-                create_dirs: true,
-                overwrite: true,
-                backup_existing: false,
-            }
-        ];
+
+        let configs = vec![OutputDestinationConfig::Filesystem {
+            path: file_path.to_string_lossy().to_string(),
+            format: OutputFormat::Json,
+            permissions: 0o644,
+            create_dirs: true,
+            overwrite: true,
+            backup_existing: false,
+        }];
 
         let manager = OutputDeliveryManager::from_configs(&configs, 5).unwrap();
         assert_eq!(manager.destination_count(), 1);
@@ -431,7 +493,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path1 = temp_dir.path().join("output1.json");
         let file_path2 = temp_dir.path().join("output2.yaml");
-        
+
         let configs = vec![
             OutputDestinationConfig::Filesystem {
                 path: file_path1.to_string_lossy().to_string(),
@@ -448,7 +510,7 @@ mod tests {
                 create_dirs: true,
                 overwrite: true,
                 backup_existing: false,
-            }
+            },
         ];
 
         let manager = OutputDeliveryManager::from_configs(&configs, 5).unwrap();
@@ -476,12 +538,24 @@ mod tests {
         let context = manager.build_delivery_context(&output, &job_context);
 
         assert_eq!(context.template_variables.get("job_id").unwrap(), "123");
-        assert_eq!(context.template_variables.get("task_name").unwrap(), "test-task");
-        assert_eq!(context.template_variables.get("task_version").unwrap(), "1.0.0");
+        assert_eq!(
+            context.template_variables.get("task_name").unwrap(),
+            "test-task"
+        );
+        assert_eq!(
+            context.template_variables.get("task_version").unwrap(),
+            "1.0.0"
+        );
         assert!(context.template_variables.contains_key("timestamp"));
         assert!(context.template_variables.contains_key("hostname"));
-        assert_eq!(context.template_variables.get("meta_user_id").unwrap(), "user123");
-        assert_eq!(context.template_variables.get("meta_priority").unwrap(), "high");
+        assert_eq!(
+            context.template_variables.get("meta_user_id").unwrap(),
+            "user123"
+        );
+        assert_eq!(
+            context.template_variables.get("meta_priority").unwrap(),
+            "high"
+        );
     }
 
     #[tokio::test]
@@ -503,10 +577,12 @@ mod tests {
                 retry_policy: RetryPolicy::default(),
                 auth: None,
                 content_type: None,
-            }
+            },
         ];
 
-        let test_results = OutputDeliveryManager::test_configurations(&configs).await.unwrap();
+        let test_results = OutputDeliveryManager::test_configurations(&configs)
+            .await
+            .unwrap();
         assert_eq!(test_results.len(), 2);
         assert!(test_results[0].success);
         assert!(test_results[1].success);
@@ -514,16 +590,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_invalid_configuration() {
-        let configs = vec![
-            OutputDestinationConfig::Filesystem {
-                path: "".to_string(), // Invalid empty path
-                format: OutputFormat::Json,
-                permissions: 0o644,
-                create_dirs: true,
-                overwrite: true,
-                backup_existing: false,
-            }
-        ];
+        let configs = vec![OutputDestinationConfig::Filesystem {
+            path: "".to_string(), // Invalid empty path
+            format: OutputFormat::Json,
+            permissions: 0o644,
+            create_dirs: true,
+            overwrite: true,
+            backup_existing: false,
+        }];
 
         let result = OutputDeliveryManager::from_configs(&configs, 5);
         assert!(result.is_err());
@@ -533,14 +607,14 @@ mod tests {
     fn test_metrics_tracking() {
         let manager = OutputDeliveryManager::new(5);
         let metrics = manager.metrics();
-        
+
         // Initially no metrics
         assert_eq!(metrics.destination_types().len(), 0);
-        
+
         // Simulate some metrics
         metrics.record_success("filesystem", Duration::from_millis(100), 1024);
         metrics.record_success("webhook", Duration::from_millis(200), 512);
-        
+
         assert_eq!(metrics.destination_types().len(), 2);
         assert_eq!(metrics.success_rate("filesystem"), 1.0);
         assert_eq!(metrics.total_bytes_delivered("filesystem"), 1024);

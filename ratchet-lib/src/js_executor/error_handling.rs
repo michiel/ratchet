@@ -18,7 +18,7 @@ pub const JS_ERROR_CONFIGS: &[JsErrorConfig] = &[
         has_status: false,
     },
     JsErrorConfig {
-        name: "AuthorizationError", 
+        name: "AuthorizationError",
         default_message: "Authorization failed",
         has_status: false,
     },
@@ -34,7 +34,7 @@ pub const JS_ERROR_CONFIGS: &[JsErrorConfig] = &[
     },
     JsErrorConfig {
         name: "ValidationError",
-        default_message: "Validation error", 
+        default_message: "Validation error",
         has_status: false,
     },
     JsErrorConfig {
@@ -68,7 +68,8 @@ pub const JS_ERROR_CONFIGS: &[JsErrorConfig] = &[
 pub fn generate_error_class(error_config: &JsErrorConfig) -> String {
     if error_config.has_status {
         // Special case for HttpError which takes status and message
-        format!(r#"
+        format!(
+            r#"
         // {name}
         function {name}(status, message) {{
             this.name = "{name}";
@@ -83,7 +84,8 @@ pub fn generate_error_class(error_config: &JsErrorConfig) -> String {
         )
     } else {
         // Standard error type with just message
-        format!(r#"
+        format!(
+            r#"
         // {name}
         function {name}(message) {{
             this.name = "{name}";
@@ -113,8 +115,10 @@ pub fn register_error_types(context: &mut BoaContext) -> Result<(), JsExecutionE
 
     context
         .eval(Source::from_bytes(&error_classes))
-        .map_err(|e| JsExecutionError::CompileError(format!("Failed to register error types: {}", e)))?;
-    
+        .map_err(|e| {
+            JsExecutionError::CompileError(format!("Failed to register error types: {}", e))
+        })?;
+
     Ok(())
 }
 
@@ -123,27 +127,26 @@ pub fn parse_js_error(error_message: &str) -> JsErrorType {
     // Try to extract error type and message from the error string
     if let Some(captures) = regex::Regex::new(r"(\w+Error): (.+)")
         .unwrap()
-        .captures(error_message) 
+        .captures(error_message)
     {
         let error_type = &captures[1];
         let message = captures[2].to_string();
-        
+
         match error_type {
             "AuthenticationError" => JsErrorType::AuthenticationError(message),
             "AuthorizationError" => JsErrorType::AuthorizationError(message),
             "NetworkError" => JsErrorType::NetworkError(message),
             "HttpError" => {
                 // Try to extract status code from message
-                if let Some(status_captures) = regex::Regex::new(r"(\d+)")
-                    .unwrap()
-                    .captures(&message) 
+                if let Some(status_captures) =
+                    regex::Regex::new(r"(\d+)").unwrap().captures(&message)
                 {
                     if let Ok(status) = status_captures[1].parse::<u16>() {
                         return JsErrorType::HttpError { status, message };
                     }
                 }
                 JsErrorType::HttpError { status: 0, message }
-            },
+            }
             "ValidationError" => JsErrorType::ValidationError(message),
             "ConfigurationError" => JsErrorType::ConfigurationError(message),
             "RateLimitError" => JsErrorType::RateLimitError(message),

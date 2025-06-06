@@ -1,5 +1,5 @@
 /// Unified API types for consistent representation across REST and GraphQL
-use async_graphql::{*, scalar};
+use async_graphql::{scalar, *};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,27 +13,27 @@ impl ApiId {
     pub fn from_i32(id: i32) -> Self {
         Self(id.to_string())
     }
-    
+
     /// Create from UUID
     pub fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid.to_string())
     }
-    
+
     /// Create from string
     pub fn from_string(s: impl Into<String>) -> Self {
         Self(s.into())
     }
-    
+
     /// Get as string (always available)
     pub fn as_str(&self) -> &str {
         &self.0
     }
-    
+
     /// Try to parse as integer (for database IDs)
     pub fn as_i32(&self) -> Option<i32> {
         self.0.parse().ok()
     }
-    
+
     /// Try to parse as UUID
     pub fn as_uuid(&self) -> Option<Uuid> {
         Uuid::parse_str(&self.0).ok()
@@ -93,7 +93,7 @@ pub struct UnifiedTask {
     pub updated_at: DateTime<Utc>,
     pub validated_at: Option<DateTime<Utc>>,
     pub in_sync: bool,
-    
+
     // Additional fields for detailed view
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_schema: Option<serde_json::Value>,
@@ -121,7 +121,7 @@ pub struct UnifiedExecution {
     pub duration_ms: Option<i32>,
     pub http_requests: Option<serde_json::Value>,
     pub recording_path: Option<String>,
-    
+
     // Computed fields
     pub can_retry: bool,
     pub can_cancel: bool,

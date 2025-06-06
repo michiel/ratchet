@@ -1,31 +1,31 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
-use std::collections::HashMap;
 
 use crate::{
     config::RatchetConfig,
+    execution::ipc::{
+        CoordinatorMessage, IpcTransport, MessageEnvelope, StdioTransport, TaskExecutionResult,
+        TaskValidationResult, WorkerError, WorkerMessage, WorkerStatus,
+    },
     services::{RatchetEngine, ServiceError},
     task::Task,
-    execution::ipc::{
-        CoordinatorMessage, WorkerMessage, MessageEnvelope, TaskExecutionResult,
-        TaskValidationResult, WorkerStatus, WorkerError, StdioTransport, IpcTransport,
-    },
 };
 
 /// Worker process main entry point
 pub async fn worker_main(worker_id: String) -> Result<(), WorkerError> {
     info!("Starting worker process: {}", worker_id);
-    
+
     // Initialize worker
     let mut worker = Worker::new(worker_id.clone()).await?;
-    
+
     // Send ready signal
     worker.send_ready().await?;
-    
+
     // Main worker loop
     worker.run().await?;
-    
+
     info!("Worker process {} shutting down", worker_id);
     Ok(())
 }
@@ -44,13 +44,12 @@ impl Worker {
     pub async fn new(worker_id: String) -> Result<Self, WorkerError> {
         // Load configuration
         let config = RatchetConfig::default(); // TODO: Load from config file/env
-        
+
         // Initialize the Ratchet engine (this is where we can use non-Send types)
-        let engine = RatchetEngine::new(config)
-            .map_err(|e| WorkerError::InitializationFailed {
-                error: format!("Failed to create engine: {}", e),
-            })?;
-        
+        let engine = RatchetEngine::new(config).map_err(|e| WorkerError::InitializationFailed {
+            error: format!("Failed to create engine: {}", e),
+        })?;
+
         let status = Arc::new(RwLock::new(WorkerStatus {
             worker_id: worker_id.clone(),
             pid: std::process::id(),
@@ -61,7 +60,7 @@ impl Worker {
             memory_usage_mb: None,
             cpu_usage_percent: None,
         }));
-        
+
         Ok(Self {
             worker_id,
             engine,
@@ -70,23 +69,23 @@ impl Worker {
             task_cache: HashMap::new(),
         })
     }
-    
+
     /// Send ready signal to coordinator
     pub async fn send_ready(&mut self) -> Result<(), WorkerError> {
         let message = CoordinatorMessage::Ready {
             worker_id: self.worker_id.clone(),
         };
-        
+
         self.send_message(message).await
     }
-    
+
     /// Main worker loop
     pub async fn run(&mut self) -> Result<(), WorkerError> {
         loop {
             match self.receive_message().await {
                 Ok(envelope) => {
                     self.update_last_activity().await;
-                    
+
                     match self.handle_message(envelope.message).await {
                         Ok(Some(response)) => {
                             if let Err(e) = self.send_message(response).await {
@@ -112,10 +111,10 @@ impl Worker {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Handle incoming messages
     async fn handle_message(
         &mut self,
@@ -130,14 +129,16 @@ impl Worker {
                 execution_context,
                 correlation_id,
             } => {
-                let result = self.execute_task_impl(job_id, task_id, &task_path, input_data, execution_context).await;
+                let result = self
+                    .execute_task_impl(job_id, task_id, &task_path, input_data, execution_context)
+                    .await;
                 Ok(Some(CoordinatorMessage::TaskResult {
                     job_id,
                     correlation_id,
                     result,
                 }))
             }
-            
+
             WorkerMessage::ValidateTask {
                 task_path,
                 correlation_id,
@@ -148,7 +149,7 @@ impl Worker {
                     result,
                 }))
             }
-            
+
             WorkerMessage::Ping { correlation_id } => {
                 let status = self.get_current_status().await;
                 Ok(Some(CoordinatorMessage::Pong {
@@ -157,14 +158,14 @@ impl Worker {
                     status,
                 }))
             }
-            
+
             WorkerMessage::Shutdown => {
                 info!("Received shutdown signal");
                 std::process::exit(0);
             }
         }
     }
-    
+
     /// Execute a task
     async fn execute_task_impl(
         &mut self,
@@ -175,18 +176,18 @@ impl Worker {
         _execution_context: crate::execution::ipc::ExecutionContext,
     ) -> TaskExecutionResult {
         let started_at = chrono::Utc::now();
-        
+
         debug!("Executing task at path: {}", task_path);
-        
+
         // Load task if not in cache
         let mut task = match self.load_task_cached(task_path).await {
             Ok(task) => task,
             Err(e) => {
                 let completed_at = chrono::Utc::now();
                 let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
-                
+
                 self.increment_failed_tasks().await;
-                
+
                 return TaskExecutionResult {
                     success: false,
                     output: None,
@@ -198,15 +199,21 @@ impl Worker {
                 };
             }
         };
-        
+
         // Execute the task
-        match self.engine.services().task_service().execute_task_with_context(&mut task, input_data, Some(_execution_context)).await {
+        match self
+            .engine
+            .services()
+            .task_service()
+            .execute_task_with_context(&mut task, input_data, Some(_execution_context))
+            .await
+        {
             Ok(output) => {
                 let completed_at = chrono::Utc::now();
                 let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
-                
+
                 self.increment_executed_tasks().await;
-                
+
                 TaskExecutionResult {
                     success: true,
                     output: Some(output),
@@ -220,9 +227,9 @@ impl Worker {
             Err(e) => {
                 let completed_at = chrono::Utc::now();
                 let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
-                
+
                 self.increment_failed_tasks().await;
-                
+
                 TaskExecutionResult {
                     success: false,
                     output: None,
@@ -239,11 +246,11 @@ impl Worker {
             }
         }
     }
-    
+
     /// Validate a task
     async fn validate_task_impl(&mut self, task_path: &str) -> TaskValidationResult {
         debug!("Validating task at path: {}", task_path);
-        
+
         match self.load_task_cached(task_path).await {
             Ok(_task) => {
                 // TODO: Implement actual validation logic
@@ -263,35 +270,44 @@ impl Worker {
             },
         }
     }
-    
+
     /// Load task with caching
     async fn load_task_cached(&mut self, task_path: &str) -> Result<Task, ServiceError> {
         if let Some(task) = self.task_cache.get(task_path) {
             return Ok(task.clone());
         }
-        
-        let task = self.engine.services().task_service().load_task(task_path).await?;
+
+        let task = self
+            .engine
+            .services()
+            .task_service()
+            .load_task(task_path)
+            .await?;
         self.task_cache.insert(task_path.to_string(), task.clone());
         Ok(task)
     }
-    
+
     /// Send a message to the coordinator
     async fn send_message(&mut self, message: CoordinatorMessage) -> Result<(), WorkerError> {
         let envelope = MessageEnvelope::new(message);
-        self.transport.send(&envelope).await
+        self.transport
+            .send(&envelope)
+            .await
             .map_err(|e| WorkerError::CommunicationError {
                 error: e.to_string(),
             })
     }
-    
+
     /// Receive a message from the coordinator
     async fn receive_message(&mut self) -> Result<MessageEnvelope<WorkerMessage>, WorkerError> {
-        self.transport.receive().await
+        self.transport
+            .receive()
+            .await
             .map_err(|e| WorkerError::CommunicationError {
                 error: e.to_string(),
             })
     }
-    
+
     /// Update last activity timestamp
     async fn update_last_activity(&self) {
         {
@@ -299,7 +315,7 @@ impl Worker {
             status.last_activity = chrono::Utc::now();
         }
     }
-    
+
     /// Increment executed tasks counter
     async fn increment_executed_tasks(&self) {
         {
@@ -307,7 +323,7 @@ impl Worker {
             status.tasks_executed += 1;
         }
     }
-    
+
     /// Increment failed tasks counter
     async fn increment_failed_tasks(&self) {
         {
@@ -315,7 +331,7 @@ impl Worker {
             status.tasks_failed += 1;
         }
     }
-    
+
     /// Get current worker status
     async fn get_current_status(&self) -> WorkerStatus {
         {
@@ -328,12 +344,12 @@ impl Worker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_worker_creation() {
         let worker_id = "test-worker".to_string();
         let result = Worker::new(worker_id).await;
-        
+
         // This test might fail if config loading fails, which is expected in test environment
         match result {
             Ok(worker) => {

@@ -304,7 +304,10 @@ mod tests {
     #[test]
     fn test_plugin_type_display() {
         assert_eq!(PluginType::Task.to_string(), "task");
-        assert_eq!(PluginType::Custom("mytype".to_string()).to_string(), "mytype");
+        assert_eq!(
+            PluginType::Custom("mytype".to_string()).to_string(),
+            "mytype"
+        );
     }
 
     #[test]

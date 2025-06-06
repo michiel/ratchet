@@ -1,8 +1,8 @@
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, timeout};
 use tracing::{debug, error, info, warn};
@@ -90,7 +90,7 @@ impl RegistryWatcher {
         config: WatcherConfig,
     ) -> Self {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-        
+
         Self {
             watcher: None,
             registry,
@@ -121,18 +121,17 @@ impl RegistryWatcher {
         // Create the notify watcher
         let event_tx = self.event_tx.clone();
         let mut watcher = RecommendedWatcher::new(
-            move |res: Result<Event, notify::Error>| {
-                match res {
-                    Ok(event) => {
-                        if let Err(e) = Self::handle_notify_event(event, &event_tx) {
-                            error!("Failed to handle notify event: {}", e);
-                        }
+            move |res: Result<Event, notify::Error>| match res {
+                Ok(event) => {
+                    if let Err(e) = Self::handle_notify_event(event, &event_tx) {
+                        error!("Failed to handle notify event: {}", e);
                     }
-                    Err(e) => error!("Notify error: {}", e),
                 }
+                Err(e) => error!("Notify error: {}", e),
             },
             Config::default(),
-        ).map_err(|e| RatchetError::WatcherError(format!("Failed to create watcher: {}", e)))?;
+        )
+        .map_err(|e| RatchetError::WatcherError(format!("Failed to create watcher: {}", e)))?;
 
         // Add all watch paths
         for (path, recursive) in &self.watch_paths {
@@ -141,12 +140,11 @@ impl RegistryWatcher {
             } else {
                 RecursiveMode::NonRecursive
             };
-            
-            watcher.watch(path, mode)
-                .map_err(|e| RatchetError::WatcherError(
-                    format!("Failed to watch path {:?}: {}", path, e)
-                ))?;
-            
+
+            watcher.watch(path, mode).map_err(|e| {
+                RatchetError::WatcherError(format!("Failed to watch path {:?}: {}", path, e))
+            })?;
+
             info!("Watching path: {:?} (recursive: {})", path, recursive);
         }
 
@@ -205,7 +203,8 @@ impl RegistryWatcher {
                 for path in event.paths {
                     if Self::is_task_directory(&path) {
                         debug!("Task added: {:?}", path);
-                        event_tx.send(WatchEvent::TaskAdded(path))
+                        event_tx
+                            .send(WatchEvent::TaskAdded(path))
                             .map_err(|e| RatchetError::WatcherError(e.to_string()))?;
                     }
                 }
@@ -214,7 +213,8 @@ impl RegistryWatcher {
                 for path in event.paths {
                     if let Some(task_dir) = Self::find_task_directory(&path) {
                         debug!("Task modified: {:?}", task_dir);
-                        event_tx.send(WatchEvent::TaskModified(task_dir))
+                        event_tx
+                            .send(WatchEvent::TaskModified(task_dir))
                             .map_err(|e| RatchetError::WatcherError(e.to_string()))?;
                     }
                 }
@@ -228,7 +228,8 @@ impl RegistryWatcher {
                             path
                         };
                         debug!("Task removed: {:?}", task_dir);
-                        event_tx.send(WatchEvent::TaskRemoved(task_dir))
+                        event_tx
+                            .send(WatchEvent::TaskRemoved(task_dir))
                             .map_err(|e| RatchetError::WatcherError(e.to_string()))?;
                     }
                 }
@@ -249,7 +250,7 @@ impl RegistryWatcher {
     /// Find the task directory for a given path
     fn find_task_directory(path: &Path) -> Option<PathBuf> {
         let mut current = path;
-        
+
         // Walk up the directory tree looking for metadata.json
         while let Some(parent) = current.parent() {
             if parent.join("metadata.json").exists() {
@@ -257,7 +258,7 @@ impl RegistryWatcher {
             }
             current = parent;
         }
-        
+
         // Check if the path itself is a task directory
         if path.join("metadata.json").exists() {
             Some(path.to_path_buf())
@@ -290,14 +291,14 @@ impl EventProcessor {
                 Some(event) = event_rx.recv() => {
                     self.buffer_event(&mut pending_events, event);
                 }
-                
+
                 // Process buffered events after debounce period
                 _ = debounce_interval.tick() => {
                     if !pending_events.is_empty() {
                         self.process_pending_events(&mut pending_events).await;
                     }
                 }
-                
+
                 // Shutdown signal
                 _ = &mut shutdown_rx => {
                     info!("Event processor shutting down");
@@ -339,11 +340,13 @@ impl EventProcessor {
     /// Process all pending events
     async fn process_pending_events(&self, pending: &mut HashMap<PathBuf, WatchEvent>) {
         let events: Vec<_> = pending.drain().map(|(_, event)| event).collect();
-        
+
         info!("Processing {} file system events", events.len());
 
         // Limit concurrent reloads
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.config.max_concurrent_reloads));
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(
+            self.config.max_concurrent_reloads,
+        ));
         let mut handles = Vec::new();
 
         for event in events {
@@ -355,7 +358,7 @@ impl EventProcessor {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.unwrap();
-                
+
                 match event {
                     WatchEvent::TaskAdded(path) | WatchEvent::TaskModified(path) => {
                         if let Err(e) = Self::reload_task(
@@ -364,7 +367,9 @@ impl EventProcessor {
                             sync_service,
                             retry_on_error,
                             retry_delay_ms,
-                        ).await {
+                        )
+                        .await
+                        {
                             error!("Failed to reload task at {:?}: {}", path, e);
                         }
                     }
@@ -405,7 +410,10 @@ impl EventProcessor {
 
             match Task::from_fs(path) {
                 Ok(task) => {
-                    info!("Reloading task: {} ({})", task.metadata.label, task.metadata.uuid);
+                    info!(
+                        "Reloading task: {} ({})",
+                        task.metadata.label, task.metadata.uuid
+                    );
 
                     // Update registry
                     if let Err(e) = registry.add_task(task.clone()).await {
@@ -458,7 +466,8 @@ impl EventProcessor {
     ) -> Result<(), RatchetError> {
         // Extract task UUID from path
         // This is a simplification - in practice you might need to track path->UUID mapping
-        let dir_name = path.file_name()
+        let dir_name = path
+            .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| RatchetError::LoadError("Invalid path".to_string()))?;
 
@@ -467,14 +476,17 @@ impl EventProcessor {
         // Try to find the task by iterating through all tasks
         // In a real implementation, you'd want to maintain a path->UUID mapping
         let tasks = registry.list_tasks().await?;
-        
+
         for task in tasks {
             // Check if this task's path matches
             // This is a heuristic - comparing directory names
             if let Some(task_dir) = path.file_name().and_then(|n| n.to_str()) {
                 if task.metadata.uuid.to_string() == task_dir {
-                    info!("Found task to remove: {} ({})", task.metadata.label, task.metadata.uuid);
-                    
+                    info!(
+                        "Found task to remove: {} ({})",
+                        task.metadata.label, task.metadata.uuid
+                    );
+
                     // Remove from registry
                     if let Err(e) = registry.remove_task(&task.metadata.uuid).await {
                         return Err(RatchetError::LoadError(format!(
@@ -482,16 +494,16 @@ impl EventProcessor {
                             e
                         )));
                     }
-                    
+
                     // TODO: Sync removal with database if available
                     // The sync service doesn't currently have a remove method
                     // This would need to be added to properly sync deletions
-                    
+
                     return Ok(());
                 }
             }
         }
-        
+
         warn!("Could not find task to remove for path: {:?}", path);
         Ok(())
     }

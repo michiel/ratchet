@@ -1,13 +1,13 @@
 use async_graphql::*;
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
-use uuid::Uuid;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 // Re-export unified types for GraphQL
-pub use crate::api::types::*;
-pub use crate::api::pagination::*;
 pub use crate::api::errors::ApiError as UnifiedApiError;
+pub use crate::api::pagination::*;
+pub use crate::api::types::*;
 
 /// Legacy Task type (use UnifiedTask instead)
 #[derive(SimpleObject)]
@@ -295,7 +295,7 @@ pub struct S3Destination {
 }
 
 // Use unified types from api module
-pub use crate::api::types::{OutputFormat, HttpMethod};
+pub use crate::api::types::{HttpMethod, OutputFormat};
 
 /// Retry policy for delivery
 #[derive(SimpleObject)]

@@ -1,15 +1,15 @@
 //! Webhook output destination implementation
 
 use async_trait::async_trait;
+use reqwest;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use reqwest;
 
 use crate::output::{
-    destination::{OutputDestination, TaskOutput, DeliveryContext, DeliveryResult},
-    template::TemplateEngine,
+    destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput},
     errors::{DeliveryError, ValidationError},
-    WebhookAuth, RetryPolicy,
+    template::TemplateEngine,
+    RetryPolicy, WebhookAuth,
 };
 use crate::types::HttpMethod;
 
@@ -55,7 +55,9 @@ impl WebhookDestination {
     ) -> Result<reqwest::RequestBuilder, DeliveryError> {
         match auth {
             WebhookAuth::Bearer { token } => {
-                let rendered_token = self.template_engine.render(token, &context.template_variables)
+                let rendered_token = self
+                    .template_engine
+                    .render(token, &context.template_variables)
                     .map_err(|e| DeliveryError::TemplateRender {
                         template: token.clone(),
                         error: e.to_string(),
@@ -63,12 +65,16 @@ impl WebhookDestination {
                 request = request.bearer_auth(rendered_token);
             }
             WebhookAuth::Basic { username, password } => {
-                let rendered_username = self.template_engine.render(username, &context.template_variables)
+                let rendered_username = self
+                    .template_engine
+                    .render(username, &context.template_variables)
                     .map_err(|e| DeliveryError::TemplateRender {
                         template: username.clone(),
                         error: e.to_string(),
                     })?;
-                let rendered_password = self.template_engine.render(password, &context.template_variables)
+                let rendered_password = self
+                    .template_engine
+                    .render(password, &context.template_variables)
                     .map_err(|e| DeliveryError::TemplateRender {
                         template: password.clone(),
                         error: e.to_string(),
@@ -76,7 +82,9 @@ impl WebhookDestination {
                 request = request.basic_auth(rendered_username, Some(rendered_password));
             }
             WebhookAuth::ApiKey { header, key } => {
-                let rendered_key = self.template_engine.render(key, &context.template_variables)
+                let rendered_key = self
+                    .template_engine
+                    .render(key, &context.template_variables)
                     .map_err(|e| DeliveryError::TemplateRender {
                         template: key.clone(),
                         error: e.to_string(),
@@ -87,12 +95,14 @@ impl WebhookDestination {
                 // For now, we'll implement a basic HMAC-SHA256 signature
                 // This can be extended for other algorithms
                 if algorithm.to_lowercase() == "hmac-sha256" {
-                    let rendered_secret = self.template_engine.render(secret, &context.template_variables)
+                    let rendered_secret = self
+                        .template_engine
+                        .render(secret, &context.template_variables)
                         .map_err(|e| DeliveryError::TemplateRender {
                             template: secret.clone(),
                             error: e.to_string(),
                         })?;
-                    
+
                     // Note: We'd need the request body to generate the signature
                     // For now, we'll add a placeholder - this should be implemented
                     // with the actual body content in a real implementation
@@ -105,7 +115,7 @@ impl WebhookDestination {
                 }
             }
         }
-        
+
         Ok(request)
     }
 
@@ -130,12 +140,11 @@ impl WebhookDestination {
             "environment": context.environment,
             "timestamp": context.timestamp,
         });
-        
-        serde_json::to_vec(&body)
-            .map_err(|e| DeliveryError::Serialization {
-                format: "json".to_string(),
-                error: e.to_string(),
-            })
+
+        serde_json::to_vec(&body).map_err(|e| DeliveryError::Serialization {
+            format: "json".to_string(),
+            error: e.to_string(),
+        })
     }
 
     /// Check if HTTP status should trigger a retry
@@ -150,10 +159,9 @@ impl WebhookDestination {
         let base_delay = self.config.retry_policy.initial_delay.as_millis() as f64;
         let multiplier = self.config.retry_policy.backoff_multiplier;
         let delay_ms = base_delay * multiplier.powi(attempt as i32 - 1);
-        
-        let delay = Duration::from_millis(delay_ms as u64)
-            .min(self.config.retry_policy.max_delay);
-        
+
+        let delay = Duration::from_millis(delay_ms as u64).min(self.config.retry_policy.max_delay);
+
         if self.config.retry_policy.jitter {
             let jitter_range = delay.as_millis() / 4; // 25% jitter
             let jitter = Duration::from_millis(fastrand::u64(0..=jitter_range as u64));
@@ -172,19 +180,19 @@ impl OutputDestination for WebhookDestination {
         context: &DeliveryContext,
     ) -> Result<DeliveryResult, DeliveryError> {
         let start_time = Instant::now();
-        
+
         // 1. Render URL template
-        let url = self.template_engine.render(
-            &self.config.url_template,
-            &context.template_variables,
-        ).map_err(|e| DeliveryError::TemplateRender {
-            template: self.config.url_template.clone(),
-            error: e.to_string(),
-        })?;
-        
+        let url = self
+            .template_engine
+            .render(&self.config.url_template, &context.template_variables)
+            .map_err(|e| DeliveryError::TemplateRender {
+                template: self.config.url_template.clone(),
+                error: e.to_string(),
+            })?;
+
         // 2. Build request body
         let body = self.build_request_body(output, context)?;
-        
+
         // 3. Build base request
         let method = match self.config.method {
             HttpMethod::Get => reqwest::Method::GET,
@@ -196,44 +204,51 @@ impl OutputDestination for WebhookDestination {
             HttpMethod::Options => reqwest::Method::OPTIONS,
         };
 
-        let mut request = self.client
+        let mut request = self
+            .client
             .request(method, &url)
             .timeout(self.config.timeout);
-        
+
         // 4. Add headers (with template rendering)
         for (key, value_template) in &self.config.headers {
-            let value = self.template_engine.render(value_template, &context.template_variables)
+            let value = self
+                .template_engine
+                .render(value_template, &context.template_variables)
                 .map_err(|e| DeliveryError::TemplateRender {
                     template: value_template.clone(),
                     error: e.to_string(),
                 })?;
             request = request.header(key, value);
         }
-        
+
         // 5. Add authentication
         if let Some(auth) = &self.config.auth {
             request = self.add_auth(request, auth, context)?;
         }
-        
+
         // 6. Set content type and body
-        let content_type = self.config.content_type
+        let content_type = self
+            .config
+            .content_type
             .as_deref()
             .unwrap_or("application/json");
         request = request.header("Content-Type", content_type);
         request = request.body(body.clone());
-        
+
         // 7. Execute request with retry logic
         let mut last_error = None;
-        
+
         for attempt in 1..=self.config.retry_policy.max_attempts {
             match request.try_clone() {
                 Some(req) => {
                     match req.send().await {
                         Ok(response) => {
                             let status = response.status();
-                            let response_text = response.text().await
+                            let response_text = response
+                                .text()
+                                .await
                                 .unwrap_or_else(|_| "Failed to read response".to_string());
-                            
+
                             if status.is_success() {
                                 return Ok(DeliveryResult::success(
                                     format!("webhook:{}", url),
@@ -241,13 +256,15 @@ impl OutputDestination for WebhookDestination {
                                     body.len() as u64,
                                     Some(format!("HTTP {}: {}", status, response_text)),
                                 ));
-                            } else if self.should_retry_status(status.as_u16()) && attempt < self.config.retry_policy.max_attempts {
+                            } else if self.should_retry_status(status.as_u16())
+                                && attempt < self.config.retry_policy.max_attempts
+                            {
                                 last_error = Some(DeliveryError::WebhookFailed {
                                     url: url.clone(),
                                     status: status.as_u16(),
                                     response: response_text,
                                 });
-                                
+
                                 // Wait before retry
                                 let delay = self.calculate_retry_delay(attempt);
                                 tokio::time::sleep(delay).await;
@@ -265,7 +282,7 @@ impl OutputDestination for WebhookDestination {
                                 url: url.clone(),
                                 error: e.to_string(),
                             });
-                            
+
                             if attempt < self.config.retry_policy.max_attempts {
                                 let delay = self.calculate_retry_delay(attempt);
                                 tokio::time::sleep(delay).await;
@@ -279,87 +296,98 @@ impl OutputDestination for WebhookDestination {
                 }
             }
         }
-        
+
         Err(last_error.unwrap_or(DeliveryError::MaxRetriesExceeded {
             destination: url,
             attempts: self.config.retry_policy.max_attempts,
         }))
     }
-    
+
     fn validate_config(&self) -> Result<(), ValidationError> {
         // Validate URL template
         if self.config.url_template.is_empty() {
             return Err(ValidationError::EmptyUrl);
         }
-        
+
         // Validate URL format (basic check)
-        if !self.config.url_template.starts_with("http://") && 
-           !self.config.url_template.starts_with("https://") &&
-           !self.template_engine.has_variables(&self.config.url_template) {
+        if !self.config.url_template.starts_with("http://")
+            && !self.config.url_template.starts_with("https://")
+            && !self
+                .template_engine
+                .has_variables(&self.config.url_template)
+        {
             return Err(ValidationError::InvalidTemplate(
-                "URL must start with http:// or https:// or contain template variables".into()
+                "URL must start with http:// or https:// or contain template variables".into(),
             ));
         }
-        
+
         // Validate template
-        self.template_engine.validate(&self.config.url_template)
+        self.template_engine
+            .validate(&self.config.url_template)
             .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
-        
+
         // Validate headers
         for (key, value_template) in &self.config.headers {
             if key.is_empty() {
                 return Err(ValidationError::EmptyHeaderName);
             }
-            self.template_engine.validate(value_template)
+            self.template_engine
+                .validate(value_template)
                 .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
         }
-        
+
         // Validate timeout
-        if self.config.timeout < Duration::from_secs(1) || 
-           self.config.timeout > Duration::from_secs(300) {
+        if self.config.timeout < Duration::from_secs(1)
+            || self.config.timeout > Duration::from_secs(300)
+        {
             return Err(ValidationError::InvalidTimeout);
         }
-        
+
         // Validate retry policy
         if self.config.retry_policy.max_attempts == 0 {
             return Err(ValidationError::InvalidRetryPolicy {
                 reason: "max_attempts must be greater than 0".to_string(),
             });
         }
-        
+
         if self.config.retry_policy.initial_delay > self.config.retry_policy.max_delay {
             return Err(ValidationError::InvalidRetryPolicy {
                 reason: "initial_delay cannot be greater than max_delay".to_string(),
             });
         }
-        
+
         if self.config.retry_policy.backoff_multiplier <= 0.0 {
             return Err(ValidationError::InvalidRetryPolicy {
                 reason: "backoff_multiplier must be greater than 0".to_string(),
             });
         }
-        
+
         // Validate auth templates if present
         if let Some(auth) = &self.config.auth {
             match auth {
                 WebhookAuth::Bearer { token } => {
-                    self.template_engine.validate(token)
+                    self.template_engine
+                        .validate(token)
                         .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
                 }
                 WebhookAuth::Basic { username, password } => {
-                    self.template_engine.validate(username)
+                    self.template_engine
+                        .validate(username)
                         .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
-                    self.template_engine.validate(password)
+                    self.template_engine
+                        .validate(password)
                         .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
                 }
                 WebhookAuth::ApiKey { key, .. } => {
-                    self.template_engine.validate(key)
+                    self.template_engine
+                        .validate(key)
                         .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
                 }
                 WebhookAuth::Signature { secret, algorithm } => {
-                    self.template_engine.validate(secret)
+                    self.template_engine
+                        .validate(secret)
                         .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
-                    
+
                     // Validate supported algorithms
                     let supported_algorithms = ["hmac-sha256", "hmac-sha1"];
                     if !supported_algorithms.contains(&algorithm.to_lowercase().as_str()) {
@@ -370,14 +398,14 @@ impl OutputDestination for WebhookDestination {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn destination_type(&self) -> &'static str {
         "webhook"
     }
-    
+
     fn estimated_delivery_time(&self) -> Duration {
         self.config.timeout + Duration::from_millis(100) // Add small buffer
     }
@@ -387,8 +415,8 @@ impl OutputDestination for WebhookDestination {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use wiremock::{MockServer, Mock, ResponseTemplate};
-    use wiremock::matchers::{method, path, header};
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn create_test_output() -> TaskOutput {
         TaskOutput {
@@ -424,7 +452,7 @@ mod tests {
     #[tokio::test]
     async fn test_successful_webhook_delivery() {
         let mock_server = MockServer::start().await;
-        
+
         Mock::given(method("POST"))
             .and(path("/webhook"))
             .and(header("content-type", "application/json"))
@@ -444,12 +472,12 @@ mod tests {
 
         let client = reqwest::Client::new();
         let destination = WebhookDestination::new(config, client, TemplateEngine::new());
-        
+
         let output = create_test_output();
         let context = create_test_context();
 
         let result = destination.deliver(&output, &context).await.unwrap();
-        
+
         assert!(result.success);
         assert!(result.size_bytes > 0);
         assert!(result.response_info.is_some());
@@ -459,7 +487,7 @@ mod tests {
     #[tokio::test]
     async fn test_webhook_with_bearer_auth() {
         let mock_server = MockServer::start().await;
-        
+
         Mock::given(method("POST"))
             .and(path("/webhook"))
             .and(header("authorization", "Bearer test-token"))
@@ -481,7 +509,7 @@ mod tests {
 
         let client = reqwest::Client::new();
         let destination = WebhookDestination::new(config, client, TemplateEngine::new());
-        
+
         let output = create_test_output();
         let context = create_test_context();
 
@@ -492,7 +520,7 @@ mod tests {
     #[tokio::test]
     async fn test_webhook_retry_on_500() {
         let mock_server = MockServer::start().await;
-        
+
         // First call returns 500, second call returns 200
         Mock::given(method("POST"))
             .and(path("/webhook"))
@@ -500,7 +528,7 @@ mod tests {
             .up_to_n_times(1)
             .mount(&mock_server)
             .await;
-            
+
         Mock::given(method("POST"))
             .and(path("/webhook"))
             .respond_with(ResponseTemplate::new(200))
@@ -523,7 +551,7 @@ mod tests {
 
         let client = reqwest::Client::new();
         let destination = WebhookDestination::new(config, client, TemplateEngine::new());
-        
+
         let output = create_test_output();
         let context = create_test_context();
 
@@ -534,7 +562,7 @@ mod tests {
     #[tokio::test]
     async fn test_webhook_template_url() {
         let mock_server = MockServer::start().await;
-        
+
         Mock::given(method("POST"))
             .and(path("/webhook/test/123"))
             .respond_with(ResponseTemplate::new(200))
@@ -553,7 +581,7 @@ mod tests {
 
         let client = reqwest::Client::new();
         let destination = WebhookDestination::new(config, client, TemplateEngine::new());
-        
+
         let output = create_test_output();
         let context = create_test_context();
 

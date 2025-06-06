@@ -6,7 +6,7 @@ use crate::execution::{JobQueueManager, ProcessTaskExecutor};
 use crate::registry::TaskRegistry;
 use crate::services::TaskSyncService;
 
-use super::resolvers::{Query, Mutation, Subscription, GraphQLContext};
+use super::resolvers::{GraphQLContext, Mutation, Query, Subscription};
 
 /// The main GraphQL schema type
 pub type RatchetSchema = Schema<Query, Mutation, Subscription>;

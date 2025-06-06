@@ -1,9 +1,9 @@
-use crate::js_executor::execute_task;
 use crate::errors::JsExecutionError;
+use crate::js_executor::execute_task;
 use crate::task::{Task, TaskError};
 use crate::types::HttpMethod;
 use anyhow::Result;
-use serde_json::{Value as JsonValue};
+use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -68,31 +68,31 @@ impl TestSummary {
 /// Load test cases from a tests directory
 pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
     let tests_dir = task_path.join("tests");
-    
+
     debug!("Loading test cases from: {:?}", tests_dir);
-    
+
     if !tests_dir.exists() || !tests_dir.is_dir() {
         warn!("Tests directory not found: {:?}", tests_dir);
         return Err(TestError::NoTestsDirectory);
     }
-    
+
     let mut test_cases = Vec::new();
-    
+
     for entry in fs::read_dir(&tests_dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         // Skip non-JSON files
         if path.extension().map_or(true, |ext| ext != "json") {
             debug!("Skipping non-JSON file: {:?}", path);
             continue;
         }
-        
+
         debug!("Reading test file: {:?}", path);
         // Read the test file
         let content = fs::read_to_string(&path)?;
         let test_json: JsonValue = serde_json::from_str(&content)?;
-        
+
         // Validate test file structure - skip invalid files instead of failing
         let input = match test_json.get("input") {
             Some(input) => input,
@@ -101,24 +101,27 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
                 continue;
             }
         };
-        
+
         let expected_output = match test_json.get("expected_output") {
             Some(output) => output,
             None => {
-                warn!("Skipping test file with missing 'expected_output' field: {:?}", path);
+                warn!(
+                    "Skipping test file with missing 'expected_output' field: {:?}",
+                    path
+                );
                 continue;
             }
         };
-        
+
         // Check for optional mock data
         let mock = test_json.get("mock").cloned();
-        
+
         let test_name = path.file_name().unwrap().to_string_lossy();
         debug!("Loaded test case: {}", test_name);
         if mock.is_some() {
             debug!("Test case {} includes mock data", test_name);
         }
-        
+
         test_cases.push(TestCase {
             file_path: path,
             input: input.clone(),
@@ -126,14 +129,21 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
             mock,
         });
     }
-    
+
     // Sort test cases by file name for consistent execution order
     test_cases.sort_by(|a, b| {
-        a.file_path.file_name().unwrap().cmp(b.file_path.file_name().unwrap())
+        a.file_path
+            .file_name()
+            .unwrap()
+            .cmp(b.file_path.file_name().unwrap())
     });
-    
-    info!("Loaded {} test cases from: {:?}", test_cases.len(), tests_dir);
-    
+
+    info!(
+        "Loaded {} test cases from: {:?}",
+        test_cases.len(),
+        tests_dir
+    );
+
     Ok(test_cases)
 }
 
@@ -141,17 +151,23 @@ pub fn load_test_cases(task_path: &Path) -> Result<Vec<TestCase>, TestError> {
 pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult {
     let test_name = test_case.file_path.file_name().unwrap().to_string_lossy();
     debug!("Running test case: {}", test_name);
-    
+
     // Setup HttpManager with mock data if provided
     let mut http_manager = crate::http::HttpManager::new();
     if let Some(mock) = &test_case.mock {
-        debug!("Setting up HTTP manager with mock data for test: {}", test_name);
+        debug!(
+            "Setting up HTTP manager with mock data for test: {}",
+            test_name
+        );
         http_manager.set_offline();
-        
+
         // Parse mock data and setup mocks
         if let Some(http_mock) = mock.get("http") {
             let url = http_mock.get("url").and_then(|u| u.as_str()).unwrap_or("");
-            let method_str = http_mock.get("method").and_then(|m| m.as_str()).unwrap_or("GET");
+            let method_str = http_mock
+                .get("method")
+                .and_then(|m| m.as_str())
+                .unwrap_or("GET");
             let method: HttpMethod = method_str.parse().unwrap_or(HttpMethod::Get);
             if let Some(response) = http_mock.get("response") {
                 http_manager.add_mock(method, url, response.clone());
@@ -159,29 +175,29 @@ pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult 
             }
         }
     }
-    
+
     // Execute the task
     debug!("Executing task for test: {}", test_name);
     let result = execute_task(task, test_case.input.clone(), &http_manager).await;
-    
+
     match result {
         Ok(output) => {
             // Compare actual output with expected output
             let passed = output == test_case.expected_output;
-            
+
             if passed {
                 debug!("Test passed: {}", test_name);
             } else {
                 warn!("Test failed: {} - output mismatch", test_name);
             }
-            
+
             TestResult {
                 file_path: test_case.file_path.clone(),
                 passed,
                 actual_output: Some(output),
                 error_message: None,
             }
-        },
+        }
         Err(err) => {
             warn!("Test failed: {} - execution error: {}", test_name, err);
             TestResult {
@@ -197,14 +213,14 @@ pub async fn run_test_case(task: &mut Task, test_case: &TestCase) -> TestResult 
 /// Run all test cases for a task
 pub async fn run_tests(task_path: &str) -> Result<TestSummary, TestError> {
     info!("Running tests for task at: {}", task_path);
-    
+
     // Load the task
     debug!("Loading task from: {}", task_path);
     let mut task = Task::from_fs(task_path)?;
-    
+
     // Load test cases
     let test_cases = load_test_cases(&task.path)?;
-    
+
     if test_cases.is_empty() {
         warn!("No test cases found for task: {}", task_path);
         return Ok(TestSummary {
@@ -214,7 +230,7 @@ pub async fn run_tests(task_path: &str) -> Result<TestSummary, TestError> {
             results: Vec::new(),
         });
     }
-    
+
     // Run each test case
     info!("Executing {} test cases", test_cases.len());
     let mut results = Vec::new();
@@ -223,14 +239,17 @@ pub async fn run_tests(task_path: &str) -> Result<TestSummary, TestError> {
         let result = run_test_case(&mut task, test_case).await;
         results.push(result);
     }
-    
+
     // Count passed and failed tests
     let total = results.len();
     let passed = results.iter().filter(|r| r.passed).count();
     let failed = total - passed;
-    
-    info!("Test execution completed - Total: {}, Passed: {}, Failed: {}", total, passed, failed);
-    
+
+    info!(
+        "Test execution completed - Total: {}, Passed: {}, Failed: {}",
+        total, passed, failed
+    );
+
     Ok(TestSummary {
         total,
         passed,
@@ -244,11 +263,11 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use tokio_test::block_on;
-    
+
     fn create_test_task_with_tests() -> Result<(PathBuf, tempfile::TempDir), std::io::Error> {
         let temp_dir = tempdir()?;
         let task_dir = temp_dir.path().to_path_buf();
-        
+
         // Create metadata.json
         let metadata = r#"{
             "uuid": "bd6c6f98-4896-44cc-8c82-30328c3aefda",
@@ -257,7 +276,7 @@ mod tests {
             "description": "Test task for unit testing"
         }"#;
         fs::write(task_dir.join("metadata.json"), metadata)?;
-        
+
         // Create input.schema.json
         let input_schema = r#"{
             "type": "object",
@@ -268,7 +287,7 @@ mod tests {
             "required": ["num1", "num2"]
         }"#;
         fs::write(task_dir.join("input.schema.json"), input_schema)?;
-        
+
         // Create output.schema.json
         let output_schema = r#"{
             "type": "object",
@@ -278,7 +297,7 @@ mod tests {
             "required": ["sum"]
         }"#;
         fs::write(task_dir.join("output.schema.json"), output_schema)?;
-        
+
         // Create main.js
         let main_js = r#"(function(input) {
             const {num1, num2} = input;
@@ -292,11 +311,11 @@ mod tests {
             }
         })"#;
         fs::write(task_dir.join("main.js"), main_js)?;
-        
+
         // Create tests directory
         let tests_dir = task_dir.join("tests");
         fs::create_dir(&tests_dir)?;
-        
+
         // Create test files
         let test1 = r#"{
             "input": {
@@ -308,7 +327,7 @@ mod tests {
             }
         }"#;
         fs::write(tests_dir.join("test-001.json"), test1)?;
-        
+
         let test2 = r#"{
             "input": {
                 "num1": 10,
@@ -319,7 +338,7 @@ mod tests {
             }
         }"#;
         fs::write(tests_dir.join("test-002.json"), test2)?;
-        
+
         // Create a failing test
         let test3 = r#"{
             "input": {
@@ -331,7 +350,7 @@ mod tests {
             }
         }"#;
         fs::write(tests_dir.join("test-003.json"), test3)?;
-        
+
         // Create an invalid test (missing expected_output)
         let invalid_test = r#"{
             "input": {
@@ -340,55 +359,54 @@ mod tests {
             }
         }"#;
         fs::write(tests_dir.join("invalid-test.json"), invalid_test)?;
-        
+
         Ok((task_dir, temp_dir))
     }
-    
+
     #[test]
     fn test_load_test_cases() {
         if let Ok((task_dir, _temp_dir)) = create_test_task_with_tests() {
             let test_cases = load_test_cases(&task_dir).unwrap();
-            
+
             // We should have 3 valid test cases (the invalid one should be rejected)
             assert_eq!(test_cases.len(), 3);
-            
+
             // Check first test case
             assert_eq!(test_cases[0].input["num1"], 5);
             assert_eq!(test_cases[0].input["num2"], 7);
             assert_eq!(test_cases[0].expected_output["sum"], 12);
-            
+
             // Attempting to load the invalid test file should result in an error
             let invalid_test_path = task_dir.join("tests").join("invalid-test.json");
-            let test_json: JsonValue = serde_json::from_str(
-                &fs::read_to_string(invalid_test_path).unwrap()
-            ).unwrap();
-            
+            let test_json: JsonValue =
+                serde_json::from_str(&fs::read_to_string(invalid_test_path).unwrap()).unwrap();
+
             let _input = test_json.get("input").unwrap();
             let expected_output = test_json.get("expected_output");
             assert!(expected_output.is_none());
         }
     }
-    
+
     #[test]
     fn test_run_tests() {
         block_on(async {
             if let Ok((task_dir, _temp_dir)) = create_test_task_with_tests() {
                 let summary = run_tests(task_dir.to_str().unwrap()).await.unwrap();
-                
+
                 // We should have 3 test cases
                 assert_eq!(summary.total, 3);
-                
+
                 // Two tests should pass and one should fail
                 assert_eq!(summary.passed, 2);
                 assert_eq!(summary.failed, 1);
-                
+
                 // Check individual results
                 let passed_tests = summary.results.iter().filter(|r| r.passed).count();
                 assert_eq!(passed_tests, 2);
-                
+
                 let failed_tests = summary.results.iter().filter(|r| !r.passed).count();
                 assert_eq!(failed_tests, 1);
-                
+
                 // The failing test should be the third one
                 let failing_test = summary.results.iter().find(|r| !r.passed).unwrap();
                 assert_eq!(failing_test.file_path.file_name().unwrap(), "test-003.json");
@@ -398,13 +416,13 @@ mod tests {
             }
         });
     }
-    
+
     #[test]
     fn test_no_tests_directory() {
         block_on(async {
             let temp_dir = tempdir().unwrap();
             let task_dir = temp_dir.path().to_path_buf();
-            
+
             // Create a complete task without a tests directory
             let metadata = r#"{
                 "uuid": "bd6c6f98-4896-44cc-8c82-30328c3aefda",
@@ -413,7 +431,7 @@ mod tests {
                 "description": "Test task for unit testing"
             }"#;
             fs::write(task_dir.join("metadata.json"), metadata).unwrap();
-            
+
             // Create input.schema.json
             let input_schema = r#"{
                 "type": "object",
@@ -424,7 +442,7 @@ mod tests {
                 "required": ["num1", "num2"]
             }"#;
             fs::write(task_dir.join("input.schema.json"), input_schema).unwrap();
-            
+
             // Create output.schema.json
             let output_schema = r#"{
                 "type": "object",
@@ -434,15 +452,15 @@ mod tests {
                 "required": ["sum"]
             }"#;
             fs::write(task_dir.join("output.schema.json"), output_schema).unwrap();
-            
+
             // Create main.js
             let main_js = r#"(function(input) {
                 return { sum: input.num1 + input.num2 };
             })"#;
             fs::write(task_dir.join("main.js"), main_js).unwrap();
-            
+
             // Do NOT create a tests directory - this is what we're testing
-            
+
             let result = run_tests(task_dir.to_str().unwrap()).await;
             assert!(matches!(result, Err(TestError::NoTestsDirectory)));
         });

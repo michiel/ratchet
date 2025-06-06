@@ -50,14 +50,21 @@ impl DiscoveredPlugin {
     }
 
     /// Add checksum
-    pub fn with_checksum(mut self, algorithm: impl Into<String>, checksum: impl Into<String>) -> Self {
+    pub fn with_checksum(
+        mut self,
+        algorithm: impl Into<String>,
+        checksum: impl Into<String>,
+    ) -> Self {
         self.checksums.insert(algorithm.into(), checksum.into());
         self
     }
 
     /// Get plugin unique identifier for discovery
     pub fn discovery_id(&self) -> String {
-        format!("{}:{}", self.manifest.plugin.id, self.manifest.plugin.version)
+        format!(
+            "{}:{}",
+            self.manifest.plugin.id, self.manifest.plugin.version
+        )
     }
 }
 
@@ -159,15 +166,15 @@ impl PluginDiscovery {
 
         let walker = if self.config.recursive {
             let mut walker = WalkDir::new(path);
-            
+
             if let Some(max_depth) = self.config.max_depth {
                 walker = walker.max_depth(max_depth);
             }
-            
+
             if !self.config.follow_symlinks {
                 walker = walker.follow_links(false);
             }
-            
+
             walker
         } else {
             WalkDir::new(path).max_depth(1)
@@ -175,7 +182,7 @@ impl PluginDiscovery {
 
         for entry in walker.into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
-            
+
             if !entry.file_type().is_file() {
                 continue;
             }
@@ -213,7 +220,10 @@ impl PluginDiscovery {
     }
 
     /// Discover a plugin from a specific file
-    async fn discover_plugin_from_file(&self, path: &Path) -> PluginResult<Option<DiscoveredPlugin>> {
+    async fn discover_plugin_from_file(
+        &self,
+        path: &Path,
+    ) -> PluginResult<Option<DiscoveredPlugin>> {
         // Get file metadata
         let metadata = tokio::fs::metadata(path).await?;
         let size_bytes = metadata.len();
@@ -222,8 +232,7 @@ impl PluginDiscovery {
         if size_bytes > self.loader_config.max_plugin_size as u64 {
             return Err(PluginError::generic(format!(
                 "Plugin file too large: {} bytes (max: {})",
-                size_bytes,
-                self.loader_config.max_plugin_size
+                size_bytes, self.loader_config.max_plugin_size
             )));
         }
 
@@ -246,11 +255,8 @@ impl PluginDiscovery {
             manifest.validate()?;
         }
 
-        let mut discovered = DiscoveredPlugin::new(
-            manifest,
-            path.to_path_buf(),
-            "filesystem",
-        ).with_size(size_bytes);
+        let mut discovered =
+            DiscoveredPlugin::new(manifest, path.to_path_buf(), "filesystem").with_size(size_bytes);
 
         // Calculate checksums if required
         if self.config.calculate_checksums {
@@ -264,7 +270,7 @@ impl PluginDiscovery {
     /// Load manifest from file
     async fn load_manifest_from_file(&self, path: &Path) -> PluginResult<PluginManifest> {
         let content = tokio::fs::read_to_string(path).await?;
-        
+
         // Try different manifest formats
         if path.extension().and_then(|s| s.to_str()) == Some("json") {
             let manifest: PluginManifest = serde_json::from_str(&content)?;
@@ -281,9 +287,7 @@ impl PluginDiscovery {
 
     /// Check if file should be processed
     fn should_process_file(&self, path: &Path) -> bool {
-        let file_name = path.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
+        let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
 
         // Check against file patterns
         for pattern in &self.config.file_patterns {
@@ -325,7 +329,7 @@ impl PluginDiscovery {
     /// Calculate file checksum
     async fn calculate_file_checksum(&self, path: &Path) -> PluginResult<String> {
         use sha2::{Digest, Sha256};
-        
+
         let content = tokio::fs::read(path).await?;
         let mut hasher = Sha256::new();
         hasher.update(&content);
@@ -334,17 +338,20 @@ impl PluginDiscovery {
     }
 
     /// Remove duplicate plugins
-    fn deduplicate_plugins(&self, plugins: Vec<DiscoveredPlugin>) -> PluginResult<Vec<DiscoveredPlugin>> {
+    fn deduplicate_plugins(
+        &self,
+        plugins: Vec<DiscoveredPlugin>,
+    ) -> PluginResult<Vec<DiscoveredPlugin>> {
         let mut unique_plugins: HashMap<String, DiscoveredPlugin> = HashMap::new();
         let mut duplicates = Vec::new();
 
         for plugin in plugins {
             let key = plugin.discovery_id();
-            
+
             if let Some(existing) = unique_plugins.get(&key) {
                 duplicates.push((plugin.clone(), existing.clone()));
             }
-            
+
             unique_plugins.insert(key, plugin);
         }
 
@@ -390,10 +397,7 @@ pub enum PluginDiscoveryEvent {
     /// Plugin modified
     PluginModified(DiscoveredPlugin),
     /// Discovery error
-    DiscoveryError {
-        path: PathBuf,
-        error: String,
-    },
+    DiscoveryError { path: PathBuf, error: String },
 }
 
 /// Plugin catalog for managing discovered plugins
@@ -443,14 +447,16 @@ impl PluginCatalog {
             let key = plugin.discovery_id();
             self.plugins.insert(key, plugin);
         }
-        
+
         self.metadata.updated_at = chrono::Utc::now();
         self.metadata.total_plugins = self.plugins.len();
     }
 
     /// Get plugin by ID
     pub fn get_plugin(&self, plugin_id: &str) -> Option<&DiscoveredPlugin> {
-        self.plugins.values().find(|p| p.manifest.plugin.id == plugin_id)
+        self.plugins
+            .values()
+            .find(|p| p.manifest.plugin.id == plugin_id)
     }
 
     /// List all plugins
@@ -469,15 +475,18 @@ impl PluginCatalog {
     /// Get catalog statistics
     pub fn stats(&self) -> CatalogStats {
         let mut stats = CatalogStats::default();
-        
+
         for plugin in self.plugins.values() {
             stats.total_plugins += 1;
             stats.total_size_bytes += plugin.size_bytes;
-            
+
             let plugin_type = &plugin.manifest.plugin.plugin_type;
-            *stats.plugins_by_type.entry(plugin_type.to_string()).or_insert(0) += 1;
+            *stats
+                .plugins_by_type
+                .entry(plugin_type.to_string())
+                .or_insert(0) += 1;
         }
-        
+
         stats
     }
 
@@ -512,7 +521,6 @@ pub struct CatalogStats {
     pub plugins_by_type: HashMap<String, usize>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,7 +543,7 @@ mod tests {
     #[tokio::test]
     async fn test_discovery_config_default() {
         let config = DiscoveryConfig::default();
-        
+
         assert!(!config.search_paths.is_empty());
         assert!(!config.file_patterns.is_empty());
         assert!(config.recursive);
@@ -549,14 +557,17 @@ mod tests {
     async fn test_discovered_plugin() {
         let manifest = create_test_manifest();
         let path = PathBuf::from("/test/plugin.so");
-        
+
         let discovered = DiscoveredPlugin::new(manifest, path.clone(), "test")
             .with_size(1024)
             .with_checksum("sha256", "abc123");
-        
+
         assert_eq!(discovered.source_path, path);
         assert_eq!(discovered.size_bytes, 1024);
-        assert_eq!(discovered.checksums.get("sha256"), Some(&"abc123".to_string()));
+        assert_eq!(
+            discovered.checksums.get("sha256"),
+            Some(&"abc123".to_string())
+        );
         assert_eq!(discovered.discovery_id(), "test-plugin:1.0.0");
     }
 
@@ -564,7 +575,7 @@ mod tests {
     async fn test_plugin_discovery_empty_path() {
         let discovery = PluginDiscovery::with_defaults();
         let temp_dir = tempdir().unwrap();
-        
+
         // Empty directory should return no plugins
         let plugins = discovery.discover_in_path(temp_dir.path()).await.unwrap();
         assert!(plugins.is_empty());
@@ -574,13 +585,15 @@ mod tests {
     async fn test_plugin_discovery_with_manifest() {
         let discovery = PluginDiscovery::with_defaults();
         let temp_dir = tempdir().unwrap();
-        
+
         // Create a test manifest file
         let manifest = create_test_manifest();
         let manifest_path = temp_dir.path().join("plugin.json");
         let manifest_json = serde_json::to_string_pretty(&manifest).unwrap();
-        tokio::fs::write(&manifest_path, manifest_json).await.unwrap();
-        
+        tokio::fs::write(&manifest_path, manifest_json)
+            .await
+            .unwrap();
+
         // Discover plugins
         let plugins = discovery.discover_in_path(temp_dir.path()).await.unwrap();
         assert_eq!(plugins.len(), 1);
@@ -590,7 +603,7 @@ mod tests {
     #[test]
     fn test_pattern_matching() {
         let discovery = PluginDiscovery::with_defaults();
-        
+
         assert!(discovery.matches_pattern("plugin.so", "*.so"));
         assert!(discovery.matches_pattern("test.dll", "*.dll"));
         assert!(discovery.matches_pattern("manifest.json", "manifest.json"));
@@ -600,7 +613,7 @@ mod tests {
     #[test]
     fn test_is_library_file() {
         let discovery = PluginDiscovery::with_defaults();
-        
+
         assert!(discovery.is_library_file(Path::new("plugin.so")));
         assert!(discovery.is_library_file(Path::new("plugin.dll")));
         assert!(discovery.is_library_file(Path::new("plugin.dylib")));
@@ -611,30 +624,24 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_catalog() {
         let mut catalog = PluginCatalog::new();
-        
+
         // Add plugins
         let manifest1 = create_test_manifest();
-        let plugin1 = DiscoveredPlugin::new(
-            manifest1,
-            PathBuf::from("/test/plugin1.so"),
-            "test",
-        ).with_size(1024);
-        
+        let plugin1 = DiscoveredPlugin::new(manifest1, PathBuf::from("/test/plugin1.so"), "test")
+            .with_size(1024);
+
         let mut manifest2 = create_test_manifest();
         manifest2.plugin.id = "test-plugin-2".to_string();
-        let plugin2 = DiscoveredPlugin::new(
-            manifest2,
-            PathBuf::from("/test/plugin2.so"),
-            "test",
-        ).with_size(2048);
-        
+        let plugin2 = DiscoveredPlugin::new(manifest2, PathBuf::from("/test/plugin2.so"), "test")
+            .with_size(2048);
+
         catalog.add_plugins(vec![plugin1, plugin2]);
-        
+
         // Test catalog functions
         assert_eq!(catalog.list_plugins().len(), 2);
         assert!(catalog.get_plugin("test-plugin").is_some());
         assert!(catalog.get_plugin("test-plugin-2").is_some());
-        
+
         let stats = catalog.stats();
         assert_eq!(stats.total_plugins, 2);
         assert_eq!(stats.total_size_bytes, 3072);
@@ -643,26 +650,22 @@ mod tests {
     #[tokio::test]
     async fn test_catalog_search() {
         let mut catalog = PluginCatalog::new();
-        
+
         let manifest = create_test_manifest();
-        let plugin = DiscoveredPlugin::new(
-            manifest,
-            PathBuf::from("/test/plugin.so"),
-            "test",
-        ).with_size(1024);
-        
+        let plugin = DiscoveredPlugin::new(manifest, PathBuf::from("/test/plugin.so"), "test")
+            .with_size(1024);
+
         catalog.add_plugins(vec![plugin]);
-        
+
         // Search by plugin type
-        let task_plugins = catalog.search_plugins(|p| {
-            matches!(p.manifest.plugin.plugin_type, PluginType::Task)
-        });
+        let task_plugins =
+            catalog.search_plugins(|p| matches!(p.manifest.plugin.plugin_type, PluginType::Task));
         assert_eq!(task_plugins.len(), 1);
-        
+
         // Search by size
         let large_plugins = catalog.search_plugins(|p| p.size_bytes > 500);
         assert_eq!(large_plugins.len(), 1);
-        
+
         let small_plugins = catalog.search_plugins(|p| p.size_bytes < 500);
         assert_eq!(small_plugins.len(), 0);
     }
@@ -670,23 +673,16 @@ mod tests {
     #[tokio::test]
     async fn test_deduplicate_plugins() {
         let discovery = PluginDiscovery::with_defaults();
-        
+
         // Create duplicate plugins (same ID and version)
         let manifest = create_test_manifest();
-        let plugin1 = DiscoveredPlugin::new(
-            manifest.clone(),
-            PathBuf::from("/test/plugin1.so"),
-            "test",
-        );
-        let plugin2 = DiscoveredPlugin::new(
-            manifest,
-            PathBuf::from("/test/plugin2.so"),
-            "test",
-        );
-        
+        let plugin1 =
+            DiscoveredPlugin::new(manifest.clone(), PathBuf::from("/test/plugin1.so"), "test");
+        let plugin2 = DiscoveredPlugin::new(manifest, PathBuf::from("/test/plugin2.so"), "test");
+
         let plugins = vec![plugin1, plugin2];
         let deduplicated = discovery.deduplicate_plugins(plugins).unwrap();
-        
+
         // Should only have one plugin after deduplication
         assert_eq!(deduplicated.len(), 1);
     }

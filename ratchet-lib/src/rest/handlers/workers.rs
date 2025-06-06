@@ -4,13 +4,11 @@ use axum::{
     Json,
 };
 
-use crate::{
-    rest::{
-        middleware::error_handler::RestError,
-        models::{
-            common::ApiResponse,
-            workers::{WorkerResponse, WorkerDetailResponse, WorkerPoolStats, WorkerStatus},
-        },
+use crate::rest::{
+    middleware::error_handler::RestError,
+    models::{
+        common::ApiResponse,
+        workers::{WorkerDetailResponse, WorkerPoolStats, WorkerResponse, WorkerStatus},
     },
 };
 
@@ -22,7 +20,6 @@ pub struct WorkersContext {
 pub async fn list_workers(
     State(_ctx): State<WorkersContext>,
 ) -> Result<impl IntoResponse, RestError> {
-
     // For now, return mock data since worker tracking isn't fully implemented
     // TODO: Implement actual worker tracking in WorkerPool
     let workers = vec![
@@ -55,17 +52,33 @@ pub async fn get_worker(
     State(_ctx): State<WorkersContext>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, RestError> {
-
     // For now, return mock data
     // TODO: Implement actual worker tracking
     if id == "worker-1" || id == "worker-2" {
         let response = WorkerDetailResponse {
             id: id.clone(),
-            status: if id == "worker-1" { WorkerStatus::Idle } else { WorkerStatus::Running },
-            current_task: if id == "worker-2" { Some("process-data".to_string()) } else { None },
-            current_task_name: if id == "worker-2" { Some("Process Customer Data".to_string()) } else { None },
-            current_execution_id: if id == "worker-2" { Some("exec-123".to_string()) } else { None },
-            started_at: chrono::Utc::now() - chrono::Duration::hours(if id == "worker-1" { 1 } else { 2 }),
+            status: if id == "worker-1" {
+                WorkerStatus::Idle
+            } else {
+                WorkerStatus::Running
+            },
+            current_task: if id == "worker-2" {
+                Some("process-data".to_string())
+            } else {
+                None
+            },
+            current_task_name: if id == "worker-2" {
+                Some("Process Customer Data".to_string())
+            } else {
+                None
+            },
+            current_execution_id: if id == "worker-2" {
+                Some("exec-123".to_string())
+            } else {
+                None
+            },
+            started_at: chrono::Utc::now()
+                - chrono::Duration::hours(if id == "worker-1" { 1 } else { 2 }),
             last_heartbeat: chrono::Utc::now(),
             tasks_completed: if id == "worker-1" { 42 } else { 38 },
             tasks_failed: if id == "worker-1" { 2 } else { 1 },
@@ -81,7 +94,6 @@ pub async fn get_worker(
 pub async fn get_worker_pool_stats(
     State(_ctx): State<WorkersContext>,
 ) -> Result<impl IntoResponse, RestError> {
-
     // For now, return mock data
     // TODO: Implement actual statistics tracking
     let stats = WorkerPoolStats {

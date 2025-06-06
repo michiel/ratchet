@@ -1,6 +1,6 @@
-use crate::logging::{LogEvent, logger::LogSink};
-use std::sync::{Arc, Mutex};
+use crate::logging::{logger::LogSink, LogEvent};
 use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::interval;
@@ -49,7 +49,7 @@ impl BufferedSink {
                                     buffer.push_back(event);
                                     buffer.len() >= max_buffer_size
                                 };
-                                
+
                                 if should_flush {
                                     Self::flush_buffer(&buffer_clone, &inner_sink_clone);
                                 }
@@ -93,8 +93,9 @@ impl BufferedSink {
 impl LogSink for BufferedSink {
     fn log(&self, event: LogEvent) {
         // Try to send to background task, fall back to direct write if channel is full
-        if let Err(mpsc::error::TrySendError::Full(_)) = 
-            self.tx.try_send(BufferCommand::Log(event.clone())) {
+        if let Err(mpsc::error::TrySendError::Full(_)) =
+            self.tx.try_send(BufferCommand::Log(event.clone()))
+        {
             // Channel full, write directly
             self.inner_sink.log(event);
         }

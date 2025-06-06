@@ -4,28 +4,26 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Client permissions configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ClientPermissions {
     /// Whether client can execute tasks
     pub can_execute_tasks: bool,
-    
+
     /// Whether client can read logs
     pub can_read_logs: bool,
-    
+
     /// Whether client can read execution traces
     pub can_read_traces: bool,
-    
+
     /// Patterns of task names this client can execute
     pub allowed_task_patterns: Vec<String>,
-    
+
     /// Rate limiting configuration
     pub rate_limits: RateLimits,
-    
+
     /// Resource quota limits
     pub resource_quotas: ResourceQuotas,
 }
-
 
 impl ClientPermissions {
     /// Create permissions with full access
@@ -39,7 +37,7 @@ impl ClientPermissions {
             resource_quotas: ResourceQuotas::unlimited(),
         }
     }
-    
+
     /// Create read-only permissions
     pub fn read_only() -> Self {
         Self {
@@ -51,7 +49,7 @@ impl ClientPermissions {
             resource_quotas: ResourceQuotas::default(),
         }
     }
-    
+
     /// Create task execution permissions for specific patterns
     pub fn task_execution(patterns: Vec<String>) -> Self {
         Self {
@@ -63,38 +61,38 @@ impl ClientPermissions {
             resource_quotas: ResourceQuotas::default(),
         }
     }
-    
+
     /// Check if client can execute a specific task
     pub fn can_execute_task(&self, task_name: &str) -> bool {
         if !self.can_execute_tasks {
             return false;
         }
-        
+
         if self.allowed_task_patterns.is_empty() {
             return false;
         }
-        
-        self.allowed_task_patterns.iter().any(|pattern| {
-            self.matches_pattern(task_name, pattern)
-        })
+
+        self.allowed_task_patterns
+            .iter()
+            .any(|pattern| self.matches_pattern(task_name, pattern))
     }
-    
+
     /// Check if a task name matches a pattern
     fn matches_pattern(&self, task_name: &str, pattern: &str) -> bool {
         if pattern == "*" {
             return true;
         }
-        
+
         if pattern.ends_with('*') {
             let prefix = &pattern[..pattern.len() - 1];
             return task_name.starts_with(prefix);
         }
-        
+
         if pattern.starts_with('*') {
             let suffix = &pattern[1..];
             return task_name.ends_with(suffix);
         }
-        
+
         task_name == pattern
     }
 }
@@ -104,16 +102,16 @@ impl ClientPermissions {
 pub struct RateLimits {
     /// Requests per minute for task execution
     pub execute_task_per_minute: Option<u32>,
-    
+
     /// Requests per minute for reading logs
     pub get_logs_per_minute: Option<u32>,
-    
+
     /// Requests per minute for reading traces
     pub get_traces_per_minute: Option<u32>,
-    
+
     /// Overall requests per minute
     pub total_requests_per_minute: Option<u32>,
-    
+
     /// Maximum concurrent executions
     pub max_concurrent_executions: Option<u32>,
 }
@@ -141,7 +139,7 @@ impl RateLimits {
             max_concurrent_executions: None,
         }
     }
-    
+
     /// Create strict rate limits for untrusted clients
     pub fn strict() -> Self {
         Self {
@@ -159,19 +157,19 @@ impl RateLimits {
 pub struct ResourceQuotas {
     /// Maximum execution time per task (in seconds)
     pub max_execution_time_secs: Option<u64>,
-    
+
     /// Maximum memory usage per task (in MB)
     pub max_memory_mb: Option<u64>,
-    
+
     /// Maximum number of log entries per request
     pub max_log_entries_per_request: Option<u32>,
-    
+
     /// Maximum trace entries per request
     pub max_trace_entries_per_request: Option<u32>,
-    
+
     /// Maximum request size (in bytes)
     pub max_request_size_bytes: Option<u64>,
-    
+
     /// Maximum response size (in bytes)
     pub max_response_size_bytes: Option<u64>,
 }
@@ -180,7 +178,7 @@ impl Default for ResourceQuotas {
     fn default() -> Self {
         Self {
             max_execution_time_secs: Some(300), // 5 minutes
-            max_memory_mb: Some(1024), // 1GB
+            max_memory_mb: Some(1024),          // 1GB
             max_log_entries_per_request: Some(1000),
             max_trace_entries_per_request: Some(500),
             max_request_size_bytes: Some(1024 * 1024), // 1MB
@@ -201,19 +199,19 @@ impl ResourceQuotas {
             max_response_size_bytes: None,
         }
     }
-    
+
     /// Create restrictive quotas for untrusted clients
     pub fn restrictive() -> Self {
         Self {
             max_execution_time_secs: Some(60), // 1 minute
-            max_memory_mb: Some(256), // 256MB
+            max_memory_mb: Some(256),          // 256MB
             max_log_entries_per_request: Some(100),
             max_trace_entries_per_request: Some(50),
             max_request_size_bytes: Some(100 * 1024), // 100KB
             max_response_size_bytes: Some(1024 * 1024), // 1MB
         }
     }
-    
+
     /// Get execution timeout as Duration
     pub fn execution_timeout(&self) -> Option<Duration> {
         self.max_execution_time_secs.map(Duration::from_secs)
@@ -228,17 +226,17 @@ impl PermissionChecker {
     pub fn can_execute_task(permissions: &ClientPermissions, task_name: &str) -> bool {
         permissions.can_execute_task(task_name)
     }
-    
+
     /// Check if client can read logs
     pub fn can_read_logs(permissions: &ClientPermissions) -> bool {
         permissions.can_read_logs
     }
-    
+
     /// Check if client can read traces
     pub fn can_read_traces(permissions: &ClientPermissions) -> bool {
         permissions.can_read_traces
     }
-    
+
     /// Validate request size against quotas
     pub fn validate_request_size(
         permissions: &ClientPermissions,
@@ -254,7 +252,7 @@ impl PermissionChecker {
         }
         Ok(())
     }
-    
+
     /// Validate log request parameters
     pub fn validate_log_request(
         permissions: &ClientPermissions,
@@ -263,15 +261,15 @@ impl PermissionChecker {
         if !permissions.can_read_logs {
             return Err("Client does not have permission to read logs".to_string());
         }
-        
+
         let limit = permissions
             .resource_quotas
             .max_log_entries_per_request
             .unwrap_or(u32::MAX);
-        
+
         Ok(max_entries.min(limit))
     }
-    
+
     /// Validate trace request parameters
     pub fn validate_trace_request(
         permissions: &ClientPermissions,
@@ -280,12 +278,12 @@ impl PermissionChecker {
         if !permissions.can_read_traces {
             return Err("Client does not have permission to read traces".to_string());
         }
-        
+
         let limit = permissions
             .resource_quotas
             .max_trace_entries_per_request
             .unwrap_or(u32::MAX);
-        
+
         Ok(max_entries.min(limit))
     }
 }
@@ -301,12 +299,12 @@ mod tests {
             "safe-task".to_string(),
             "*-read-only".to_string(),
         ]);
-        
+
         assert!(permissions.can_execute_task("test-anything"));
         assert!(permissions.can_execute_task("test-task"));
         assert!(permissions.can_execute_task("safe-task"));
         assert!(permissions.can_execute_task("data-read-only"));
-        
+
         assert!(!permissions.can_execute_task("dangerous-task"));
         assert!(!permissions.can_execute_task("test"));
         assert!(!permissions.can_execute_task("read-only"));
@@ -315,7 +313,7 @@ mod tests {
     #[test]
     fn test_wildcard_patterns() {
         let permissions = ClientPermissions::task_execution(vec!["*".to_string()]);
-        
+
         assert!(permissions.can_execute_task("any-task"));
         assert!(permissions.can_execute_task("test"));
         assert!(permissions.can_execute_task("dangerous-task"));
@@ -328,7 +326,7 @@ mod tests {
         assert!(full.can_read_logs);
         assert!(full.can_read_traces);
         assert!(full.can_execute_task("any-task"));
-        
+
         let read_only = ClientPermissions::read_only();
         assert!(!read_only.can_execute_tasks);
         assert!(read_only.can_read_logs);
@@ -339,15 +337,18 @@ mod tests {
     #[test]
     fn test_permission_checker() {
         let permissions = ClientPermissions::read_only();
-        
+
         assert!(PermissionChecker::can_read_logs(&permissions));
         assert!(PermissionChecker::can_read_traces(&permissions));
-        assert!(!PermissionChecker::can_execute_task(&permissions, "test-task"));
-        
+        assert!(!PermissionChecker::can_execute_task(
+            &permissions,
+            "test-task"
+        ));
+
         // Test request size validation
         let mut permissions = ClientPermissions::default();
         permissions.resource_quotas.max_request_size_bytes = Some(1000);
-        
+
         assert!(PermissionChecker::validate_request_size(&permissions, 500).is_ok());
         assert!(PermissionChecker::validate_request_size(&permissions, 1500).is_err());
     }
@@ -357,15 +358,15 @@ mod tests {
         let mut permissions = ClientPermissions::default();
         permissions.can_read_logs = true;
         permissions.resource_quotas.max_log_entries_per_request = Some(100);
-        
+
         // Should allow up to the limit
         let result = PermissionChecker::validate_log_request(&permissions, 50);
         assert_eq!(result.unwrap(), 50);
-        
+
         // Should cap at the limit
         let result = PermissionChecker::validate_log_request(&permissions, 150);
         assert_eq!(result.unwrap(), 100);
-        
+
         // Should deny if no permission
         permissions.can_read_logs = false;
         let result = PermissionChecker::validate_log_request(&permissions, 50);
@@ -376,10 +377,10 @@ mod tests {
     fn test_rate_limit_presets() {
         let default = RateLimits::default();
         assert!(default.execute_task_per_minute.is_some());
-        
+
         let unlimited = RateLimits::unlimited();
         assert!(unlimited.execute_task_per_minute.is_none());
-        
+
         let strict = RateLimits::strict();
         assert!(strict.execute_task_per_minute.unwrap() < default.execute_task_per_minute.unwrap());
     }
@@ -390,7 +391,7 @@ mod tests {
         let timeout = quotas.execution_timeout();
         assert!(timeout.is_some());
         assert_eq!(timeout.unwrap(), Duration::from_secs(300));
-        
+
         let unlimited = ResourceQuotas::unlimited();
         assert!(unlimited.execution_timeout().is_none());
     }

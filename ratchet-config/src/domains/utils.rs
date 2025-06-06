@@ -6,7 +6,7 @@ use std::time::Duration;
 /// Serde helper module for Duration serialization as seconds
 pub mod serde_duration {
     use super::*;
-    
+
     pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -26,7 +26,7 @@ pub mod serde_duration {
 /// Serde helper module for optional Duration serialization
 pub mod serde_duration_option {
     use super::*;
-    
+
     pub fn serialize<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

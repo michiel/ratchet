@@ -1,9 +1,9 @@
 //! Delivery result entity definition
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use super::Entity;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Delivery result entity for tracking output delivery
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,14 +24,27 @@ pub struct DeliveryResult {
 }
 
 impl Entity for DeliveryResult {
-    fn id(&self) -> i32 { self.id }
-    fn uuid(&self) -> Uuid { self.uuid }
-    fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    fn id(&self) -> i32 {
+        self.id
+    }
+    fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 }
 
 impl DeliveryResult {
-    pub fn new(job_id: i32, execution_id: i32, destination_type: String, destination_id: String) -> Self {
+    pub fn new(
+        job_id: i32,
+        execution_id: i32,
+        destination_type: String,
+        destination_id: String,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id: 0,

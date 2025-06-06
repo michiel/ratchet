@@ -6,9 +6,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::{McpError, McpResult};
-use crate::protocol::{Tool, ToolsCallResult, ToolContent};
+use crate::protocol::{Tool, ToolContent, ToolsCallResult};
 use crate::security::SecurityContext;
+use crate::{McpError, McpResult};
 
 // Import Ratchet's execution types
 use ratchet_lib::logging::logger::StructuredLogger;
@@ -18,13 +18,13 @@ use ratchet_lib::logging::logger::StructuredLogger;
 pub struct McpTool {
     /// Tool metadata
     pub tool: Tool,
-    
+
     /// Tool category for organization
     pub category: String,
-    
+
     /// Whether this tool requires authentication
     pub requires_auth: bool,
-    
+
     /// Whether this tool can be called by any client
     pub public: bool,
 }
@@ -49,14 +49,14 @@ impl McpTool {
             public: false,
         }
     }
-    
+
     /// Make this tool public (accessible without authentication)
     pub fn public(mut self) -> Self {
         self.public = true;
         self.requires_auth = false;
         self
     }
-    
+
     /// Add metadata to the tool
     pub fn with_metadata(mut self, key: impl Into<String>, value: Value) -> Self {
         self.tool.metadata.insert(key.into(), value);
@@ -69,10 +69,10 @@ impl McpTool {
 pub struct ToolExecutionContext {
     /// Security context for the request
     pub security: SecurityContext,
-    
+
     /// Tool arguments
     pub arguments: Option<Value>,
-    
+
     /// Request correlation ID
     pub request_id: Option<String>,
 }
@@ -82,17 +82,17 @@ pub struct ToolExecutionContext {
 pub trait ToolRegistry: Send + Sync {
     /// List all available tools
     async fn list_tools(&self, context: &SecurityContext) -> McpResult<Vec<Tool>>;
-    
+
     /// Get a specific tool by name
     async fn get_tool(&self, name: &str, context: &SecurityContext) -> McpResult<Option<McpTool>>;
-    
+
     /// Execute a tool
     async fn execute_tool(
         &self,
         name: &str,
         execution_context: ToolExecutionContext,
     ) -> McpResult<ToolsCallResult>;
-    
+
     /// Check if a tool exists and is accessible
     async fn can_access_tool(&self, name: &str, context: &SecurityContext) -> bool;
 }
@@ -132,23 +132,28 @@ pub struct McpExecutionStatus {
 pub trait McpTaskExecutor: Send + Sync {
     /// Execute a task
     async fn execute_task(&self, task_path: &str, input: Value) -> Result<Value, String>;
-    
+
     /// Execute a task with progress streaming support
     async fn execute_task_with_progress(
-        &self, 
-        task_path: &str, 
+        &self,
+        task_path: &str,
         input: Value,
         progress_manager: Option<Arc<super::progress::ProgressNotificationManager>>,
         connection: Option<Arc<dyn crate::transport::connection::TransportConnection>>,
         filter: Option<super::progress::ProgressFilter>,
     ) -> Result<(String, Value), String>;
-    
+
     /// List available tasks
     async fn list_tasks(&self, filter: Option<&str>) -> Result<Vec<McpTaskInfo>, String>;
-    
+
     /// Get execution logs
-    async fn get_execution_logs(&self, execution_id: &str, level: &str, limit: usize) -> Result<String, String>;
-    
+    async fn get_execution_logs(
+        &self,
+        execution_id: &str,
+        level: &str,
+        limit: usize,
+    ) -> Result<String, String>;
+
     /// Get execution status
     async fn get_execution_status(&self, execution_id: &str) -> Result<McpExecutionStatus, String>;
 }
@@ -157,13 +162,13 @@ pub trait McpTaskExecutor: Send + Sync {
 pub struct RatchetToolRegistry {
     /// Available tools
     tools: HashMap<String, McpTool>,
-    
+
     /// Task executor for MCP operations
     task_executor: Option<Arc<dyn McpTaskExecutor>>,
-    
+
     /// Logger for structured logging
     logger: Option<Arc<dyn StructuredLogger>>,
-    
+
     /// Progress notification manager
     progress_manager: Arc<super::progress::ProgressNotificationManager>,
 }
@@ -177,13 +182,13 @@ impl RatchetToolRegistry {
             logger: None,
             progress_manager: Arc::new(super::progress::ProgressNotificationManager::new()),
         };
-        
+
         // Register built-in Ratchet tools
         registry.register_builtin_tools();
-        
+
         registry
     }
-    
+
     /// Register all built-in Ratchet tools
     fn register_builtin_tools(&mut self) {
         // Task execution tool
@@ -224,7 +229,7 @@ impl RatchetToolRegistry {
                                 "description": "Minimum progress change (0.0-1.0) to trigger notification"
                             },
                             "max_frequency_ms": {
-                                "type": "integer", 
+                                "type": "integer",
                                 "description": "Maximum notification frequency in milliseconds"
                             },
                             "step_filter": {
@@ -244,8 +249,9 @@ impl RatchetToolRegistry {
             }),
             "execution",
         );
-        self.tools.insert("ratchet.execute_task".to_string(), execute_task_tool);
-        
+        self.tools
+            .insert("ratchet.execute_task".to_string(), execute_task_tool);
+
         // Execution status tool
         let status_tool = McpTool::new(
             "ratchet.get_execution_status",
@@ -262,8 +268,9 @@ impl RatchetToolRegistry {
             }),
             "monitoring",
         );
-        self.tools.insert("ratchet.get_execution_status".to_string(), status_tool);
-        
+        self.tools
+            .insert("ratchet.get_execution_status".to_string(), status_tool);
+
         // Logs retrieval tool
         let logs_tool = McpTool::new(
             "ratchet.get_execution_logs",
@@ -296,8 +303,9 @@ impl RatchetToolRegistry {
             }),
             "monitoring",
         );
-        self.tools.insert("ratchet.get_execution_logs".to_string(), logs_tool);
-        
+        self.tools
+            .insert("ratchet.get_execution_logs".to_string(), logs_tool);
+
         // Trace retrieval tool
         let trace_tool = McpTool::new(
             "ratchet.get_execution_trace",
@@ -325,8 +333,9 @@ impl RatchetToolRegistry {
             }),
             "debugging",
         );
-        self.tools.insert("ratchet.get_execution_trace".to_string(), trace_tool);
-        
+        self.tools
+            .insert("ratchet.get_execution_trace".to_string(), trace_tool);
+
         // Task discovery tool
         let list_tasks_tool = McpTool::new(
             "ratchet.list_available_tasks",
@@ -351,8 +360,9 @@ impl RatchetToolRegistry {
             }),
             "discovery",
         );
-        self.tools.insert("ratchet.list_available_tasks".to_string(), list_tasks_tool);
-        
+        self.tools
+            .insert("ratchet.list_available_tasks".to_string(), list_tasks_tool);
+
         // Error analysis tool
         let analyze_error_tool = McpTool::new(
             "ratchet.analyze_execution_error",
@@ -379,8 +389,11 @@ impl RatchetToolRegistry {
             }),
             "debugging",
         );
-        self.tools.insert("ratchet.analyze_execution_error".to_string(), analyze_error_tool);
-        
+        self.tools.insert(
+            "ratchet.analyze_execution_error".to_string(),
+            analyze_error_tool,
+        );
+
         // Batch execution tool
         let batch_execute_tool = McpTool::new(
             "ratchet.batch_execute",
@@ -453,26 +466,27 @@ impl RatchetToolRegistry {
             }),
             "execution",
         );
-        self.tools.insert("ratchet.batch_execute".to_string(), batch_execute_tool);
+        self.tools
+            .insert("ratchet.batch_execute".to_string(), batch_execute_tool);
     }
-    
+
     /// Configure the registry with task executor
     pub fn with_task_executor(mut self, executor: Arc<dyn McpTaskExecutor>) -> Self {
         self.task_executor = Some(executor);
         self
     }
-    
+
     /// Configure with logger
     pub fn with_logger(mut self, logger: Arc<dyn StructuredLogger>) -> Self {
         self.logger = Some(logger);
         self
     }
-    
+
     /// Set the task executor (for mutable access)
     pub fn set_executor(&mut self, executor: Arc<dyn McpTaskExecutor>) {
         self.task_executor = Some(executor);
     }
-    
+
     /// Get the progress manager
     pub fn get_progress_manager(&self) -> Arc<super::progress::ProgressNotificationManager> {
         self.progress_manager.clone()
@@ -483,16 +497,16 @@ impl RatchetToolRegistry {
 impl ToolRegistry for RatchetToolRegistry {
     async fn list_tools(&self, context: &SecurityContext) -> McpResult<Vec<Tool>> {
         let mut accessible_tools = Vec::new();
-        
+
         for tool in self.tools.values() {
             if self.can_access_tool_internal(tool, context) {
                 accessible_tools.push(tool.tool.clone());
             }
         }
-        
+
         Ok(accessible_tools)
     }
-    
+
     async fn get_tool(&self, name: &str, context: &SecurityContext) -> McpResult<Option<McpTool>> {
         if let Some(tool) = self.tools.get(name) {
             if self.can_access_tool_internal(tool, context) {
@@ -506,47 +520,41 @@ impl ToolRegistry for RatchetToolRegistry {
             Ok(None)
         }
     }
-    
+
     async fn execute_tool(
         &self,
         name: &str,
         execution_context: ToolExecutionContext,
     ) -> McpResult<ToolsCallResult> {
         // Get the tool to verify it exists
-        let _tool = self.get_tool(name, &execution_context.security).await?
+        let _tool = self
+            .get_tool(name, &execution_context.security)
+            .await?
             .ok_or_else(|| McpError::ToolNotFound {
                 tool_name: name.to_string(),
             })?;
-        
+
         // Execute the tool based on its name
         match name {
-            "ratchet.execute_task" => {
-                self.execute_task_tool(execution_context).await
-            }
+            "ratchet.execute_task" => self.execute_task_tool(execution_context).await,
             "ratchet.get_execution_status" => {
                 self.get_execution_status_tool(execution_context).await
             }
-            "ratchet.get_execution_logs" => {
-                self.get_execution_logs_tool(execution_context).await
-            }
-            "ratchet.get_execution_trace" => {
-                self.get_execution_trace_tool(execution_context).await
-            }
+            "ratchet.get_execution_logs" => self.get_execution_logs_tool(execution_context).await,
+            "ratchet.get_execution_trace" => self.get_execution_trace_tool(execution_context).await,
             "ratchet.list_available_tasks" => {
                 self.list_available_tasks_tool(execution_context).await
             }
             "ratchet.analyze_execution_error" => {
                 self.analyze_execution_error_tool(execution_context).await
             }
-            "ratchet.batch_execute" => {
-                self.batch_execute_tool(execution_context).await
-            }
+            "ratchet.batch_execute" => self.batch_execute_tool(execution_context).await,
             _ => Err(McpError::ToolNotFound {
                 tool_name: name.to_string(),
             }),
         }
     }
-    
+
     async fn can_access_tool(&self, name: &str, context: &SecurityContext) -> bool {
         if let Some(tool) = self.tools.get(name) {
             self.can_access_tool_internal(tool, context)
@@ -563,7 +571,7 @@ impl RatchetToolRegistry {
         if tool.public {
             return true;
         }
-        
+
         // Check if tool requires authentication
         if tool.requires_auth {
             // For now, just check if the client is authenticated
@@ -573,7 +581,7 @@ impl RatchetToolRegistry {
             true
         }
     }
-    
+
     /// Execute the task execution tool
     async fn execute_task_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
         // Extract arguments
@@ -581,43 +589,47 @@ impl RatchetToolRegistry {
             method: "ratchet.execute_task".to_string(),
             details: "Missing arguments".to_string(),
         })?;
-        
+
         // Parse task ID and input
-        let task_id = args.get("task_id")
+        let task_id = args
+            .get("task_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
                 method: "ratchet.execute_task".to_string(),
                 details: "Missing or invalid task_id".to_string(),
             })?;
-            
-        let input = args.get("input")
-            .cloned()
-            .unwrap_or(serde_json::json!({}));
-            
-        let trace_enabled = args.get("trace")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-            
-        let stream_progress = args.get("stream_progress")
+
+        let input = args.get("input").cloned().unwrap_or(serde_json::json!({}));
+
+        let trace_enabled = args.get("trace").and_then(|v| v.as_bool()).unwrap_or(true);
+
+        let stream_progress = args
+            .get("stream_progress")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-            
+
         // Parse progress filter if provided
-        let progress_filter = args.get("progress_filter").map(|filter_json| super::progress::ProgressFilter {
-                min_progress_delta: filter_json.get("min_progress_delta")
-                    .and_then(|v| v.as_f64().map(|f| f as f32)),
-                max_frequency_ms: filter_json.get("max_frequency_ms")
-                    .and_then(|v| v.as_u64()),
-                step_filter: filter_json.get("step_filter")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter()
-                        .filter_map(|s| s.as_str().map(String::from))
-                        .collect()),
-                include_data: filter_json.get("include_data")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true),
-            });
-            
+        let progress_filter =
+            args.get("progress_filter")
+                .map(|filter_json| super::progress::ProgressFilter {
+                    min_progress_delta: filter_json
+                        .get("min_progress_delta")
+                        .and_then(|v| v.as_f64().map(|f| f as f32)),
+                    max_frequency_ms: filter_json.get("max_frequency_ms").and_then(|v| v.as_u64()),
+                    step_filter: filter_json
+                        .get("step_filter")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|s| s.as_str().map(String::from))
+                                .collect()
+                        }),
+                    include_data: filter_json
+                        .get("include_data")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
+                });
+
         // Check if executor is configured
         let executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
@@ -630,26 +642,34 @@ impl RatchetToolRegistry {
                     is_error: true,
                     metadata: {
                         let mut meta = HashMap::new();
-                        meta.insert("task_id".to_string(), serde_json::Value::String(task_id.to_string()));
-                        meta.insert("error_type".to_string(), serde_json::Value::String("configuration_error".to_string()));
+                        meta.insert(
+                            "task_id".to_string(),
+                            serde_json::Value::String(task_id.to_string()),
+                        );
+                        meta.insert(
+                            "error_type".to_string(),
+                            serde_json::Value::String("configuration_error".to_string()),
+                        );
                         meta
                     },
                 });
             }
         };
-        
+
         // Execute the task with or without progress streaming
-        
-        
+
         if stream_progress {
             // Use progress streaming
-            match executor.execute_task_with_progress(
-                task_id, 
-                input, 
-                Some(self.progress_manager.clone()),
-                None, // TODO: Get connection from context
-                progress_filter,
-            ).await {
+            match executor
+                .execute_task_with_progress(
+                    task_id,
+                    input,
+                    Some(self.progress_manager.clone()),
+                    None, // TODO: Get connection from context
+                    progress_filter,
+                )
+                .await
+            {
                 Ok((execution_id, output)) => {
                     // Success response with execution ID for progress tracking
                     Ok(ToolsCallResult {
@@ -658,16 +678,26 @@ impl RatchetToolRegistry {
                                 "execution_id": execution_id,
                                 "output": output,
                                 "streaming": true
-                            })).unwrap_or_else(|_| output.to_string()),
+                            }))
+                            .unwrap_or_else(|_| output.to_string()),
                         }],
                         is_error: false,
                         metadata: {
                             let mut meta = HashMap::new();
-                            meta.insert("task_id".to_string(), serde_json::Value::String(task_id.to_string()));
-                            meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id));
+                            meta.insert(
+                                "task_id".to_string(),
+                                serde_json::Value::String(task_id.to_string()),
+                            );
+                            meta.insert(
+                                "execution_id".to_string(),
+                                serde_json::Value::String(execution_id),
+                            );
                             meta.insert("streaming".to_string(), serde_json::Value::Bool(true));
                             if trace_enabled {
-                                meta.insert("trace_enabled".to_string(), serde_json::Value::Bool(true));
+                                meta.insert(
+                                    "trace_enabled".to_string(),
+                                    serde_json::Value::Bool(true),
+                                );
                             }
                             meta
                         },
@@ -682,8 +712,14 @@ impl RatchetToolRegistry {
                         is_error: true,
                         metadata: {
                             let mut meta = HashMap::new();
-                            meta.insert("task_id".to_string(), serde_json::Value::String(task_id.to_string()));
-                            meta.insert("error_type".to_string(), serde_json::Value::String("execution_error".to_string()));
+                            meta.insert(
+                                "task_id".to_string(),
+                                serde_json::Value::String(task_id.to_string()),
+                            );
+                            meta.insert(
+                                "error_type".to_string(),
+                                serde_json::Value::String("execution_error".to_string()),
+                            );
                             meta.insert("streaming".to_string(), serde_json::Value::Bool(true));
                             meta
                         },
@@ -703,10 +739,16 @@ impl RatchetToolRegistry {
                         is_error: false,
                         metadata: {
                             let mut meta = HashMap::new();
-                            meta.insert("task_id".to_string(), serde_json::Value::String(task_id.to_string()));
+                            meta.insert(
+                                "task_id".to_string(),
+                                serde_json::Value::String(task_id.to_string()),
+                            );
                             meta.insert("streaming".to_string(), serde_json::Value::Bool(false));
                             if trace_enabled {
-                                meta.insert("trace_enabled".to_string(), serde_json::Value::Bool(true));
+                                meta.insert(
+                                    "trace_enabled".to_string(),
+                                    serde_json::Value::Bool(true),
+                                );
                             }
                             meta
                         },
@@ -721,8 +763,14 @@ impl RatchetToolRegistry {
                         is_error: true,
                         metadata: {
                             let mut meta = HashMap::new();
-                            meta.insert("task_id".to_string(), serde_json::Value::String(task_id.to_string()));
-                            meta.insert("error_type".to_string(), serde_json::Value::String("execution_error".to_string()));
+                            meta.insert(
+                                "task_id".to_string(),
+                                serde_json::Value::String(task_id.to_string()),
+                            );
+                            meta.insert(
+                                "error_type".to_string(),
+                                serde_json::Value::String("execution_error".to_string()),
+                            );
                             meta.insert("streaming".to_string(), serde_json::Value::Bool(false));
                             meta
                         },
@@ -731,22 +779,26 @@ impl RatchetToolRegistry {
             }
         }
     }
-    
+
     /// Execute the execution status tool
-    async fn get_execution_status_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
+    async fn get_execution_status_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
             method: "ratchet.get_execution_status".to_string(),
             details: "Missing arguments".to_string(),
         })?;
-        
+
         // Parse execution ID
-        let execution_id = args.get("execution_id")
+        let execution_id = args
+            .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
                 method: "ratchet.get_execution_status".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
-            
+
         // Check if executor is configured (which provides access to repositories)
         let executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
@@ -760,69 +812,81 @@ impl RatchetToolRegistry {
                 });
             }
         };
-        
+
         // Get real execution status from the repository
         match executor.get_execution_status(execution_id).await {
-            Ok(status) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: serde_json::to_string_pretty(&status)
-                            .unwrap_or_else(|_| "Failed to serialize execution status".to_string()),
-                    }],
-                    is_error: false,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("status".to_string(), serde_json::Value::String(status.status.clone()));
-                        meta.insert("task_id".to_string(), serde_json::Value::Number(serde_json::Number::from(status.task_id)));
-                        meta
-                    },
-                })
-            }
-            Err(e) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: format!("Failed to get execution status: {}", e),
-                    }],
-                    is_error: true,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("error_type".to_string(), serde_json::Value::String("status_retrieval_error".to_string()));
-                        meta
-                    },
-                })
-            }
+            Ok(status) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&status)
+                        .unwrap_or_else(|_| "Failed to serialize execution status".to_string()),
+                }],
+                is_error: false,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "status".to_string(),
+                        serde_json::Value::String(status.status.clone()),
+                    );
+                    meta.insert(
+                        "task_id".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(status.task_id)),
+                    );
+                    meta
+                },
+            }),
+            Err(e) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: format!("Failed to get execution status: {}", e),
+                }],
+                is_error: true,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "error_type".to_string(),
+                        serde_json::Value::String("status_retrieval_error".to_string()),
+                    );
+                    meta
+                },
+            }),
         }
     }
-    
+
     /// Execute the logs retrieval tool
-    async fn get_execution_logs_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
+    async fn get_execution_logs_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
             method: "ratchet.get_execution_logs".to_string(),
             details: "Missing arguments".to_string(),
         })?;
-        
+
         // Parse execution ID
-        let execution_id = args.get("execution_id")
+        let execution_id = args
+            .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
                 method: "ratchet.get_execution_logs".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
-            
-        let level = args.get("level")
-            .and_then(|v| v.as_str())
-            .unwrap_or("info");
-            
-        let limit = args.get("limit")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(100) as usize;
-            
-        let format = args.get("format")
+
+        let level = args.get("level").and_then(|v| v.as_str()).unwrap_or("info");
+
+        let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(100) as usize;
+
+        let format = args
+            .get("format")
             .and_then(|v| v.as_str())
             .unwrap_or("json");
-        
+
         // Check if executor is configured
         let executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
@@ -836,65 +900,86 @@ impl RatchetToolRegistry {
                 });
             }
         };
-        
+
         // Use the improved logs retrieval from adapter
-        match executor.get_execution_logs(execution_id, level, limit).await {
-            Ok(logs_output) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: logs_output,
-                    }],
-                    is_error: false,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("level".to_string(), serde_json::Value::String(level.to_string()));
-                        meta.insert("limit".to_string(), serde_json::Value::Number(serde_json::Number::from(limit)));
-                        meta.insert("format".to_string(), serde_json::Value::String(format.to_string()));
-                        meta
-                    },
-                })
-            }
-            Err(e) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: format!("Failed to retrieve logs: {}", e),
-                    }],
-                    is_error: true,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("error_type".to_string(), serde_json::Value::String("logs_retrieval_error".to_string()));
-                        meta
-                    },
-                })
-            }
+        match executor
+            .get_execution_logs(execution_id, level, limit)
+            .await
+        {
+            Ok(logs_output) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text { text: logs_output }],
+                is_error: false,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "level".to_string(),
+                        serde_json::Value::String(level.to_string()),
+                    );
+                    meta.insert(
+                        "limit".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(limit)),
+                    );
+                    meta.insert(
+                        "format".to_string(),
+                        serde_json::Value::String(format.to_string()),
+                    );
+                    meta
+                },
+            }),
+            Err(e) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: format!("Failed to retrieve logs: {}", e),
+                }],
+                is_error: true,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "error_type".to_string(),
+                        serde_json::Value::String("logs_retrieval_error".to_string()),
+                    );
+                    meta
+                },
+            }),
         }
     }
-    
+
     /// Execute the trace retrieval tool
-    async fn get_execution_trace_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
+    async fn get_execution_trace_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
             method: "ratchet.get_execution_trace".to_string(),
             details: "Missing arguments".to_string(),
         })?;
-        
+
         // Parse execution ID
-        let execution_id = args.get("execution_id")
+        let execution_id = args
+            .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
                 method: "ratchet.get_execution_trace".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
-            
-        let include_http_calls = args.get("include_http_calls")
+
+        let include_http_calls = args
+            .get("include_http_calls")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
-            
-        let format = args.get("format")
+
+        let format = args
+            .get("format")
             .and_then(|v| v.as_str())
             .unwrap_or("json");
-        
+
         // Check if executor is configured
         let executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
@@ -908,61 +993,81 @@ impl RatchetToolRegistry {
                 });
             }
         };
-        
+
         // Try to get the execution from the adapter
-        match self.get_execution_trace_data(executor, execution_id, include_http_calls).await {
-            Ok(trace_data) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: if format == "flamegraph" {
-                            "Flamegraph format not yet supported - returning JSON trace data".to_string()
-                        } else {
-                            serde_json::to_string_pretty(&trace_data)
-                                .unwrap_or_else(|_| trace_data.to_string())
-                        },
-                    }],
-                    is_error: false,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("format".to_string(), serde_json::Value::String(format.to_string()));
-                        meta.insert("include_http_calls".to_string(), serde_json::Value::Bool(include_http_calls));
-                        meta.insert("trace_type".to_string(), serde_json::Value::String("detailed".to_string()));
-                        meta
+        match self
+            .get_execution_trace_data(executor, execution_id, include_http_calls)
+            .await
+        {
+            Ok(trace_data) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: if format == "flamegraph" {
+                        "Flamegraph format not yet supported - returning JSON trace data"
+                            .to_string()
+                    } else {
+                        serde_json::to_string_pretty(&trace_data)
+                            .unwrap_or_else(|_| trace_data.to_string())
                     },
-                })
-            }
-            Err(e) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: format!("Failed to get execution trace: {}", e),
-                    }],
-                    is_error: true,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("error_type".to_string(), serde_json::Value::String("trace_retrieval_error".to_string()));
-                        meta
-                    },
-                })
-            }
+                }],
+                is_error: false,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "format".to_string(),
+                        serde_json::Value::String(format.to_string()),
+                    );
+                    meta.insert(
+                        "include_http_calls".to_string(),
+                        serde_json::Value::Bool(include_http_calls),
+                    );
+                    meta.insert(
+                        "trace_type".to_string(),
+                        serde_json::Value::String("detailed".to_string()),
+                    );
+                    meta
+                },
+            }),
+            Err(e) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: format!("Failed to get execution trace: {}", e),
+                }],
+                is_error: true,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "error_type".to_string(),
+                        serde_json::Value::String("trace_retrieval_error".to_string()),
+                    );
+                    meta
+                },
+            }),
         }
     }
-    
+
     /// Execute the task listing tool
-    async fn list_available_tasks_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
+    async fn list_available_tasks_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.unwrap_or(serde_json::json!({}));
-        
-        let filter = args.get("filter")
-            .and_then(|v| v.as_str());
-            
-        let include_schemas = args.get("include_schemas")
+
+        let filter = args.get("filter").and_then(|v| v.as_str());
+
+        let include_schemas = args
+            .get("include_schemas")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-            
-        let category = args.get("category")
-            .and_then(|v| v.as_str());
-        
+
+        let category = args.get("category").and_then(|v| v.as_str());
+
         // Check if executor is configured
         let executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
@@ -977,12 +1082,12 @@ impl RatchetToolRegistry {
                 });
             }
         };
-        
+
         // Query tasks
         match executor.list_tasks(filter).await {
             Ok(tasks) => {
                 let mut task_list = Vec::new();
-                
+
                 for task in tasks {
                     // Apply category filter if provided
                     if let Some(cat) = category {
@@ -990,7 +1095,7 @@ impl RatchetToolRegistry {
                             continue;
                         }
                     }
-                    
+
                     let mut task_info = serde_json::json!({
                         "id": task.id,
                         "name": task.name,
@@ -999,7 +1104,7 @@ impl RatchetToolRegistry {
                         "tags": task.tags,
                         "enabled": task.enabled,
                     });
-                    
+
                     if include_schemas {
                         if let Some(input_schema) = &task.input_schema {
                             task_info["input_schema"] = input_schema.clone();
@@ -1008,10 +1113,10 @@ impl RatchetToolRegistry {
                             task_info["output_schema"] = output_schema.clone();
                         }
                     }
-                    
+
                     task_list.push(task_info);
                 }
-                
+
                 Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
                         text: serde_json::to_string_pretty(&task_list)
@@ -1020,49 +1125,59 @@ impl RatchetToolRegistry {
                     is_error: false,
                     metadata: {
                         let mut meta = HashMap::new();
-                        meta.insert("task_count".to_string(), serde_json::Value::Number(serde_json::Number::from(task_list.len())));
+                        meta.insert(
+                            "task_count".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(task_list.len())),
+                        );
                         if let Some(f) = filter {
-                            meta.insert("filter".to_string(), serde_json::Value::String(f.to_string()));
+                            meta.insert(
+                                "filter".to_string(),
+                                serde_json::Value::String(f.to_string()),
+                            );
                         }
                         meta
                     },
                 })
             }
-            Err(e) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: format!("Failed to list tasks: {}", e),
-                    }],
-                    is_error: true,
-                    metadata: HashMap::new(),
-                })
-            }
+            Err(e) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: format!("Failed to list tasks: {}", e),
+                }],
+                is_error: true,
+                metadata: HashMap::new(),
+            }),
         }
     }
-    
+
     /// Execute the error analysis tool
-    async fn analyze_execution_error_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
+    async fn analyze_execution_error_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
             method: "ratchet.analyze_execution_error".to_string(),
             details: "Missing arguments".to_string(),
         })?;
-        
+
         // Parse execution ID
-        let execution_id = args.get("execution_id")
+        let execution_id = args
+            .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
                 method: "ratchet.analyze_execution_error".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
-            
-        let include_suggestions = args.get("include_suggestions")
+
+        let include_suggestions = args
+            .get("include_suggestions")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
-            
-        let include_context = args.get("include_context")
+
+        let include_context = args
+            .get("include_context")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
-        
+
         // Check if executor is configured
         let executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
@@ -1076,43 +1191,60 @@ impl RatchetToolRegistry {
                 });
             }
         };
-        
+
         // Perform detailed error analysis
-        match self.perform_error_analysis(executor, execution_id, include_suggestions, include_context).await {
-            Ok(error_analysis) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: serde_json::to_string_pretty(&error_analysis)
-                            .unwrap_or_else(|_| error_analysis.to_string()),
-                    }],
-                    is_error: false,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("include_suggestions".to_string(), serde_json::Value::Bool(include_suggestions));
-                        meta.insert("include_context".to_string(), serde_json::Value::Bool(include_context));
-                        meta.insert("analysis_type".to_string(), serde_json::Value::String("detailed".to_string()));
-                        meta
-                    },
-                })
-            }
-            Err(e) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: format!("Failed to analyze execution error: {}", e),
-                    }],
-                    is_error: true,
-                    metadata: {
-                        let mut meta = HashMap::new();
-                        meta.insert("execution_id".to_string(), serde_json::Value::String(execution_id.to_string()));
-                        meta.insert("error_type".to_string(), serde_json::Value::String("analysis_error".to_string()));
-                        meta
-                    },
-                })
-            }
+        match self
+            .perform_error_analysis(executor, execution_id, include_suggestions, include_context)
+            .await
+        {
+            Ok(error_analysis) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&error_analysis)
+                        .unwrap_or_else(|_| error_analysis.to_string()),
+                }],
+                is_error: false,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "include_suggestions".to_string(),
+                        serde_json::Value::Bool(include_suggestions),
+                    );
+                    meta.insert(
+                        "include_context".to_string(),
+                        serde_json::Value::Bool(include_context),
+                    );
+                    meta.insert(
+                        "analysis_type".to_string(),
+                        serde_json::Value::String("detailed".to_string()),
+                    );
+                    meta
+                },
+            }),
+            Err(e) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: format!("Failed to analyze execution error: {}", e),
+                }],
+                is_error: true,
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert(
+                        "execution_id".to_string(),
+                        serde_json::Value::String(execution_id.to_string()),
+                    );
+                    meta.insert(
+                        "error_type".to_string(),
+                        serde_json::Value::String("analysis_error".to_string()),
+                    );
+                    meta
+                },
+            }),
         }
     }
-    
+
     /// Helper method to perform detailed error analysis
     async fn perform_error_analysis(
         &self,
@@ -1123,7 +1255,7 @@ impl RatchetToolRegistry {
     ) -> Result<serde_json::Value, String> {
         // Get execution status to understand the failure
         let execution_status = executor.get_execution_status(execution_id).await?;
-        
+
         // Only analyze failed executions
         if execution_status.status != "failed" {
             return Ok(serde_json::json!({
@@ -1138,16 +1270,18 @@ impl RatchetToolRegistry {
                 }
             }));
         }
-        
+
         // Extract error information
-        let error_message = execution_status.error_message.unwrap_or_else(|| "Unknown error".to_string());
+        let error_message = execution_status
+            .error_message
+            .unwrap_or_else(|| "Unknown error".to_string());
         let error_details = execution_status.error_details;
-        
+
         // Analyze error patterns
         let (error_type, severity, category) = Self::classify_error(&error_message, &error_details);
         let root_cause = Self::determine_root_cause(&error_message, &error_details);
         let impact = Self::assess_error_impact(&error_type, &severity);
-        
+
         // Build context if requested
         let context = if include_context {
             Some(serde_json::json!({
@@ -1162,20 +1296,20 @@ impl RatchetToolRegistry {
         } else {
             None
         };
-        
+
         // Generate suggestions if requested
         let suggestions = if include_suggestions {
             Self::generate_error_suggestions(&error_type, &error_message, &error_details)
         } else {
             Vec::new()
         };
-        
+
         // Try to get related logs for additional context
         let log_context = match executor.get_execution_logs(execution_id, "error", 10).await {
             Ok(logs) => Some(logs),
             Err(_) => None,
         };
-        
+
         Ok(serde_json::json!({
             "execution_id": execution_id,
             "analysis": {
@@ -1193,7 +1327,7 @@ impl RatchetToolRegistry {
             "analysis_timestamp": chrono::Utc::now().to_rfc3339()
         }))
     }
-    
+
     /// Helper method to get execution trace data
     async fn get_execution_trace_data(
         &self,
@@ -1203,28 +1337,29 @@ impl RatchetToolRegistry {
     ) -> Result<serde_json::Value, String> {
         // Get basic execution status
         let execution_status = executor.get_execution_status(execution_id).await?;
-        
+
         // Calculate timing information
         let timing = Self::calculate_execution_timing(&execution_status);
-        
+
         // Get logs to extract trace events
-        let events = match executor.get_execution_logs(execution_id, "trace", 1000).await {
-            Ok(logs_str) => {
-                Self::extract_trace_events_from_logs(&logs_str)
-            }
+        let events = match executor
+            .get_execution_logs(execution_id, "trace", 1000)
+            .await
+        {
+            Ok(logs_str) => Self::extract_trace_events_from_logs(&logs_str),
             Err(_) => Vec::new(),
         };
-        
+
         // Extract HTTP calls if requested and available
         let http_calls = if include_http_calls {
             Self::extract_http_calls(&execution_status)
         } else {
             serde_json::Value::Null
         };
-        
+
         // Generate spans from events
         let spans = Self::generate_spans_from_events(&events);
-        
+
         Ok(serde_json::json!({
             "execution_id": execution_id,
             "status": execution_status.status,
@@ -1245,45 +1380,95 @@ impl RatchetToolRegistry {
             "trace_timestamp": chrono::Utc::now().to_rfc3339()
         }))
     }
-    
+
     /// Classify error type and severity based on error message and details
-    fn classify_error(error_message: &str, error_details: &Option<serde_json::Value>) -> (String, String, String) {
+    fn classify_error(
+        error_message: &str,
+        error_details: &Option<serde_json::Value>,
+    ) -> (String, String, String) {
         let message_lower = error_message.to_lowercase();
-        
+
         // Check for common error patterns
         if message_lower.contains("timeout") || message_lower.contains("timed out") {
-            ("timeout_error".to_string(), "medium".to_string(), "transient".to_string())
+            (
+                "timeout_error".to_string(),
+                "medium".to_string(),
+                "transient".to_string(),
+            )
         } else if message_lower.contains("network") || message_lower.contains("connection") {
-            ("network_error".to_string(), "medium".to_string(), "transient".to_string())
+            (
+                "network_error".to_string(),
+                "medium".to_string(),
+                "transient".to_string(),
+            )
         } else if message_lower.contains("permission") || message_lower.contains("unauthorized") {
-            ("permission_error".to_string(), "high".to_string(), "security".to_string())
+            (
+                "permission_error".to_string(),
+                "high".to_string(),
+                "security".to_string(),
+            )
         } else if message_lower.contains("not found") || message_lower.contains("404") {
-            ("not_found_error".to_string(), "low".to_string(), "client".to_string())
+            (
+                "not_found_error".to_string(),
+                "low".to_string(),
+                "client".to_string(),
+            )
         } else if message_lower.contains("validation") || message_lower.contains("invalid") {
-            ("validation_error".to_string(), "medium".to_string(), "input".to_string())
+            (
+                "validation_error".to_string(),
+                "medium".to_string(),
+                "input".to_string(),
+            )
         } else if message_lower.contains("out of memory") || message_lower.contains("oom") {
-            ("resource_error".to_string(), "critical".to_string(), "system".to_string())
+            (
+                "resource_error".to_string(),
+                "critical".to_string(),
+                "system".to_string(),
+            )
         } else if message_lower.contains("database") || message_lower.contains("sql") {
-            ("database_error".to_string(), "high".to_string(), "infrastructure".to_string())
+            (
+                "database_error".to_string(),
+                "high".to_string(),
+                "infrastructure".to_string(),
+            )
         } else if message_lower.contains("javascript") || message_lower.contains("js") {
-            ("javascript_error".to_string(), "medium".to_string(), "runtime".to_string())
+            (
+                "javascript_error".to_string(),
+                "medium".to_string(),
+                "runtime".to_string(),
+            )
         } else if message_lower.contains("syntax") {
-            ("syntax_error".to_string(), "high".to_string(), "code".to_string())
+            (
+                "syntax_error".to_string(),
+                "high".to_string(),
+                "code".to_string(),
+            )
         } else {
             // Try to extract more specific information from error details
             if let Some(details) = error_details {
                 if let Some(error_code) = details.get("error_code").and_then(|v| v.as_str()) {
-                    return (format!("{}_{}", error_code.to_lowercase(), "error"), "medium".to_string(), "application".to_string());
+                    return (
+                        format!("{}_{}", error_code.to_lowercase(), "error"),
+                        "medium".to_string(),
+                        "application".to_string(),
+                    );
                 }
             }
-            ("unknown_error".to_string(), "medium".to_string(), "unknown".to_string())
+            (
+                "unknown_error".to_string(),
+                "medium".to_string(),
+                "unknown".to_string(),
+            )
         }
     }
-    
+
     /// Determine root cause based on error analysis
-    fn determine_root_cause(error_message: &str, _error_details: &Option<serde_json::Value>) -> String {
+    fn determine_root_cause(
+        error_message: &str,
+        _error_details: &Option<serde_json::Value>,
+    ) -> String {
         let message_lower = error_message.to_lowercase();
-        
+
         if message_lower.contains("timeout") {
             "Operation exceeded maximum allowed execution time".to_string()
         } else if message_lower.contains("network") {
@@ -1302,29 +1487,45 @@ impl RatchetToolRegistry {
             format!("Application error: {}", error_message)
         }
     }
-    
+
     /// Assess the impact of the error
     fn assess_error_impact(error_type: &str, severity: &str) -> String {
         match (error_type, severity) {
-            (_, "critical") => "System stability affected, immediate intervention required".to_string(),
-            ("permission_error", "high") => "Security breach potential, access controls may be compromised".to_string(),
-            ("database_error", "high") => "Data integrity concerns, service degradation likely".to_string(),
-            ("resource_error", _) => "System performance degraded, may affect other operations".to_string(),
+            (_, "critical") => {
+                "System stability affected, immediate intervention required".to_string()
+            }
+            ("permission_error", "high") => {
+                "Security breach potential, access controls may be compromised".to_string()
+            }
+            ("database_error", "high") => {
+                "Data integrity concerns, service degradation likely".to_string()
+            }
+            ("resource_error", _) => {
+                "System performance degraded, may affect other operations".to_string()
+            }
             ("timeout_error", _) => "Operation incomplete, data consistency uncertain".to_string(),
-            ("validation_error", _) => "Invalid data processed, output reliability compromised".to_string(),
+            ("validation_error", _) => {
+                "Invalid data processed, output reliability compromised".to_string()
+            }
             _ => "Isolated failure, limited impact on overall system".to_string(),
         }
     }
-    
+
     /// Generate actionable suggestions based on error type
-    fn generate_error_suggestions(error_type: &str, error_message: &str, _error_details: &Option<serde_json::Value>) -> Vec<String> {
+    fn generate_error_suggestions(
+        error_type: &str,
+        error_message: &str,
+        _error_details: &Option<serde_json::Value>,
+    ) -> Vec<String> {
         let mut suggestions = Vec::new();
-        
+
         match error_type {
             "timeout_error" => {
                 suggestions.push("Increase timeout configuration for the task".to_string());
                 suggestions.push("Check if external services are responding slowly".to_string());
-                suggestions.push("Consider breaking down large operations into smaller chunks".to_string());
+                suggestions.push(
+                    "Consider breaking down large operations into smaller chunks".to_string(),
+                );
                 suggestions.push("Review task input size and complexity".to_string());
             }
             "network_error" => {
@@ -1370,25 +1571,29 @@ impl RatchetToolRegistry {
                 suggestions.push("Test with minimal input to isolate the issue".to_string());
             }
         }
-        
+
         // Add general suggestions
         if error_message.contains("Error:") || error_message.contains("Exception:") {
             suggestions.push("Review the complete stack trace for error origin".to_string());
         }
-        
+
         suggestions
     }
-    
+
     /// Generate next steps based on error analysis
     fn generate_next_steps(error_type: &str, severity: &str) -> Vec<String> {
         let mut steps = Vec::new();
-        
+
         // Immediate actions based on severity
         match severity {
             "critical" => {
-                steps.push("Immediately stop similar executions to prevent further issues".to_string());
+                steps.push(
+                    "Immediately stop similar executions to prevent further issues".to_string(),
+                );
                 steps.push("Alert system administrators and on-call team".to_string());
-                steps.push("Implement emergency rollback if recent changes are suspected".to_string());
+                steps.push(
+                    "Implement emergency rollback if recent changes are suspected".to_string(),
+                );
             }
             "high" => {
                 steps.push("Investigate and resolve within the next hour".to_string());
@@ -1398,11 +1603,13 @@ impl RatchetToolRegistry {
                 steps.push("Schedule investigation within normal business hours".to_string());
             }
         }
-        
+
         // Specific actions based on error type
         match error_type {
             "timeout_error" => {
-                steps.push("Review task performance metrics and optimization opportunities".to_string());
+                steps.push(
+                    "Review task performance metrics and optimization opportunities".to_string(),
+                );
             }
             "permission_error" => {
                 steps.push("Coordinate with security team to review access policies".to_string());
@@ -1412,36 +1619,38 @@ impl RatchetToolRegistry {
             }
             _ => {}
         }
-        
+
         // General next steps
         steps.push("Document the error and resolution for future reference".to_string());
         steps.push("Consider adding monitoring alerts for this error pattern".to_string());
-        
+
         steps
     }
-    
+
     /// Calculate execution timing information
     fn calculate_execution_timing(execution_status: &McpExecutionStatus) -> serde_json::Value {
         let queued_time = chrono::DateTime::parse_from_rfc3339(&execution_status.queued_at)
             .map(|dt| dt.with_timezone(&chrono::Utc))
             .ok();
-        
-        let start_time = execution_status.started_at
+
+        let start_time = execution_status
+            .started_at
             .as_ref()
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&chrono::Utc));
-        
-        let _complete_time = execution_status.completed_at
+
+        let _complete_time = execution_status
+            .completed_at
             .as_ref()
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&chrono::Utc));
-        
+
         let queue_duration = if let (Some(queued), Some(started)) = (queued_time, start_time) {
             Some(started.signed_duration_since(queued).num_milliseconds())
         } else {
             None
         };
-        
+
         serde_json::json!({
             "total_duration_ms": execution_status.duration_ms,
             "queue_duration_ms": queue_duration,
@@ -1451,11 +1660,11 @@ impl RatchetToolRegistry {
             "is_complete": execution_status.completed_at.is_some()
         })
     }
-    
+
     /// Extract trace events from log output
     fn extract_trace_events_from_logs(logs_str: &str) -> Vec<serde_json::Value> {
         let mut events = Vec::new();
-        
+
         // Try to parse logs as JSON and extract events
         if let Ok(logs_json) = serde_json::from_str::<serde_json::Value>(logs_str) {
             if let Some(logs_array) = logs_json.get("logs").and_then(|l| l.as_array()) {
@@ -1475,7 +1684,7 @@ impl RatchetToolRegistry {
                 }
             }
         }
-        
+
         // If no structured events found, create a summary event
         if events.is_empty() {
             events.push(serde_json::json!({
@@ -1486,10 +1695,10 @@ impl RatchetToolRegistry {
                 "raw_logs_available": !logs_str.is_empty()
             }));
         }
-        
+
         events
     }
-    
+
     /// Extract HTTP call information from execution status
     fn extract_http_calls(_execution_status: &McpExecutionStatus) -> serde_json::Value {
         // Note: This would integrate with the http_requests field from the execution entity
@@ -1502,38 +1711,42 @@ impl RatchetToolRegistry {
             "message": "HTTP call tracking not yet fully implemented"
         })
     }
-    
+
     /// Generate execution spans from trace events
     fn generate_spans_from_events(events: &[serde_json::Value]) -> Vec<serde_json::Value> {
         let mut spans = Vec::new();
-        
+
         // Group events by span_id to create spans
-        let mut span_groups: std::collections::HashMap<String, Vec<&serde_json::Value>> = std::collections::HashMap::new();
-        
+        let mut span_groups: std::collections::HashMap<String, Vec<&serde_json::Value>> =
+            std::collections::HashMap::new();
+
         for event in events {
             if let Some(span_id) = event.get("span_id").and_then(|s| s.as_str()) {
-                span_groups.entry(span_id.to_string()).or_default().push(event);
+                span_groups
+                    .entry(span_id.to_string())
+                    .or_default()
+                    .push(event);
             }
         }
-        
+
         // Create spans from grouped events
         for (span_id, span_events) in span_groups {
             let start_time = span_events
                 .iter()
                 .filter_map(|e| e.get("timestamp").and_then(|t| t.as_str()))
                 .min();
-            
+
             let end_time = span_events
                 .iter()
                 .filter_map(|e| e.get("timestamp").and_then(|t| t.as_str()))
                 .max();
-            
+
             let operation_name = span_events
                 .first()
                 .and_then(|e| e.get("fields").and_then(|f| f.get("operation")))
                 .and_then(|o| o.as_str())
                 .unwrap_or("unknown_operation");
-            
+
             spans.push(serde_json::json!({
                 "span_id": span_id,
                 "operation_name": operation_name,
@@ -1546,7 +1759,7 @@ impl RatchetToolRegistry {
                 }
             }));
         }
-        
+
         // If no spans found, create a default execution span
         if spans.is_empty() {
             spans.push(serde_json::json!({
@@ -1562,12 +1775,15 @@ impl RatchetToolRegistry {
                 }
             }));
         }
-        
+
         spans
     }
 
     /// Execute multiple tasks in a batch with support for dependencies and parallel execution
-    async fn batch_execute_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
+    async fn batch_execute_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
         #[derive(Deserialize)]
         struct BatchExecuteRequest {
             requests: Vec<BatchTaskRequest>,
@@ -1597,20 +1813,23 @@ impl RatchetToolRegistry {
             details: "Missing arguments".to_string(),
         })?;
 
-        let request: BatchExecuteRequest = serde_json::from_value(arguments)
-            .map_err(|e| McpError::InvalidParams {
+        let request: BatchExecuteRequest =
+            serde_json::from_value(arguments).map_err(|e| McpError::InvalidParams {
                 method: "ratchet.batch_execute".to_string(),
                 details: format!("Invalid batch execute request: {}", e),
             })?;
 
         // Get task executor
-        let _executor = self.task_executor.as_ref()
+        let _executor = self
+            .task_executor
+            .as_ref()
             .ok_or_else(|| McpError::Internal {
                 message: "Task executor not configured".to_string(),
             })?;
 
         // Convert to MCP batch format
-        let mcp_batch_requests: Vec<crate::protocol::BatchRequest> = request.requests
+        let mcp_batch_requests: Vec<crate::protocol::BatchRequest> = request
+            .requests
             .into_iter()
             .map(|req| crate::protocol::BatchRequest {
                 id: req.id,
@@ -1647,19 +1866,21 @@ impl RatchetToolRegistry {
         };
 
         // Create a batch processor
-        use std::time::Duration;
         use super::batch::BatchProcessor;
-        
+        use std::time::Duration;
+
         let batch_processor = BatchProcessor::new(
-            100, // max_batch_size
+            100,                                // max_batch_size
             request.max_parallel.unwrap_or(10), // max_parallel
-            Duration::from_secs(300), // default_timeout
+            Duration::from_secs(300),           // default_timeout
             Arc::new(move |_request| {
                 // This is a placeholder - in practice, we'd need access to the handler
                 Box::pin(async move {
                     crate::protocol::JsonRpcResponse {
                         jsonrpc: "2.0".to_string(),
-                        result: Some(serde_json::json!({"error": "Not implemented in tool context"})),
+                        result: Some(
+                            serde_json::json!({"error": "Not implemented in tool context"}),
+                        ),
                         error: None,
                         id: None,
                     }
@@ -1669,28 +1890,27 @@ impl RatchetToolRegistry {
         );
 
         match batch_processor.process_batch(batch_params).await {
-            Ok(result) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: serde_json::to_string_pretty(&result)
-                            .unwrap_or_else(|_| "Failed to serialize batch result".to_string()),
-                    }],
-                    is_error: false,
-                    metadata: std::collections::HashMap::new(),
-                })
-            }
-            Err(e) => {
-                Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: format!("Batch execution failed: {}", e),
-                    }],
-                    is_error: true,
-                    metadata: std::collections::HashMap::from([
-                        ("error_type".to_string(), Value::String("batch_execution_error".to_string())),
-                        ("error_details".to_string(), Value::String(e.to_string())),
-                    ]),
-                })
-            }
+            Ok(result) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&result)
+                        .unwrap_or_else(|_| "Failed to serialize batch result".to_string()),
+                }],
+                is_error: false,
+                metadata: std::collections::HashMap::new(),
+            }),
+            Err(e) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: format!("Batch execution failed: {}", e),
+                }],
+                is_error: true,
+                metadata: std::collections::HashMap::from([
+                    (
+                        "error_type".to_string(),
+                        Value::String("batch_execution_error".to_string()),
+                    ),
+                    ("error_details".to_string(), Value::String(e.to_string())),
+                ]),
+            }),
         }
     }
 }
@@ -1700,7 +1920,6 @@ impl Default for RatchetToolRegistry {
         Self::new()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1715,7 +1934,7 @@ mod tests {
             authenticated_at: chrono::Utc::now(),
             session_id: "session-123".to_string(),
         };
-        
+
         SecurityContext::new(client, crate::security::SecurityConfig::default())
     }
 
@@ -1723,12 +1942,14 @@ mod tests {
     async fn test_tool_registry_creation() {
         let registry = RatchetToolRegistry::new();
         assert!(!registry.tools.is_empty());
-        
+
         // Check that built-in tools are registered
         assert!(registry.tools.contains_key("ratchet.execute_task"));
         assert!(registry.tools.contains_key("ratchet.get_execution_logs"));
         assert!(registry.tools.contains_key("ratchet.list_available_tasks"));
-        assert!(registry.tools.contains_key("ratchet.analyze_execution_error"));
+        assert!(registry
+            .tools
+            .contains_key("ratchet.analyze_execution_error"));
         assert!(registry.tools.contains_key("ratchet.get_execution_trace"));
         assert!(registry.tools.contains_key("ratchet.batch_execute"));
     }
@@ -1737,48 +1958,76 @@ mod tests {
     async fn test_list_tools() {
         let registry = RatchetToolRegistry::new();
         let context = create_test_context();
-        
+
         let tools = registry.list_tools(&context).await.unwrap();
         assert!(!tools.is_empty());
-        
+
         // Find the execute task tool
         let execute_tool = tools.iter().find(|t| t.name == "ratchet.execute_task");
         assert!(execute_tool.is_some());
-        assert_eq!(execute_tool.unwrap().description, "Execute a Ratchet task with given input and optional progress streaming");
-        
+        assert_eq!(
+            execute_tool.unwrap().description,
+            "Execute a Ratchet task with given input and optional progress streaming"
+        );
+
         // Find the debugging tools
-        let error_analysis_tool = tools.iter().find(|t| t.name == "ratchet.analyze_execution_error");
+        let error_analysis_tool = tools
+            .iter()
+            .find(|t| t.name == "ratchet.analyze_execution_error");
         assert!(error_analysis_tool.is_some());
-        assert_eq!(error_analysis_tool.unwrap().description, "Get detailed error analysis for failed execution");
-        
-        let trace_tool = tools.iter().find(|t| t.name == "ratchet.get_execution_trace");
+        assert_eq!(
+            error_analysis_tool.unwrap().description,
+            "Get detailed error analysis for failed execution"
+        );
+
+        let trace_tool = tools
+            .iter()
+            .find(|t| t.name == "ratchet.get_execution_trace");
         assert!(trace_tool.is_some());
-        assert_eq!(trace_tool.unwrap().description, "Get detailed execution trace with timing and context");
-        
+        assert_eq!(
+            trace_tool.unwrap().description,
+            "Get detailed execution trace with timing and context"
+        );
+
         // Find the batch execution tool
         let batch_tool = tools.iter().find(|t| t.name == "ratchet.batch_execute");
         assert!(batch_tool.is_some());
-        assert_eq!(batch_tool.unwrap().description, "Execute multiple tasks in parallel or sequence with dependency management");
+        assert_eq!(
+            batch_tool.unwrap().description,
+            "Execute multiple tasks in parallel or sequence with dependency management"
+        );
     }
 
     #[tokio::test]
     async fn test_get_tool() {
         let registry = RatchetToolRegistry::new();
         let context = create_test_context();
-        
-        let tool = registry.get_tool("ratchet.execute_task", &context).await.unwrap();
+
+        let tool = registry
+            .get_tool("ratchet.execute_task", &context)
+            .await
+            .unwrap();
         assert!(tool.is_some());
         assert_eq!(tool.unwrap().tool.name, "ratchet.execute_task");
-        
-        let nonexistent = registry.get_tool("nonexistent.tool", &context).await.unwrap();
+
+        let nonexistent = registry
+            .get_tool("nonexistent.tool", &context)
+            .await
+            .unwrap();
         assert!(nonexistent.is_none());
-        
+
         // Test debugging tools
-        let error_tool = registry.get_tool("ratchet.analyze_execution_error", &context).await.unwrap();
+        let error_tool = registry
+            .get_tool("ratchet.analyze_execution_error", &context)
+            .await
+            .unwrap();
         assert!(error_tool.is_some());
         assert_eq!(error_tool.unwrap().category, "debugging");
-        
-        let trace_tool = registry.get_tool("ratchet.get_execution_trace", &context).await.unwrap();
+
+        let trace_tool = registry
+            .get_tool("ratchet.get_execution_trace", &context)
+            .await
+            .unwrap();
         assert!(trace_tool.is_some());
         assert_eq!(trace_tool.unwrap().category, "debugging");
     }
@@ -1787,7 +2036,7 @@ mod tests {
     async fn test_tool_execution_without_executor() {
         let registry = RatchetToolRegistry::new();
         let context = create_test_context();
-        
+
         let execution_context = ToolExecutionContext {
             security: context,
             arguments: Some(serde_json::json!({
@@ -1796,15 +2045,17 @@ mod tests {
             })),
             request_id: Some("req-123".to_string()),
         };
-        
+
         // Without a configured executor, the tool should return an error result
-        let result = registry.execute_tool("ratchet.execute_task", execution_context).await;
+        let result = registry
+            .execute_tool("ratchet.execute_task", execution_context)
+            .await;
         assert!(result.is_ok());
-        
+
         let tool_result = result.unwrap();
         assert!(tool_result.is_error);
         assert!(!tool_result.content.is_empty());
-        
+
         // Check that the error message mentions the missing executor
         if let ToolContent::Text { text } = &tool_result.content[0] {
             assert!(text.contains("not configured"));
@@ -1819,12 +2070,12 @@ mod tests {
             serde_json::json!({"type": "object"}),
             "testing",
         );
-        
+
         assert_eq!(tool.tool.name, "test.tool");
         assert_eq!(tool.category, "testing");
         assert!(tool.requires_auth);
         assert!(!tool.public);
-        
+
         let public_tool = tool.public();
         assert!(!public_tool.requires_auth);
         assert!(public_tool.public);
@@ -1833,37 +2084,29 @@ mod tests {
     #[test]
     fn test_error_classification_patterns() {
         // Test timeout error classification
-        let (error_type, severity, category) = RatchetToolRegistry::classify_error(
-            "Operation timed out after 60 seconds",
-            &None,
-        );
+        let (error_type, severity, category) =
+            RatchetToolRegistry::classify_error("Operation timed out after 60 seconds", &None);
         assert_eq!(error_type, "timeout_error");
         assert_eq!(severity, "medium");
         assert_eq!(category, "transient");
 
         // Test permission error classification
-        let (error_type, severity, category) = RatchetToolRegistry::classify_error(
-            "Permission denied: unauthorized access",
-            &None,
-        );
+        let (error_type, severity, category) =
+            RatchetToolRegistry::classify_error("Permission denied: unauthorized access", &None);
         assert_eq!(error_type, "permission_error");
         assert_eq!(severity, "high");
         assert_eq!(category, "security");
 
         // Test validation error classification
-        let (error_type, severity, category) = RatchetToolRegistry::classify_error(
-            "Validation failed: invalid input format",
-            &None,
-        );
+        let (error_type, severity, category) =
+            RatchetToolRegistry::classify_error("Validation failed: invalid input format", &None);
         assert_eq!(error_type, "validation_error");
         assert_eq!(severity, "medium");
         assert_eq!(category, "input");
 
         // Test resource error classification
-        let (error_type, severity, category) = RatchetToolRegistry::classify_error(
-            "Out of memory: insufficient heap space",
-            &None,
-        );
+        let (error_type, severity, category) =
+            RatchetToolRegistry::classify_error("Out of memory: insufficient heap space", &None);
         assert_eq!(error_type, "resource_error");
         assert_eq!(severity, "critical");
         assert_eq!(category, "system");
@@ -1878,7 +2121,9 @@ mod tests {
             &None,
         );
         assert!(!suggestions.is_empty());
-        assert!(suggestions.iter().any(|s| s.contains("timeout configuration")));
+        assert!(suggestions
+            .iter()
+            .any(|s| s.contains("timeout configuration")));
         assert!(suggestions.iter().any(|s| s.contains("external services")));
 
         // Test network error suggestions
@@ -1887,7 +2132,9 @@ mod tests {
             "Connection refused",
             &None,
         );
-        assert!(suggestions.iter().any(|s| s.contains("network connectivity")));
+        assert!(suggestions
+            .iter()
+            .any(|s| s.contains("network connectivity")));
         assert!(suggestions.iter().any(|s| s.contains("retry logic")));
 
         // Test validation error suggestions
@@ -1906,7 +2153,9 @@ mod tests {
         let steps = RatchetToolRegistry::generate_next_steps("resource_error", "critical");
         assert!(!steps.is_empty());
         assert!(steps.iter().any(|s| s.contains("Immediately stop")));
-        assert!(steps.iter().any(|s| s.contains("Alert system administrators")));
+        assert!(steps
+            .iter()
+            .any(|s| s.contains("Alert system administrators")));
 
         // Test medium severity next steps
         let steps = RatchetToolRegistry::generate_next_steps("timeout_error", "medium");
@@ -1932,7 +2181,7 @@ mod tests {
         };
 
         let timing = RatchetToolRegistry::calculate_execution_timing(&mock_status);
-        
+
         assert_eq!(timing["total_duration_ms"], 10000);
         assert_eq!(timing["queue_duration_ms"], 5000); // 5 second queue time
         assert!(timing["was_queued"].as_bool().unwrap());

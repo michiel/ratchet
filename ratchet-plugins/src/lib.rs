@@ -7,7 +7,6 @@ pub mod examples;
 
 // Re-export common plugin types for convenience
 pub use ratchet_plugin::{
-    Plugin, PluginContext, PluginMetadata, PluginResult, PluginError,
-    Hook, TaskHook, ExecutionHook, HookPriority,
-    PluginManager, PluginRegistry, PluginType, PluginVersion,
+    ExecutionHook, Hook, HookPriority, Plugin, PluginContext, PluginError, PluginManager,
+    PluginMetadata, PluginRegistry, PluginResult, PluginType, PluginVersion, TaskHook,
 };

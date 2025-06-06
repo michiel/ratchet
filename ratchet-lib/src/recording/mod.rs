@@ -1,6 +1,6 @@
 pub mod session;
 
 pub use session::{
-    set_recording_dir, get_recording_dir, is_recording, finalize_recording,
-    record_input, record_output, record_http_request
+    finalize_recording, get_recording_dir, is_recording, record_http_request, record_input,
+    record_output, set_recording_dir,
 };

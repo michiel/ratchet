@@ -8,36 +8,36 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
-use crate::{McpError, McpResult};
-use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use super::{McpTransport, TransportHealth};
+use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
+use crate::{McpError, McpResult};
 
 /// Standard I/O transport for local MCP server processes
 pub struct StdioTransport {
     /// Command to execute
     command: String,
-    
+
     /// Command arguments
     args: Vec<String>,
-    
+
     /// Environment variables
     env: HashMap<String, String>,
-    
+
     /// Working directory
     cwd: Option<String>,
-    
+
     /// Child process handle
     child: Option<Child>,
-    
+
     /// Stdin writer
     stdin: Option<BufWriter<ChildStdin>>,
-    
+
     /// Stdout reader
     stdout: Option<BufReader<ChildStdout>>,
-    
+
     /// Transport health tracking
     health: Mutex<TransportHealth>,
-    
+
     /// Whether the transport is connected
     connected: bool,
 }
@@ -110,11 +110,12 @@ impl StdioTransport {
         })?;
 
         let mut line = String::new();
-        let bytes_read = stdout.read_line(&mut line).await.map_err(|e| {
-            McpError::Transport {
+        let bytes_read = stdout
+            .read_line(&mut line)
+            .await
+            .map_err(|e| McpError::Transport {
                 message: format!("Failed to read from stdout: {}", e),
-            }
-        })?;
+            })?;
 
         if bytes_read == 0 {
             return Err(McpError::ConnectionFailed {
@@ -139,22 +140,22 @@ impl StdioTransport {
             message: "Transport not connected".to_string(),
         })?;
 
-        stdin.write_all(line.as_bytes()).await.map_err(|e| {
-            McpError::Transport {
+        stdin
+            .write_all(line.as_bytes())
+            .await
+            .map_err(|e| McpError::Transport {
                 message: format!("Failed to write to stdin: {}", e),
-            }
-        })?;
+            })?;
 
-        stdin.write_all(b"\n").await.map_err(|e| {
-            McpError::Transport {
+        stdin
+            .write_all(b"\n")
+            .await
+            .map_err(|e| McpError::Transport {
                 message: format!("Failed to write newline to stdin: {}", e),
-            }
-        })?;
+            })?;
 
-        stdin.flush().await.map_err(|e| {
-            McpError::Transport {
-                message: format!("Failed to flush stdin: {}", e),
-            }
+        stdin.flush().await.map_err(|e| McpError::Transport {
+            message: format!("Failed to flush stdin: {}", e),
         })?;
 
         Ok(())
@@ -190,7 +191,10 @@ impl McpTransport for StdioTransport {
         health.metadata.insert(
             "args".to_string(),
             serde_json::Value::Array(
-                self.args.iter().map(|s| serde_json::Value::String(s.clone())).collect(),
+                self.args
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
             ),
         );
 
@@ -264,11 +268,10 @@ impl McpTransport for StdioTransport {
         };
 
         // Parse JSON response
-        let response: JsonRpcResponse = serde_json::from_str(&line).map_err(|e| {
-            McpError::Serialization {
+        let response: JsonRpcResponse =
+            serde_json::from_str(&line).map_err(|e| McpError::Serialization {
                 details: format!("Failed to parse response: {}", e),
-            }
-        })?;
+            })?;
 
         // Update health
         let latency = start_time.elapsed();
@@ -360,24 +363,14 @@ mod tests {
         );
         assert!(transport.is_ok());
 
-        let empty_command = StdioTransport::new(
-            "".to_string(),
-            vec![],
-            HashMap::new(),
-            None,
-        );
+        let empty_command = StdioTransport::new("".to_string(), vec![], HashMap::new(), None);
         assert!(empty_command.is_err());
     }
 
     #[tokio::test]
     async fn test_transport_health_tracking() {
-        let mut transport = StdioTransport::new(
-            "cat".to_string(),
-            vec![],
-            HashMap::new(),
-            None,
-        )
-        .unwrap();
+        let mut transport =
+            StdioTransport::new("cat".to_string(), vec![], HashMap::new(), None).unwrap();
 
         // Initially unhealthy
         let health = transport.health().await;
@@ -405,11 +398,8 @@ mod tests {
 
         assert!(transport.connect().await.is_ok());
 
-        let request = JsonRpcRequest::with_id(
-            "test_method",
-            Some(json!({"param": "value"})),
-            "test-id",
-        );
+        let request =
+            JsonRpcRequest::with_id("test_method", Some(json!({"param": "value"})), "test-id");
 
         // Send request
         assert!(transport.send(request.clone()).await.is_ok());
@@ -417,7 +407,7 @@ mod tests {
         // Cat will echo back the request JSON, which won't be a valid JsonRpcResponse
         // but might be parseable as JSON. Let's check what we actually get.
         let result = transport.receive().await;
-        
+
         // Clean up
         let _ = transport.close().await;
 

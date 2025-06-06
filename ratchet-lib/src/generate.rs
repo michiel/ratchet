@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde_json::{json, Value as JsonValue};
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 use tracing::{debug, info};
 use uuid::Uuid;
 
@@ -61,19 +61,27 @@ pub fn generate_task(config: TaskGenerationConfig) -> Result<GeneratedTaskInfo> 
 
     // Check if directory already exists
     if config.path.exists() {
-        return Err(anyhow::anyhow!("Directory already exists: {:?}", config.path));
+        return Err(anyhow::anyhow!(
+            "Directory already exists: {:?}",
+            config.path
+        ));
     }
 
     // Create the task directory
-    fs::create_dir_all(&config.path)
-        .context(format!("Failed to create task directory: {:?}", config.path))?;
+    fs::create_dir_all(&config.path).context(format!(
+        "Failed to create task directory: {:?}",
+        config.path
+    ))?;
 
     // Generate UUID for the task
     let task_uuid = Uuid::new_v4();
 
     // Use provided values or defaults
     let task_label = config.label.as_deref().unwrap_or("My Task");
-    let task_description = config.description.as_deref().unwrap_or("A task that performs a specific operation");
+    let task_description = config
+        .description
+        .as_deref()
+        .unwrap_or("A task that performs a specific operation");
     let task_version = config.version.as_deref().unwrap_or("1.0.0");
 
     info!("Creating task files with UUID: {}", task_uuid);
@@ -129,7 +137,12 @@ pub fn generate_task(config: TaskGenerationConfig) -> Result<GeneratedTaskInfo> 
 }
 
 /// Create metadata.json content
-fn create_metadata_json(uuid: Uuid, label: &str, description: &str, version: &str) -> Result<JsonValue> {
+fn create_metadata_json(
+    uuid: Uuid,
+    label: &str,
+    description: &str,
+    version: &str,
+) -> Result<JsonValue> {
     debug!("Creating metadata.json with UUID: {}", uuid);
     Ok(json!({
         "uuid": uuid,
@@ -204,7 +217,8 @@ fn create_main_js_content() -> String {
         throw new Error(`Task processing failed: ${error.message}`);
     }
 })
-"#.to_string()
+"#
+    .to_string()
 }
 
 /// Create sample test content
@@ -224,8 +238,7 @@ fn create_sample_test() -> Result<JsonValue> {
 fn write_json_file(path: &PathBuf, content: &JsonValue) -> Result<()> {
     debug!("Writing JSON file: {:?}", path);
     let json_content = serde_json::to_string_pretty(content)?;
-    fs::write(path, json_content)
-        .context(format!("Failed to write JSON file: {:?}", path))?;
+    fs::write(path, json_content).context(format!("Failed to write JSON file: {:?}", path))?;
     Ok(())
 }
 
@@ -238,15 +251,15 @@ mod tests {
     fn test_generate_task_basic() {
         let temp_dir = tempdir().unwrap();
         let task_path = temp_dir.path().join("test-task");
-        
+
         let config = TaskGenerationConfig::new(task_path.clone());
         let result = generate_task(config).unwrap();
-        
+
         assert_eq!(result.path, task_path);
         assert_eq!(result.label, "My Task");
         assert_eq!(result.version, "1.0.0");
         assert_eq!(result.files_created.len(), 5);
-        
+
         // Check that files were created
         assert!(task_path.join("metadata.json").exists());
         assert!(task_path.join("input.schema.json").exists());
@@ -259,18 +272,18 @@ mod tests {
     fn test_generate_task_with_custom_metadata() {
         let temp_dir = tempdir().unwrap();
         let task_path = temp_dir.path().join("custom-task");
-        
+
         let config = TaskGenerationConfig::new(task_path.clone())
             .with_label("Custom Task")
             .with_description("A custom task description")
             .with_version("2.5.0");
-            
+
         let result = generate_task(config).unwrap();
-        
+
         assert_eq!(result.label, "Custom Task");
         assert_eq!(result.description, "A custom task description");
         assert_eq!(result.version, "2.5.0");
-        
+
         // Check metadata file content
         let metadata_content = fs::read_to_string(task_path.join("metadata.json")).unwrap();
         let metadata: JsonValue = serde_json::from_str(&metadata_content).unwrap();
@@ -283,15 +296,18 @@ mod tests {
     fn test_generate_task_existing_directory() {
         let temp_dir = tempdir().unwrap();
         let task_path = temp_dir.path().join("existing-task");
-        
+
         // Create the directory first
         fs::create_dir_all(&task_path).unwrap();
-        
+
         let config = TaskGenerationConfig::new(task_path);
         let result = generate_task(config);
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Directory already exists"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Directory already exists"));
     }
 
     #[test]
@@ -301,7 +317,7 @@ mod tests {
             .with_label("Test Label")
             .with_description("Test Description")
             .with_version("1.2.3");
-            
+
         assert_eq!(config.path, path);
         assert_eq!(config.label, Some("Test Label".to_string()));
         assert_eq!(config.description, Some("Test Description".to_string()));

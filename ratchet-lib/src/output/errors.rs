@@ -6,16 +6,10 @@ use thiserror::Error;
 #[derive(Debug, Error, Clone)]
 pub enum DeliveryError {
     #[error("Template rendering failed: {template} - {error}")]
-    TemplateRender {
-        template: String,
-        error: String,
-    },
+    TemplateRender { template: String, error: String },
 
     #[error("Serialization failed for format {format}: {error}")]
-    Serialization {
-        format: String,
-        error: String,
-    },
+    Serialization { format: String, error: String },
 
     #[error("Filesystem operation failed at {path} ({operation}): {error}")]
     Filesystem {
@@ -35,19 +29,13 @@ pub enum DeliveryError {
     },
 
     #[error("Network error for {url}: {error}")]
-    Network {
-        url: String,
-        error: String,
-    },
+    Network { url: String, error: String },
 
     #[error("Failed to clone request for retry")]
     RequestClone,
 
     #[error("Maximum retry attempts exceeded for {destination} ({attempts} attempts)")]
-    MaxRetriesExceeded {
-        destination: String,
-        attempts: u32,
-    },
+    MaxRetriesExceeded { destination: String, attempts: u32 },
 
     #[error("Task join error: {error}")]
     TaskJoin { error: String },
@@ -56,16 +44,10 @@ pub enum DeliveryError {
     InvalidTemplateVariable { variable: String },
 
     #[error("Database error: {operation} - {error}")]
-    Database {
-        operation: String,
-        error: String,
-    },
+    Database { operation: String, error: String },
 
     #[error("S3 error: {operation} - {error}")]
-    S3 {
-        operation: String,
-        error: String,
-    },
+    S3 { operation: String, error: String },
 }
 
 /// Configuration validation errors

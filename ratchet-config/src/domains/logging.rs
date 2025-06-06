@@ -1,9 +1,9 @@
 //! Logging configuration
 
+use crate::error::ConfigResult;
+use crate::validation::{validate_enum_choice, validate_required_string, Validatable};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use crate::validation::{Validatable, validate_enum_choice, validate_required_string};
-use crate::error::ConfigResult;
 
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,19 +12,19 @@ pub struct LoggingConfig {
     /// Log level
     #[serde(default)]
     pub level: LogLevel,
-    
+
     /// Log format
     #[serde(default)]
     pub format: LogFormat,
-    
+
     /// Log targets configuration
     #[serde(default)]
     pub targets: Vec<LogTarget>,
-    
+
     /// Whether to include source location in logs
     #[serde(default = "crate::domains::utils::default_false")]
     pub include_location: bool,
-    
+
     /// Whether to enable structured logging
     #[serde(default = "crate::domains::utils::default_true")]
     pub structured: bool,
@@ -94,11 +94,9 @@ impl Default for LoggingConfig {
     }
 }
 
-
-
 impl FromStr for LogLevel {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "error" => Ok(LogLevel::Error),
@@ -113,7 +111,7 @@ impl FromStr for LogLevel {
 
 impl FromStr for LogFormat {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "json" => Ok(LogFormat::Json),
@@ -131,15 +129,15 @@ impl Validatable for LoggingConfig {
         for target in &self.targets {
             target.validate()?;
         }
-        
+
         // Ensure at least one target
         if self.targets.is_empty() {
             return Err(self.validation_error("At least one log target must be configured"));
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "logging"
     }
@@ -151,37 +149,44 @@ impl Validatable for LogTarget {
             LogTarget::Console { .. } => {
                 // Console target is always valid
                 Ok(())
-            },
-            LogTarget::File { path, max_size_bytes, max_files, .. } => {
+            }
+            LogTarget::File {
+                path,
+                max_size_bytes,
+                max_files,
+                ..
+            } => {
                 validate_required_string(path, "path", self.domain_name())?;
-                
+
                 if *max_size_bytes == 0 {
                     return Err(self.validation_error("max_size_bytes must be greater than 0"));
                 }
-                
+
                 if *max_files == 0 {
                     return Err(self.validation_error("max_files must be greater than 0"));
                 }
-                
+
                 Ok(())
-            },
-            LogTarget::Syslog { facility, ident, .. } => {
+            }
+            LogTarget::Syslog {
+                facility, ident, ..
+            } => {
                 validate_required_string(facility, "facility", self.domain_name())?;
                 validate_required_string(ident, "ident", self.domain_name())?;
-                
+
                 // Validate syslog facility
                 let valid_facilities = [
-                    "kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news",
-                    "uucp", "cron", "authpriv", "ftp", "local0", "local1", "local2",
-                    "local3", "local4", "local5", "local6", "local7"
+                    "kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp",
+                    "cron", "authpriv", "ftp", "local0", "local1", "local2", "local3", "local4",
+                    "local5", "local6", "local7",
                 ];
                 validate_enum_choice(facility, &valid_facilities, "facility", self.domain_name())?;
-                
+
                 Ok(())
             }
         }
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "logging.target"
     }
@@ -238,7 +243,7 @@ mod tests {
     fn test_logging_config_validation() {
         let mut config = LoggingConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test empty targets
         config.targets.clear();
         assert!(config.validate().is_err());
@@ -249,7 +254,7 @@ mod tests {
         // Console target
         let console = LogTarget::Console { level: None };
         assert!(console.validate().is_ok());
-        
+
         // File target
         let file = LogTarget::File {
             path: "/var/log/ratchet.log".to_string(),
@@ -258,7 +263,7 @@ mod tests {
             max_files: 3,
         };
         assert!(file.validate().is_ok());
-        
+
         // Invalid file target
         let invalid_file = LogTarget::File {
             path: String::new(),
@@ -267,7 +272,7 @@ mod tests {
             max_files: 0,
         };
         assert!(invalid_file.validate().is_err());
-        
+
         // Syslog target
         let syslog = LogTarget::Syslog {
             level: None,

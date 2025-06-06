@@ -20,13 +20,13 @@ pub fn ensure_content_loaded(task_type: &mut TaskType) -> Result<(), TaskError> 
         TaskType::JsTask { path, content } => {
             if content.is_none() {
                 debug!("Loading JavaScript content for: {}", path);
-                
+
                 // Make a clone of the path for use in file operations
                 let path_str = path.clone();
-                
+
                 // Try to get content from cache first
                 let mut cache = CONTENT_CACHE.lock().unwrap();
-                
+
                 if let Some(cached_content) = cache.get(&path_str) {
                     debug!("JavaScript content found in cache for: {}", path);
                     // Content found in cache, use it
@@ -36,16 +36,16 @@ pub fn ensure_content_loaded(task_type: &mut TaskType) -> Result<(), TaskError> 
                     // Content not in cache, load from filesystem
                     let file_content = std::fs::read_to_string(&path_str)?;
                     let arc_content = Arc::new(file_content);
-                    
+
                     debug!("Storing JavaScript content in cache for: {}", path);
                     // Store in cache for future use
                     cache.put(path_str, arc_content.clone());
-                    
+
                     // Update task with content
                     *content = Some(arc_content);
                 }
             }
-            
+
             Ok(())
         }
     }

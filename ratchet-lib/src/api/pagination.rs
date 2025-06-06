@@ -35,17 +35,17 @@ impl PaginationInput {
             (page.saturating_sub(1)) * limit
         }
     }
-    
+
     /// Get the limit with validation
     pub fn get_limit(&self) -> u32 {
         self.limit.unwrap_or(25).min(100).max(1)
     }
-    
+
     /// Get the page number
     pub fn get_page(&self) -> u32 {
         self.page.unwrap_or(1).max(1)
     }
-    
+
     /// Convert from Refine.dev style parameters
     pub fn from_refine(start: Option<u64>, end: Option<u64>) -> Self {
         let offset = start.unwrap_or(0) as u32;
@@ -54,14 +54,14 @@ impl PaginationInput {
         } else {
             25
         };
-        
+
         Self {
             page: None,
             limit: Some(limit),
             offset: Some(offset),
         }
     }
-    
+
     /// Convert to Refine.dev style parameters for compatibility
     pub fn to_refine(&self) -> (u64, u64) {
         let offset = self.get_offset() as u64;
@@ -104,7 +104,7 @@ impl SortInput {
             },
         })
     }
-    
+
     /// Get the direction with default
     pub fn get_direction(&self) -> SortDirection {
         self.direction.unwrap_or_default()
@@ -137,7 +137,7 @@ impl PaginationMeta {
         let offset = pagination.get_offset();
         let page = pagination.get_page();
         let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
-        
+
         Self {
             page,
             limit,
@@ -148,7 +148,7 @@ impl PaginationMeta {
             offset,
         }
     }
-    
+
     /// Convert to headers for REST API compatibility
     pub fn to_headers(&self) -> Vec<(String, String)> {
         vec![
@@ -183,7 +183,7 @@ impl ListResponse<crate::api::types::UnifiedTask> {
     async fn items(&self) -> &Vec<crate::api::types::UnifiedTask> {
         &self.items
     }
-    
+
     async fn meta(&self) -> &PaginationMeta {
         &self.meta
     }
@@ -194,7 +194,7 @@ impl ListResponse<crate::api::types::UnifiedExecution> {
     async fn items(&self) -> &Vec<crate::api::types::UnifiedExecution> {
         &self.items
     }
-    
+
     async fn meta(&self) -> &PaginationMeta {
         &self.meta
     }
@@ -205,7 +205,7 @@ impl ListResponse<crate::api::types::UnifiedJob> {
     async fn items(&self) -> &Vec<crate::api::types::UnifiedJob> {
         &self.items
     }
-    
+
     async fn meta(&self) -> &PaginationMeta {
         &self.meta
     }
@@ -216,7 +216,7 @@ impl ListResponse<crate::api::types::UnifiedSchedule> {
     async fn items(&self) -> &Vec<crate::api::types::UnifiedSchedule> {
         &self.items
     }
-    
+
     async fn meta(&self) -> &PaginationMeta {
         &self.meta
     }

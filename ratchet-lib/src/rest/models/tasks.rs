@@ -1,9 +1,7 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{
-    api::types::UnifiedTask,
-};
+use crate::api::types::UnifiedTask;
 
 /// REST API representation of a Task (now unified)
 pub type TaskResponse = UnifiedTask;
@@ -45,7 +43,7 @@ impl TaskFilters {
             None => match &self.name {
                 Some(exact) => name == exact,
                 None => true,
-            }
+            },
         }
     }
 

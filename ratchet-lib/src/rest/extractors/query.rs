@@ -6,7 +6,7 @@ use axum::{
 
 use crate::rest::{
     middleware::RestError,
-    models::common::{ListQuery, PaginationQuery, SortQuery, FilterQuery},
+    models::common::{FilterQuery, ListQuery, PaginationQuery, SortQuery},
 };
 
 /// Extract list query parameters with validation
@@ -24,7 +24,7 @@ where
         let Query(query) = Query::<ListQuery>::from_request_parts(parts, state)
             .await
             .map_err(|err| RestError::BadRequest(format!("Invalid query parameters: {}", err)))?;
-        
+
         // Validate pagination parameters
         if let (Some(start), Some(end)) = (query.start, query.end) {
             if start >= end {
@@ -38,7 +38,7 @@ where
                 ));
             }
         }
-        
+
         Ok(ListQueryExtractor(query))
     }
 }
@@ -57,8 +57,10 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let Query(query) = Query::<PaginationQuery>::from_request_parts(parts, state)
             .await
-            .map_err(|err| RestError::BadRequest(format!("Invalid pagination parameters: {}", err)))?;
-        
+            .map_err(|err| {
+                RestError::BadRequest(format!("Invalid pagination parameters: {}", err))
+            })?;
+
         Ok(PaginationExtractor(query))
     }
 }
@@ -78,7 +80,7 @@ where
         let Query(query) = Query::<SortQuery>::from_request_parts(parts, state)
             .await
             .map_err(|err| RestError::BadRequest(format!("Invalid sort parameters: {}", err)))?;
-        
+
         Ok(SortExtractor(query))
     }
 }
@@ -98,7 +100,7 @@ where
         let Query(query) = Query::<FilterQuery>::from_request_parts(parts, state)
             .await
             .map_err(|err| RestError::BadRequest(format!("Invalid filter parameters: {}", err)))?;
-        
+
         Ok(FilterExtractor(query))
     }
 }

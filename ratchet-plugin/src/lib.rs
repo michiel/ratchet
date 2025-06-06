@@ -16,10 +16,10 @@ pub mod types;
 pub use core::{Plugin, PluginContext, PluginMetadata};
 pub use error::{PluginError, PluginResult};
 pub use hooks::{ExecutionHook, Hook, HookPriority, HookRegistry, TaskHook};
-pub use loader::{PluginLoader, StaticPluginLoader, DynamicPluginLoader};
+pub use loader::{DynamicPluginLoader, PluginLoader, StaticPluginLoader};
 pub use manager::{PluginManager, PluginManagerBuilder};
-pub use registry::{PluginRegistry, PluginInfo};
-pub use types::{PluginType, PluginVersion, PluginDependency};
+pub use registry::{PluginInfo, PluginRegistry};
+pub use types::{PluginDependency, PluginType, PluginVersion};
 
 /// Plugin system version
 pub const PLUGIN_SYSTEM_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -30,21 +30,21 @@ pub const MIN_PLUGIN_API_VERSION: &str = "0.0.1";
 /// Plugin discovery macros
 pub mod macros {
     pub use inventory;
-    
+
     /// Register a static plugin
-    /// 
+    ///
     /// # Example
     /// ```rust,ignore
     /// use ratchet_plugin::{Plugin, PluginMetadata, register_plugin};
-    /// 
+    ///
     /// struct MyPlugin;
-    /// 
+    ///
     /// impl Plugin for MyPlugin {
     ///     fn metadata(&self) -> &PluginMetadata {
     ///         // implementation
     ///     }
     /// }
-    /// 
+    ///
     /// register_plugin!(MyPlugin::new());
     /// ```
     #[macro_export]

@@ -1,11 +1,11 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde_json::{json, Value as JsonValue};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::fs;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
-use chrono::{DateTime, Utc};
 
 // Global recording state
 lazy_static::lazy_static! {
@@ -21,13 +21,13 @@ struct RecordingState {
 /// Set the recording directory for the current session
 pub fn set_recording_dir(session_dir: PathBuf) -> Result<()> {
     debug!("Setting recording directory: {:?}", session_dir);
-    
+
     let mut state = RECORDING_STATE.lock().unwrap();
     *state = Some(RecordingState {
         session_dir,
         entries: Vec::new(),
     });
-    
+
     Ok(())
 }
 
@@ -44,32 +44,42 @@ pub fn record_http_request(
     duration_ms: u64,
 ) -> Result<()> {
     let mut state = RECORDING_STATE.lock().unwrap();
-    
+
     if let Some(ref mut recording_state) = state.as_mut() {
         debug!("Recording HTTP request: {} {}", method, url);
-        
+
         // Build request headers
         let req_headers: Vec<JsonValue> = if let Some(headers) = request_headers {
-            headers.iter().map(|(name, value)| json!({
-                "name": name,
-                "value": value,
-                "comment": ""
-            })).collect()
+            headers
+                .iter()
+                .map(|(name, value)| {
+                    json!({
+                        "name": name,
+                        "value": value,
+                        "comment": ""
+                    })
+                })
+                .collect()
         } else {
             Vec::new()
         };
-        
+
         // Build response headers
         let resp_headers: Vec<JsonValue> = if let Some(headers) = response_headers {
-            headers.iter().map(|(name, value)| json!({
-                "name": name,
-                "value": value,
-                "comment": ""
-            })).collect()
+            headers
+                .iter()
+                .map(|(name, value)| {
+                    json!({
+                        "name": name,
+                        "value": value,
+                        "comment": ""
+                    })
+                })
+                .collect()
         } else {
             Vec::new()
         };
-        
+
         // Build HAR entry
         let entry = json!({
             "startedDateTime": started_at.to_rfc3339(),
@@ -93,7 +103,7 @@ pub fn record_http_request(
                 "status": response_status,
                 "statusText": match response_status {
                     200 => "OK",
-                    400 => "Bad Request", 
+                    400 => "Bad Request",
                     401 => "Unauthorized",
                     404 => "Not Found",
                     500 => "Internal Server Error",
@@ -126,21 +136,27 @@ pub fn record_http_request(
             "connection": "",
             "comment": ""
         });
-        
+
         recording_state.entries.push(entry);
-        info!("Recorded HTTP request {} {} -> {}", method, url, response_status);
+        info!(
+            "Recorded HTTP request {} {} -> {}",
+            method, url, response_status
+        );
     }
-    
+
     Ok(())
 }
 
 /// Finalize and save the HAR file
 pub fn finalize_recording() -> Result<()> {
     let mut state = RECORDING_STATE.lock().unwrap();
-    
+
     if let Some(recording_state) = state.take() {
-        debug!("Finalizing recording with {} entries", recording_state.entries.len());
-        
+        debug!(
+            "Finalizing recording with {} entries",
+            recording_state.entries.len()
+        );
+
         let har = json!({
             "log": {
                 "version": "1.2",
@@ -159,14 +175,14 @@ pub fn finalize_recording() -> Result<()> {
                 "comment": ""
             }
         });
-        
+
         let har_file = recording_state.session_dir.join("requests.har");
         let har_json = serde_json::to_string_pretty(&har)?;
         fs::write(&har_file, har_json)?;
-        
+
         info!("Saved HAR file: {:?}", har_file);
     }
-    
+
     Ok(())
 }
 
@@ -185,33 +201,33 @@ pub fn get_recording_dir() -> Option<PathBuf> {
 /// Record task input JSON
 pub fn record_input(input_json: &JsonValue) -> Result<()> {
     let state = RECORDING_STATE.lock().unwrap();
-    
+
     if let Some(recording_state) = state.as_ref() {
         debug!("Recording task input JSON");
-        
+
         let input_file = recording_state.session_dir.join("input.json");
         let input_pretty = serde_json::to_string_pretty(input_json)?;
         fs::write(&input_file, input_pretty)?;
-        
+
         info!("Saved input JSON: {:?}", input_file);
     }
-    
+
     Ok(())
 }
 
 /// Record task output JSON
 pub fn record_output(output_json: &JsonValue) -> Result<()> {
     let state = RECORDING_STATE.lock().unwrap();
-    
+
     if let Some(recording_state) = state.as_ref() {
         debug!("Recording task output JSON");
-        
+
         let output_file = recording_state.session_dir.join("output.json");
         let output_pretty = serde_json::to_string_pretty(output_json)?;
         fs::write(&output_file, output_pretty)?;
-        
+
         info!("Saved output JSON: {:?}", output_file);
     }
-    
+
     Ok(())
 }

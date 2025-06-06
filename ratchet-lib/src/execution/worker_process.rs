@@ -1,8 +1,8 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot, Mutex};
-use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -159,7 +159,7 @@ impl WorkerProcess {
             Uuid::new_v4(),
             "1.0.0".to_string(),
         );
-        
+
         let message = WorkerMessage::ExecuteTask {
             job_id,
             task_id,
@@ -386,7 +386,7 @@ impl WorkerProcessManager {
         let pending_tasks = Arc::new(Mutex::new(HashMap::new()));
         let _pending_validations = Arc::new(Mutex::new(HashMap::new()));
         let _pending_health_checks = Arc::new(Mutex::new(HashMap::new()));
-        
+
         // Start message processing task
         let workers_clone = workers.clone();
         let pending_tasks_clone = pending_tasks.clone();
@@ -394,14 +394,15 @@ impl WorkerProcessManager {
         let pending_health_checks_clone = _pending_health_checks.clone();
         tokio::spawn(async move {
             Self::process_worker_messages(
-                workers_clone, 
+                workers_clone,
                 pending_tasks_clone,
                 pending_validations_clone,
                 pending_health_checks_clone,
-                message_rx
-            ).await;
+                message_rx,
+            )
+            .await;
         });
-        
+
         Self {
             config,
             workers,
@@ -419,7 +420,9 @@ impl WorkerProcessManager {
         for i in 0..self.config.worker_count {
             let worker_id = format!("worker-{}", i);
 
-            match WorkerProcess::spawn(worker_id.clone(), &self.config, self.message_tx.clone()).await {
+            match WorkerProcess::spawn(worker_id.clone(), &self.config, self.message_tx.clone())
+                .await
+            {
                 Ok(worker) => {
                     let mut workers = self.workers.lock().await;
                     workers.push(worker);
@@ -463,8 +466,11 @@ impl WorkerProcessManager {
         mut message_rx: mpsc::UnboundedReceiver<WorkerToManagerMessage>,
     ) {
         while let Some(worker_msg) = message_rx.recv().await {
-            debug!("Processing message from worker {}: {:?}", worker_msg.worker_id, worker_msg.message);
-            
+            debug!(
+                "Processing message from worker {}: {:?}",
+                worker_msg.worker_id, worker_msg.message
+            );
+
             // Update worker status
             if let Ok(mut workers) = workers.try_lock() {
                 if let Some(worker) = workers.iter_mut().find(|w| w.id == worker_msg.worker_id) {
@@ -486,7 +492,10 @@ impl WorkerProcessManager {
                             worker.status = WorkerProcessStatus::Ready;
                         }
                         _ => {
-                            debug!("Unhandled message from worker {}: {:?}", worker.id, worker_msg.message);
+                            debug!(
+                                "Unhandled message from worker {}: {:?}",
+                                worker.id, worker_msg.message
+                            );
                         }
                     }
                 }
@@ -494,49 +503,87 @@ impl WorkerProcessManager {
 
             // Handle pending task responses
             match worker_msg.message {
-                CoordinatorMessage::TaskResult { correlation_id, result, .. } => {
+                CoordinatorMessage::TaskResult {
+                    correlation_id,
+                    result,
+                    ..
+                } => {
                     if let Ok(mut pending) = pending_tasks.try_lock() {
                         if let Some(sender) = pending.remove(&correlation_id) {
-                            debug!("Resolving pending task with correlation_id: {}", correlation_id);
+                            debug!(
+                                "Resolving pending task with correlation_id: {}",
+                                correlation_id
+                            );
                             if sender.send(result).is_err() {
-                                warn!("Failed to send task result - receiver may have been dropped");
+                                warn!(
+                                    "Failed to send task result - receiver may have been dropped"
+                                );
                             }
                         } else {
-                            warn!("Received TaskResult for unknown correlation_id: {}", correlation_id);
+                            warn!(
+                                "Received TaskResult for unknown correlation_id: {}",
+                                correlation_id
+                            );
                         }
                     }
                 }
-                CoordinatorMessage::TaskProgress { correlation_id, progress, .. } => {
-                    debug!("Received progress update for correlation_id: {} - {:?}", correlation_id, progress);
+                CoordinatorMessage::TaskProgress {
+                    correlation_id,
+                    progress,
+                    ..
+                } => {
+                    debug!(
+                        "Received progress update for correlation_id: {} - {:?}",
+                        correlation_id, progress
+                    );
                     // TODO: Forward progress updates to MCP progress manager
                     // For now, just log the progress
                 }
-                CoordinatorMessage::ValidationResult { correlation_id, result } => {
+                CoordinatorMessage::ValidationResult {
+                    correlation_id,
+                    result,
+                } => {
                     if let Ok(mut pending) = pending_validations.try_lock() {
                         if let Some(sender) = pending.remove(&correlation_id) {
-                            debug!("Resolving pending validation with correlation_id: {}", correlation_id);
+                            debug!(
+                                "Resolving pending validation with correlation_id: {}",
+                                correlation_id
+                            );
                             if sender.send(result).is_err() {
                                 warn!("Failed to send validation result - receiver may have been dropped");
                             }
                         }
                     }
                 }
-                CoordinatorMessage::Pong { correlation_id, status, .. } => {
+                CoordinatorMessage::Pong {
+                    correlation_id,
+                    status,
+                    ..
+                } => {
                     if let Ok(mut pending) = pending_health_checks.try_lock() {
                         if let Some(sender) = pending.remove(&correlation_id) {
-                            debug!("Resolving pending health check with correlation_id: {}", correlation_id);
+                            debug!(
+                                "Resolving pending health check with correlation_id: {}",
+                                correlation_id
+                            );
                             if sender.send(status).is_err() {
                                 warn!("Failed to send health check result - receiver may have been dropped");
                             }
                         }
                     }
                 }
-                CoordinatorMessage::Error { correlation_id, error } => {
+                CoordinatorMessage::Error {
+                    correlation_id,
+                    error,
+                } => {
                     if let Some(correlation_id) = correlation_id {
                         // Try to resolve as a task error
                         if let Ok(mut pending) = pending_tasks.try_lock() {
                             if let Some(sender) = pending.remove(&correlation_id) {
-                                debug!("Resolving pending task with error for correlation_id: {}", correlation_id);
+                                debug!(
+                                    "Resolving pending task with error for correlation_id: {}",
+                                    correlation_id
+                                );
                                 let error_result = TaskExecutionResult {
                                     success: false,
                                     output: None,
@@ -565,7 +612,8 @@ impl WorkerProcessManager {
     pub async fn get_available_worker(&mut self) -> Option<String> {
         // Return worker ID instead of reference since we can't return a mutable reference to Arc<Mutex<>>
         let workers = self.workers.lock().await;
-        workers.iter()
+        workers
+            .iter()
             .find(|w| w.is_available())
             .map(|w| w.id.clone())
     }
@@ -614,7 +662,8 @@ impl WorkerProcessManager {
         // Find available worker ID
         let worker_id = {
             let workers = self.workers.lock().await;
-            workers.iter()
+            workers
+                .iter()
                 .find(|w| w.is_available())
                 .map(|w| w.id.clone())
                 .ok_or_else(|| {
@@ -651,7 +700,9 @@ impl WorkerProcessManager {
             if let Some(worker) = workers.iter_mut().find(|w| w.id == worker_id) {
                 worker.send_message(message).await?;
             } else {
-                return Err(WorkerProcessError::CommunicationError("Worker not found".to_string()));
+                return Err(WorkerProcessError::CommunicationError(
+                    "Worker not found".to_string(),
+                ));
             }
         }
 
@@ -729,4 +780,3 @@ mod tests {
         assert_eq!(worker.id, "test-worker");
     }
 }
-

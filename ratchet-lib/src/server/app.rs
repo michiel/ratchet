@@ -1,7 +1,7 @@
 use axum::{
+    middleware,
     routing::{get, post},
     Router,
-    middleware,
 };
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -9,14 +9,14 @@ use tower_http::services::ServeDir;
 
 use crate::database::repositories::RepositoryFactory;
 use crate::execution::{JobQueueManager, ProcessTaskExecutor};
-use crate::graphql::{RatchetSchema, create_schema};
+use crate::graphql::{create_schema, RatchetSchema};
 use crate::registry::TaskRegistry;
 use crate::rest::create_rest_app;
 use crate::services::TaskSyncService;
 
 use super::{
     handlers::{graphql_handler, graphql_playground, health_handler, version_handler},
-    middleware::{logging_middleware, cors_layer, trace_layer},
+    middleware::{cors_layer, logging_middleware, trace_layer},
 };
 
 /// Server application state with Send+Sync compliance
@@ -71,39 +71,34 @@ pub fn create_app(
         // GraphQL routes
         .route("/graphql", post(graphql_handler))
         .route("/playground", get(graphql_playground))
-        
         // API routes
         .route("/health", get(health_handler))
         .route("/version", get(version_handler))
-        .route("/api-docs", get(|| async { 
-            axum::response::Redirect::permanent("/docs/openapi-viewer.html") 
-        }))
-        
+        .route(
+            "/api-docs",
+            get(|| async { axum::response::Redirect::permanent("/docs/openapi-viewer.html") }),
+        )
         // Root route
         .route("/", get(|| async { "Ratchet API Server" }))
-        
         // Add state for GraphQL routes
         .with_state(state)
-        
         // Nest REST API under /api/v1
         .nest("/api/v1", rest_api)
-        
         // Serve static documentation files
         .nest_service("/docs", ServeDir::new("docs"))
-        
         // Add middleware stack
         .layer(
             ServiceBuilder::new()
                 .layer(trace_layer())
                 .layer(cors_layer())
-                .layer(middleware::from_fn(logging_middleware))
+                .layer(middleware::from_fn(logging_middleware)),
         )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{RatchetConfig, DatabaseConfig, ServerConfig};
+    use crate::config::{DatabaseConfig, RatchetConfig, ServerConfig};
     use crate::database::DatabaseConnection;
     use axum_test::TestServer;
     use std::time::Duration;
@@ -128,7 +123,11 @@ mod tests {
 
         let repositories = RepositoryFactory::new(db);
         let job_queue = Arc::new(JobQueueManager::with_default_config(repositories.clone()));
-        let task_executor = Arc::new(ProcessTaskExecutor::new(repositories.clone(), config).await.unwrap());
+        let task_executor = Arc::new(
+            ProcessTaskExecutor::new(repositories.clone(), config)
+                .await
+                .unwrap(),
+        );
 
         create_app(repositories, job_queue, task_executor, None, None)
     }
@@ -149,7 +148,7 @@ mod tests {
 
         let response = server.get("/version").await;
         assert_eq!(response.status_code(), 200);
-        
+
         let json: serde_json::Value = response.json();
         assert!(json.get("version").is_some());
         assert!(json.get("name").is_some());

@@ -1,13 +1,16 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, error};
+use tracing::{error, info};
 
-use crate::errors::Result;
-use crate::registry::{TaskRegistry, TaskSource, loaders::{TaskLoader, filesystem::FilesystemTaskLoader, http::HttpTaskLoader}};
-use crate::registry::watcher::{RegistryWatcher, WatcherConfig};
-use crate::services::TaskSyncService;
 use crate::config::RegistrySourceConfig;
+use crate::errors::Result;
+use crate::registry::watcher::{RegistryWatcher, WatcherConfig};
+use crate::registry::{
+    loaders::{filesystem::FilesystemTaskLoader, http::HttpTaskLoader, TaskLoader},
+    TaskRegistry, TaskSource,
+};
+use crate::services::TaskSyncService;
 
 #[async_trait]
 pub trait RegistryService: Send + Sync {
@@ -38,7 +41,7 @@ impl DefaultRegistryService {
             source_configs: Vec::new(),
         }
     }
-    
+
     pub fn new_with_configs(sources: Vec<TaskSource>, configs: Vec<RegistrySourceConfig>) -> Self {
         let sources_clone = sources.clone();
         Self {
@@ -51,7 +54,7 @@ impl DefaultRegistryService {
             source_configs: configs,
         }
     }
-    
+
     pub fn with_sync_service(mut self, sync_service: Arc<TaskSyncService>) -> Self {
         self.sync_service = Some(sync_service);
         self
@@ -63,7 +66,7 @@ impl DefaultRegistryService {
 
     async fn load_source(&self, source: &TaskSource) -> Result<()> {
         info!("Loading tasks from source: {:?}", source);
-        
+
         let tasks = match source {
             TaskSource::Filesystem { .. } => self.filesystem_loader.load_tasks(source).await?,
             TaskSource::Http { .. } => self.http_loader.load_tasks(source).await?,
@@ -90,7 +93,7 @@ impl DefaultRegistryService {
 impl RegistryService for DefaultRegistryService {
     async fn load_all_sources(&self) -> Result<()> {
         let sources = self.registry.sources().to_vec();
-        
+
         for source in sources {
             if let Err(e) = self.load_source(&source).await {
                 error!("Failed to load source {:?}: {}", source, e);
@@ -100,7 +103,7 @@ impl RegistryService for DefaultRegistryService {
 
         let task_count = self.registry.list_tasks().await?.len();
         info!("Registry loaded with {} tasks", task_count);
-        
+
         Ok(())
     }
 
@@ -114,7 +117,7 @@ impl DefaultRegistryService {
     pub async fn start_watching(&mut self) -> Result<()> {
         // Collect filesystem sources with watch enabled
         let mut watch_paths = Vec::new();
-        
+
         // Match sources with their configs
         for (i, source) in self.sources.iter().enumerate() {
             if let TaskSource::Filesystem { path } = source {
@@ -155,7 +158,7 @@ impl DefaultRegistryService {
         );
 
         let num_paths = watch_paths.len();
-        
+
         for (path, recursive) in watch_paths {
             watcher.add_watch_path(path, recursive);
         }

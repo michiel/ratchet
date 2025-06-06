@@ -10,29 +10,19 @@ pub type PluginResult<T> = Result<T, PluginError>;
 pub enum PluginError {
     /// Plugin not found
     #[error("Plugin '{name}' not found")]
-    PluginNotFound {
-        name: String,
-    },
+    PluginNotFound { name: String },
 
     /// Plugin already exists
     #[error("Plugin '{name}' already exists")]
-    PluginAlreadyExists {
-        name: String,
-    },
+    PluginAlreadyExists { name: String },
 
     /// Plugin initialization failed
     #[error("Plugin '{name}' initialization failed: {reason}")]
-    InitializationFailed {
-        name: String,
-        reason: String,
-    },
+    InitializationFailed { name: String, reason: String },
 
     /// Plugin dependency error
     #[error("Plugin '{name}' dependency error: {reason}")]
-    DependencyError {
-        name: String,
-        reason: String,
-    },
+    DependencyError { name: String, reason: String },
 
     /// Plugin version incompatible
     #[error("Plugin '{name}' version {version} is incompatible with required version {required}")]
@@ -52,10 +42,7 @@ pub enum PluginError {
 
     /// Hook execution failed
     #[error("Hook '{hook_name}' execution failed: {reason}")]
-    HookExecutionFailed {
-        hook_name: String,
-        reason: String,
-    },
+    HookExecutionFailed { hook_name: String, reason: String },
 
     /// Dynamic loading error
     #[error("Dynamic loading error: {0}")]
@@ -63,22 +50,15 @@ pub enum PluginError {
 
     /// Plugin file not found
     #[error("Plugin file not found: {path}")]
-    PluginFileNotFound {
-        path: String,
-    },
+    PluginFileNotFound { path: String },
 
     /// Invalid plugin manifest
     #[error("Invalid plugin manifest: {reason}")]
-    InvalidManifest {
-        reason: String,
-    },
+    InvalidManifest { reason: String },
 
     /// Plugin execution error
     #[error("Plugin '{name}' execution error: {reason}")]
-    ExecutionError {
-        name: String,
-        reason: String,
-    },
+    ExecutionError { name: String, reason: String },
 
     /// Serialization error
     #[error("Serialization error: {0}")]

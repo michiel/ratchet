@@ -1,8 +1,8 @@
 //! MCP (Model Context Protocol) configuration
 
-use serde::{Deserialize, Serialize};
-use crate::validation::Validatable;
 use crate::error::ConfigResult;
+use crate::validation::Validatable;
+use serde::{Deserialize, Serialize};
 
 /// MCP server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,15 +11,15 @@ pub struct McpConfig {
     /// Whether MCP server is enabled
     #[serde(default = "crate::domains::utils::default_false")]
     pub enabled: bool,
-    
+
     /// Transport protocol ("stdio" or "sse")
     #[serde(default = "default_mcp_transport")]
     pub transport: String,
-    
+
     /// Host address for SSE transport
     #[serde(default = "default_mcp_host")]
     pub host: String,
-    
+
     /// Port for SSE transport
     #[serde(default = "default_mcp_port")]
     pub port: u16,
@@ -44,17 +44,17 @@ impl Validatable for McpConfig {
             &self.transport,
             &valid_transports,
             "transport",
-            self.domain_name()
+            self.domain_name(),
         )?;
-        
+
         // Validate port range if using SSE
         if self.transport == "sse" {
             crate::validation::validate_port_range(self.port, "port", self.domain_name())?;
         }
-        
+
         Ok(())
     }
-    
+
     fn domain_name(&self) -> &'static str {
         "mcp"
     }
@@ -90,11 +90,11 @@ mod tests {
     fn test_mcp_config_validation() {
         let mut config = McpConfig::default();
         assert!(config.validate().is_ok());
-        
+
         // Test invalid transport
         config.transport = "invalid".to_string();
         assert!(config.validate().is_err());
-        
+
         // Test valid SSE transport
         config.transport = "sse".to_string();
         assert!(config.validate().is_ok());
