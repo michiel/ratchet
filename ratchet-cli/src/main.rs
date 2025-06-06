@@ -89,10 +89,10 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
     let logging_config = ratchet_lib::logging::LoggingConfig::default();
     
     // Convert MCP config
-    let mcp_config = new_config.mcp.map(|mcp| McpServerConfig {
+    let mcp_config = new_config.mcp.as_ref().map(|mcp| McpServerConfig {
         enabled: mcp.enabled,
-        transport: mcp.transport.to_string(),
-        host: mcp.host,
+        transport: mcp.transport.clone(),
+        host: mcp.host.clone(),
         port: mcp.port,
     });
     
@@ -266,8 +266,7 @@ async fn mcp_serve_command(
     port: u16,
 ) -> Result<()> {
     let ratchet_config = load_config(config_path)?;
-    let lib_config = convert_to_legacy_config(ratchet_config)?;
-    mcp_serve_command_with_config(lib_config, transport, host, port).await
+    mcp_serve_command_with_config(ratchet_config, transport, host, port).await
 }
 
 #[cfg(not(feature = "mcp-server"))]
@@ -282,7 +281,7 @@ async fn mcp_serve_command(
 
 #[cfg(feature = "mcp-server")]
 async fn mcp_serve_command_with_config(
-    ratchet_config: LibRatchetConfig,
+    ratchet_config: RatchetConfig,
     transport: &str,
     host: &str,
     port: u16,
@@ -317,23 +316,24 @@ async fn mcp_serve_command_with_config(
     };
     
     // Get database configuration (use server config if available, otherwise default)
-    let lib_database_config = if let Some(server_config) = &ratchet_config.server {
+    let database_config = if let Some(server_config) = &ratchet_config.server {
         if !is_stdio {
             info!("Using server database configuration for MCP");
         }
-        server_config.database.clone()
+        &server_config.database
     } else {
         if !is_stdio {
             info!("No server configuration found, using default database config");
         }
-        ratchet_lib::config::DatabaseConfig::default()
+        // Use default from server config
+        &ratchet_config::domains::server::ServerConfig::default().database
     };
 
-    // Convert lib database config to storage database config
+    // Convert new database config to storage database config
     let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
-        url: lib_database_config.url.clone(),
-        max_connections: lib_database_config.max_connections,
-        connection_timeout: lib_database_config.connection_timeout,
+        url: database_config.url.clone(),
+        max_connections: database_config.max_connections,
+        connection_timeout: database_config.connection_timeout,
     };
 
     // Initialize database
@@ -354,12 +354,13 @@ async fn mcp_serve_command_with_config(
     let task_repo = Arc::new(repositories.task_repository());
     let execution_repo = Arc::new(repositories.execution_repository());
 
-    // Initialize task executor for MCP
+    // Initialize task executor for MCP - convert to legacy config for executor
     if !is_stdio {
         info!("Initializing task executor for MCP");
     }
+    let legacy_config = convert_to_legacy_config(ratchet_config.clone())?;
     let task_executor = Arc::new(
-        ProcessTaskExecutor::new(repositories, ratchet_config).await
+        ProcessTaskExecutor::new(repositories, legacy_config).await
             .context("Failed to initialize process task executor")?
     );
 
@@ -379,29 +380,35 @@ async fn mcp_serve_command_with_config(
         execution_repo.clone(),
     );
 
-    // Build MCP server configuration
-    let server_config = match transport_type {
-        SimpleTransportType::Stdio => McpServerConfig {
-            transport: McpServerTransport::Stdio,
-            security: ratchet_mcp::security::SecurityConfig::default(),
-            bind_address: None,
-        },
-        SimpleTransportType::Sse => McpServerConfig {
-            transport: McpServerTransport::Sse {
-                port,
-                host: host.to_string(),
-                tls: false,
-                cors: CorsConfig {
-                    allowed_origins: vec!["*".to_string()],
-                    allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
-                    allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
-                    allow_credentials: false,
-                },
-                timeout: std::time::Duration::from_secs(300), // Default 5 minutes
+    // Build MCP server configuration - use MCP config from ratchet_config if available, otherwise use CLI args
+    let server_config = if let Some(mcp_config) = &ratchet_config.mcp {
+        // Use config from file/environment
+        McpServerConfig::from_ratchet_config(mcp_config)
+    } else {
+        // Use command line arguments
+        match transport_type {
+            SimpleTransportType::Stdio => McpServerConfig {
+                transport: McpServerTransport::Stdio,
+                security: ratchet_mcp::security::SecurityConfig::default(),
+                bind_address: None,
             },
-            security: ratchet_mcp::security::SecurityConfig::default(),
-            bind_address: Some(format!("{}:{}", host, port)),
-        },
+            SimpleTransportType::Sse => McpServerConfig {
+                transport: McpServerTransport::Sse {
+                    port,
+                    host: host.to_string(),
+                    tls: false,
+                    cors: CorsConfig {
+                        allowed_origins: vec!["*".to_string()],
+                        allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
+                        allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
+                        allow_credentials: false,
+                    },
+                    timeout: std::time::Duration::from_secs(300), // Default 5 minutes
+                },
+                security: ratchet_mcp::security::SecurityConfig::default(),
+                bind_address: Some(format!("{}:{}", host, port)),
+            },
+        }
     };
 
     // Create tool registry with the adapter as task executor
@@ -1283,8 +1290,7 @@ async fn main() -> Result<()> {
                 } else {
                     config
                 };
-                let lib_config = convert_to_legacy_config(mcp_config)?;
-                mcp_serve_command_with_config(lib_config, transport, host, *port).await
+                mcp_serve_command_with_config(mcp_config, transport, host, *port).await
             }
             #[cfg(not(feature = "mcp-server"))]
             {

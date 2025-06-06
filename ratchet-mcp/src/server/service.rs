@@ -321,9 +321,9 @@ impl Default for McpServiceBuilder {
 
 /// Integration helper to create MCP service from Ratchet config
 impl McpService {
-    /// Create from Ratchet's new modular MCP configuration
-    pub async fn from_new_ratchet_config(
-        mcp_config: &ratchet_config::McpConfig,
+    /// Create from Ratchet's modular MCP configuration
+    pub async fn from_ratchet_config(
+        mcp_config: &ratchet_config::domains::mcp::McpConfig,
         task_executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
         execution_repository: Arc<ExecutionRepository>,
@@ -341,7 +341,7 @@ impl McpService {
     }
 
     /// Create from Ratchet's legacy MCP configuration (for backward compatibility)
-    pub async fn from_ratchet_config(
+    pub async fn from_legacy_ratchet_config(
         mcp_config: &ratchet_lib::config::McpServerConfig,
         task_executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,

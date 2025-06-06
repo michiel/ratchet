@@ -64,7 +64,7 @@ impl McpServerConfig {
     }
 
     /// Create from new ratchet-config MCP configuration
-    pub fn from_ratchet_config(mcp_config: &ratchet_config::McpConfig) -> Self {
+    pub fn from_ratchet_config(mcp_config: &ratchet_config::domains::mcp::McpConfig) -> Self {
         match mcp_config.transport.as_str() {
             "stdio" => Self::stdio(),
             "sse" => Self::sse_with_host(mcp_config.port, &mcp_config.host),
