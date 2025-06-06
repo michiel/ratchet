@@ -1,13 +1,31 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use ratchet_config::{RatchetConfig as NewRatchetConfig, ConfigLoader, compat};
-use ratchet_lib::config::RatchetConfig;
+use ratchet_config::{
+    RatchetConfig, ConfigLoader, compat,
+    DatabaseConfig, ServerConfig, ExecutionConfig, HttpConfig, 
+    CacheConfig, OutputConfig, LoggingConfig
+};
+
+#[cfg(feature = "server")]
+use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
+
+#[cfg(feature = "server")]
 use ratchet_lib::{
     task::Task,
     execution::ipc::{WorkerMessage, CoordinatorMessage, TaskExecutionResult, MessageEnvelope},
     recording,
     js_executor::execute_task,
     http::HttpManager,
+};
+
+#[cfg(feature = "database")]
+use ratchet_storage::seaorm::{
+    connection::DatabaseConnection,
+    repositories::{
+        RepositoryFactory,
+        task_repository::TaskRepository,
+        execution_repository::ExecutionRepository,
+    },
 };
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use tracing::{debug, error, info, warn};
@@ -20,17 +38,22 @@ use uuid::Uuid;
 mod cli;
 use cli::{Cli, Commands, GenerateCommands, ConfigCommands};
 
-/// Convert new config format to legacy format for backward compatibility
-fn convert_to_legacy_config(new_config: NewRatchetConfig) -> Result<RatchetConfig> {
+/// Convert config format to legacy format for backward compatibility when server features are enabled
+#[cfg(feature = "server")]
+fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfig> {
     use ratchet_lib::config::*;
     
     // Convert database config
     let database_config = DatabaseConfig {
-        url: new_config.server.as_ref()
-            .map(|_| "sqlite::memory:".to_string()) // Default for now
+        url: new_config.database.as_ref()
+            .map(|db| db.url.clone())
             .unwrap_or_else(|| "sqlite::memory:".to_string()),
-        max_connections: 10,
-        connection_timeout: std::time::Duration::from_secs(30),
+        max_connections: new_config.database.as_ref()
+            .map(|db| db.max_connections)
+            .unwrap_or(10),
+        connection_timeout: new_config.database.as_ref()
+            .map(|db| db.connection_timeout)
+            .unwrap_or_else(|| std::time::Duration::from_secs(30)),
     };
     
     // Convert server config
@@ -48,8 +71,8 @@ fn convert_to_legacy_config(new_config: NewRatchetConfig) -> Result<RatchetConfi
     let execution_config = ExecutionConfig {
         max_execution_duration: new_config.execution.max_execution_duration.as_secs(),
         validate_schemas: new_config.execution.validate_schemas,
-        max_concurrent_tasks: 4, // Default
-        timeout_grace_period: 30, // Default
+        max_concurrent_tasks: new_config.execution.max_concurrent_tasks.unwrap_or(4),
+        timeout_grace_period: new_config.execution.timeout_grace_period.unwrap_or(30),
     };
     
     // Convert HTTP config
@@ -57,29 +80,29 @@ fn convert_to_legacy_config(new_config: NewRatchetConfig) -> Result<RatchetConfi
         timeout: new_config.http.timeout,
         user_agent: new_config.http.user_agent,
         verify_ssl: new_config.http.verify_ssl,
-        max_redirects: 10, // Default
+        max_redirects: new_config.http.max_redirects.unwrap_or(10),
     };
     
-    // Convert logging config - use ratchet_lib's default LoggingConfig
+    // Convert logging config - use lib's format
     let logging_config = ratchet_lib::logging::LoggingConfig::default();
     
     // Convert MCP config
     let mcp_config = new_config.mcp.map(|mcp| McpServerConfig {
         enabled: mcp.enabled,
-        transport: mcp.transport,
+        transport: mcp.transport.to_string(),
         host: mcp.host,
         port: mcp.port,
     });
     
-    Ok(RatchetConfig {
+    Ok(LibRatchetConfig {
         server: Some(server_config),
         execution: execution_config,
         http: http_config,
         logging: logging_config,
         mcp: mcp_config,
-        cache: CacheConfig::default(), // Use default
-        output: OutputConfig::default(), // Use default
-        registry: None, // Default
+        cache: ratchet_lib::config::CacheConfig::default(),
+        output: ratchet_lib::config::OutputConfig::default(),
+        registry: None,
     })
 }
 
@@ -87,36 +110,41 @@ fn convert_to_legacy_config(new_config: NewRatchetConfig) -> Result<RatchetConfi
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     let loader = ConfigLoader::new();
     
-    let new_config = match config_path {
+    match config_path {
         Some(path) => {
             if path.exists() {
                 info!("Loading configuration from: {:?}", path);
                 loader.from_file(path)
-                    .context(format!("Failed to load configuration from {:?}", path))?
+                    .context(format!("Failed to load configuration from {:?}", path))
             } else {
                 warn!("Configuration file not found: {:?}. Using defaults.", path);
                 loader.from_env()
-                    .context("Failed to load configuration from environment")?
+                    .context("Failed to load configuration from environment")
             }
         }
         None => {
             debug!("No configuration file specified. Loading from environment or defaults.");
             loader.from_env()
-                .context("Failed to load configuration from environment")?
+                .context("Failed to load configuration from environment")
         }
-    };
-    
-    // Convert to legacy format
-    convert_to_legacy_config(new_config)
+    }
 }
 
 /// Start the Ratchet server
+#[cfg(feature = "server")]
 async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     let config = load_config(config_path)?;
-    serve_command_with_config(config).await
+    let lib_config = convert_to_legacy_config(config)?;
+    serve_command_with_config(lib_config).await
 }
 
-async fn serve_command_with_config(config: RatchetConfig) -> Result<()> {
+#[cfg(not(feature = "server"))]
+async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
+    Err(anyhow::anyhow!("Server functionality not available. Build with --features=server"))
+}
+
+#[cfg(feature = "server")]
+async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     use ratchet_lib::{
         database::DatabaseConnection,
         database::repositories::RepositoryFactory,
@@ -222,6 +250,7 @@ async fn serve_command_with_config(config: RatchetConfig) -> Result<()> {
 }
 
 /// Start the MCP (Model Context Protocol) server
+#[cfg(feature = "mcp-server")]
 async fn mcp_serve_command(
     config_path: Option<&PathBuf>,
     transport: &str,
@@ -229,11 +258,23 @@ async fn mcp_serve_command(
     port: u16,
 ) -> Result<()> {
     let ratchet_config = load_config(config_path)?;
-    mcp_serve_command_with_config(ratchet_config, transport, host, port).await
+    let lib_config = convert_to_legacy_config(ratchet_config)?;
+    mcp_serve_command_with_config(lib_config, transport, host, port).await
 }
 
+#[cfg(not(feature = "mcp-server"))]
+async fn mcp_serve_command(
+    _config_path: Option<&PathBuf>,
+    _transport: &str,
+    _host: &str,
+    _port: u16,
+) -> Result<()> {
+    Err(anyhow::anyhow!("MCP server functionality not available. Build with --features=mcp-server"))
+}
+
+#[cfg(feature = "mcp-server")]
 async fn mcp_serve_command_with_config(
-    ratchet_config: RatchetConfig,
+    ratchet_config: LibRatchetConfig,
     transport: &str,
     host: &str,
     port: u16,
@@ -417,7 +458,8 @@ async fn mcp_serve_command_with_config(
 }
 
 /// Initialize logging from configuration with fallback to simple tracing
-fn init_logging_with_config(config: &RatchetConfig, log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Result<()> {
+#[cfg(feature = "server")]
+fn init_logging_with_config(config: &LibRatchetConfig, log_level: Option<&String>, record_dir: Option<&PathBuf>) -> Result<()> {
     // If CLI log level is provided, override config level
     let mut logging_config = config.logging.clone();
     if let Some(level_str) = log_level {
@@ -464,6 +506,12 @@ fn init_logging_with_config(config: &RatchetConfig, log_level: Option<&String>, 
     }
 
     Ok(())
+}
+
+/// Initialize simple logging when server features are disabled
+#[cfg(not(feature = "server"))]
+fn init_logging_with_config(_config: &RatchetConfig, log_level: Option<&String>, _record_dir: Option<&PathBuf>) -> Result<()> {
+    init_simple_tracing(log_level)
 }
 
 /// Initialize simple tracing with environment variable override support (fallback)
@@ -541,6 +589,7 @@ fn parse_input_json(input_json: Option<&String>) -> Result<JsonValue> {
 }
 
 /// Run a task from a file system path
+#[cfg(feature = "javascript")]
 async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
     info!("Loading task from: {}", from_fs);
     
@@ -564,6 +613,7 @@ async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
 }
 
 /// Validate a task
+#[cfg(feature = "javascript")]
 fn validate_task(from_fs: &str) -> Result<()> {
     info!("Validating task from: {}", from_fs);
     
@@ -586,6 +636,7 @@ fn validate_task(from_fs: &str) -> Result<()> {
 }
 
 /// Test a task by running its test cases
+#[cfg(feature = "javascript")]
 async fn test_task(from_fs: &str) -> Result<()> {
     info!("Testing task from: {}", from_fs);
     
@@ -657,6 +708,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
 }
 
 /// Run a single test case
+#[cfg(feature = "javascript")]
 async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result<()> {
     use serde_json::Value;
     
@@ -692,6 +744,7 @@ async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result
 }
 
 /// Replay a task execution using recorded session data
+#[cfg(feature = "javascript")]
 async fn replay_task(from_fs: &str, recording: &Option<PathBuf>) -> Result<JsonValue> {
     let recording_path = recording.as_ref().ok_or_else(|| {
         anyhow::anyhow!("Recording path is required for replay")
@@ -739,6 +792,7 @@ async fn replay_task(from_fs: &str, recording: &Option<PathBuf>) -> Result<JsonV
 }
 
 /// Run as worker process
+#[cfg(feature = "server")]
 async fn run_worker_process(worker_id: String) -> Result<()> {
     info!("Starting worker process with ID: {}", worker_id);
     
@@ -789,6 +843,7 @@ async fn run_worker_process(worker_id: String) -> Result<()> {
 }
 
 /// Process a worker message
+#[cfg(feature = "server")]
 async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
     use chrono::Utc;
     
@@ -928,6 +983,7 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
 }
 
 /// Handle task generation
+#[cfg(feature = "javascript")]
 async fn handle_generate_task(
     path: &PathBuf,
     label: &Option<String>,
