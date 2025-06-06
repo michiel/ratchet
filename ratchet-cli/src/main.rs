@@ -1162,15 +1162,22 @@ async fn main() -> Result<()> {
 
     // Handle worker mode first (before any logging setup to avoid conflicts)
     if cli.worker {
-        let worker_id = cli.worker_id.unwrap_or_else(|| {
-            Uuid::new_v4().to_string()
-        });
-        
-        // Initialize tracing for worker (stderr only to avoid IPC conflicts)
-        init_worker_tracing(cli.log_level.as_ref())?;
-        
-        // Run worker process
-        return run_worker_process(worker_id).await;
+        #[cfg(feature = "server")]
+        {
+            let worker_id = cli.worker_id.unwrap_or_else(|| {
+                Uuid::new_v4().to_string()
+            });
+            
+            // Initialize tracing for worker (stderr only to avoid IPC conflicts)
+            init_worker_tracing(cli.log_level.as_ref())?;
+            
+            // Run worker process
+            return run_worker_process(worker_id).await;
+        }
+        #[cfg(not(feature = "server"))]
+        {
+            return Err(anyhow::anyhow!("Worker functionality not available. Build with --features=server"));
+        }
     }
 
     // Check if this is MCP stdio mode - if so, use minimal stderr-only logging
@@ -1203,77 +1210,139 @@ async fn main() -> Result<()> {
             input_json,
             record,
         }) => {
-            info!("Running task from file system path: {}", from_fs);
+            #[cfg(feature = "javascript")]
+            {
+                info!("Running task from file system path: {}", from_fs);
 
-            // Parse input JSON
-            let input = parse_input_json(input_json.as_ref())?;
+                // Parse input JSON
+                let input = parse_input_json(input_json.as_ref())?;
 
-            if input_json.is_some() {
-                info!("Using provided input: {}", input_json.as_ref().unwrap());
-            }
-
-            // Run the task
-            let result = run_task(from_fs, &input).await?;
-
-            // Pretty-print the result
-            let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
-
-            println!("Result: {}", formatted);
-            info!("Task execution completed");
-            
-            // Finalize recording if it was enabled
-            if record.is_some() {
-                if let Err(e) = ratchet_lib::recording::finalize_recording() {
-                    warn!("Failed to finalize recording: {}", e);
-                } else if let Some(dir) = ratchet_lib::recording::get_recording_dir() {
-                    println!("Recording saved to: {:?}", dir);
+                if input_json.is_some() {
+                    info!("Using provided input: {}", input_json.as_ref().unwrap());
                 }
+
+                // Run the task
+                let result = run_task(from_fs, &input).await?;
+
+                // Pretty-print the result
+                let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
+
+                println!("Result: {}", formatted);
+                info!("Task execution completed");
+                
+                // Finalize recording if it was enabled
+                if record.is_some() {
+                    #[cfg(feature = "server")]
+                    {
+                        if let Err(e) = ratchet_lib::recording::finalize_recording() {
+                            warn!("Failed to finalize recording: {}", e);
+                        } else if let Some(dir) = ratchet_lib::recording::get_recording_dir() {
+                            println!("Recording saved to: {:?}", dir);
+                        }
+                    }
+                    #[cfg(not(feature = "server"))]
+                    {
+                        warn!("Recording functionality not available without server features");
+                    }
+                }
+                
+                Ok(())
             }
-            
-            Ok(())
+            #[cfg(not(feature = "javascript"))]
+            {
+                Err(anyhow::anyhow!("Task execution not available. Build with --features=javascript"))
+            }
         }
         Some(Commands::Serve { config: config_override }) => {
-            info!("Starting Ratchet server");
-            // Use config override if provided, otherwise use loaded config
-            let server_config = if config_override.is_some() {
-                load_config(config_override.as_ref())?
-            } else {
-                config
-            };
-            serve_command_with_config(server_config).await
+            #[cfg(feature = "server")]
+            {
+                info!("Starting Ratchet server");
+                // Use config override if provided, otherwise use loaded config
+                let server_config = if config_override.is_some() {
+                    load_config(config_override.as_ref())?
+                } else {
+                    config
+                };
+                let lib_config = convert_to_legacy_config(server_config)?;
+                serve_command_with_config(lib_config).await
+            }
+            #[cfg(not(feature = "server"))]
+            {
+                Err(anyhow::anyhow!("Server functionality not available. Build with --features=server"))
+            }
         }
         Some(Commands::McpServe { config: config_override, transport, host, port }) => {
-            if !is_mcp_stdio {
-                info!("Starting MCP server");
+            #[cfg(feature = "mcp-server")]
+            {
+                if !is_mcp_stdio {
+                    info!("Starting MCP server");
+                }
+                // Use config override if provided, otherwise use loaded config
+                let mcp_config = if config_override.is_some() {
+                    load_config(config_override.as_ref())?
+                } else {
+                    config
+                };
+                let lib_config = convert_to_legacy_config(mcp_config)?;
+                mcp_serve_command_with_config(lib_config, transport, host, *port).await
             }
-            // Use config override if provided, otherwise use loaded config
-            let mcp_config = if config_override.is_some() {
-                load_config(config_override.as_ref())?
-            } else {
-                config
-            };
-            mcp_serve_command_with_config(mcp_config, transport, host, *port).await
+            #[cfg(not(feature = "mcp-server"))]
+            {
+                Err(anyhow::anyhow!("MCP server functionality not available. Build with --features=mcp-server"))
+            }
         }
-        Some(Commands::Validate { from_fs }) => validate_task(from_fs),
-        Some(Commands::Test { from_fs }) => test_task(from_fs).await,
+        Some(Commands::Validate { from_fs }) => {
+            #[cfg(feature = "javascript")]
+            {
+                validate_task(from_fs)
+            }
+            #[cfg(not(feature = "javascript"))]
+            {
+                Err(anyhow::anyhow!("Task validation not available. Build with --features=javascript"))
+            }
+        }
+        Some(Commands::Test { from_fs }) => {
+            #[cfg(feature = "javascript")]
+            {
+                test_task(from_fs).await
+            }
+            #[cfg(not(feature = "javascript"))]
+            {
+                Err(anyhow::anyhow!("Task testing not available. Build with --features=javascript"))
+            }
+        }
         Some(Commands::Replay { from_fs, recording }) => {
-            info!("Replaying task from file system path: {} with recording: {:?}", from_fs, recording);
+            #[cfg(feature = "javascript")]
+            {
+                info!("Replaying task from file system path: {} with recording: {:?}", from_fs, recording);
 
-            // Run the replay
-            let result = replay_task(from_fs, recording).await?;
+                // Run the replay
+                let result = replay_task(from_fs, recording).await?;
 
-            // Pretty-print the result
-            let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
+                // Pretty-print the result
+                let formatted = to_string_pretty(&result).context("Failed to format result as JSON")?;
 
-            println!("Replay Result: {}", formatted);
-            info!("Task replay completed");
-            
-            Ok(())
+                println!("Replay Result: {}", formatted);
+                info!("Task replay completed");
+                
+                Ok(())
+            }
+            #[cfg(not(feature = "javascript"))]
+            {
+                Err(anyhow::anyhow!("Task replay not available. Build with --features=javascript"))
+            }
         }
         Some(Commands::Generate { generate_cmd }) => {
             match generate_cmd {
                 GenerateCommands::Task { path, label, description, version } => {
-                    handle_generate_task(path, label, description, version).await
+                    #[cfg(feature = "javascript")]
+                    {
+                        handle_generate_task(path, label, description, version).await
+                    }
+                    #[cfg(not(feature = "javascript"))]
+                    {
+                        Err(anyhow::anyhow!("Task generation not available. Build with --features=javascript"))
+                    }
                 }
             }
         }
