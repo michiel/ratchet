@@ -1,4 +1,4 @@
-use crate::logging::{logger::LogSink, LogEvent, LogLevel};
+use crate::{logger::LogSink, LogEvent, LogLevel};
 use colored::Colorize;
 use std::io::Write;
 

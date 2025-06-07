@@ -1,11 +1,11 @@
 use super::{init_logger, LoggingConfig};
-use crate::errors::RatchetError;
+use anyhow::Result;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 /// Initialize logging from configuration
-pub fn init_logging_from_config(config: &LoggingConfig) -> Result<(), RatchetError> {
+pub fn init_logging_from_config(config: &LoggingConfig) -> Result<()> {
     // If no sinks are configured, fall back to simple tracing
     if config.sinks.is_empty() {
         return init_simple_tracing(&config.level.to_string());
@@ -25,16 +25,16 @@ pub fn init_logging_from_config(config: &LoggingConfig) -> Result<(), RatchetErr
     // Use structured logging for complex configurations
     let logger = config
         .build_logger()
-        .map_err(|e| RatchetError::Configuration(format!("Failed to build logger: {}", e)))?;
+        .map_err(|e| anyhow::anyhow!("Failed to build logger: {}", e))?;
 
     init_logger(logger)
-        .map_err(|e| RatchetError::Configuration(format!("Failed to initialize logger: {}", e)))?;
+        .map_err(|e| anyhow::anyhow!("Failed to initialize logger: {}", e))?;
 
     Ok(())
 }
 
 /// Initialize simple tracing for basic console output
-pub fn init_simple_tracing(log_level: &str) -> Result<(), RatchetError> {
+pub fn init_simple_tracing(log_level: &str) -> Result<()> {
     let env_filter = EnvFilter::try_new(log_level)
         .or_else(|_| EnvFilter::try_from_default_env())
         .unwrap_or_else(|_| EnvFilter::new("info"));
@@ -45,7 +45,7 @@ pub fn init_simple_tracing(log_level: &str) -> Result<(), RatchetError> {
 }
 
 /// Initialize logging with both structured and tracing layers
-pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<(), RatchetError> {
+pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<()> {
     // Create tracing subscriber for console output
     let console_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
@@ -70,11 +70,11 @@ pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<(), RatchetError> {
         .any(|s| !matches!(s, super::config::SinkConfig::Console { .. }))
     {
         let logger = config.build_logger().map_err(|e| {
-            RatchetError::Configuration(format!("Failed to build structured logger: {}", e))
+            anyhow::anyhow!("Failed to build structured logger: {}", e)
         })?;
 
         init_logger(logger).map_err(|e| {
-            RatchetError::Configuration(format!("Failed to initialize structured logger: {}", e))
+            anyhow::anyhow!("Failed to initialize structured logger: {}", e)
         })?;
     }
 

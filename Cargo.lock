@@ -3943,6 +3943,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratchet-logging"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "colored",
+ "hostname",
+ "humantime-serde",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "ratchet-mcp"
 version = "0.0.6"
 dependencies = [
@@ -4124,6 +4146,7 @@ dependencies = [
  "rand 0.8.5",
  "ratchet-core",
  "ratchet-http",
+ "ratchet-logging",
  "regex",
  "reqwest 0.12.15",
  "sea-orm",

@@ -384,12 +384,12 @@ impl LLMExporter {
 
         // Add severity-specific prompts
         match error.severity {
-            crate::errors::ErrorSeverity::Critical => {
+            crate::severity::ErrorSeverity::Critical => {
                 prompts.push(
                     "What immediate actions should be taken for this critical error?".to_string(),
                 );
             }
-            crate::errors::ErrorSeverity::High => {
+            crate::severity::ErrorSeverity::High => {
                 prompts.push(
                     "How can we prevent this high-severity error from recurring?".to_string(),
                 );
@@ -554,7 +554,7 @@ pub fn format_markdown_report(report: &LLMErrorReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::ErrorSeverity;
+    use crate::severity::ErrorSeverity;
 
     #[test]
     fn test_llm_export() {

@@ -57,7 +57,7 @@ pub struct RatchetConfig {
 
     /// Logging configuration
     #[serde(default)]
-    pub logging: crate::logging::LoggingConfig,
+    pub logging: ratchet_logging::LoggingConfig,
 
     /// Output destinations configuration
     #[serde(default)]

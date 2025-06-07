@@ -1,4 +1,4 @@
-use crate::logging::{logger::LogSink, LogEvent};
+use crate::{logger::LogSink, LogEvent};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
