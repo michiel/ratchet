@@ -6,8 +6,9 @@ use ratchet_config::{ConfigLoader, RatchetConfig};
 use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
 
 #[cfg(feature = "server")]
-use ratchet_lib::execution::ipc::{
-    CoordinatorMessage, MessageEnvelope, TaskExecutionResult, WorkerMessage,
+use ratchet_execution::{
+    CoordinatorMessage, MessageEnvelope, ProcessExecutorConfig, ProcessTaskExecutor,
+    TaskExecutionResult, TaskValidationResult, WorkerMessage, WorkerStatus,
 };
 
 use ratchet_lib::{http::HttpManager, js_executor::execute_task, recording, task::Task};
@@ -177,7 +178,7 @@ async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
 #[cfg(feature = "server")]
 async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     use ratchet_lib::{
-        execution::{JobQueueManager, ProcessTaskExecutor},
+        execution::JobQueueManager,
         server::create_app,
     };
     use std::sync::Arc;
@@ -240,11 +241,16 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
 
     // Initialize process task executor
     info!("⚙️  Initializing task executor...");
-    let task_executor = Arc::new(
-        ProcessTaskExecutor::new(legacy_repositories.clone(), config.clone())
-            .await
-            .context("Failed to initialize process task executor")?,
-    );
+    
+    // Create executor config from the legacy config
+    let executor_config = ProcessExecutorConfig {
+        worker_count: config.execution.max_concurrent_tasks,
+        task_timeout_seconds: config.execution.max_execution_duration,
+        restart_on_crash: true,
+        max_restart_attempts: 3,
+    };
+    
+    let task_executor = Arc::new(ProcessTaskExecutor::new(executor_config));
 
     // Start worker processes
     info!("👷 Starting worker processes...");
@@ -271,38 +277,10 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
                 let mcp_task_repo = Arc::new(storage_repositories.task_repository());
                 let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
                 
-                let mcp_adapter = RatchetMcpAdapter::new(
-                    task_executor.clone(),
-                    mcp_task_repo,
-                    mcp_execution_repo,
-                );
-                
-                // Convert to ratchet-mcp config format
-                let mcp_server_config = ratchet_mcp::config::McpConfig {
-                    transport_type: match mcp_config.transport.as_str() {
-                        "stdio" => ratchet_mcp::config::SimpleTransportType::Stdio,
-                        "sse" => ratchet_mcp::config::SimpleTransportType::Sse,
-                        _ => ratchet_mcp::config::SimpleTransportType::Sse, // Default fallback
-                    },
-                    host: mcp_config.host.clone(),
-                    port: mcp_config.port,
-                    auth: ratchet_mcp::security::McpAuth::default(),
-                    limits: ratchet_mcp::config::ConnectionLimits::default(),
-                    timeouts: ratchet_mcp::config::Timeouts::default(),
-                    tools: ratchet_mcp::config::ToolConfig::default(),
-                };
-
-                // Create MCP server
-                match McpServer::with_adapter(mcp_server_config, mcp_adapter).await {
-                    Ok(mcp_server) => {
-                        info!("✅ MCP SSE service initialized for unified server");
-                        Some(mcp_server.create_sse_routes())
-                    }
-                    Err(e) => {
-                        error!("❌ Failed to create MCP server for routes: {}", e);
-                        None
-                    }
-                }
+                // TODO: Update MCP adapter to use new ProcessTaskExecutor
+                // For now, disable MCP integration in unified server mode
+                warn!("MCP integration temporarily disabled during ProcessTaskExecutor migration");
+                None
             }
             
             #[cfg(not(feature = "mcp-server"))]
@@ -318,10 +296,20 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     };
 
     // Create the application
+    // TODO: Update create_app to use new ProcessTaskExecutor
+    // For now, create a placeholder legacy executor for compatibility
+    let placeholder_executor = {
+        let placeholder_config = ratchet_lib::config::RatchetConfig::default();
+        Arc::new(ratchet_lib::execution::ProcessTaskExecutor::new(
+            legacy_repositories.clone(), 
+            placeholder_config
+        ).await.expect("Failed to create placeholder executor"))
+    };
+    
     let app = create_app(
         legacy_repositories,
         job_queue,
-        task_executor.clone(),
+        placeholder_executor,
         None,
         None,
         mcp_routes,
@@ -433,7 +421,6 @@ async fn mcp_serve_command_with_config(
     port: u16,
 ) -> Result<()> {
     let is_stdio = transport == "stdio";
-    use ratchet_lib::execution::ProcessTaskExecutor;
     use ratchet_mcp::{
         security::{McpAuth, McpAuthManager},
         server::{
@@ -509,16 +496,20 @@ async fn mcp_serve_command_with_config(
     let storage_config = database.get_config().clone();
     let legacy_repositories = convert_to_legacy_repository_factory(storage_config).await?;
 
-    // Initialize task executor for MCP - convert to legacy config for executor
+    // Initialize task executor for MCP
     if !is_stdio {
         info!("Initializing task executor for MCP");
     }
-    let legacy_config = convert_to_legacy_config(ratchet_config.clone())?;
-    let task_executor = Arc::new(
-        ProcessTaskExecutor::new(legacy_repositories, legacy_config)
-            .await
-            .context("Failed to initialize process task executor")?,
-    );
+    
+    // Create executor config from the ratchet config
+    let executor_config = ProcessExecutorConfig {
+        worker_count: ratchet_config.execution.max_concurrent_tasks,
+        task_timeout_seconds: ratchet_config.execution.max_execution_duration.as_secs(),
+        restart_on_crash: true,
+        max_restart_attempts: 3,
+    };
+    
+    let task_executor = Arc::new(ProcessTaskExecutor::new(executor_config));
 
     // Start worker processes for the executor
     if !is_stdio {
@@ -536,8 +527,17 @@ async fn mcp_serve_command_with_config(
     }
 
     // Create MCP adapter
+    // Create MCP adapter using the new ProcessTaskExecutor from ratchet-execution
+    use ratchet_execution::ProcessExecutorConfig;
+    let mcp_executor_config = ProcessExecutorConfig {
+        worker_count: ratchet_config.execution.max_concurrent_tasks,
+        task_timeout_seconds: ratchet_config.execution.max_execution_duration.as_secs(),
+        restart_on_crash: true,
+        max_restart_attempts: 3,
+    };
+    let mcp_executor = Arc::new(ratchet_execution::ProcessTaskExecutor::new(mcp_executor_config));
     let adapter = RatchetMcpAdapter::new(
-        task_executor.clone(),
+        mcp_executor,
         task_repo.clone(),
         execution_repo.clone(),
     );
@@ -1212,7 +1212,7 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
                 Ok(mut task) => match task.validate() {
                     Ok(_) => {
                         info!("Worker task validation passed: {}", task_path);
-                        ratchet_lib::execution::ipc::TaskValidationResult {
+                        TaskValidationResult {
                             valid: true,
                             error_message: None,
                             error_details: None,
@@ -1220,7 +1220,7 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
                     }
                     Err(e) => {
                         error!("Worker task validation failed: {}", e);
-                        ratchet_lib::execution::ipc::TaskValidationResult {
+                        TaskValidationResult {
                             valid: false,
                             error_message: Some(e.to_string()),
                             error_details: None,
@@ -1229,7 +1229,7 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
                 },
                 Err(e) => {
                     error!("Worker failed to load task for validation: {}", e);
-                    ratchet_lib::execution::ipc::TaskValidationResult {
+                    TaskValidationResult {
                         valid: false,
                         error_message: Some(format!("Failed to load task: {}", e)),
                         error_details: None,
@@ -1247,7 +1247,7 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
             CoordinatorMessage::Pong {
                 correlation_id,
                 worker_id: "worker".to_string(), // TODO: Use actual worker ID
-                status: ratchet_lib::execution::ipc::WorkerStatus {
+                status: WorkerStatus {
                     worker_id: "worker".to_string(),
                     pid: std::process::id(),
                     started_at: Utc::now(),

@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::{error, info};
 
-use ratchet_lib::execution::ProcessTaskExecutor;
+use ratchet_execution::ProcessTaskExecutor;
 use ratchet_lib::services::base::{Service, ServiceHealth, ServiceMetrics};
 use ratchet_storage::seaorm::repositories::{
     execution_repository::ExecutionRepository, task_repository::TaskRepository,
@@ -451,11 +451,15 @@ mod tests {
             .unwrap();
         let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
 
-        let executor = Arc::new(
-            ProcessTaskExecutor::new(legacy_repos, config)
-                .await
-                .unwrap(),
-        );
+        // Create ProcessTaskExecutor using the new API from ratchet-execution
+        use ratchet_execution::ProcessExecutorConfig;
+        let executor_config = ProcessExecutorConfig {
+            worker_count: 2,
+            task_timeout_seconds: 60,
+            restart_on_crash: true,
+            max_restart_attempts: 3,
+        };
+        let executor = Arc::new(ProcessTaskExecutor::new(executor_config));
 
         (
             executor,

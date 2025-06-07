@@ -51,6 +51,7 @@ ratchet-ipc = { path = "../ratchet-ipc" }
 ratchet-runtime = { path = "../ratchet-runtime" }
 ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-config = { path = "../ratchet-config" }
+ratchet-execution = { path = "../ratchet-execution" }
 ratchet_lib = { path = "../ratchet-lib" }
 
 [features]

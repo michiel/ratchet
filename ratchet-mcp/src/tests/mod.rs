@@ -268,7 +268,7 @@ async fn test_mcp_server_error_handling() {
 
 /// Create a test adapter with mock repositories
 async fn create_test_adapter() -> RatchetMcpAdapter {
-    use ratchet_lib::execution::ProcessTaskExecutor;
+    use ratchet_execution::{ProcessTaskExecutor, ProcessExecutorConfig};
     use ratchet_storage::seaorm::{
         connection::DatabaseConnection, repositories::RepositoryFactory,
     };
@@ -292,16 +292,14 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     let task_repository = Arc::new(repo_factory.task_repository());
     let execution_repository = Arc::new(repo_factory.execution_repository());
 
-    // Create executor with test config (using legacy config for now since executor still needs it)
-    let config = ratchet_lib::config::RatchetConfig::default();
-    let legacy_repo_factory = convert_to_legacy_repository_factory_for_test(db_config.clone())
-        .await
-        .expect("Failed to create legacy repository factory");
-    let executor = Arc::new(
-        ProcessTaskExecutor::new(legacy_repo_factory, config)
-            .await
-            .expect("Failed to create test executor"),
-    );
+    // Create executor using the new API from ratchet-execution
+    let executor_config = ProcessExecutorConfig {
+        worker_count: 1,
+        task_timeout_seconds: 30,
+        restart_on_crash: true,
+        max_restart_attempts: 3,
+    };
+    let executor = Arc::new(ProcessTaskExecutor::new(executor_config));
 
     RatchetMcpAdapter::new(executor, task_repository, execution_repository)
 }
