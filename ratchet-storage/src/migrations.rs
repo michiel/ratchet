@@ -5,6 +5,7 @@
 use crate::StorageResult;
 
 /// Migration trait for database schema changes
+#[allow(async_fn_in_trait)]
 pub trait Migration {
     /// Apply the migration
     async fn up(&self) -> StorageResult<()>;
