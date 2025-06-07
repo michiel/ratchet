@@ -1,7 +1,7 @@
 use crate::errors::JsExecutionError;
 use crate::js_executor::execute_task;
 use crate::task::{Task, TaskError};
-use crate::types::HttpMethod;
+use crate::http::HttpMethod;
 use anyhow::Result;
 use serde_json::Value as JsonValue;
 use std::fs;

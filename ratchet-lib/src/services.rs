@@ -3,6 +3,7 @@ use crate::errors::JsExecutionError;
 use crate::http::HttpManager;
 use crate::task::{Task, TaskError};
 use async_trait::async_trait;
+use ratchet_http::HttpClient;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use thiserror::Error;

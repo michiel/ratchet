@@ -11,7 +11,7 @@ use ratchet_execution::{
     TaskExecutionResult, TaskValidationResult, WorkerMessage, WorkerStatus,
 };
 
-use ratchet_lib::{http::HttpManager, js_executor::execute_task, recording, task::Task};
+use ratchet_lib::{http::{HttpConfig, HttpManager}, js_executor::execute_task, recording, task::Task};
 
 #[cfg(feature = "database")]
 use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};

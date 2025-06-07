@@ -1,4 +1,4 @@
-use super::manager::call_http;
+use ratchet_http::call_http;
 use boa_engine::{
     property::PropertyKey, Context, JsError, JsNativeError, JsResult, JsString, JsValue, Source,
 };

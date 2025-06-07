@@ -1,5 +1,8 @@
+//! HTTP client implementation
+
 use crate::config::HttpConfig;
-use crate::types::{HttpMethod, HttpMethodError};
+use crate::errors::HttpError;
+use crate::types::HttpMethod;
 use anyhow::Result;
 use chrono::Utc;
 use reqwest::{
@@ -11,6 +14,17 @@ use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
 use std::str::FromStr;
 use tracing::{debug, info, warn};
+
+/// HTTP client trait for making HTTP requests
+#[async_trait::async_trait]
+pub trait HttpClient {
+    async fn call_http(
+        &self,
+        url: &str,
+        params: Option<&JsonValue>,
+        body: Option<&JsonValue>,
+    ) -> Result<JsonValue, HttpError>;
+}
 
 /// HTTP Manager for handling HTTP requests with mock support
 #[derive(Debug, Clone)]
@@ -77,7 +91,7 @@ impl HttpManager {
         method: &str,
         url: &str,
         response: JsonValue,
-    ) -> Result<(), HttpMethodError> {
+    ) -> Result<(), crate::types::HttpMethodError> {
         let http_method: HttpMethod = method.parse()?;
         self.add_mock(http_method, url, response);
         Ok(())
@@ -88,14 +102,17 @@ impl HttpManager {
         self.mocks.clear();
         debug!("Cleared all HTTP mocks");
     }
+}
 
+#[async_trait::async_trait]
+impl HttpClient for HttpManager {
     /// Perform an HTTP request similar to the JavaScript fetch API
-    pub async fn call_http(
+    async fn call_http(
         &self,
         url: &str,
         params: Option<&JsonValue>,
         body: Option<&JsonValue>,
-    ) -> Result<JsonValue, super::errors::HttpError> {
+    ) -> Result<JsonValue, HttpError> {
         let start_time = Utc::now();
 
         info!("Making HTTP request to: {}", url);
@@ -153,7 +170,7 @@ impl HttpManager {
                 }
 
                 debug!("No matching mock response found for {} {}", method, url);
-                return Err(super::errors::HttpError::InvalidUrl(
+                return Err(HttpError::InvalidUrl(
                     "No mock response available in offline mode".to_string(),
                 ));
             }
@@ -212,7 +229,7 @@ impl HttpManager {
                 for (key, value) in headers {
                     if let Some(value_str) = value.as_str() {
                         let header_name = HeaderName::from_str(key).map_err(|_| {
-                            super::errors::HttpError::InvalidHeaderName(key.to_string())
+                            HttpError::InvalidHeaderName(key.to_string())
                         })?;
 
                         if let Ok(header_value) = HeaderValue::from_str(value_str) {
@@ -302,23 +319,26 @@ impl HttpManager {
         };
 
         // Record the HTTP request if recording is enabled
-        let end_time = Utc::now();
-        let duration_ms = (end_time - start_time).num_milliseconds() as u64;
+        #[cfg(feature = "recording")]
+        {
+            let end_time = Utc::now();
+            let duration_ms = (end_time - start_time).num_milliseconds() as u64;
 
-        if crate::recording::is_recording() {
-            let response_body_str = serde_json::to_string(&response_body).unwrap_or_default();
-            if let Err(e) = crate::recording::record_http_request(
-                url,
-                method.as_str(),
-                request_headers.as_ref(),
-                request_body_str.as_deref(),
-                status_code,
-                Some(&response_headers),
-                &response_body_str,
-                start_time,
-                duration_ms,
-            ) {
-                warn!("Failed to record HTTP request: {}", e);
+            if crate::recording::is_recording() {
+                let response_body_str = serde_json::to_string(&response_body).unwrap_or_default();
+                if let Err(e) = crate::recording::record_http_request(
+                    url,
+                    method.as_str(),
+                    request_headers.as_ref(),
+                    request_body_str.as_deref(),
+                    status_code,
+                    Some(&response_headers),
+                    &response_body_str,
+                    start_time,
+                    duration_ms,
+                ) {
+                    warn!("Failed to record HTTP request: {}", e);
+                }
             }
         }
 
@@ -340,14 +360,4 @@ impl HttpManager {
 /// Create a default HttpManager instance for backward compatibility
 pub fn create_http_manager() -> HttpManager {
     HttpManager::new()
-}
-
-/// Perform an HTTP request using a default HttpManager (for backward compatibility)
-pub async fn call_http(
-    url: &str,
-    params: Option<&JsonValue>,
-    body: Option<&JsonValue>,
-) -> Result<JsonValue, super::errors::HttpError> {
-    let manager = HttpManager::new();
-    manager.call_http(url, params, body).await
 }

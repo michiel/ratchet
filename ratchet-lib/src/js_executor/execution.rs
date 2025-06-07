@@ -202,8 +202,9 @@ pub async fn execute_task(
             validate_json(&input_data, &input_schema)?;
 
             // Record input if recording is active
-            if crate::recording::is_recording() {
-                crate::recording::record_input(&input_data).map_err(|e| {
+            #[cfg(feature = "default")]
+            if ratchet_http::is_recording() {
+                ratchet_http::record_input(&input_data).map_err(|e| {
                     JsExecutionError::ExecutionError(format!("Failed to record input: {}", e))
                 })?;
             }
@@ -247,8 +248,9 @@ pub async fn execute_task(
             validate_json(&result, &output_schema)?;
 
             // Record output if recording is active
-            if crate::recording::is_recording() {
-                crate::recording::record_output(&result).map_err(|e| {
+            #[cfg(feature = "default")]
+            if ratchet_http::is_recording() {
+                ratchet_http::record_output(&result).map_err(|e| {
                     JsExecutionError::ExecutionError(format!("Failed to record output: {}", e))
                 })?;
             }
@@ -314,8 +316,9 @@ pub async fn execute_task_with_context(
             validate_json(&input_data, &input_schema)?;
 
             // Record input if recording is active
-            if crate::recording::is_recording() {
-                crate::recording::record_input(&input_data).map_err(|e| {
+            #[cfg(feature = "default")]
+            if ratchet_http::is_recording() {
+                ratchet_http::record_input(&input_data).map_err(|e| {
                     JsExecutionError::ExecutionError(format!("Failed to record input: {}", e))
                 })?;
             }
@@ -366,8 +369,9 @@ pub async fn execute_task_with_context(
             validate_json(&result, &output_schema)?;
 
             // Record output if recording is active
-            if crate::recording::is_recording() {
-                crate::recording::record_output(&result).map_err(|e| {
+            #[cfg(feature = "default")]
+            if ratchet_http::is_recording() {
+                ratchet_http::record_output(&result).map_err(|e| {
                     JsExecutionError::ExecutionError(format!("Failed to record output: {}", e))
                 })?;
             }

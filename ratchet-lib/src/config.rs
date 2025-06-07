@@ -49,7 +49,7 @@ pub struct RatchetConfig {
 
     /// HTTP client configuration
     #[serde(default)]
-    pub http: HttpConfig,
+    pub http: ratchet_http::HttpConfig,
 
     /// Caching configuration
     #[serde(default)]
@@ -97,29 +97,6 @@ pub struct ExecutionConfig {
     pub timeout_grace_period: u64,
 }
 
-/// HTTP client configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct HttpConfig {
-    /// Request timeout in seconds
-    #[serde(
-        with = "serde_duration_seconds",
-        default = "default_http_timeout_duration"
-    )]
-    pub timeout: Duration,
-
-    /// Maximum number of redirects to follow
-    #[serde(default = "default_max_redirects")]
-    pub max_redirects: u32,
-
-    /// User agent string
-    #[serde(default = "default_user_agent")]
-    pub user_agent: String,
-
-    /// Whether to verify SSL certificates
-    #[serde(default = "default_true")]
-    pub verify_ssl: bool,
-}
 
 /// Cache configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,15 +258,6 @@ fn default_max_concurrent_tasks() -> usize {
 fn default_grace_period() -> u64 {
     5
 }
-fn default_http_timeout_duration() -> Duration {
-    Duration::from_secs(30)
-}
-fn default_max_redirects() -> u32 {
-    10
-}
-fn default_user_agent() -> String {
-    "Ratchet/1.0".to_string()
-}
 fn default_cache_size() -> usize {
     100
 }
@@ -338,16 +306,6 @@ impl Default for ExecutionConfig {
     }
 }
 
-impl Default for HttpConfig {
-    fn default() -> Self {
-        Self {
-            timeout: default_http_timeout_duration(),
-            max_redirects: default_max_redirects(),
-            user_agent: default_user_agent(),
-            verify_ssl: default_true(),
-        }
-    }
-}
 
 impl Default for CacheConfig {
     fn default() -> Self {

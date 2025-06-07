@@ -1,3 +1,5 @@
+//! HTTP error types
+
 use crate::types::HttpMethodError;
 
 /// Error type for HTTP operations
@@ -18,12 +20,9 @@ pub enum HttpError {
     #[error("Invalid JSON: {0}")]
     InvalidJson(#[from] serde_json::Error),
 
-    #[error("JavaScript error: {0}")]
-    JsError(String),
-}
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
 
-/// Convert a JS error to an HttpError
-#[allow(dead_code)]
-pub fn js_error_to_http_error(err: boa_engine::JsError) -> HttpError {
-    HttpError::JsError(err.to_string())
+    #[error("Recording error: {0}")]
+    RecordingError(String),
 }
