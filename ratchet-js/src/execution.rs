@@ -1,7 +1,7 @@
 //! Simplified JavaScript execution without Task dependencies
 
 use crate::{conversion::{convert_js_result_to_json, prepare_input_argument}, error_handling::{parse_js_error, register_error_types}, JsExecutionError};
-use boa_engine::{Context as BoaContext, Source};
+use boa_engine::{Context as BoaContext, Source, Script, property::PropertyKey, JsString};
 use ratchet_core::validation::{parse_schema, validate_json};
 use serde_json::Value as JsonValue;
 use std::path::Path;
@@ -10,56 +10,51 @@ use tracing::{debug, info};
 /// Call a JavaScript function with input data
 pub async fn call_js_function(
     context: &mut BoaContext,
-    compiled_code: &boa_engine::Code,
+    script: &Script,
     input_data: &JsonValue,
     http_manager: &impl ratchet_http::HttpClient,
 ) -> Result<JsonValue, JsExecutionError> {
     // Prepare input argument
     let input_arg = prepare_input_argument(context, input_data)?;
 
-    // Execute the compiled code first to define functions
-    context.execute(compiled_code).map_err(|e| {
-        if let Ok(parsed_error) = parse_js_error(&e.to_string()) {
-            JsExecutionError::TypedJsError(parsed_error)
-        } else {
-            JsExecutionError::RuntimeError(e.to_string())
-        }
+    // Execute the script first to define functions
+    script.evaluate(context).map_err(|e| {
+        let parsed_error = parse_js_error(&e.to_string());
+        JsExecutionError::TypedJsError(parsed_error)
     })?;
 
     // Get the main function from the global context
-    let main_function = context.global_object().get("main", context).map_err(|e| {
+    let main_function = context.global_object().get(PropertyKey::from(JsString::from("main")), context).map_err(|e| {
         JsExecutionError::RuntimeError(format!("Failed to get main function: {}", e))
     })?;
 
     // Check for HTTP fetch calls
     let result = if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
         debug!("Detected HTTP fetch call to: {}", url);
-        crate::http_integration::handle_fetch_processing(
+        let js_result = crate::http_integration::handle_fetch_processing(
             context,
             &main_function,
-            input_arg,
-            &url,
-            params.as_ref(),
-            body.as_ref(),
+            &input_arg,
             http_manager,
+            url,
+            params,
+            body,
         )
-        .await?
+        .await?;
+        convert_js_result_to_json(context, js_result)?
     } else {
         // Call the main function normally
         let result = main_function
             .as_callable()
             .ok_or_else(|| JsExecutionError::RuntimeError("main is not a function".to_string()))?
-            .call(&input_arg.into(), &[], context)
+            .call(&boa_engine::JsValue::undefined(), &[input_arg], context)
             .map_err(|e| {
-                if let Ok(parsed_error) = parse_js_error(&e.to_string()) {
-                    JsExecutionError::TypedJsError(parsed_error)
-                } else {
-                    JsExecutionError::RuntimeError(e.to_string())
-                }
+                let parsed_error = parse_js_error(&e.to_string());
+                JsExecutionError::TypedJsError(parsed_error)
             })?;
 
-        convert_js_result_to_json(context, result)
-    }?;
+        convert_js_result_to_json(context, result)?
+    };
 
     Ok(result)
 }
@@ -67,7 +62,7 @@ pub async fn call_js_function(
 /// Call a JavaScript function with input data and execution context
 pub async fn call_js_function_with_context(
     context: &mut BoaContext,
-    compiled_code: &boa_engine::Code,
+    script: &Script,
     input_data: &JsonValue,
     http_manager: &impl ratchet_http::HttpClient,
     execution_context: &crate::ExecutionContext,
@@ -81,50 +76,45 @@ pub async fn call_js_function_with_context(
         "jobId": execution_context.job_id
     }))?;
 
-    // Execute the compiled code first to define functions
-    context.execute(compiled_code).map_err(|e| {
-        if let Ok(parsed_error) = parse_js_error(&e.to_string()) {
-            JsExecutionError::TypedJsError(parsed_error)
-        } else {
-            JsExecutionError::RuntimeError(e.to_string())
-        }
+    // Execute the script first to define functions
+    script.evaluate(context).map_err(|e| {
+        let parsed_error = parse_js_error(&e.to_string());
+        JsExecutionError::TypedJsError(parsed_error)
     })?;
 
     // Get the main function from the global context
-    let main_function = context.global_object().get("main", context).map_err(|e| {
+    let main_function = context.global_object().get(PropertyKey::from(JsString::from("main")), context).map_err(|e| {
         JsExecutionError::RuntimeError(format!("Failed to get main function: {}", e))
     })?;
 
     // Check for HTTP fetch calls
     let result = if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
         debug!("Detected HTTP fetch call to: {}", url);
-        crate::http_integration::handle_fetch_processing_with_context(
+        let js_result = crate::http_integration::handle_fetch_processing_with_context(
             context,
             &main_function,
-            input_arg,
-            context_arg,
-            &url,
-            params.as_ref(),
-            body.as_ref(),
+            &input_arg,
+            &context_arg,
             http_manager,
+            url,
+            params,
+            body,
         )
-        .await?
+        .await?;
+        convert_js_result_to_json(context, js_result)?
     } else {
         // Call the main function with both input and context
         let result = main_function
             .as_callable()
             .ok_or_else(|| JsExecutionError::RuntimeError("main is not a function".to_string()))?
-            .call(&input_arg.into(), &[context_arg.into()], context)
+            .call(&boa_engine::JsValue::undefined(), &[input_arg, context_arg], context)
             .map_err(|e| {
-                if let Ok(parsed_error) = parse_js_error(&e.to_string()) {
-                    JsExecutionError::TypedJsError(parsed_error)
-                } else {
-                    JsExecutionError::RuntimeError(e.to_string())
-                }
+                let parsed_error = parse_js_error(&e.to_string());
+                JsExecutionError::TypedJsError(parsed_error)
             })?;
 
-        convert_js_result_to_json(context, result)
-    }?;
+        convert_js_result_to_json(context, result)?
+    };
 
     Ok(result)
 }
@@ -206,16 +196,16 @@ pub async fn execute_js_with_content(
     debug!("Compiling JavaScript code");
     // Parse and compile the JavaScript code
     let source = Source::from_bytes(js_code);
-    let func = context.compile(&source).map_err(|e| {
+    let script = Script::parse(source, None, &mut context).map_err(|e| {
         JsExecutionError::CompilationError(format!("Compilation failed: {}", e))
     })?;
 
     debug!("Calling JavaScript function");
     // Call the JavaScript function with the input data and execution context
     let result = if let Some(exec_ctx) = execution_context {
-        call_js_function_with_context(&mut context, &func, &input_data, http_manager, exec_ctx).await?
+        call_js_function_with_context(&mut context, &script, &input_data, http_manager, exec_ctx).await?
     } else {
-        call_js_function(&mut context, &func, &input_data, http_manager).await?
+        call_js_function(&mut context, &script, &input_data, http_manager).await?
     };
 
     // Validate output against schema if provided

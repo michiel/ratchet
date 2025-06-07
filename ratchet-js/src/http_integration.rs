@@ -1,7 +1,6 @@
 use crate::JsExecutionError;
 use crate::error_handling::parse_js_error;
 use boa_engine::{property::PropertyKey, Context as BoaContext, JsString, Source};
-use ratchet_http::HttpClient;
 use serde_json::Value as JsonValue;
 use tracing::debug;
 
@@ -160,14 +159,11 @@ pub async fn handle_fetch_processing(
 
     debug!("Re-calling JavaScript function with updated fetch");
 
-    // Get the function as an object
-    let func_obj = func.as_object().ok_or_else(|| {
-        JsExecutionError::ExecutionError("Failed to convert to object".to_string())
-    })?;
-
     // Re-call the JavaScript function now that fetch will return the real result
-    let result = func_obj
-        .call(func, &[input_arg.clone()], context)
+    let result = func
+        .as_callable()
+        .ok_or_else(|| JsExecutionError::ExecutionError("Function is not callable".to_string()))?
+        .call(&boa_engine::JsValue::undefined(), &[input_arg.clone()], context)
         .map_err(|e| {
             let error_message = e.to_string();
             // Try to parse as a typed JS error first
@@ -213,7 +209,7 @@ pub async fn handle_fetch_processing_with_context(
     debug!("HTTP request completed, setting result");
 
     // Set the HTTP response result in the JavaScript context
-    crate::js_executor::conversion::set_js_value(
+    crate::conversion::set_js_value(
         context,
         "__http_result",
         &serde_json::to_value(response_result).map_err(|e| {
@@ -262,14 +258,11 @@ pub async fn handle_fetch_processing_with_context(
 
     debug!("Re-calling JavaScript function with updated fetch and context");
 
-    // Get the function as an object
-    let func_obj = func.as_object().ok_or_else(|| {
-        JsExecutionError::ExecutionError("Failed to convert to object".to_string())
-    })?;
-
     // Re-call the JavaScript function with both input and context now that fetch will return the real result
-    let result = func_obj
-        .call(func, &[input_arg.clone(), context_arg.clone()], context)
+    let result = func
+        .as_callable()
+        .ok_or_else(|| JsExecutionError::ExecutionError("Function is not callable".to_string()))?
+        .call(&boa_engine::JsValue::undefined(), &[input_arg.clone(), context_arg.clone()], context)
         .map_err(|e| {
             let error_message = e.to_string();
             // Try to parse as a typed JS error first

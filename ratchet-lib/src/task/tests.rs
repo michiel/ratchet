@@ -77,11 +77,15 @@ fn test_load_from_sample() {
                 assert!(path.contains("main.js"));
                 assert!(content.is_none()); // Content should not be loaded initially
             }
+            TaskType::CoreTask { .. } => {
+                // Core task is valid but we're testing JS task loading in this case
+                panic!("Expected JsTask for filesystem loading test");
+            }
         }
 
         // Test content loading
         task.ensure_content_loaded().unwrap();
-        let content = task.get_js_content().unwrap();
+        let content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
         assert!(!content.is_empty());
 
         // Check schema properties
@@ -115,6 +119,9 @@ fn test_from_fs() {
             assert!(path.contains("main.js"));
             assert!(content.is_none()); // Content should not be loaded initially
         }
+        TaskType::CoreTask { .. } => {
+            panic!("Expected JsTask for ZIP loading test");
+        }
     }
 
     // Test loading content
@@ -126,10 +133,14 @@ fn test_from_fs() {
             let js_content = content.as_ref().unwrap();
             assert!(js_content.contains("function")); // Check content contains expected text
         }
+        TaskType::CoreTask { .. } => {
+            // For core tasks, content is stored in the task.content field
+            assert!(task.content.is_some());
+        }
     }
 
     // Test get_js_content
-    let js_content = task.get_js_content().unwrap();
+    let js_content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
     assert!(js_content.contains("function"));
 
     // Test purge_content
@@ -138,6 +149,10 @@ fn test_from_fs() {
     match &task.task_type {
         TaskType::JsTask { content, .. } => {
             assert!(content.is_none()); // Content should be purged
+        }
+        TaskType::CoreTask { .. } => {
+            // For core tasks, purging affects the task.content field
+            // The test here depends on the specific purge implementation for core tasks
         }
     }
 
@@ -280,7 +295,7 @@ fn test_from_zip() {
 
     // Test loading content
     task.ensure_content_loaded().unwrap();
-    let content = task.get_js_content().unwrap();
+    let content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
     assert!(content.contains("function"));
 
     // Check schema properties
@@ -311,7 +326,7 @@ fn test_sample_zip() {
 
         // Test content loading
         task.ensure_content_loaded().unwrap();
-        let content = task.get_js_content().unwrap();
+        let content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
         assert!(!content.is_empty());
 
         // Check schema properties

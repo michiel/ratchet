@@ -21,6 +21,7 @@ pub enum JsTaskError {
 
 /// JavaScript task runner
 pub struct JsTaskRunner {
+    #[allow(dead_code)]
     http_enabled: bool,
 }
 

@@ -116,4 +116,7 @@ pub enum JsExecutionError {
         error_type: JsErrorType,
         message: String,
     },
+
+    #[error("Ratchet error: {0}")]
+    RatchetError(#[from] ratchet_core::error::RatchetError),
 }

@@ -53,7 +53,7 @@ pub fn convert_js_result_to_json(
         .to_string(context)
         .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
 
-    let json_str = result_str.to_std_string().unwrap();
+    let json_str = result_str.to_std_string_escaped();
 
     // Parse the JSON string into a JsonValue
     serde_json::from_str(&json_str)

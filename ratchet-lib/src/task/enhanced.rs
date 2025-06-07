@@ -189,6 +189,11 @@ impl Task {
     pub fn validate(&mut self) -> Result<(), crate::task::TaskError> {
         super::validation::validate_task(self)
     }
+    
+    /// Purge content from memory to save space
+    pub fn purge_content(&mut self) {
+        super::cache::purge_content(&mut self.task_type)
+    }
 }
 
 /// Task builder for easier construction
