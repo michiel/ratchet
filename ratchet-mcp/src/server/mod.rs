@@ -6,6 +6,7 @@ pub mod config;
 pub mod handler;
 pub mod progress;
 pub mod service;
+pub mod task_dev_tools;
 pub mod tools;
 
 pub use adapter::{RatchetMcpAdapter, RatchetMcpAdapterBuilder};
@@ -294,7 +295,7 @@ impl McpServer {
 
         use axum::{
             extract::{Path, State},
-            http::{header::CONTENT_TYPE, HeaderMap, StatusCode},
+            http::{HeaderMap, StatusCode},
             response::{sse::Event, Sse},
             routing::{get, post},
             Json, Router,
@@ -440,7 +441,7 @@ impl McpServer {
                 axum::http::Method::POST,
                 axum::http::Method::OPTIONS,
             ])
-            .allow_headers([CONTENT_TYPE, axum::http::header::AUTHORIZATION])
+            .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::AUTHORIZATION])
             .allow_credentials(false);
 
         // Build the app
@@ -480,7 +481,7 @@ impl McpServer {
     pub fn create_sse_routes(&self) -> axum::Router {
         use axum::{
             extract::{Path, State},
-            http::{header::CONTENT_TYPE, HeaderMap, StatusCode},
+            http::{HeaderMap, StatusCode},
             response::{sse::Event, Sse},
             routing::{get, post},
             Json, Router,

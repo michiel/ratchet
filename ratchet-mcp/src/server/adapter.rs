@@ -41,7 +41,7 @@ impl ExecutorType {
                     .execute_task_send(task_id, input_data, context)
                     .await
             }
-            ExecutorType::Runtime(executor) => {
+            ExecutorType::Runtime(_executor) => {
                 // For runtime executor, we need to implement this
                 // This is a simplified implementation - in production you'd want proper conversion
                 Err(ExecutionError::ExecutionFailed(
