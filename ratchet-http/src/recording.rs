@@ -1,3 +1,8 @@
+//! HTTP request recording functionality
+//! 
+//! This module provides HAR (HTTP Archive) format recording capabilities
+//! for debugging and testing purposes.
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value as JsonValue};

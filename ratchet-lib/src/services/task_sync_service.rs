@@ -27,7 +27,7 @@ impl TaskSyncService {
     /// This is called when a task is loaded into the registry
     pub async fn sync_task_to_db(&self, task: &Task) -> Result<()> {
         let task_uuid = task.metadata.uuid;
-        let version = &task.metadata.version;
+        let version = &task.metadata.core.version;
 
         // Check if this exact version already exists in database
         if let Ok(Some(existing)) = self.task_repo.find_by_uuid(task_uuid).await {
@@ -111,9 +111,9 @@ impl TaskSyncService {
                 // Core data from registry
                 id: db_task.map(|t| t.id),
                 uuid: task_uuid,
-                version: registry_task.metadata.version.clone(),
+                version: registry_task.metadata.core.version.clone(),
                 label: registry_task.metadata.label.clone(),
-                description: registry_task.metadata.description.clone(),
+                description: registry_task.metadata.core.description.clone().unwrap_or_default(),
 
                 // Registry info
                 available_versions: self.registry.list_versions(task_uuid).await?,
@@ -147,9 +147,9 @@ impl TaskSyncService {
             let unified = UnifiedTask {
                 id: db_task.as_ref().map(|t| t.id),
                 uuid: registry_task.metadata.uuid,
-                version: registry_task.metadata.version.clone(),
+                version: registry_task.metadata.core.version.clone(),
                 label: registry_task.metadata.label.clone(),
-                description: registry_task.metadata.description.clone(),
+                description: registry_task.metadata.core.description.clone().unwrap_or_default(),
 
                 available_versions: self.registry.list_versions(uuid).await?,
                 registry_source: true,

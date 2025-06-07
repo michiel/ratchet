@@ -7,7 +7,7 @@ use tokio::task::JoinHandle;
 use tokio::sync::Mutex;
 
 use ratchet_lib::services::base::{Service, ServiceHealth, ServiceMetrics, HealthStatus};
-use ratchet_lib::execution::ProcessTaskExecutor;
+use ratchet_execution::ProcessTaskExecutor;
 use ratchet_storage::seaorm::repositories::{
     task_repository::TaskRepository,
     execution_repository::ExecutionRepository,
@@ -411,14 +411,32 @@ mod tests {
     use ratchet_lib::database::{DatabaseConnection, repositories::RepositoryFactory};
 
     async fn create_test_dependencies() -> (Arc<ProcessTaskExecutor>, Arc<TaskRepository>, Arc<ExecutionRepository>) {
-        let config = RatchetConfig::default();
-        let db = DatabaseConnection::new(config.database.clone()).await.unwrap();
-        db.migrate().await.unwrap();
+        // Create storage-based repositories
+        let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
+            url: "sqlite::memory:".to_string(),
+            max_connections: 5,
+            connection_timeout: std::time::Duration::from_secs(10),
+        };
+        let storage_db = ratchet_storage::seaorm::connection::DatabaseConnection::new(storage_db_config)
+            .await.unwrap();
+        storage_db.migrate().await.unwrap();
+        let storage_repos = ratchet_storage::seaorm::repositories::RepositoryFactory::new(storage_db);
         
-        let repos = RepositoryFactory::new(db);
-        let executor = Arc::new(ProcessTaskExecutor::new(repos.clone(), config).await.unwrap());
+        // Create ProcessTaskExecutor using the new API from ratchet-execution
+        use ratchet_execution::ProcessExecutorConfig;
+        let executor_config = ProcessExecutorConfig {
+            worker_count: 2,
+            task_timeout_seconds: 60,
+            restart_on_crash: true,
+            max_restart_attempts: 3,
+        };
+        let executor = Arc::new(ProcessTaskExecutor::new(executor_config));
         
-        (executor, repos.task_repository(), repos.execution_repository())
+        (
+            executor,
+            Arc::new(storage_repos.task_repository()),
+            Arc::new(storage_repos.execution_repository()),
+        )
     }
 
     #[tokio::test]

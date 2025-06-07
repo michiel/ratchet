@@ -1,4 +1,4 @@
-use crate::logging::{logger::LogSink, LogEvent, LogLevel};
+use crate::{logger::LogSink, LogEvent, LogLevel};
 use chrono::Local;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};

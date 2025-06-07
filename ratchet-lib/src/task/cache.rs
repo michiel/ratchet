@@ -48,6 +48,10 @@ pub fn ensure_content_loaded(task_type: &mut TaskType) -> Result<(), TaskError> 
 
             Ok(())
         }
+        TaskType::CoreTask { .. } => {
+            // Core tasks don't need cache management
+            Ok(())
+        }
     }
 }
 
@@ -59,6 +63,9 @@ pub fn purge_content(task_type: &mut TaskType) {
                 debug!("Purging JavaScript content from memory for: {}", path);
             }
             *content = None;
+        }
+        TaskType::CoreTask { .. } => {
+            // Core tasks don't need cache management
         }
     }
 }

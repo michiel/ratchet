@@ -1,6 +1,7 @@
 use crate::errors::JsExecutionError;
 use crate::js_executor::error_handling::parse_js_error;
 use boa_engine::{property::PropertyKey, Context as BoaContext, JsString, Source};
+use ratchet_http::HttpClient;
 use serde_json::Value as JsonValue;
 use tracing::debug;
 

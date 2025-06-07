@@ -1,4 +1,4 @@
-use crate::errors::unified::ErrorSeverity;
+use crate::severity::ErrorSeverity;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;

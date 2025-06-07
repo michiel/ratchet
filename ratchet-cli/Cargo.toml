@@ -31,6 +31,7 @@ axum.workspace = true
 
 # Local dependencies
 ratchet_lib = { path = "../ratchet-lib", optional = true }
+ratchet-execution = { path = "../ratchet-execution", optional = true }
 ratchet-mcp = { path = "../ratchet-mcp", optional = true }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-core = { path = "../ratchet-core" }
@@ -52,7 +53,7 @@ default = ["server", "database", "mcp-server", "plugins", "javascript", "output"
 core = []
 
 # Server components
-server = ["rest-api", "graphql-api", "dep:ratchet_lib"]
+server = ["rest-api", "graphql-api", "dep:ratchet_lib", "dep:ratchet-execution"]
 rest-api = ["ratchet_lib/server"]
 graphql-api = ["ratchet_lib/server"]
 
@@ -63,7 +64,7 @@ postgres = ["ratchet-storage/postgres", "ratchet_lib/database"]
 mysql = ["ratchet-storage/mysql", "ratchet_lib/database"]
 
 # MCP Server implementation
-mcp-server = ["mcp-stdio", "mcp-sse", "dep:ratchet-mcp"]
+mcp-server = ["mcp-stdio", "mcp-sse", "dep:ratchet-mcp", "dep:ratchet-execution"]
 mcp-stdio = ["ratchet-mcp/transport-stdio"]
 mcp-sse = ["ratchet-mcp/transport-sse"]
 

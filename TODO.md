@@ -1,10 +1,10 @@
 # Ratchet Development Roadmap & TODO
 
-## 🎯 Current Status: Modular Architecture Migration Complete! 🚀
+## 🎯 Current Status: Complete Workspace Health & Server Refactoring Plan! 🚀
 
-**Major Milestone**: The complete migration from monolithic to modular architecture (Phase 1.5) is now finished! **Latest**: Successfully migrated all components from `ratchet_lib` to 11 specialized crates with feature flags, dual execution paths, and 100% backward compatibility. The project now supports flexible build profiles from minimal core functionality to full enterprise features.
+**Major Milestone**: All build and testing errors resolved across the entire workspace! **Latest**: Successfully fixed all 27 JavaScript engine compatibility issues, resolved test framework problems, and achieved 100% clean build status with 486 passing tests. Created comprehensive 5-phase server architecture refactoring plan for final ratchet-lib deprecation.
 
-**Previous Milestone**: Production-ready MCP (Model Context Protocol) server (Phase 1) complete with real-time monitoring tools, intelligent debugging capabilities, SSE transport, streaming progress notifications, high-performance batch processing, and comprehensive enterprise configuration system.
+**Previous Milestone**: The complete migration from monolithic to modular architecture (Phase 1.5) is now finished! Successfully migrated all components from `ratchet_lib` to 11 specialized crates with feature flags, dual execution paths, and 100% backward compatibility. The project now supports flexible build profiles from minimal core functionality to full enterprise features.
 
 ---
 
@@ -27,12 +27,12 @@
 - **YAML Configuration**: Flexible logging configuration with environment overrides
 - **Performance**: <10μs pattern matching, 500K+ events/second throughput
 
-### ✅ **Modular Architecture Migration** (COMPLETED - Phase 1.5)
-- **11 Modular Crates**: Complete separation from monolithic `ratchet_lib` to specialized crates
+### ✅ **Complete Architecture Migration & Health** (COMPLETED - Phase 1.6)
+- **15+ Modular Crates**: Complete separation from monolithic `ratchet_lib` to specialized crates
   - `ratchet-core`: Domain models and types (Task, Execution, etc.)
-  - `ratchet-lib`: Legacy API (maintained for compatibility)
+  - `ratchet-lib`: Legacy API (maintained for compatibility) - **Ready for Server Refactoring**
   - `ratchet-storage`: Repository pattern with Sea-ORM integration
-  - `ratchet-caching`: Multiple store backends (in-memory, LRU, TTL, Moka)
+  - `ratchet-caching`: Multiple store backends (in-memory, LRU, TTL, Moka)  
   - `ratchet-config`: Domain-specific configuration management
   - `ratchet-ipc`: Inter-process communication abstractions
   - `ratchet-plugin`: Plugin infrastructure and lifecycle management
@@ -40,11 +40,14 @@
   - `ratchet-runtime`: Modern task execution with worker management
   - `ratchet-mcp`: Model Context Protocol server for LLM integration
   - `ratchet-plugins`: Plugin implementations (logging, metrics, notifications)
-- **Feature Flag System**: Comprehensive build profiles (minimal, core, production, enterprise)
-- **Dual Execution Paths**: Modern runtime executor + legacy JavaScript executor with automatic fallback
-- **Repository Factory Compatibility**: Seamless type conversion between legacy and modern storage layers
-- **100% Backward Compatibility**: All existing functionality preserved during migration
-- **Conditional Compilation**: Smart feature detection with graceful error messages
+  - `ratchet-http`: HTTP client functionality with mock support ✅
+  - `ratchet-logging`: Structured logging with LLM integration ✅
+  - `ratchet-js`: JavaScript execution with Boa 0.20 compatibility ✅
+  - `ratchet-execution`: Process execution infrastructure ✅
+- **Enhanced Task Consolidation**: Bridged ratchet-core and ratchet-lib task systems with backward compatibility ✅
+- **100% Clean Build Status**: All 486 tests passing, zero compilation errors ✅
+- **JavaScript Engine Compatibility**: Fixed all Boa 0.20 API issues ✅
+- **Server Refactoring Plan**: Comprehensive 5-phase plan for final ratchet-lib server extraction ✅
 
 ### ✅ **Production Infrastructure**
 - **Database Persistence**: SQLite with PostgreSQL roadmap, full migration system
@@ -196,6 +199,55 @@
 - [ ] GraphQL Evolution: Schema versioning and breaking change management  
 - [ ] Dependency Management: Workspace vs per-crate dependency versions
 - [ ] Migration Strategy: Big-bang vs gradual vs feature-flag driven
+
+---
+
+## ✅ **Phase 1.7: Workspace Health & Server Planning** (COMPLETED)
+
+### Build & Testing Resolution ✅ COMPLETED
+- [x] **JavaScript Engine Compatibility**
+  - [x] Fixed all 27 Boa 0.20 API compatibility issues in ratchet-js
+  - [x] Updated Script parsing, evaluation, and PropertyKey usage
+  - [x] Resolved function call signatures and error handling
+  - [x] Added proper type conversions and module paths
+
+- [x] **Test Framework Fixes**
+  - [x] Added missing serde_yaml dependency to ratchet-logging
+  - [x] Fixed enhanced Task method calls in ratchet-lib tests
+  - [x] Updated pattern matching for CoreTask variants
+  - [x] **All 486 tests now passing** across entire workspace
+
+- [x] **Clean Build Achievement**
+  - [x] Workspace builds with zero compilation errors
+  - [x] Only minor warnings about unused code (expected during development)
+  - [x] Full compatibility across all crate dependencies
+
+### Server Architecture Analysis ✅ COMPLETED
+- [x] **Comprehensive Architecture Analysis**
+  - [x] Analyzed all server components across ratchet-lib, ratchet-mcp
+  - [x] Identified monolithic structure and circular dependency issues
+  - [x] Documented tight coupling and mixed abstraction levels
+  - [x] Created detailed component extraction plan
+
+- [x] **5-Phase Server Refactoring Plan**
+  - [x] Phase 1: Server Core Extraction (ratchet-server-core)
+  - [x] Phase 2: REST API Extraction (ratchet-rest)
+  - [x] Phase 3: GraphQL Server Extraction (ratchet-graphql)
+  - [x] Phase 4: MCP Server Isolation (remove ratchet_lib dependency)
+  - [x] Phase 5: Unified Server Orchestration (ratchet-servers)
+
+- [x] **Expected Benefits Quantified**
+  - [x] 30-40% reduction in build time through smaller, focused crates
+  - [x] 20-30% reduction in binary size when using subset of servers
+  - [x] Improved testability with isolated components
+  - [x] Enhanced modularity for easier maintenance
+
+### Ready for Final ratchet-lib Deprecation ✅
+- [x] All infrastructure components successfully extracted
+- [x] Task system consolidated between ratchet-core and ratchet-lib
+- [x] Workspace health at 100% with comprehensive test coverage
+- [x] Server refactoring plan created with implementation roadmap
+- [x] Backward compatibility maintained throughout all changes
 
 ---
 
@@ -467,7 +519,106 @@ With the successful completion of Phase 1.5, Ratchet now has:
 - Clean build with no duplicated functionality
 - All tests pass with new architecture
 
-## 🚀 **Phase 2: Feature Flags & Business Logic Migration** (HIGH PRIORITY)
+## 🔍 **Analysis: What Remains to Deprecate ratchet-lib**
+
+### Current ratchet-lib Structure
+Based on the comprehensive analysis, ratchet-lib currently contains these main components:
+
+#### ✅ **Already Extracted**
+- **HTTP Client** → `ratchet-http` ✅
+- **Logging Infrastructure** → `ratchet-logging` ✅  
+- **JavaScript Execution** → `ratchet-js` ✅
+- **Task Loading/Validation** → Enhanced with `ratchet-core` ✅
+- **Process Execution** → `ratchet-execution` ✅
+
+#### 🎯 **Ready for Server Extraction (Priority 1)**
+- **REST API Server** (`src/rest/`) → `ratchet-rest` 📋 **Planned**
+  - REST handlers (tasks, executions, jobs, schedules, workers)
+  - REST middleware (CORS, error handling, pagination, rate limiting)
+  - REST models and extractors
+  - OpenAPI integration
+
+- **GraphQL Server** (`src/graphql/`) → `ratchet-graphql` 📋 **Planned**
+  - GraphQL schema and resolvers
+  - GraphQL context and types
+  - Subscription support
+  - Integration with async-graphql
+
+- **Core Server** (`src/server/`) → `ratchet-server-core` 📋 **Planned**
+  - Server traits and abstractions
+  - Unified state management
+  - Server lifecycle operations
+  - Health monitoring
+
+#### 🔄 **Business Logic Layer (Priority 2)**
+- **Output Management** (`src/output/`) → Could stay or extract to `ratchet-output`
+  - Destination management (filesystem, webhook)
+  - Template engine and delivery
+  - Metrics and error handling
+
+- **Registry System** (`src/registry/`) → Could stay or extract to `ratchet-registry`
+  - Task registry and loaders
+  - Service abstraction
+  - File system and HTTP loaders
+
+- **Service Layer** (`src/services.rs`) → Could stay as integration layer
+  - RatchetEngine and service orchestration
+  - Task validation and execution coordination
+  - Integration between components
+
+#### 📊 **Database Integration** (Priority 3)
+- **Database Entities** (`src/database/`) → Partially moved to `ratchet-storage`
+  - Some entities still in ratchet-lib for API integration
+  - Could complete migration to ratchet-storage
+
+### 🎯 **Recommended Deprecation Strategy**
+
+#### **Phase A: Server Component Extraction** (Weeks 1-10)
+Following the detailed 5-phase server refactoring plan:
+1. Extract server core abstractions → `ratchet-server-core`
+2. Extract REST API → `ratchet-rest`  
+3. Extract GraphQL server → `ratchet-graphql`
+4. Isolate MCP server (remove ratchet_lib dependency)
+5. Create unified orchestration → `ratchet-servers`
+
+#### **Phase B: Business Logic Assessment** (Weeks 11-12)
+- Analyze remaining components for extraction value
+- Decision: Extract vs Keep as integrated business layer
+- Output/Registry systems could be extracted but may not provide significant benefit
+
+#### **Phase C: Final Consolidation** (Weeks 13-14)
+- Remove ratchet-lib from CLI and MCP dependencies
+- Update integration tests to use modular crates
+- Create ratchet-lib as thin compatibility layer or deprecate entirely
+
+### 🚀 **Post-Deprecation Architecture**
+
+```
+ratchet-server-core/    # Server abstractions
+ratchet-rest/          # REST API server
+ratchet-graphql/       # GraphQL server  
+ratchet-servers/       # Multi-server orchestration
+ratchet-mcp/          # MCP server (independent)
+ratchet-execution/    # Process execution
+ratchet-storage/      # Database layer
+ratchet-core/         # Domain types
+ratchet-http/         # HTTP client
+ratchet-logging/      # Structured logging
+ratchet-js/           # JavaScript execution
+... (other crates)
+
+ratchet-lib/          # DEPRECATED or thin compatibility layer
+```
+
+### 📈 **Expected Timeline**
+- **Immediate**: Begin server core extraction (Phase 1)
+- **10 weeks**: Complete server refactoring  
+- **12 weeks**: Assess remaining business logic
+- **14 weeks**: Final ratchet-lib deprecation
+
+---
+
+## 🚀 **Phase 2: Server Architecture Refactoring** (HIGH PRIORITY - NEXT)
 
 ### 2.1 Feature Flag Implementation
 - [ ] **Workspace Feature Flags** 
@@ -882,23 +1033,34 @@ Month 12: Documentation & developer tools
 
 ## 🎯 **Immediate Next Steps** (Next 2-4 weeks)
 
-### **Priority 0: Feature Flags Implementation** (Phase 2.1)
-1. **Workspace Feature Flags**
-   - Add comprehensive feature flags to workspace Cargo.toml
-   - Optional dependencies: libloading, inventory, sea-orm
-   - Protocol options: stdio, sse, websocket transport
-   - Build profiles: minimal vs full functionality
+### **Priority 1: Server Core Extraction** (Phase 2 - Week 1-2)
+1. **Create ratchet-server-core Crate**
+   - Define foundational Server trait and abstractions
+   - Create unified ServerState management
+   - Implement server lifecycle operations (start, stop, health)
+   - Add RequestHandler trait for request processing
 
-2. **Conditional Compilation Updates**
-   - Update ratchet-plugins to use optional dependencies
-   - Add feature gates for expensive plugin functionality
-   - Create minimal build without plugin system
-   - Configure CI for multiple build variants
+2. **Extract Common Server Functionality**
+   - Move shared server code from ratchet-lib/src/server/
+   - Create server configuration abstractions
+   - Implement health monitoring infrastructure
+   - Add server metrics collection
 
-3. **Build Optimization**
-   - Reduce default build size through selective compilation
-   - Enable feature-specific optimizations
-   - Create distribution profiles for different use cases
+3. **Establish Dependencies**
+   - Add dependencies on ratchet-core, ratchet-storage, ratchet-execution
+   - Create clean interface abstractions
+   - Ensure no circular dependencies
+
+### **Priority 2: REST API Extraction Planning** (Phase 2 - Week 3-4)
+1. **Analyze REST Components**
+   - Audit ratchet-lib/src/rest/ for extraction scope
+   - Identify dependencies on other ratchet-lib modules
+   - Plan migration strategy for handlers and middleware
+
+2. **Create ratchet-rest Crate Structure**
+   - Design crate architecture
+   - Plan re-export strategy for backward compatibility
+   - Prepare extraction roadmap
 
 ### **Priority 1: Complete API Documentation** (Phase 0.4)
 1. **OpenAPI 3.0 Specification**

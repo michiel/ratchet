@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ratchet_lib::execution::{ExecutionError, ExecutionResult, ProcessTaskExecutor};
+use ratchet_execution::{ExecutionError, ProcessTaskExecutor, TaskExecutionResult};
 use ratchet_lib::logging::event::{LogEvent, LogLevel};
 use ratchet_runtime::executor::TaskExecutor;
 use ratchet_storage::seaorm::entities::ExecutionStatus;
@@ -18,33 +18,31 @@ use ratchet_storage::seaorm::repositories::{
 
 use super::tools::{McpExecutionStatus, McpTaskExecutor, McpTaskInfo};
 
-/// Executor type that can handle both legacy and new execution engines
+/// Executor type that can handle both execution engines
 pub enum ExecutorType {
-    /// Legacy process executor from ratchet_lib
-    Legacy(Arc<ProcessTaskExecutor>),
+    /// Process executor from ratchet-execution
+    Process(Arc<ProcessTaskExecutor>),
     /// New modular task executor from ratchet-runtime
     Runtime(Arc<dyn TaskExecutor>),
 }
 
 impl ExecutorType {
-    /// Execute task sending results via IPC
-    pub async fn execute_task_send(
+    /// Execute task directly using the new API
+    pub async fn execute_task_direct(
         &self,
         task_id: i32,
+        task_path: String,
         input_data: JsonValue,
-        context: Option<ratchet_lib::execution::ipc::ExecutionContext>,
-    ) -> Result<ExecutionResult, ExecutionError> {
+        context: Option<ratchet_execution::ipc::ExecutionContext>,
+    ) -> Result<TaskExecutionResult, ExecutionError> {
         match self {
-            ExecutorType::Legacy(executor) => {
-                // Context is already the right type for legacy executor
-                executor
-                    .execute_task_send(task_id, input_data, context)
-                    .await
+            ExecutorType::Process(executor) => {
+                executor.execute_task_direct(task_id, task_path, input_data, context).await
             }
             ExecutorType::Runtime(_executor) => {
                 // For runtime executor, we need to implement this
                 // This is a simplified implementation - in production you'd want proper conversion
-                Err(ExecutionError::ExecutionFailed(
+                Err(ExecutionError::TaskExecutionError(
                     "Runtime executor not yet fully implemented".to_string(),
                 ))
             }
@@ -68,14 +66,14 @@ pub struct RatchetMcpAdapter {
 }
 
 impl RatchetMcpAdapter {
-    /// Create a new adapter with legacy ProcessTaskExecutor
+    /// Create a new adapter with ProcessTaskExecutor from ratchet-execution
     pub fn new(
         executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
         execution_repository: Arc<ExecutionRepository>,
     ) -> Self {
         Self {
-            executor: ExecutorType::Legacy(executor),
+            executor: ExecutorType::Process(executor),
             task_repository,
             execution_repository,
             log_file_path: None,
@@ -96,7 +94,7 @@ impl RatchetMcpAdapter {
         }
     }
 
-    /// Create a new adapter with log file path for log retrieval (legacy)
+    /// Create a new adapter with log file path for log retrieval
     pub fn with_log_file(
         executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
@@ -104,7 +102,7 @@ impl RatchetMcpAdapter {
         log_file_path: PathBuf,
     ) -> Self {
         Self {
-            executor: ExecutorType::Legacy(executor),
+            executor: ExecutorType::Process(executor),
             task_repository,
             execution_repository,
             log_file_path: Some(log_file_path),
@@ -149,25 +147,26 @@ impl McpTaskExecutor for RatchetMcpAdapter {
         };
 
         // Create an execution context
-        use ratchet_lib::execution::ipc::ExecutionContext;
-        let context = ExecutionContext {
-            execution_id: uuid::Uuid::new_v4().to_string(),
-            job_id: None,
-            task_id: task.uuid.to_string(),
-            task_version: task.version.clone(),
-        };
+        use ratchet_execution::ipc::ExecutionContext;
+        let context = ExecutionContext::new(
+            uuid::Uuid::new_v4(),
+            None,
+            task.uuid,
+            task.version.clone(),
+        );
 
         // Execute the task using the process executor
         match self
             .executor
-            .execute_task_send(
+            .execute_task_direct(
                 task.id, // Database task ID
+                format!("/tasks/{}", task.uuid), // Use UUID as task path
                 input,
                 Some(context),
             )
             .await
         {
-            Ok(result) => result
+            Ok(task_result) => task_result
                 .output
                 .ok_or_else(|| "No output from task execution".to_string()),
             Err(e) => Err(format!("Task execution failed: {}", e)),

@@ -339,7 +339,7 @@ async fn test_executor_lifecycle() {
     let executor_clone = executor.clone();
     let handle = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        executor_clone.stop().await;
+        let _ = executor_clone.stop().await;
     });
 
     // Start executor (this will block until stopped)

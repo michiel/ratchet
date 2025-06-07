@@ -106,7 +106,7 @@ fn test_structured_error_info() {
         "DB_CONN_TIMEOUT",
         "Connection to database timed out",
     )
-    .with_severity(ratchet_lib::errors::ErrorSeverity::High)
+    .with_severity(ratchet_lib::logging::ErrorSeverity::High)
     .with_retryable(true)
     .with_context_value("database", "postgres://localhost:5432/ratchet")
     .with_context_value("timeout_ms", 5000)

@@ -121,8 +121,8 @@ async fn test_addition_task_with_webhook() {
     let task_model = TaskActiveModel {
         uuid: Set(addition_task.uuid()),
         name: Set(addition_task.metadata.label.clone()),
-        description: Set(Some(addition_task.metadata.description.clone())),
-        version: Set(addition_task.metadata.version.clone()),
+        description: Set(addition_task.metadata.core.description.clone()),
+        version: Set(addition_task.metadata.core.version.clone()),
         path: Set(addition_task_path.to_string_lossy().to_string()),
         metadata: Set(serde_json::to_value(&addition_task.metadata).unwrap()),
         input_schema: Set(addition_task.input_schema.clone()),
@@ -289,8 +289,8 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
     let task_model = TaskActiveModel {
         uuid: Set(addition_task.uuid()),
         name: Set(addition_task.metadata.label.clone()),
-        description: Set(Some(addition_task.metadata.description.clone())),
-        version: Set(addition_task.metadata.version.clone()),
+        description: Set(addition_task.metadata.core.description.clone()),
+        version: Set(addition_task.metadata.core.version.clone()),
         path: Set(addition_task_path.to_string_lossy().to_string()),
         metadata: Set(serde_json::to_value(&addition_task.metadata).unwrap()),
         input_schema: Set(addition_task.input_schema.clone()),
@@ -514,8 +514,8 @@ async fn test_addition_task_with_webhook_via_rest_api() {
     let task_model = TaskActiveModel {
         uuid: Set(addition_task.uuid()),
         name: Set(addition_task.metadata.label.clone()),
-        description: Set(Some(addition_task.metadata.description.clone())),
-        version: Set(addition_task.metadata.version.clone()),
+        description: Set(addition_task.metadata.core.description.clone()),
+        version: Set(addition_task.metadata.core.version.clone()),
         path: Set(addition_task_path.to_string_lossy().to_string()),
         metadata: Set(serde_json::to_value(&addition_task.metadata).unwrap()),
         input_schema: Set(addition_task.input_schema.clone()),

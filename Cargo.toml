@@ -7,6 +7,10 @@ members = [
     "ratchet-resilience",
     "ratchet-caching",
     "ratchet-plugins",
+    "ratchet-execution", # Extracted execution engine
+    "ratchet-http",     # HTTP client functionality
+    "ratchet-js",       # JavaScript execution engine
+    "ratchet-logging",  # Structured logging infrastructure
     "ratchet-mcp",      # New MCP implementation
     "ratchet-lib",      # Primary API implementation (REST & GraphQL)
     "ratchet-cli", "ratchet-config", "ratchet-plugin",
@@ -38,8 +42,8 @@ tower-http = { version = "0.4", features = ["cors", "trace", "timeout", "limit",
 # GraphQL with essential features
 async-graphql = { version = "6.0", features = ["uuid", "chrono", "graphiql"], default-features = false }
 async-graphql-axum = "6.0"
-# Use reqwest 0.12 to consolidate versions
-reqwest = { version = "0.12", features = ["json", "stream"], default-features = false }
+# Use reqwest 0.12 to consolidate versions with rustls
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
 url = "2.4"
 async-trait = "0.1"
 tokio-stream = "0.1"

@@ -8,9 +8,20 @@ pub mod graphql;
 pub mod http;
 pub mod js_executor;
 pub mod js_task;
-pub mod logging;
+// Logging functionality moved to ratchet-logging crate
+pub mod logging {
+    pub use ratchet_logging::*;
+}
 pub mod output;
-pub mod recording;
+// Recording functionality moved to ratchet-http crate
+#[cfg(feature = "default")]
+pub mod recording {
+    #[cfg(feature = "default")]
+    pub use ratchet_http::{
+        finalize_recording, get_recording_dir, is_recording, record_http_request, record_input,
+        record_output, set_recording_dir,
+    };
+}
 pub mod registry;
 pub mod rest;
 pub mod server;

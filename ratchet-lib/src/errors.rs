@@ -143,8 +143,8 @@ pub type Result<T> = std::result::Result<T, RatchetError>;
 
 impl RatchetError {
     /// Convert to a log event for structured logging
-    pub fn to_log_event(&self, context: &crate::logging::LogContext) -> crate::logging::LogEvent {
-        use crate::logging::{ErrorInfo, LogEvent, LogLevel};
+    pub fn to_log_event(&self, context: &ratchet_logging::LogContext) -> ratchet_logging::LogEvent {
+        use ratchet_logging::{ErrorInfo, LogEvent, LogLevel};
 
         let event = LogEvent::new(LogLevel::Error, self.to_string())
             .with_logger("ratchet.error")
@@ -156,7 +156,7 @@ impl RatchetError {
             error_type: self.error_type(),
             error_code: self.error_code(),
             message: self.to_string(),
-            severity: self.severity(),
+            severity: self.severity().into(),
             is_retryable: self.is_retryable(),
             stack_trace: None, // Backtrace capture can be expensive, enable only in debug mode
             context: self.get_error_context(),
@@ -254,8 +254,8 @@ impl RatchetError {
         context
     }
 
-    fn get_suggestions(&self) -> crate::logging::ErrorSuggestions {
-        let mut suggestions = crate::logging::ErrorSuggestions::default();
+    fn get_suggestions(&self) -> ratchet_logging::ErrorSuggestions {
+        let mut suggestions = ratchet_logging::ErrorSuggestions::default();
 
         match self {
             Self::TaskNotFound(task) => {
@@ -292,5 +292,18 @@ impl RatchetError {
         }
 
         suggestions
+    }
+}
+
+/// Convert from ratchet_lib ErrorSeverity to ratchet_logging ErrorSeverity
+impl From<ErrorSeverity> for ratchet_logging::ErrorSeverity {
+    fn from(severity: ErrorSeverity) -> Self {
+        match severity {
+            ErrorSeverity::Info => ratchet_logging::ErrorSeverity::Info,
+            ErrorSeverity::Low => ratchet_logging::ErrorSeverity::Low,
+            ErrorSeverity::Medium => ratchet_logging::ErrorSeverity::Medium,
+            ErrorSeverity::High => ratchet_logging::ErrorSeverity::High,
+            ErrorSeverity::Critical => ratchet_logging::ErrorSeverity::Critical,
+        }
     }
 }

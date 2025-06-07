@@ -1,4 +1,5 @@
-use super::{Task, TaskError};
+use super::enhanced::Task;
+use super::TaskError;
 use boa_engine::{Context as BoaContext, Source};
 use tracing::{debug, info, warn};
 
@@ -30,7 +31,9 @@ pub fn validate_task(task: &mut Task) -> Result<(), TaskError> {
     // 3. Validate that the JavaScript code can be parsed
     debug!("Validating JavaScript content");
     task.ensure_content_loaded()?;
-    let js_content = task.get_js_content()?;
+    let js_content = task.js_content().ok_or_else(|| {
+        TaskError::InvalidTaskStructure("No JavaScript content available".to_string())
+    })?;
 
     // We'll use a basic heuristic first - check if it contains a function definition
     if !js_content.contains("function") {
@@ -44,7 +47,7 @@ pub fn validate_task(task: &mut Task) -> Result<(), TaskError> {
     // This will catch syntax errors in the JavaScript code
     debug!("Parsing JavaScript with BoaJS engine");
     let mut context = BoaContext::default();
-    let result = context.eval(Source::from_bytes(js_content.as_ref()));
+    let result = context.eval(Source::from_bytes(js_content.as_bytes()));
     if result.is_err() {
         let error = result.err().unwrap();
         warn!("JavaScript syntax error: {}", error);

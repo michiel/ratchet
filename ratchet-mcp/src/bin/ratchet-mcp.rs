@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use ratchet_lib::{config::RatchetConfig, execution::ProcessTaskExecutor};
+use ratchet_execution::{ProcessTaskExecutor, ProcessExecutorConfig};
 use ratchet_mcp::{
     config::McpConfig,
     server::{adapter::RatchetMcpAdapter, McpServer},
@@ -74,27 +74,6 @@ impl From<TransportChoice> for ratchet_mcp::SimpleTransportType {
     }
 }
 
-/// Convert ratchet-storage RepositoryFactory to ratchet_lib RepositoryFactory
-async fn convert_to_legacy_repository_factory(
-    storage_config: DatabaseConfig,
-) -> Result<ratchet_lib::database::repositories::RepositoryFactory> {
-    // Convert storage config to legacy config
-    let legacy_config = ratchet_lib::config::DatabaseConfig {
-        url: storage_config.url.clone(),
-        max_connections: storage_config.max_connections,
-        connection_timeout: storage_config.connection_timeout,
-    };
-
-    // Create legacy database connection using the same configuration
-    let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create legacy database connection: {}", e))?;
-
-    // Create legacy repository factory
-    let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
-
-    Ok(legacy_repos)
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -118,15 +97,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn serve_command(
-    config_path: Option<&str>,
+    _config_path: Option<&str>,
     transport: ratchet_mcp::SimpleTransportType,
     host: &str,
     port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting Ratchet MCP server with {:?} transport", transport);
 
-    // Load configuration
-    let config = load_config(config_path).await?;
+    // We don't need RatchetConfig for the new executor
 
     // Initialize database connection (using default since RatchetConfig doesn't have database field)
     let db_config = DatabaseConfig::default();
@@ -140,9 +118,14 @@ async fn serve_command(
     let task_repository = Arc::new(repo_factory.task_repository());
     let execution_repository = Arc::new(repo_factory.execution_repository());
 
-    // Initialize task executor (still needs legacy format)
-    let legacy_repo_factory = convert_to_legacy_repository_factory(db_config.clone()).await?;
-    let executor = Arc::new(ProcessTaskExecutor::new(legacy_repo_factory, config.clone()).await?);
+    // Initialize task executor using the new API from ratchet-execution
+    let executor_config = ProcessExecutorConfig {
+        worker_count: 4,
+        task_timeout_seconds: 300,
+        restart_on_crash: true,
+        max_restart_attempts: 3,
+    };
+    let executor = Arc::new(ProcessTaskExecutor::new(executor_config));
 
     // Create MCP adapter
     let adapter = RatchetMcpAdapter::new(executor, task_repository, execution_repository);
@@ -225,20 +208,11 @@ async fn tools_command() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+async fn test_command(_config_path: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Testing connection to Ratchet backend");
 
-    // Load configuration
-    let config = match load_config(config_path).await {
-        Ok(config) => {
-            tracing::info!("✓ Configuration loaded successfully");
-            config
-        }
-        Err(e) => {
-            tracing::error!("✗ Failed to load configuration: {}", e);
-            return Err(e);
-        }
-    };
+    // Configuration is not needed for the new executor
+    tracing::info!("✓ Using default executor configuration");
 
     // Test database connection
     let db_config = DatabaseConfig::default();
@@ -266,17 +240,15 @@ async fn test_command(config_path: Option<&str>) -> Result<(), Box<dyn std::erro
     }
 
     // Test executor initialization
-    let repositories = RepositoryFactory::new(db.clone());
-    let legacy_repo_factory_test = convert_to_legacy_repository_factory(db_config.clone()).await?;
-    match ProcessTaskExecutor::new(legacy_repo_factory_test, config.clone()).await {
-        Ok(_) => {
-            tracing::info!("✓ Task executor initialized successfully");
-        }
-        Err(e) => {
-            tracing::error!("✗ Task executor initialization failed: {}", e);
-            return Err(e.into());
-        }
-    }
+    let _repositories = RepositoryFactory::new(db.clone());
+    let executor_config = ProcessExecutorConfig {
+        worker_count: 2,
+        task_timeout_seconds: 60,
+        restart_on_crash: true,
+        max_restart_attempts: 3,
+    };
+    let _executor = ProcessTaskExecutor::new(executor_config);
+    tracing::info!("✓ Task executor initialized successfully");
 
     tracing::info!("All systems operational - MCP server ready to start");
     Ok(())
@@ -317,17 +289,3 @@ async fn validate_config_command(
     }
 }
 
-async fn load_config(
-    config_path: Option<&str>,
-) -> Result<RatchetConfig, Box<dyn std::error::Error>> {
-    match config_path {
-        Some(path) => {
-            tracing::info!("Loading configuration from: {}", path);
-            RatchetConfig::from_file(path).map_err(Into::into)
-        }
-        None => {
-            tracing::info!("Using default configuration");
-            Ok(RatchetConfig::default())
-        }
-    }
-}

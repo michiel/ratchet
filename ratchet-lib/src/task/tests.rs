@@ -69,7 +69,7 @@ fn test_load_from_sample() {
             task.metadata.uuid.to_string(),
             "bd6c6f98-4896-44cc-8c82-30328c3aefda"
         );
-        assert_eq!(task.metadata.version, "1.0.0");
+        assert_eq!(task.metadata.core.version, "1.0.0");
         assert_eq!(task.metadata.label, "Addition Task");
 
         match &task.task_type {
@@ -77,11 +77,15 @@ fn test_load_from_sample() {
                 assert!(path.contains("main.js"));
                 assert!(content.is_none()); // Content should not be loaded initially
             }
+            TaskType::CoreTask { .. } => {
+                // Core task is valid but we're testing JS task loading in this case
+                panic!("Expected JsTask for filesystem loading test");
+            }
         }
 
         // Test content loading
         task.ensure_content_loaded().unwrap();
-        let content = task.get_js_content().unwrap();
+        let content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
         assert!(!content.is_empty());
 
         // Check schema properties
@@ -103,17 +107,20 @@ fn test_from_fs() {
         task.metadata.uuid.to_string(),
         "bd6c6f98-4896-44cc-8c82-30328c3aefda"
     );
-    assert_eq!(task.metadata.version, "1.0.0");
+    assert_eq!(task.metadata.core.version, "1.0.0");
     assert_eq!(task.metadata.label, "Addition Task");
     assert_eq!(
-        task.metadata.description,
-        "This is a sample task that adds two numbers together."
+        task.metadata.core.description.as_deref(),
+        Some("This is a sample task that adds two numbers together.")
     );
 
     match &task.task_type {
         TaskType::JsTask { path, content } => {
             assert!(path.contains("main.js"));
             assert!(content.is_none()); // Content should not be loaded initially
+        }
+        TaskType::CoreTask { .. } => {
+            panic!("Expected JsTask for ZIP loading test");
         }
     }
 
@@ -126,10 +133,14 @@ fn test_from_fs() {
             let js_content = content.as_ref().unwrap();
             assert!(js_content.contains("function")); // Check content contains expected text
         }
+        TaskType::CoreTask { .. } => {
+            // For core tasks, content is stored in the task.content field
+            assert!(task.content.is_some());
+        }
     }
 
     // Test get_js_content
-    let js_content = task.get_js_content().unwrap();
+    let js_content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
     assert!(js_content.contains("function"));
 
     // Test purge_content
@@ -138,6 +149,10 @@ fn test_from_fs() {
     match &task.task_type {
         TaskType::JsTask { content, .. } => {
             assert!(content.is_none()); // Content should be purged
+        }
+        TaskType::CoreTask { .. } => {
+            // For core tasks, purging affects the task.content field
+            // The test here depends on the specific purge implementation for core tasks
         }
     }
 
@@ -268,11 +283,11 @@ fn test_from_zip() {
         task.metadata.uuid.to_string(),
         "bd6c6f98-4896-44cc-8c82-30328c3aefda"
     );
-    assert_eq!(task.metadata.version, "1.0.0");
+    assert_eq!(task.metadata.core.version, "1.0.0");
     assert_eq!(task.metadata.label, "ZIP Task");
     assert_eq!(
-        task.metadata.description,
-        "This is a sample task in a ZIP file."
+        task.metadata.core.description.as_deref(),
+        Some("This is a sample task in a ZIP file.")
     );
 
     // The temporary directory should be stored in the task
@@ -280,7 +295,7 @@ fn test_from_zip() {
 
     // Test loading content
     task.ensure_content_loaded().unwrap();
-    let content = task.get_js_content().unwrap();
+    let content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
     assert!(content.contains("function"));
 
     // Check schema properties
@@ -303,7 +318,7 @@ fn test_sample_zip() {
             task.metadata.uuid.to_string(),
             "bd6c6f98-4896-44cc-8c82-30328c3aefda"
         );
-        assert_eq!(task.metadata.version, "1.0.0");
+        assert_eq!(task.metadata.core.version, "1.0.0");
         assert_eq!(task.metadata.label, "Addition Task");
 
         // The temporary directory should be stored in the task
@@ -311,7 +326,7 @@ fn test_sample_zip() {
 
         // Test content loading
         task.ensure_content_loaded().unwrap();
-        let content = task.get_js_content().unwrap();
+        let content = task.js_content().ok_or_else(|| crate::task::TaskError::InvalidTaskStructure("No JS content".to_string())).unwrap();
         assert!(!content.is_empty());
 
         // Check schema properties

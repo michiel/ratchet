@@ -1,0 +1,34 @@
+[package]
+name = "ratchet-http"
+version.workspace = true
+edition.workspace = true
+
+authors.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HTTP client functionality for Ratchet"
+
+[dependencies]
+# Core dependencies
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+# HTTP client
+reqwest = { workspace = true, features = ["rustls-tls", "json"] }
+async-trait = "0.1"
+
+# Recording functionality
+chrono.workspace = true
+lazy_static.workspace = true
+
+# Configuration
+ratchet-config = { path = "../ratchet-config" }
+
+[features]
+default = ["recording"]
+recording = []

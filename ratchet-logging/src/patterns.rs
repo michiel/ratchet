@@ -368,7 +368,7 @@ pub enum ErrorTrend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::ErrorSeverity;
+    use crate::severity::ErrorSeverity;
 
     #[test]
     fn test_pattern_matching() {
