@@ -569,7 +569,9 @@ impl ToolRegistry for RatchetToolRegistry {
             "ratchet.batch_execute" => self.batch_execute_tool(execution_context).await,
             // Task development tools
             "ratchet.create_task" | "ratchet.validate_task" | "ratchet.debug_task_execution" | 
-            "ratchet.run_task_tests" | "ratchet.create_task_version" => {
+            "ratchet.run_task_tests" | "ratchet.create_task_version" | "ratchet.edit_task" |
+            "ratchet.import_tasks" | "ratchet.export_tasks" | "ratchet.generate_from_template" |
+            "ratchet.list_templates" => {
                 if let Some(service) = &self.task_dev_service {
                     super::task_dev_tools::execute_task_dev_tool(name, execution_context, service.clone()).await
                 } else {

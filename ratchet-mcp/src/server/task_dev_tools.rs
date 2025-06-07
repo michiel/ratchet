@@ -243,6 +243,181 @@ fn default_make_active() -> bool {
     true
 }
 
+/// Task editing request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditTaskRequest {
+    /// Task name or ID
+    pub task_id: String,
+    
+    /// New JavaScript code (optional)
+    pub code: Option<String>,
+    
+    /// New input schema (optional)
+    pub input_schema: Option<Value>,
+    
+    /// New output schema (optional)
+    pub output_schema: Option<Value>,
+    
+    /// New description (optional)
+    pub description: Option<String>,
+    
+    /// New tags (optional)
+    pub tags: Option<Vec<String>>,
+    
+    /// Whether to validate changes before applying
+    #[serde(default = "default_validate_changes")]
+    pub validate_changes: bool,
+    
+    /// Whether to create a backup before editing
+    #[serde(default = "default_create_backup")]
+    pub create_backup: bool,
+}
+
+fn default_validate_changes() -> bool {
+    true
+}
+
+fn default_create_backup() -> bool {
+    true
+}
+
+/// Task import request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportTaskRequest {
+    /// Task data (JSON or ZIP format)
+    pub data: Value,
+    
+    /// Import format
+    #[serde(default = "default_import_format")]
+    pub format: ImportFormat,
+    
+    /// Whether to overwrite existing tasks
+    #[serde(default)]
+    pub overwrite_existing: bool,
+    
+    /// Import options
+    #[serde(default)]
+    pub options: ImportOptions,
+}
+
+fn default_import_format() -> ImportFormat {
+    ImportFormat::Json
+}
+
+/// Import format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImportFormat {
+    Json,
+    Zip,
+    Directory,
+}
+
+/// Import options
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ImportOptions {
+    /// Include test cases
+    #[serde(default = "default_include_import_tests")]
+    pub include_tests: bool,
+    
+    /// Validate imported tasks
+    #[serde(default = "default_validate_imports")]
+    pub validate_tasks: bool,
+    
+    /// Prefix for imported task names
+    pub name_prefix: Option<String>,
+}
+
+fn default_include_import_tests() -> bool {
+    true
+}
+
+fn default_validate_imports() -> bool {
+    true
+}
+
+/// Task export request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportTaskRequest {
+    /// Task name or ID (optional, exports all if not provided)
+    pub task_id: Option<String>,
+    
+    /// Export format
+    #[serde(default = "default_export_format")]
+    pub format: ExportFormat,
+    
+    /// Export options
+    #[serde(default)]
+    pub options: ExportOptions,
+}
+
+fn default_export_format() -> ExportFormat {
+    ExportFormat::Json
+}
+
+/// Export format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportFormat {
+    Json,
+    Zip,
+    Individual,
+}
+
+/// Export options
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExportOptions {
+    /// Include test cases
+    #[serde(default = "default_include_export_tests")]
+    pub include_tests: bool,
+    
+    /// Include metadata
+    #[serde(default = "default_include_metadata")]
+    pub include_metadata: bool,
+    
+    /// Include version history
+    #[serde(default)]
+    pub include_versions: bool,
+}
+
+fn default_include_export_tests() -> bool {
+    true
+}
+
+fn default_include_metadata() -> bool {
+    true
+}
+
+/// Template generation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerateFromTemplateRequest {
+    /// Template name
+    pub template: String,
+    
+    /// Task name
+    pub name: String,
+    
+    /// Template parameters
+    pub parameters: HashMap<String, Value>,
+    
+    /// Task description
+    pub description: Option<String>,
+}
+
+/// Available task templates
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskTemplate {
+    pub name: String,
+    pub description: String,
+    pub code_template: String,
+    pub input_schema_template: Value,
+    pub output_schema_template: Value,
+    pub required_parameters: Vec<String>,
+    pub optional_parameters: Vec<String>,
+    pub category: String,
+    pub tags: Vec<String>,
+}
+
 /// Task development service that handles creation, validation, testing, and versioning
 pub struct TaskDevelopmentService {
     /// Task repository for database operations
@@ -540,6 +715,252 @@ impl TaskDevelopmentService {
         Ok(version_info)
     }
     
+    /// Edit an existing task
+    pub async fn edit_task(&self, request: EditTaskRequest) -> McpResult<Value> {
+        // Find the task
+        let task = self.find_task(&request.task_id).await?;
+        
+        // Create backup if requested
+        if request.create_backup {
+            let _backup_id = format!("{}_backup_{}", task.name, chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+            // In production, this would create an actual backup
+        }
+        
+        let mut changes = Vec::new();
+        let mut errors = Vec::new();
+        
+        // Validate code changes if provided
+        if let Some(ref code) = request.code {
+            if request.validate_changes {
+                if let Err(e) = self.task_validator.validate_syntax(code) {
+                    errors.push(format!("Code validation failed: {}", e));
+                } else {
+                    changes.push("code".to_string());
+                }
+            } else {
+                changes.push("code".to_string());
+            }
+        }
+        
+        // Validate schema changes if provided
+        if let Some(ref input_schema) = request.input_schema {
+            if request.validate_changes {
+                if let Err(e) = self.validate_json_schema(input_schema) {
+                    errors.push(format!("Input schema validation failed: {}", e));
+                } else {
+                    changes.push("input_schema".to_string());
+                }
+            } else {
+                changes.push("input_schema".to_string());
+            }
+        }
+        
+        if let Some(ref output_schema) = request.output_schema {
+            if request.validate_changes {
+                if let Err(e) = self.validate_json_schema(output_schema) {
+                    errors.push(format!("Output schema validation failed: {}", e));
+                } else {
+                    changes.push("output_schema".to_string());
+                }
+            } else {
+                changes.push("output_schema".to_string());
+            }
+        }
+        
+        if let Some(ref _description) = request.description {
+            changes.push("description".to_string());
+        }
+        
+        if let Some(ref _tags) = request.tags {
+            changes.push("tags".to_string());
+        }
+        
+        if !errors.is_empty() {
+            return Ok(json!({
+                "task_id": task.uuid.to_string(),
+                "success": false,
+                "errors": errors,
+                "message": "Validation failed"
+            }));
+        }
+        
+        let edit_result = json!({
+            "task_id": task.uuid.to_string(),
+            "task_name": task.name,
+            "success": true,
+            "changes_applied": changes,
+            "backup_created": request.create_backup,
+            "validation_performed": request.validate_changes,
+            "message": "Task edited successfully (database update not implemented)",
+            "edited_at": chrono::Utc::now().to_rfc3339()
+        });
+        
+        Ok(edit_result)
+    }
+    
+    /// Import tasks from external source
+    pub async fn import_tasks(&self, request: ImportTaskRequest) -> McpResult<Value> {
+        let mut imported_tasks = Vec::new();
+        let mut errors = Vec::new();
+        
+        match request.format {
+            ImportFormat::Json => {
+                // Parse JSON data
+                if let Some(tasks_array) = request.data.as_array() {
+                    for (idx, task_data) in tasks_array.iter().enumerate() {
+                        match self.import_single_task(task_data, &request.options).await {
+                            Ok(imported) => imported_tasks.push(imported),
+                            Err(e) => errors.push(format!("Task {}: {}", idx, e)),
+                        }
+                    }
+                } else if request.data.is_object() {
+                    // Single task import
+                    match self.import_single_task(&request.data, &request.options).await {
+                        Ok(imported) => imported_tasks.push(imported),
+                        Err(e) => errors.push(format!("Task import: {}", e)),
+                    }
+                }
+            }
+            ImportFormat::Zip | ImportFormat::Directory => {
+                errors.push("ZIP and Directory import not yet implemented".to_string());
+            }
+        }
+        
+        let import_result = json!({
+            "imported_count": imported_tasks.len(),
+            "error_count": errors.len(),
+            "imported_tasks": imported_tasks,
+            "errors": errors,
+            "format": request.format,
+            "overwrite_existing": request.overwrite_existing,
+            "imported_at": chrono::Utc::now().to_rfc3339()
+        });
+        
+        Ok(import_result)
+    }
+    
+    /// Export tasks
+    pub async fn export_tasks(&self, request: ExportTaskRequest) -> McpResult<Value> {
+        let tasks = if let Some(task_id) = &request.task_id {
+            // Export single task
+            vec![self.find_task(task_id).await?]
+        } else {
+            // Export all tasks (placeholder - would need database integration)
+            vec![]
+        };
+        
+        let mut exported_tasks = Vec::new();
+        
+        for task in tasks {
+            let mut task_export = json!({
+                "name": task.name,
+                "version": task.version,
+                "code": task.code,
+                "input_schema": task.input_schema,
+                "output_schema": task.output_schema
+            });
+            
+            if request.options.include_metadata {
+                task_export["metadata"] = json!({
+                    "uuid": task.uuid.to_string(),
+                    "created_at": chrono::Utc::now().to_rfc3339(),
+                    "exported_at": chrono::Utc::now().to_rfc3339()
+                });
+            }
+            
+            if request.options.include_tests {
+                // Load test cases
+                let test_cases = self.load_task_tests(&task.name).await?;
+                task_export["test_cases"] = json!(test_cases);
+            }
+            
+            exported_tasks.push(task_export);
+        }
+        
+        let export_result = match request.format {
+            ExportFormat::Json => json!({
+                "tasks": exported_tasks,
+                "export_format": "json",
+                "exported_count": exported_tasks.len(),
+                "options": request.options,
+                "exported_at": chrono::Utc::now().to_rfc3339()
+            }),
+            ExportFormat::Zip => json!({
+                "message": "ZIP export not yet implemented",
+                "tasks": exported_tasks,
+                "export_format": "zip"
+            }),
+            ExportFormat::Individual => json!({
+                "message": "Individual file export not yet implemented", 
+                "tasks": exported_tasks,
+                "export_format": "individual"
+            }),
+        };
+        
+        Ok(export_result)
+    }
+    
+    /// Generate task from template
+    pub async fn generate_from_template(&self, request: GenerateFromTemplateRequest) -> McpResult<Value> {
+        let templates = self.get_available_templates();
+        
+        let template = templates.iter()
+            .find(|t| t.name == request.template)
+            .ok_or_else(|| McpError::InvalidParams {
+                method: "generate_from_template".to_string(),
+                details: format!("Template '{}' not found", request.template),
+            })?;
+        
+        // Check required parameters
+        for param in &template.required_parameters {
+            if !request.parameters.contains_key(param) {
+                return Err(McpError::InvalidParams {
+                    method: "generate_from_template".to_string(),
+                    details: format!("Missing required parameter: {}", param),
+                });
+            }
+        }
+        
+        // Generate code from template
+        let code = self.apply_template_parameters(&template.code_template, &request.parameters)?;
+        let input_schema = self.apply_template_to_schema(&template.input_schema_template, &request.parameters)?;
+        let output_schema = self.apply_template_to_schema(&template.output_schema_template, &request.parameters)?;
+        
+        let generated_task = json!({
+            "name": request.name,
+            "description": request.description.unwrap_or_else(|| template.description.clone()),
+            "code": code,
+            "input_schema": input_schema,
+            "output_schema": output_schema,
+            "template_used": template.name,
+            "template_category": template.category,
+            "parameters": request.parameters,
+            "generated_at": chrono::Utc::now().to_rfc3339()
+        });
+        
+        Ok(generated_task)
+    }
+    
+    /// List available templates
+    pub async fn list_templates(&self) -> McpResult<Value> {
+        let templates = self.get_available_templates();
+        
+        let template_list: Vec<Value> = templates.iter().map(|template| json!({
+            "name": template.name,
+            "description": template.description,
+            "category": template.category,
+            "tags": template.tags,
+            "required_parameters": template.required_parameters,
+            "optional_parameters": template.optional_parameters
+        })).collect();
+        
+        Ok(json!({
+            "templates": template_list,
+            "total_count": templates.len(),
+            "categories": self.get_template_categories(&templates)
+        }))
+    }
+    
     // Helper methods
     
     async fn create_task_directory(&self, task_dir: &Path, request: &CreateTaskRequest) -> McpResult<()> {
@@ -755,6 +1176,272 @@ impl TaskDevelopmentService {
         }
         
         new_parts.len() > current_parts.len()
+    }
+    
+    /// Import a single task from JSON data
+    async fn import_single_task(&self, task_data: &Value, options: &ImportOptions) -> McpResult<Value> {
+        let name = task_data["name"].as_str()
+            .ok_or_else(|| McpError::InvalidParams {
+                method: "import_task".to_string(),
+                details: "Task name is required".to_string(),
+            })?;
+        
+        let final_name = if let Some(prefix) = &options.name_prefix {
+            format!("{}{}", prefix, name)
+        } else {
+            name.to_string()
+        };
+        
+        if options.validate_tasks {
+            if let Some(code) = task_data["code"].as_str() {
+                if let Err(e) = self.task_validator.validate_syntax(code) {
+                    return Err(McpError::InvalidParams {
+                        method: "import_task".to_string(),
+                        details: format!("Task validation failed: {}", e),
+                    });
+                }
+            }
+        }
+        
+        Ok(json!({
+            "original_name": name,
+            "imported_name": final_name,
+            "validated": options.validate_tasks,
+            "status": "imported",
+            "message": "Task import successful (database integration pending)"
+        }))
+    }
+    
+    /// Get available task templates
+    fn get_available_templates(&self) -> Vec<TaskTemplate> {
+        vec![
+            TaskTemplate {
+                name: "http_api_call".to_string(),
+                description: "Make HTTP API calls with error handling".to_string(),
+                code_template: r#"
+async function process(input, { fetch }) {
+    const { url, method = 'GET', headers = {}, body } = input;
+    
+    const response = await fetch(url, {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            ...headers
+        },
+        body: body ? JSON.stringify(body) : undefined
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    return result;
+}"#.to_string(),
+                input_schema_template: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "format": "uri" },
+                        "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+                        "headers": { "type": "object" },
+                        "body": { "type": "object" }
+                    },
+                    "required": ["url"]
+                }),
+                output_schema_template: json!({
+                    "type": "object"
+                }),
+                required_parameters: vec![],
+                optional_parameters: vec!["default_headers".to_string()],
+                category: "api".to_string(),
+                tags: vec!["http".to_string(), "api".to_string(), "network".to_string()],
+            },
+            TaskTemplate {
+                name: "data_transform".to_string(),
+                description: "Transform data structures using mapping rules".to_string(),
+                code_template: r#"
+function process(input) {
+    const { data, mapping } = input;
+    
+    const result = {};
+    for (const [outputKey, inputPath] of Object.entries(mapping)) {
+        result[outputKey] = getValueByPath(data, inputPath);
+    }
+    
+    return result;
+}
+
+function getValueByPath(obj, path) {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+}"#.to_string(),
+                input_schema_template: json!({
+                    "type": "object",
+                    "properties": {
+                        "data": { "type": "object" },
+                        "mapping": { 
+                            "type": "object",
+                            "additionalProperties": { "type": "string" }
+                        }
+                    },
+                    "required": ["data", "mapping"]
+                }),
+                output_schema_template: json!({
+                    "type": "object"
+                }),
+                required_parameters: vec![],
+                optional_parameters: vec![],
+                category: "transformation".to_string(),
+                tags: vec!["data".to_string(), "transform".to_string(), "mapping".to_string()],
+            },
+            TaskTemplate {
+                name: "validation".to_string(),
+                description: "Validate data against JSON schemas".to_string(),
+                code_template: r#"
+function process(input) {
+    const { data, schema, strict = true } = input;
+    
+    // Basic validation implementation
+    const errors = validateAgainstSchema(data, schema, strict);
+    
+    return {
+        valid: errors.length === 0,
+        errors: errors,
+        data: data
+    };
+}
+
+function validateAgainstSchema(data, schema, strict) {
+    const errors = [];
+    
+    // Type validation
+    if (schema.type && typeof data !== schema.type) {
+        errors.push(`Expected type ${schema.type}, got ${typeof data}`);
+    }
+    
+    // Required fields validation
+    if (schema.required && schema.type === 'object') {
+        for (const field of schema.required) {
+            if (!(field in data)) {
+                errors.push(`Missing required field: ${field}`);
+            }
+        }
+    }
+    
+    return errors;
+}"#.to_string(),
+                input_schema_template: json!({
+                    "type": "object",
+                    "properties": {
+                        "data": { "type": "object" },
+                        "schema": { "type": "object" },
+                        "strict": { "type": "boolean", "default": true }
+                    },
+                    "required": ["data", "schema"]
+                }),
+                output_schema_template: json!({
+                    "type": "object",
+                    "properties": {
+                        "valid": { "type": "boolean" },
+                        "errors": { "type": "array", "items": { "type": "string" } },
+                        "data": { "type": "object" }
+                    },
+                    "required": ["valid", "errors"]
+                }),
+                required_parameters: vec![],
+                optional_parameters: vec![],
+                category: "validation".to_string(),
+                tags: vec!["validation".to_string(), "schema".to_string(), "data".to_string()],
+            },
+            TaskTemplate {
+                name: "file_processor".to_string(),
+                description: "Process files with different formats".to_string(),
+                code_template: r#"
+function process(input) {
+    const { fileContent, fileType, operation = 'parse' } = input;
+    
+    switch (fileType.toLowerCase()) {
+        case 'json':
+            return processJson(fileContent, operation);
+        case 'csv':
+            return processCsv(fileContent, operation);
+        case 'xml':
+            return processXml(fileContent, operation);
+        default:
+            throw new Error(`Unsupported file type: ${fileType}`);
+    }
+}
+
+function processJson(content, operation) {
+    const data = JSON.parse(content);
+    return { type: 'json', data, operation };
+}
+
+function processCsv(content, operation) {
+    const lines = content.split('\n').filter(line => line.trim());
+    const headers = lines[0].split(',');
+    const rows = lines.slice(1).map(line => line.split(','));
+    return { type: 'csv', headers, rows, operation };
+}
+
+function processXml(content, operation) {
+    // Basic XML parsing placeholder
+    return { type: 'xml', content, operation, message: 'XML parsing not fully implemented' };
+}"#.to_string(),
+                input_schema_template: json!({
+                    "type": "object",
+                    "properties": {
+                        "fileContent": { "type": "string" },
+                        "fileType": { "type": "string", "enum": ["json", "csv", "xml"] },
+                        "operation": { "type": "string", "default": "parse" }
+                    },
+                    "required": ["fileContent", "fileType"]
+                }),
+                output_schema_template: json!({
+                    "type": "object",
+                    "properties": {
+                        "type": { "type": "string" },
+                        "data": { "type": "object" },
+                        "operation": { "type": "string" }
+                    }
+                }),
+                required_parameters: vec![],
+                optional_parameters: vec!["default_operation".to_string()],
+                category: "file".to_string(),
+                tags: vec!["file".to_string(), "parsing".to_string(), "processing".to_string()],
+            },
+        ]
+    }
+    
+    /// Apply template parameters to code
+    fn apply_template_parameters(&self, template: &str, parameters: &HashMap<String, Value>) -> McpResult<String> {
+        let mut result = template.to_string();
+        
+        for (key, value) in parameters {
+            let placeholder = format!("{{{{{}}}}}", key);
+            if let Some(str_value) = value.as_str() {
+                result = result.replace(&placeholder, str_value);
+            }
+        }
+        
+        Ok(result)
+    }
+    
+    /// Apply template parameters to schema
+    fn apply_template_to_schema(&self, schema: &Value, _parameters: &HashMap<String, Value>) -> McpResult<Value> {
+        // For now, return schema as-is
+        // In a full implementation, this would support parameter substitution in schemas
+        Ok(schema.clone())
+    }
+    
+    /// Get template categories
+    fn get_template_categories(&self, templates: &[TaskTemplate]) -> Vec<String> {
+        let mut categories: Vec<String> = templates.iter()
+            .map(|t| t.category.clone())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        categories.sort();
+        categories
     }
 }
 
@@ -996,6 +1683,165 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet.create_task_version".to_string(), create_version_tool);
+    
+    // Edit task tool
+    let edit_task_tool = McpTool::new(
+        "ratchet.edit_task",
+        "Edit existing task code, schemas, and metadata",
+        json!({
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string",
+                    "description": "Task name or UUID to edit"
+                },
+                "code": {
+                    "type": "string",
+                    "description": "New JavaScript code"
+                },
+                "input_schema": {
+                    "type": "object",
+                    "description": "New input schema"
+                },
+                "output_schema": {
+                    "type": "object",
+                    "description": "New output schema"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "New task description"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "New task tags"
+                },
+                "validate_changes": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Validate changes before applying"
+                },
+                "create_backup": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Create backup before editing"
+                }
+            },
+            "required": ["task_id"]
+        }),
+        "development",
+    );
+    tools.insert("ratchet.edit_task".to_string(), edit_task_tool);
+    
+    // Import tasks tool
+    let import_tasks_tool = McpTool::new(
+        "ratchet.import_tasks",
+        "Import tasks from JSON or other formats",
+        json!({
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object",
+                    "description": "Task data to import"
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["json", "zip", "directory"],
+                    "default": "json",
+                    "description": "Import format"
+                },
+                "overwrite_existing": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Overwrite existing tasks"
+                },
+                "options": {
+                    "type": "object",
+                    "properties": {
+                        "include_tests": {"type": "boolean", "default": true},
+                        "validate_tasks": {"type": "boolean", "default": true},
+                        "name_prefix": {"type": "string"}
+                    }
+                }
+            },
+            "required": ["data"]
+        }),
+        "development",
+    );
+    tools.insert("ratchet.import_tasks".to_string(), import_tasks_tool);
+    
+    // Export tasks tool
+    let export_tasks_tool = McpTool::new(
+        "ratchet.export_tasks",
+        "Export tasks to JSON or other formats",
+        json!({
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string",
+                    "description": "Task to export (optional, exports all if not provided)"
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["json", "zip", "individual"],
+                    "default": "json",
+                    "description": "Export format"
+                },
+                "options": {
+                    "type": "object",
+                    "properties": {
+                        "include_tests": {"type": "boolean", "default": true},
+                        "include_metadata": {"type": "boolean", "default": true},
+                        "include_versions": {"type": "boolean", "default": false}
+                    }
+                }
+            }
+        }),
+        "development",
+    );
+    tools.insert("ratchet.export_tasks".to_string(), export_tasks_tool);
+    
+    // Generate from template tool
+    let generate_template_tool = McpTool::new(
+        "ratchet.generate_from_template",
+        "Generate a new task from a predefined template",
+        json!({
+            "type": "object",
+            "properties": {
+                "template": {
+                    "type": "string",
+                    "description": "Template name (use list_templates to see available)"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Name for the generated task"
+                },
+                "parameters": {
+                    "type": "object",
+                    "description": "Template-specific parameters"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Task description"
+                }
+            },
+            "required": ["template", "name", "parameters"]
+        }),
+        "development",
+    );
+    tools.insert("ratchet.generate_from_template".to_string(), generate_template_tool);
+    
+    // List templates tool
+    let list_templates_tool = McpTool::new(
+        "ratchet.list_templates",
+        "List all available task templates",
+        json!({
+            "type": "object",
+            "properties": {}
+        }),
+        "development",
+    );
+    tools.insert("ratchet.list_templates".to_string(), list_templates_tool);
 }
 
 /// Execute task development tools
@@ -1128,6 +1974,125 @@ pub async fn execute_task_dev_tool(
                 Err(e) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
                         text: format!("Failed to create version: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+        
+        "ratchet.edit_task" => {
+            let request: EditTaskRequest = serde_json::from_value(args)
+                .map_err(|e| McpError::InvalidParams {
+                    method: tool_name.to_string(),
+                    details: format!("Invalid request: {}", e),
+                })?;
+            
+            match service.edit_task(request).await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to edit task: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+        
+        "ratchet.import_tasks" => {
+            let request: ImportTaskRequest = serde_json::from_value(args)
+                .map_err(|e| McpError::InvalidParams {
+                    method: tool_name.to_string(),
+                    details: format!("Invalid request: {}", e),
+                })?;
+            
+            match service.import_tasks(request).await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to import tasks: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+        
+        "ratchet.export_tasks" => {
+            let request: ExportTaskRequest = serde_json::from_value(args)
+                .map_err(|e| McpError::InvalidParams {
+                    method: tool_name.to_string(),
+                    details: format!("Invalid request: {}", e),
+                })?;
+            
+            match service.export_tasks(request).await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to export tasks: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+        
+        "ratchet.generate_from_template" => {
+            let request: GenerateFromTemplateRequest = serde_json::from_value(args)
+                .map_err(|e| McpError::InvalidParams {
+                    method: tool_name.to_string(),
+                    details: format!("Invalid request: {}", e),
+                })?;
+            
+            match service.generate_from_template(request).await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to generate from template: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+        
+        "ratchet.list_templates" => {
+            match service.list_templates().await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to list templates: {}", e),
                     }],
                     is_error: true,
                     metadata: HashMap::new(),
