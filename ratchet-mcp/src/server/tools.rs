@@ -171,6 +171,9 @@ pub struct RatchetToolRegistry {
 
     /// Progress notification manager
     progress_manager: Arc<super::progress::ProgressNotificationManager>,
+    
+    /// Task development service for dev tools
+    task_dev_service: Option<Arc<super::task_dev_tools::TaskDevelopmentService>>,
 }
 
 impl RatchetToolRegistry {
@@ -181,6 +184,7 @@ impl RatchetToolRegistry {
             task_executor: None,
             logger: None,
             progress_manager: Arc::new(super::progress::ProgressNotificationManager::new()),
+            task_dev_service: None,
         };
 
         // Register built-in Ratchet tools
@@ -191,6 +195,9 @@ impl RatchetToolRegistry {
 
     /// Register all built-in Ratchet tools
     fn register_builtin_tools(&mut self) {
+        // Register task development tools
+        super::task_dev_tools::register_task_dev_tools(&mut self.tools);
+        
         // Task execution tool
         let execute_task_tool = McpTool::new(
             "ratchet.execute_task",
@@ -486,6 +493,17 @@ impl RatchetToolRegistry {
     pub fn set_executor(&mut self, executor: Arc<dyn McpTaskExecutor>) {
         self.task_executor = Some(executor);
     }
+    
+    /// Set the task development service
+    pub fn set_task_dev_service(&mut self, service: Arc<super::task_dev_tools::TaskDevelopmentService>) {
+        self.task_dev_service = Some(service);
+    }
+    
+    /// Configure with task development service
+    pub fn with_task_dev_service(mut self, service: Arc<super::task_dev_tools::TaskDevelopmentService>) -> Self {
+        self.task_dev_service = Some(service);
+        self
+    }
 
     /// Get the progress manager
     pub fn get_progress_manager(&self) -> Arc<super::progress::ProgressNotificationManager> {
@@ -549,6 +567,23 @@ impl ToolRegistry for RatchetToolRegistry {
                 self.analyze_execution_error_tool(execution_context).await
             }
             "ratchet.batch_execute" => self.batch_execute_tool(execution_context).await,
+            // Task development tools
+            "ratchet.create_task" | "ratchet.validate_task" | "ratchet.debug_task_execution" | 
+            "ratchet.run_task_tests" | "ratchet.create_task_version" | "ratchet.edit_task" |
+            "ratchet.import_tasks" | "ratchet.export_tasks" | "ratchet.generate_from_template" |
+            "ratchet.list_templates" => {
+                if let Some(service) = &self.task_dev_service {
+                    super::task_dev_tools::execute_task_dev_tool(name, execution_context, service.clone()).await
+                } else {
+                    Ok(ToolsCallResult {
+                        content: vec![ToolContent::Text {
+                            text: "Task development service not configured".to_string(),
+                        }],
+                        is_error: true,
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
             _ => Err(McpError::ToolNotFound {
                 tool_name: name.to_string(),
             }),
@@ -1952,6 +1987,13 @@ mod tests {
             .contains_key("ratchet.analyze_execution_error"));
         assert!(registry.tools.contains_key("ratchet.get_execution_trace"));
         assert!(registry.tools.contains_key("ratchet.batch_execute"));
+        
+        // Check that task development tools are registered
+        assert!(registry.tools.contains_key("ratchet.create_task"));
+        assert!(registry.tools.contains_key("ratchet.validate_task"));
+        assert!(registry.tools.contains_key("ratchet.debug_task_execution"));
+        assert!(registry.tools.contains_key("ratchet.run_task_tests"));
+        assert!(registry.tools.contains_key("ratchet.create_task_version"));
     }
 
     #[tokio::test]
@@ -1996,6 +2038,20 @@ mod tests {
             batch_tool.unwrap().description,
             "Execute multiple tasks in parallel or sequence with dependency management"
         );
+        
+        // Find task development tools
+        let create_tool = tools.iter().find(|t| t.name == "ratchet.create_task");
+        assert!(create_tool.is_some());
+        assert_eq!(
+            create_tool.unwrap().description,
+            "Create a new task with code, schemas, and optional test cases"
+        );
+        
+        let validate_tool = tools.iter().find(|t| t.name == "ratchet.validate_task");
+        assert!(validate_tool.is_some());
+        
+        let debug_tool = tools.iter().find(|t| t.name == "ratchet.debug_task_execution");
+        assert!(debug_tool.is_some());
     }
 
     #[tokio::test]

@@ -12,6 +12,7 @@ use tokio::time::timeout;
 /// Test that the MCP server properly initializes and handles subsequent requests
 /// over stdio transport without requiring the 'initialized' notification.
 #[tokio::test]
+#[ignore = "Integration test that spawns subprocess - use `cargo test -- --ignored` to run"]
 async fn test_mcp_server_stdio_initialization_compatibility() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
@@ -21,8 +22,12 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
             "ratchet",
             "--bin",
             "ratchet",
+            "--features",
+            "mcp-server",
             "--",
             "mcp-serve",
+            "--transport",
+            "stdio",
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -186,6 +191,7 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
 
 /// Test that the server still works correctly when clients DO send the 'initialized' notification
 #[tokio::test]
+#[ignore = "Integration test that spawns subprocess - use `cargo test -- --ignored` to run"]
 async fn test_mcp_server_stdio_with_initialized_notification() {
     // Start the MCP server process
     let mut child = Command::new("cargo")
@@ -195,8 +201,12 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
             "ratchet",
             "--bin",
             "ratchet",
+            "--features",
+            "mcp-server",
             "--",
             "mcp-serve",
+            "--transport",
+            "stdio",
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

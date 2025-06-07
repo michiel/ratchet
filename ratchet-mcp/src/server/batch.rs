@@ -40,11 +40,13 @@ pub struct BatchProcessor {
     /// Enable request deduplication
     enable_deduplication: bool,
     /// Enable result caching
+    #[allow(dead_code)]
     enable_caching: bool,
 }
 
 /// Execution context for a batch item
 #[derive(Debug)]
+#[allow(dead_code)]
 struct BatchItemContext {
     id: String,
     request: JsonRpcRequest,
