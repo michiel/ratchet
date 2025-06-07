@@ -31,6 +31,7 @@ async fn convert_to_legacy_repository_factory_for_test(
 
 // Stdio-specific integration tests
 mod stdio_initialization_test;
+mod simple_stdio_test;
 
 // SSE-specific integration tests
 mod sse_integration_test;
