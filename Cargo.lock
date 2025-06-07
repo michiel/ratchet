@@ -3943,6 +3943,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratchet-js"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "boa_engine",
+ "boa_runtime",
+ "ratchet-core",
+ "ratchet-http",
+ "ratchet-logging",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ratchet-logging"
 version = "0.3.0"
 dependencies = [

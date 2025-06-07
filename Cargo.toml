@@ -9,6 +9,7 @@ members = [
     "ratchet-plugins",
     "ratchet-execution", # Extracted execution engine
     "ratchet-http",     # HTTP client functionality
+    "ratchet-js",       # JavaScript execution engine
     "ratchet-logging",  # Structured logging infrastructure
     "ratchet-mcp",      # New MCP implementation
     "ratchet-lib",      # Primary API implementation (REST & GraphQL)
