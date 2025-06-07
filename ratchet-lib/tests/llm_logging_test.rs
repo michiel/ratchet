@@ -1,7 +1,7 @@
-use ratchet_lib::errors::{ErrorSeverity, RatchetError};
+use ratchet_lib::errors::RatchetError;
 use ratchet_lib::logging::{
     format_markdown_report, ErrorCategory, ErrorInfo, ErrorPattern, ErrorPatternMatcher,
-    LLMExportConfig, LLMExporter, LogEvent, LogLevel, MatchingRule,
+    ErrorSeverity, LLMExportConfig, LLMExporter, LogEvent, LogLevel, MatchingRule,
 };
 
 #[test]
