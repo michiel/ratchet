@@ -182,10 +182,10 @@ pub async fn execute_task(
                 ))
             })?;
 
-            let js_content = task.get_js_content().map_err(|e| {
+            let js_content = task.js_content().ok_or_else(|| {
                 JsExecutionError::FileReadError(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("Failed to get JavaScript content: {}", e),
+                    "No JavaScript content available".to_string(),
                 ))
             })?;
 
@@ -236,7 +236,7 @@ pub async fn execute_task(
             debug!("Compiling JavaScript code");
             // Evaluate the JavaScript code from memory
             let func = context
-                .eval(Source::from_bytes(&js_content.as_ref()))
+                .eval(Source::from_bytes(js_content.as_bytes()))
                 .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
 
             debug!("Calling JavaScript function");
@@ -257,6 +257,67 @@ pub async fn execute_task(
 
             info!(
                 "Task execution completed successfully: {} ({})",
+                task.metadata.label, task.metadata.uuid
+            );
+            debug!(
+                "Output data: {}",
+                serde_json::to_string(&result).unwrap_or_else(|_| "<invalid json>".to_string())
+            );
+
+            Ok(result)
+        }
+        crate::task::TaskType::CoreTask { .. } => {
+            // For core tasks, use the same execution logic as JsTask
+            debug!("Loading JavaScript content for core task execution");
+            task.ensure_content_loaded().map_err(|e| {
+                JsExecutionError::FileReadError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to load JavaScript content: {}", e),
+                ))
+            })?;
+
+            let js_content = task.js_content().ok_or_else(|| {
+                JsExecutionError::FileReadError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "No JavaScript content available".to_string(),
+                ))
+            })?;
+
+            // Validate input against schema
+            validate_json(&input_data, &task.input_schema)?;
+
+            // Create a new Boa context for JavaScript execution
+            let mut context = BoaContext::default();
+
+            // Register the fetch API
+            crate::http::register_fetch(&mut context).map_err(|e| {
+                JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e))
+            })?;
+
+            // Register custom error types
+            register_error_types(&mut context).map_err(|e| {
+                JsExecutionError::ExecutionError(format!("Failed to register error types: {}", e))
+            })?;
+
+            // Initialize fetch variables
+            context
+                .eval(Source::from_bytes(
+                    "var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;",
+                ))
+                .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
+
+            // Evaluate the JavaScript code
+            let func = context
+                .eval(Source::from_bytes(js_content.as_bytes()))
+                .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
+
+            let result = call_js_function(&mut context, &func, &input_data, http_manager).await?;
+            
+            // Validate output against schema
+            validate_json(&result, &task.output_schema)?;
+
+            info!(
+                "Core task execution completed successfully: {} ({})",
                 task.metadata.label, task.metadata.uuid
             );
             debug!(
@@ -296,10 +357,10 @@ pub async fn execute_task_with_context(
                 ))
             })?;
 
-            let js_content = task.get_js_content().map_err(|e| {
+            let js_content = task.js_content().ok_or_else(|| {
                 JsExecutionError::FileReadError(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("Failed to get JavaScript content: {}", e),
+                    "No JavaScript content available".to_string(),
                 ))
             })?;
 
@@ -350,7 +411,7 @@ pub async fn execute_task_with_context(
             debug!("Compiling JavaScript code");
             // Evaluate the JavaScript code from memory
             let func = context
-                .eval(Source::from_bytes(&js_content.as_ref()))
+                .eval(Source::from_bytes(js_content.as_bytes()))
                 .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
 
             debug!("Calling JavaScript function with context");
@@ -383,6 +444,39 @@ pub async fn execute_task_with_context(
             debug!(
                 "Output data: {}",
                 serde_json::to_string(&result).unwrap_or_else(|_| "<invalid json>".to_string())
+            );
+
+            Ok(result)
+        }
+        crate::task::TaskType::CoreTask { .. } => {
+            // For core tasks, use the task schemas directly
+            task.ensure_content_loaded().map_err(|e| {
+                JsExecutionError::FileReadError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to load JavaScript content: {}", e),
+                ))
+            })?;
+
+            let js_content = task.js_content().ok_or_else(|| {
+                JsExecutionError::FileReadError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "No JavaScript content available".to_string(),
+                ))
+            })?;
+
+            // Use task schemas directly for core tasks
+            let result = call_js_function_with_schemas(
+                js_content,
+                input_data,
+                &task.input_schema,
+                &task.output_schema,
+                http_manager,
+            )
+            .await?;
+
+            info!(
+                "Core task execution with context completed successfully: {} ({})",
+                task.metadata.label, task.metadata.uuid
             );
 
             Ok(result)
@@ -463,6 +557,50 @@ pub async fn execute_js_file(
         "Output data: {}",
         serde_json::to_string(&result).unwrap_or_else(|_| "<invalid json>".to_string())
     );
+
+    Ok(result)
+}
+
+/// Execute JavaScript with direct schemas (for core tasks)
+async fn call_js_function_with_schemas(
+    js_content: &str,
+    input_data: JsonValue,
+    input_schema: &JsonValue,
+    output_schema: &JsonValue,
+    _http_manager: &crate::http::HttpManager,
+) -> Result<JsonValue, JsExecutionError> {
+    // Validate input against schema
+    validate_json(&input_data, input_schema)?;
+
+    // Create a new Boa context for JavaScript execution
+    let mut context = BoaContext::default();
+
+    // Register the fetch API
+    crate::http::register_fetch(&mut context).map_err(|e| {
+        JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e))
+    })?;
+
+    // Register custom error types
+    register_error_types(&mut context).map_err(|e| {
+        JsExecutionError::ExecutionError(format!("Failed to register error types: {}", e))
+    })?;
+
+    // Initialize fetch variables
+    context
+        .eval(Source::from_bytes(
+            "var __fetch_url = null; var __fetch_params = null; var __fetch_body = null;",
+        ))
+        .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
+
+    // Evaluate the JavaScript code
+    let func = context
+        .eval(Source::from_bytes(js_content.as_bytes()))
+        .map_err(|e| JsExecutionError::CompileError(e.to_string()))?;
+
+    let result = call_js_function(&mut context, &func, &input_data, _http_manager).await?;
+    
+    // Validate output against schema
+    validate_json(&result, output_schema)?;
 
     Ok(result)
 }

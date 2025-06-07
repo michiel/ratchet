@@ -43,7 +43,7 @@ impl TaskRegistry {
 
     pub async fn add_task(&self, task: Task) -> Result<()> {
         let task_id = task.metadata.uuid;
-        let version = task.metadata.version.clone();
+        let version = task.metadata.core.version.clone();
 
         let mut tasks = self.tasks.write().await;
         let version_map = tasks.entry(task_id).or_insert_with(HashMap::new);

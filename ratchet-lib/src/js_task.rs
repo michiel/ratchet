@@ -32,6 +32,7 @@ pub fn run_task_from_fs(from_fs: &str) -> Result<JsonValue, JsTaskError> {
             path: _,
             content: _,
         } => {}
+        TaskType::CoreTask { .. } => {}
     }
 
     // Execute the task inside the runtime

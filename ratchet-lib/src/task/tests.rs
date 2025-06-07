@@ -69,7 +69,7 @@ fn test_load_from_sample() {
             task.metadata.uuid.to_string(),
             "bd6c6f98-4896-44cc-8c82-30328c3aefda"
         );
-        assert_eq!(task.metadata.version, "1.0.0");
+        assert_eq!(task.metadata.core.version, "1.0.0");
         assert_eq!(task.metadata.label, "Addition Task");
 
         match &task.task_type {
@@ -103,11 +103,11 @@ fn test_from_fs() {
         task.metadata.uuid.to_string(),
         "bd6c6f98-4896-44cc-8c82-30328c3aefda"
     );
-    assert_eq!(task.metadata.version, "1.0.0");
+    assert_eq!(task.metadata.core.version, "1.0.0");
     assert_eq!(task.metadata.label, "Addition Task");
     assert_eq!(
-        task.metadata.description,
-        "This is a sample task that adds two numbers together."
+        task.metadata.core.description.as_deref(),
+        Some("This is a sample task that adds two numbers together.")
     );
 
     match &task.task_type {
@@ -268,11 +268,11 @@ fn test_from_zip() {
         task.metadata.uuid.to_string(),
         "bd6c6f98-4896-44cc-8c82-30328c3aefda"
     );
-    assert_eq!(task.metadata.version, "1.0.0");
+    assert_eq!(task.metadata.core.version, "1.0.0");
     assert_eq!(task.metadata.label, "ZIP Task");
     assert_eq!(
-        task.metadata.description,
-        "This is a sample task in a ZIP file."
+        task.metadata.core.description.as_deref(),
+        Some("This is a sample task in a ZIP file.")
     );
 
     // The temporary directory should be stored in the task
@@ -303,7 +303,7 @@ fn test_sample_zip() {
             task.metadata.uuid.to_string(),
             "bd6c6f98-4896-44cc-8c82-30328c3aefda"
         );
-        assert_eq!(task.metadata.version, "1.0.0");
+        assert_eq!(task.metadata.core.version, "1.0.0");
         assert_eq!(task.metadata.label, "Addition Task");
 
         // The temporary directory should be stored in the task

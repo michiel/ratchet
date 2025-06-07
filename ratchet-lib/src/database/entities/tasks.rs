@@ -86,14 +86,14 @@ impl Model {
             id: 0, // Will be set by database
             uuid: task.uuid(),
             name: task.metadata.label.clone(),
-            description: Some(task.metadata.description.clone()),
-            version: task.metadata.version.clone(),
+            description: task.metadata.core.description.clone(),
+            version: task.metadata.core.version.clone(),
             path: task.path.to_string_lossy().to_string(),
             metadata: serde_json::json!({
                 "uuid": task.metadata.uuid,
-                "version": task.metadata.version,
+                "version": task.metadata.core.version,
                 "label": task.metadata.label,
-                "description": task.metadata.description,
+                "description": task.metadata.core.description,
             }),
             input_schema: task.input_schema.clone(),
             output_schema: task.output_schema.clone(),

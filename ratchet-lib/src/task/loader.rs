@@ -1,4 +1,5 @@
-use super::{Task, TaskError, TaskMetadata, TaskType};
+use super::enhanced::{Task, TaskBuilder, TaskMetadata, TaskType};
+use super::TaskError;
 use serde_json::Value as JsonValue;
 use std::fs;
 use std::io;
@@ -65,7 +66,23 @@ pub fn load_from_directory(path: &Path) -> Result<Task, TaskError> {
     }
 
     let metadata_json = fs::read_to_string(&metadata_path)?;
-    let metadata: TaskMetadata = serde_json::from_str(&metadata_json)?;
+    
+    // Parse the legacy metadata format
+    #[derive(serde::Deserialize)]
+    struct LegacyMetadata {
+        uuid: uuid::Uuid,
+        version: String,
+        label: String,
+        description: String,
+    }
+    
+    let legacy_metadata: LegacyMetadata = serde_json::from_str(&metadata_json)?;
+    let metadata = TaskMetadata::new(
+        legacy_metadata.uuid,
+        legacy_metadata.version,
+        legacy_metadata.label,
+        legacy_metadata.description,
+    );
 
     debug!(
         "Task metadata loaded: {} ({})",
@@ -119,14 +136,14 @@ pub fn load_from_directory(path: &Path) -> Result<Task, TaskError> {
         metadata.label, metadata.uuid
     );
 
-    Ok(Task {
-        metadata,
-        task_type,
-        input_schema,
-        output_schema,
-        path: path.to_path_buf(),
-        _temp_dir: None,
-    })
+    // Use TaskBuilder to construct the enhanced task
+    TaskBuilder::new()
+        .with_metadata(metadata)
+        .with_task_type(task_type)
+        .with_input_schema(input_schema)
+        .with_output_schema(output_schema)
+        .with_path(path.to_path_buf())
+        .build()
 }
 
 /// Load a task from a ZIP file

@@ -292,8 +292,8 @@ impl TaskCache {
         // Rough estimation of task memory footprint
         let base_size = std::mem::size_of::<Task>();
         let label_size = task.metadata.label.len();
-        let description_size = task.metadata.description.len();
-        let version_size = task.metadata.version.len();
+        let description_size = task.metadata.core.description.as_ref().map_or(0, |s| s.len());
+        let version_size = task.metadata.core.version.len();
         let path_size = task.path.to_string_lossy().len();
 
         // Estimate JSON schema sizes
@@ -304,6 +304,10 @@ impl TaskCache {
         let task_type_size = match &task.task_type {
             crate::task::TaskType::JsTask { path, content } => {
                 path.len() + content.as_ref().map_or(0, |c| c.len())
+            }
+            crate::task::TaskType::CoreTask { .. } => {
+                // Estimate size for core task
+                task.content.as_ref().map_or(0, |c| c.len())
             }
         };
 
@@ -390,12 +394,12 @@ mod tests {
         use std::path::PathBuf;
 
         Task {
-            metadata: TaskMetadata {
-                uuid: Uuid::new_v4(),
-                version: "1.0.0".to_string(),
-                label: name.to_string(),
-                description: format!("Test task {}", name),
-            },
+            metadata: TaskMetadata::new(
+                Uuid::new_v4(),
+                "1.0.0".to_string(),
+                name.to_string(),
+                format!("Test task {}", name),
+            ),
             task_type: TaskType::JsTask {
                 path: format!("/test/{}/main.js", name),
                 content: None,
@@ -404,6 +408,7 @@ mod tests {
             output_schema: serde_json::json!({}),
             path: PathBuf::from(format!("/test/{}", name)),
             _temp_dir: None,
+            content: None,
         }
     }
 

@@ -373,9 +373,9 @@ impl Query {
 
             registry_tasks.push(RegistryTask {
                 id: task.metadata.uuid,
-                version: task.metadata.version.clone(),
+                version: task.metadata.core.version.clone(),
                 label: task.metadata.label.clone(),
-                description: task.metadata.description.clone(),
+                description: task.metadata.core.description.clone().unwrap_or_default(),
                 available_versions: versions,
             });
         }
@@ -408,9 +408,9 @@ impl Query {
 
             Ok(Some(RegistryTask {
                 id: task.metadata.uuid,
-                version: task.metadata.version.clone(),
+                version: task.metadata.core.version.clone(),
                 label: task.metadata.label.clone(),
-                description: task.metadata.description.clone(),
+                description: task.metadata.core.description.clone().unwrap_or_default(),
                 available_versions: versions,
             }))
         } else {
