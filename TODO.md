@@ -2,7 +2,7 @@
 
 ## 🎯 Current Status: Infrastructure Extraction Complete, Server Refactoring Next! 🚀
 
-**Latest Achievement**: Successfully completed Phase 1 infrastructure migration with 486 passing tests, pure Rust TLS implementation, and comprehensive component extraction. The workspace now consists of 15 specialized crates with infrastructure successfully modularized.
+**Latest Achievement**: Successfully completed logging migration to ratchet-logging with full standard Rust integration (RUST_LOG, --log-level), test consolidation, and dependency cleanup. The workspace now consists of 15 specialized crates with infrastructure successfully modularized and 486 passing tests.
 
 **Next Goal**: Continue modular architecture migration by extracting server components from ratchet-lib into focused crates (ratchet-rest, ratchet-graphql, ratchet-server-core). The target is complete ratchet-lib decomposition into specialized components.
 
@@ -26,6 +26,8 @@
 - **Multiple Sinks**: Console (colored/JSON), file (with rotation), buffered async output
 - **YAML Configuration**: Flexible logging configuration with environment overrides
 - **Performance**: <10μs pattern matching, 500K+ events/second throughput
+- **Standard Integration**: Full RUST_LOG environment variable and --log-level CLI flag support
+- **Migration Complete**: All logging functionality consolidated in ratchet-logging crate ✅
 
 ### ✅ **Phase 1: Infrastructure Extraction** (COMPLETED)
 - **15 Modular Crates**: Infrastructure successfully extracted from monolithic ratchet-lib
@@ -41,7 +43,7 @@
   - `ratchet-mcp`: Model Context Protocol server for LLM integration
   - `ratchet-plugins`: Plugin implementations (logging, metrics, notifications)
   - `ratchet-http`: HTTP client functionality with mock support ✅ Extracted
-  - `ratchet-logging`: Structured logging with LLM integration ✅ Extracted
+  - `ratchet-logging`: Structured logging with LLM integration ✅ Extracted & Migration Complete
   - `ratchet-js`: JavaScript execution with Boa 0.20 compatibility ✅ Extracted
   - `ratchet-execution`: Process execution infrastructure ✅ Extracted
 - **Enhanced Task Consolidation**: Bridged ratchet-core and ratchet-lib task systems
@@ -497,6 +499,32 @@ With the successful completion of Phase 1.5, Ratchet now has:
 - Clean build with no duplicated functionality
 - All tests pass with new architecture
 
+## ✅ **Logging Migration Complete: ratchet-logging Fully Integrated** (LATEST)
+
+### 🎯 **Logging Migration Results** ✅ COMPLETED  
+**Commit**: `181ad65` - Successfully completed logging infrastructure migration from ratchet-lib to ratchet-logging
+
+#### **Migration Achievements**
+- [x] **Test Migration**: Moved all logging tests (`logging_test.rs`, `logging_config_test.rs`, `llm_logging_test.rs`) to ratchet-logging/tests/
+- [x] **Dependency Cleanup**: Removed duplicate logging dependencies from ratchet-lib/Cargo.toml  
+- [x] **Standard Integration Confirmed**: Full RUST_LOG environment variable and --log-level CLI flag support
+- [x] **Test Dependencies Added**: Added tempfile and tokio-test to ratchet-logging for comprehensive test coverage
+- [x] **Backward Compatibility**: Maintained through re-exports in ratchet-lib (pub mod logging { pub use ratchet_logging::*; })
+- [x] **All Tests Passing**: Complete test suite working with updated imports and dependencies
+
+#### **Integration Features Confirmed**
+- **RUST_LOG Priority Logic**: `RUST_LOG` > `--log-level` > default "info"
+- **Module-Specific Filtering**: Supports standard syntax like `RUST_LOG=ratchet=debug,tower=warn`
+- **CLI Flag Integration**: Global `--log-level` flag available across all subcommands
+- **Context-Aware Logging**: Different modes (stdio MCP, worker, standard) use appropriate logging
+- **Fallback Handling**: Invalid values gracefully fall back with clear error messages
+
+#### **Benefits Achieved**
+- **Cleaner Separation**: Logging functionality completely self-contained in ratchet-logging
+- **Reduced Coupling**: ratchet-lib no longer has direct logging implementation dependencies  
+- **Better Maintainability**: Logging tests co-located with logging implementation
+- **Consistent Architecture**: Follows established modular decomposition pattern
+
 ## 🎯 **Phase 1 Complete: Infrastructure Extracted, Phase 2 Next**
 
 ### Phase 1 Achievement ✅
@@ -504,7 +532,7 @@ With the successful completion of Phase 1.5, Ratchet now has:
 
 #### ✅ **Successfully Extracted Infrastructure**
 - **HTTP Client** → `ratchet-http` (mock support, recording)
-- **Logging Infrastructure** → `ratchet-logging` (structured, LLM integration)  
+- **Logging Infrastructure** → `ratchet-logging` (structured, LLM integration) ✅ Migration Complete
 - **JavaScript Execution** → `ratchet-js` (Boa 0.20 compatibility)
 - **Process Execution** → `ratchet-execution` (worker management)
 - **Configuration** → `ratchet-config` (domain-specific, validation)
