@@ -4,7 +4,7 @@
 
 Ratchet is a high-performance, scalable task execution platform that runs JavaScript code with enterprise-grade reliability. Built with Rust for performance and safety, it provides comprehensive APIs, persistent storage, and advanced execution capabilities.
 
-[![Tests](https://img.shields.io/badge/tests-116%20passing-brightgreen)](.) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Status](https://img.shields.io/badge/status-production--ready-green)]()
+[![Tests](https://img.shields.io/badge/tests-486%20passing-brightgreen)](.) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Status](https://img.shields.io/badge/status-production--ready-green)]()
 
 ## 🎯 Key Features by Category
 
@@ -104,16 +104,25 @@ ratchet run-once --from-fs sample/js-tasks/weather-api \
 
 ## 📁 Project Structure
 
+Ratchet uses a modular architecture with 15 specialized crates:
+
 ```
 ratchet/
 ├── ratchet-cli/          # Command-line interface
-├── ratchet-lib/          # Core library
-│   ├── database/         # Persistence layer (entities, migrations, repositories)
-│   ├── execution/        # Task execution engine (workers, queue, scheduler)
-│   ├── graphql/          # GraphQL API (schema, resolvers)
-│   ├── rest/             # REST API (handlers, middleware)
-│   ├── registry/         # Task registry and management
-│   └── services/         # Business logic layer
+├── ratchet-lib/          # Primary business logic & APIs (REST, GraphQL)
+├── ratchet-mcp/          # Model Context Protocol server for LLM integration
+├── ratchet-execution/    # Process execution infrastructure
+├── ratchet-storage/      # Database layer with repositories
+├── ratchet-core/         # Domain types and models
+├── ratchet-http/         # HTTP client with mocking support
+├── ratchet-logging/      # Structured logging system
+├── ratchet-js/           # JavaScript execution engine (Boa)
+├── ratchet-config/       # Configuration management
+├── ratchet-caching/      # Caching abstractions
+├── ratchet-resilience/   # Circuit breakers, retry logic
+├── ratchet-runtime/      # Alternative task execution patterns
+├── ratchet-ipc/          # Inter-process communication
+├── ratchet-plugin/       # Plugin infrastructure
 ├── sample/               # Example tasks and configurations
 └── docs/                 # Documentation and API specs
 ```
@@ -451,7 +460,7 @@ See [TODO.md](TODO.md) for the comprehensive architectural roadmap including:
 ## 🧪 Testing
 
 ```bash
-# Run all tests (currently 116 passing)
+# Run all tests (currently 486 passing)
 cargo test
 
 # Run with coverage
