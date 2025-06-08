@@ -1,10 +1,10 @@
 # Ratchet Development Roadmap & TODO
 
-## 🎯 Current Status: Production-Ready with Modular Architecture! 🚀
+## 🎯 Current Status: Infrastructure Extraction Complete, Server Refactoring Next! 🚀
 
-**Latest Achievement**: Successfully completed modular architecture migration with 486 passing tests, pure Rust TLS implementation, and comprehensive component extraction. The workspace now consists of 15 specialized crates providing flexible build profiles from minimal core functionality to full enterprise features.
+**Latest Achievement**: Successfully completed Phase 1 infrastructure migration with 486 passing tests, pure Rust TLS implementation, and comprehensive component extraction. The workspace now consists of 15 specialized crates with infrastructure successfully modularized.
 
-**Production Status**: Ratchet is production-ready with complete REST/GraphQL APIs, MCP server for LLM integration, persistent database, job queue system, and comprehensive security features. All major architectural goals achieved.
+**Next Goal**: Continue modular architecture migration by extracting server components from ratchet-lib into focused crates (ratchet-rest, ratchet-graphql, ratchet-server-core). The target is complete ratchet-lib decomposition into specialized components.
 
 ---
 
@@ -27,10 +27,10 @@
 - **YAML Configuration**: Flexible logging configuration with environment overrides
 - **Performance**: <10μs pattern matching, 500K+ events/second throughput
 
-### ✅ **Complete Architecture Migration & Health** (COMPLETED)
-- **15 Modular Crates**: Complete separation achieved with specialized, focused crates
+### ✅ **Phase 1: Infrastructure Extraction** (COMPLETED)
+- **15 Modular Crates**: Infrastructure successfully extracted from monolithic ratchet-lib
   - `ratchet-core`: Domain models and types (Task, Execution, etc.)
-  - `ratchet-lib`: Primary API implementation (REST, GraphQL, business logic)
+  - `ratchet-lib`: **Legacy monolith - targeted for decomposition**
   - `ratchet-storage`: Repository pattern with Sea-ORM integration
   - `ratchet-caching`: Multiple store backends (in-memory, LRU, TTL, Moka)  
   - `ratchet-config`: Domain-specific configuration management
@@ -40,14 +40,14 @@
   - `ratchet-runtime`: Modern task execution with worker management
   - `ratchet-mcp`: Model Context Protocol server for LLM integration
   - `ratchet-plugins`: Plugin implementations (logging, metrics, notifications)
-  - `ratchet-http`: HTTP client functionality with mock support
-  - `ratchet-logging`: Structured logging with LLM integration
-  - `ratchet-js`: JavaScript execution with Boa 0.20 compatibility
-  - `ratchet-execution`: Process execution infrastructure
+  - `ratchet-http`: HTTP client functionality with mock support ✅ Extracted
+  - `ratchet-logging`: Structured logging with LLM integration ✅ Extracted
+  - `ratchet-js`: JavaScript execution with Boa 0.20 compatibility ✅ Extracted
+  - `ratchet-execution`: Process execution infrastructure ✅ Extracted
 - **Enhanced Task Consolidation**: Bridged ratchet-core and ratchet-lib task systems
 - **100% Clean Build Status**: All 486 tests passing, zero compilation errors
 - **Pure Rust TLS**: Migrated from OpenSSL to rustls for better security and cross-compilation
-- **Production Infrastructure**: Complete APIs, database persistence, job queue, worker management
+- **Infrastructure Stable**: Extracted components ready for server refactoring phase
 
 ### ✅ **Production Infrastructure**
 - **Database Persistence**: SQLite with full migration system
@@ -497,10 +497,10 @@ With the successful completion of Phase 1.5, Ratchet now has:
 - Clean build with no duplicated functionality
 - All tests pass with new architecture
 
-## 🏆 **Current Production Architecture**
+## 🎯 **Phase 1 Complete: Infrastructure Extracted, Phase 2 Next**
 
-### Architecture Achievement
-**Decision**: The current architecture **IS** the target architecture. Through strategic infrastructure extraction, we've achieved optimal modularity while preserving a cohesive, production-tested business logic layer.
+### Phase 1 Achievement ✅
+**Completed**: Successfully extracted infrastructure components from monolithic ratchet-lib. Clean foundation established for server component extraction.
 
 #### ✅ **Successfully Extracted Infrastructure**
 - **HTTP Client** → `ratchet-http` (mock support, recording)
@@ -511,46 +511,52 @@ With the successful completion of Phase 1.5, Ratchet now has:
 - **Storage Layer** → `ratchet-storage` (repository pattern, Sea-ORM)
 - **TLS Implementation** → Pure Rust (rustls, eliminated OpenSSL)
 
-#### 🏆 **ratchet-lib: Primary Business Logic & API Layer**
-**Status**: Production-ready, feature-complete implementation
+#### 📋 **Phase 2 Target: Server Component Extraction**
+**Next Goal**: Extract remaining server components from ratchet-lib
 
-- **REST API Server** - Complete with handlers, middleware, OpenAPI integration
-- **GraphQL Server** - Full schema with resolvers, subscriptions, playground
-- **Business Logic** - Task execution, output management, registry system
-- **Service Layer** - RatchetEngine and service orchestration
-- **Database Integration** - Entity definitions optimized for API layer
+- **REST API Server** → `ratchet-rest` (handlers, middleware, OpenAPI)
+- **GraphQL Server** → `ratchet-graphql` (schema, resolvers, subscriptions)
+- **Server Core** → `ratchet-server-core` (abstractions, lifecycle)
+- **Business Logic** → `ratchet-services` (task execution, output, registry)
+- **Service Layer** → `ratchet-orchestration` (RatchetEngine coordination)
 
-### 🚀 **Final Production Architecture**
+**Target**: Complete ratchet-lib decomposition into focused, reusable components
+
+### 🎯 **Target Architecture (Post-Phase 2)**
 
 ```
 ratchet-cli/          # Command-line interface
 ratchet-mcp/          # MCP server for LLM integration  
-ratchet-lib/          # 🏆 PRIMARY BUSINESS LOGIC & APIs
-ratchet-execution/    # Process execution infrastructure
-ratchet-storage/      # Database layer with repositories
-ratchet-core/         # Domain types and models
-ratchet-http/         # HTTP client with mocking
-ratchet-logging/      # Structured logging system
-ratchet-js/           # JavaScript execution engine
-ratchet-config/       # Configuration management
-ratchet-caching/      # Caching abstractions
-ratchet-resilience/   # Circuit breakers, retry logic
-ratchet-runtime/      # Alternative task execution
-ratchet-ipc/          # Inter-process communication
-ratchet-plugin/       # Plugin infrastructure
+ratchet-rest/         # 🎯 REST API server (extracted from ratchet-lib)
+ratchet-graphql/      # 🎯 GraphQL server (extracted from ratchet-lib)
+ratchet-server-core/  # 🎯 Server abstractions (extracted from ratchet-lib)
+ratchet-services/     # 🎯 Business logic services (extracted from ratchet-lib)
+ratchet-execution/    # ✅ Process execution infrastructure
+ratchet-storage/      # ✅ Database layer with repositories
+ratchet-core/         # ✅ Domain types and models
+ratchet-http/         # ✅ HTTP client with mocking
+ratchet-logging/      # ✅ Structured logging system
+ratchet-js/           # ✅ JavaScript execution engine
+ratchet-config/       # ✅ Configuration management
+ratchet-caching/      # ✅ Caching abstractions
+ratchet-resilience/   # ✅ Circuit breakers, retry logic
+ratchet-runtime/      # ✅ Alternative task execution
+ratchet-ipc/          # ✅ Inter-process communication
+ratchet-plugin/       # ✅ Plugin infrastructure
+
+# ratchet-lib/        # 🎯 TARGET: Complete decomposition
 ```
 
-### ✅ **Architecture Goals Achieved**
-- **Modularity**: Clear separation between infrastructure and business logic
-- **Maintainability**: Focused crates with single responsibilities  
-- **Testability**: Infrastructure components isolated and testable
-- **Performance**: Reduced build times, optional dependencies
-- **Security**: Pure Rust implementation, no native dependencies
-- **Production Readiness**: Complete APIs, comprehensive test coverage
+### 🎯 **Architecture Goals (In Progress)**
+- **Phase 1 ✅**: Infrastructure extraction complete
+- **Phase 2 📋**: Server component extraction (REST, GraphQL, core)
+- **Phase 3 📋**: Business logic decomposition (services, orchestration)
+- **Phase 4 📋**: Complete ratchet-lib elimination
+- **Target**: Fully modular architecture with focused, single-responsibility crates
 
 ---
 
-## 🚀 **Future Enhancement Opportunities** (OPTIONAL)
+## 🚀 **Phase 2: Server Architecture Refactoring** (HIGH PRIORITY - NEXT)
 
 ### 2.1 Feature Flag Implementation
 - [ ] **Workspace Feature Flags** 
