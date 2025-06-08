@@ -164,8 +164,8 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
         }
     }
     
-    let lib_config = convert_to_legacy_config(config)?;
-    serve_command_with_config(lib_config).await
+    let lib_config = convert_to_legacy_config(config.clone())?;
+    serve_command_with_config(lib_config, config).await
 }
 
 #[cfg(not(feature = "server"))]
@@ -176,7 +176,7 @@ async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
 }
 
 #[cfg(feature = "server")]
-async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
+async fn serve_command_with_config(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
     use ratchet_lib::{
         execution::JobQueueManager,
         server::create_app,
@@ -263,37 +263,72 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     // Note: MCP service is now integrated as routes rather than a separate service
 
     // Check if MCP is enabled for logging
-    let mcp_enabled = config.mcp.as_ref().map_or(false, |mcp| mcp.enabled);
+    let mcp_enabled = new_config.mcp.as_ref().map_or(false, |mcp| mcp.enabled);
     
     // Create MCP routes if MCP service is enabled
-    let mcp_routes = if let Some(mcp_config) = &config.mcp {
+    let mcp_routes = if let Some(mcp_config) = &new_config.mcp {
         if mcp_config.enabled {
             #[cfg(feature = "mcp-server")]
             {
                 use ratchet_mcp::server::adapter::RatchetMcpAdapter;
                 use ratchet_mcp::server::McpServer;
+                use ratchet_mcp::server::tools::RatchetToolRegistry;
+                use ratchet_mcp::security::{McpAuth, McpAuthManager, AuditLogger};
+                use ratchet_mcp::server::config::McpServerConfig;
                 
-                // Create MCP adapter for route integration
+                info!("🤖 Initializing MCP integration for unified server...");
+                
+                // Create MCP adapter using the existing ProcessTaskExecutor
                 let mcp_task_repo = Arc::new(storage_repositories.task_repository());
                 let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
                 
-                // TODO: Update MCP adapter to use new ProcessTaskExecutor
-                // For now, disable MCP integration in unified server mode
-                warn!("MCP integration temporarily disabled during ProcessTaskExecutor migration");
-                None
+                let adapter = RatchetMcpAdapter::new(
+                    task_executor.clone(), // Use the same ProcessTaskExecutor
+                    mcp_task_repo,
+                    mcp_execution_repo,
+                );
+                
+                // Create tool registry with the adapter
+                let mut tool_registry = RatchetToolRegistry::new();
+                tool_registry = tool_registry.with_task_executor(Arc::new(adapter));
+                
+                // Create security components
+                let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
+                let audit_logger = Arc::new(AuditLogger::new(false));
+                
+                // Create MCP server configuration for SSE
+                let mcp_server_config = McpServerConfig::from_ratchet_config(mcp_config);
+                
+                // Create MCP server
+                let mcp_server = McpServer::new(
+                    mcp_server_config,
+                    Arc::new(tool_registry),
+                    auth_manager,
+                    audit_logger,
+                );
+                
+                // Create SSE routes for the unified server
+                let routes = mcp_server.create_sse_routes();
+                info!("✅ MCP SSE routes created successfully for unified server");
+                Some(routes)
             }
             
             #[cfg(not(feature = "mcp-server"))]
             {
-                warn!("MCP service enabled but mcp-server feature not available");
+                warn!("⚠️  MCP service enabled in config but mcp-server feature not available at compile time");
                 None
             }
         } else {
+            info!("   • MCP Service: Disabled (not configured)");
             None
         }
     } else {
+        info!("   • MCP Service: Disabled (no configuration)");
         None
     };
+
+    // Check if MCP routes were created for logging before moving the value
+    let has_mcp_routes = mcp_routes.is_some();
 
     // Create the application
     // TODO: Update create_app to use new ProcessTaskExecutor
@@ -342,11 +377,13 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     info!("   🎮 GraphQL Playground: http://{}/playground", addr);
     
     // Log MCP routes if enabled
-    if mcp_enabled {
-        info!("   🤖 MCP SSE Service:   http://{}/mcp/", addr);
+    if mcp_enabled && has_mcp_routes {
+        info!("   🤖 MCP SSE Service:   ✅ Enabled - http://{}/mcp/", addr);
         info!("      • SSE Endpoint:    http://{}/mcp/sse/{{session_id}}", addr);
         info!("      • Message Endpoint: http://{}/mcp/message/{{session_id}}", addr);
         info!("      • Health Check:    http://{}/mcp/health", addr);
+    } else if mcp_enabled {
+        info!("   🤖 MCP SSE Service:   ⚠️  Enabled in config but routes not created");
     } else {
         info!("   🤖 MCP SSE Service:   ❌ Disabled");
     }
@@ -1607,8 +1644,8 @@ async fn main() -> Result<()> {
                     }
                 }
                 
-                let lib_config = convert_to_legacy_config(server_config)?;
-                serve_command_with_config(lib_config).await
+                let lib_config = convert_to_legacy_config(server_config.clone())?;
+                serve_command_with_config(lib_config, server_config).await
             }
             #[cfg(not(feature = "server"))]
             {
