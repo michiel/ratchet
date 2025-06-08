@@ -388,11 +388,13 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
         info!("   🤖 MCP SSE Service:   ❌ Disabled");
     }
 
-    // Graceful shutdown signal
+    // Graceful shutdown signal with better responsiveness
     let shutdown_signal = async {
         signal::ctrl_c()
             .await
             .expect("Failed to install Ctrl+C handler");
+        
+        info!("🛑 Shutdown signal received, initiating graceful shutdown...");
     };
 
     // Start the server with graceful shutdown (axum 0.6 style)
@@ -415,12 +417,21 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
 
     // Note: MCP service is now integrated as routes and will stop with the main server
 
-    // Stop worker processes
-    info!("Stopping worker processes");
-    task_executor
-        .stop()
-        .await
-        .context("Failed to stop worker processes")?;
+    // Stop worker processes with timeout
+    info!("Stopping worker processes...");
+    let shutdown_timeout = tokio::time::Duration::from_secs(10);
+    
+    match tokio::time::timeout(shutdown_timeout, task_executor.stop()).await {
+        Ok(Ok(())) => {
+            info!("✅ Worker processes stopped successfully");
+        }
+        Ok(Err(e)) => {
+            warn!("⚠️  Error stopping worker processes: {}", e);
+        }
+        Err(_) => {
+            warn!("⚠️  Worker shutdown timed out after {}s, forcing termination", shutdown_timeout.as_secs());
+        }
+    }
 
     info!("Ratchet server shutdown complete");
     Ok(())
