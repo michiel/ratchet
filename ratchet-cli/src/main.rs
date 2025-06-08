@@ -698,6 +698,13 @@ fn init_logging_with_config(
     log_level: Option<&String>,
     record_dir: Option<&PathBuf>,
 ) -> Result<()> {
+    // Check if RUST_LOG is set - if so, prefer simple tracing
+    if std::env::var("RUST_LOG").is_ok() && record_dir.is_none() {
+        // RUST_LOG is set and we're not recording, use simple tracing
+        init_simple_tracing(log_level)?;
+        return Ok(());
+    }
+
     // If CLI log level is provided, override config level
     let mut logging_config = config.logging.clone();
     if let Some(level_str) = log_level {
@@ -736,6 +743,12 @@ fn init_logging_with_config(
         );
     }
 
+    // If no sinks configured and not recording, use simple tracing
+    if logging_config.sinks.is_empty() && record_dir.is_none() {
+        init_simple_tracing(log_level)?;
+        return Ok(());
+    }
+
     // Try to initialize structured logging
     match ratchet_lib::logging::init_logging_from_config(&logging_config) {
         Ok(()) => {
@@ -766,12 +779,35 @@ fn init_logging_with_config(
 
 /// Initialize simple tracing with environment variable override support (fallback)
 fn init_simple_tracing(log_level: Option<&String>) -> Result<()> {
-    let env_filter = match log_level {
-        Some(level) => EnvFilter::try_new(level).unwrap_or_else(|_| {
+    // Priority: RUST_LOG env var > --log-level flag > default "info"
+    let env_filter = if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        // RUST_LOG is set, use it but allow --log-level to set a minimum level
+        if let Some(level) = log_level {
+            // Combine RUST_LOG with minimum level from --log-level
+            let combined = format!("{},{}", rust_log, level);
+            EnvFilter::try_new(&combined).unwrap_or_else(|_| {
+                // If combination fails, just use RUST_LOG
+                EnvFilter::try_new(&rust_log).unwrap_or_else(|_| {
+                    eprintln!("Invalid RUST_LOG '{}', falling back to 'info'", rust_log);
+                    EnvFilter::new("info")
+                })
+            })
+        } else {
+            // Just use RUST_LOG
+            EnvFilter::try_new(&rust_log).unwrap_or_else(|_| {
+                eprintln!("Invalid RUST_LOG '{}', falling back to 'info'", rust_log);
+                EnvFilter::new("info")
+            })
+        }
+    } else if let Some(level) = log_level {
+        // No RUST_LOG, use --log-level
+        EnvFilter::try_new(level).unwrap_or_else(|_| {
             eprintln!("Invalid log level '{}', falling back to 'info'", level);
             EnvFilter::new("info")
-        }),
-        None => EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        })
+    } else {
+        // Neither RUST_LOG nor --log-level, use default
+        EnvFilter::new("info")
     };
 
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
