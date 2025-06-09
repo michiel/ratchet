@@ -379,8 +379,9 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
     // Log MCP routes if enabled
     if mcp_enabled && has_mcp_routes {
         info!("   🤖 MCP SSE Service:   ✅ Enabled - http://{}/mcp/", addr);
-        info!("      • SSE Endpoint:    http://{}/mcp/sse/{{session_id}}", addr);
-        info!("      • Message Endpoint: http://{}/mcp/message/{{session_id}}", addr);
+        info!("      • Direct SSE:      http://{}/mcp/ (for simple clients)", addr);
+        info!("      • Simple Messages: http://{}/mcp/message", addr);
+        info!("      • Advanced SSE:    http://{}/mcp/sse/{{session_id}}", addr);
         info!("      • Health Check:    http://{}/mcp/health", addr);
     } else if mcp_enabled {
         info!("   🤖 MCP SSE Service:   ⚠️  Enabled in config but routes not created");
