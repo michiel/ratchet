@@ -2,6 +2,7 @@
 members = [
     "ratchet-interfaces", # Core interfaces - NEW for breaking circular deps
     "ratchet-api-types",  # Unified API types for REST and GraphQL
+    "ratchet-web",        # Reusable web middleware and utilities
     "ratchet-core",
     "ratchet-runtime",
     "ratchet-storage", 
