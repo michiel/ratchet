@@ -122,6 +122,48 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
     })
 }
 
+/// Setup file-only logging for MCP serve command
+#[cfg(feature = "mcp-server")]
+fn setup_mcp_file_logging(config: &RatchetConfig) -> Result<()> {
+    use ratchet_config::domains::logging::{LoggingConfig, LogTarget, LogLevel};
+    
+    // Default to ratchet.log if no file logging configured
+    let log_file_path = config.logging
+        .targets.iter().find_map(|target| {
+            if let LogTarget::File { path, .. } = target {
+                Some(path.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "ratchet.log".to_string());
+
+    // Create file-only logging config
+    let file_logging = LoggingConfig {
+        level: LogLevel::Info,
+        format: ratchet_config::domains::logging::LogFormat::Text,
+        targets: vec![LogTarget::File {
+            path: log_file_path,
+            level: Some(LogLevel::Info),
+            max_size_bytes: 10 * 1024 * 1024, // 10MB
+            max_files: 5,
+        }],
+        include_location: false,
+        structured: true,
+    };
+    
+    // Convert to legacy config and initialize
+    let legacy_config = convert_to_legacy_config(RatchetConfig {
+        logging: file_logging,
+        ..config.clone()
+    })?;
+    
+    // Initialize the logging system
+    init_logging_with_config(&legacy_config, Some(&"info".to_string()), None)?;
+        
+    Ok(())
+}
+
 /// Load configuration from file or use defaults
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     let loader = ConfigLoader::new();
@@ -464,242 +506,165 @@ async fn mcp_serve_command(
 
 #[cfg(feature = "mcp-server")]
 async fn mcp_serve_command_with_config(
-    ratchet_config: RatchetConfig,
-    transport: &str,
-    host: &str,
-    port: u16,
+    mut ratchet_config: RatchetConfig,
+    _transport: &str,
+    _host: &str,
+    _port: u16,
 ) -> Result<()> {
-    let is_stdio = transport == "stdio";
     use ratchet_mcp::{
         security::{McpAuth, McpAuthManager},
         server::{
             adapter::RatchetMcpAdapter,
-            config::{CorsConfig, McpServerConfig, McpServerTransport},
+            config::McpServerConfig,
             tools::RatchetToolRegistry,
         },
-        McpServer, SimpleTransportType,
+        McpServer,
     };
     use std::sync::Arc;
     use tokio::signal;
 
-    if !is_stdio {
-        info!("Starting Ratchet MCP server");
-    }
+    // Force stdio transport for MCP serve (ignore CLI args)
+    ratchet_config.mcp = Some(ratchet_config::domains::mcp::McpConfig {
+        enabled: true,
+        transport: "stdio".to_string(),
+        host: "127.0.0.1".to_string(),
+        port: 8090,
+    });
 
-    // Parse transport type
-    let transport_type = match transport.to_lowercase().as_str() {
-        "stdio" => SimpleTransportType::Stdio,
-        "sse" => SimpleTransportType::Sse,
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Invalid transport type: {}. Use 'stdio' or 'sse'",
-                transport
-            ));
-        }
-    };
+    // Setup file-only logging (no console output for clean stdio)
+    setup_mcp_file_logging(&ratchet_config)?;
+    
+    // Log to file only - stdio must remain clean for JSON-RPC
+    info!("🤖 Starting Ratchet MCP server in stdio mode");
+    
+    // Convert to lib config (reuse the same conversion logic as serve)
+    let lib_config = convert_to_legacy_config(ratchet_config.clone())?;
 
-    // Get database configuration (use server config if available, otherwise default)
-    let database_config = if let Some(server_config) = &ratchet_config.server {
-        if !is_stdio {
-            info!("Using server database configuration for MCP");
-        }
-        &server_config.database
-    } else {
-        if !is_stdio {
-            info!("No server configuration found, using default database config");
-        }
-        // Use default from server config
-        &ratchet_config::domains::server::ServerConfig::default().database
-    };
+    // Initialize the exact same infrastructure as serve command
+    let server_config = lib_config.server.as_ref().unwrap();
+    
+    info!("📋 MCP Configuration:");
+    info!("   • Transport: stdio (JSON-RPC over stdin/stdout)");
+    info!("   • Database: {}", server_config.database.url);
+    info!("   • Max Workers: {}", lib_config.execution.max_concurrent_tasks);
+    info!("   • Logging: file-only (ratchet.log)");
 
-    // Convert new database config to storage database config
+    // Initialize database (same as serve)
+    info!("💾 Initializing database connection...");
     let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
-        url: database_config.url.clone(),
-        max_connections: database_config.max_connections,
-        connection_timeout: database_config.connection_timeout,
+        url: server_config.database.url.clone(),
+        max_connections: server_config.database.max_connections,
+        connection_timeout: server_config.database.connection_timeout,
     };
 
-    // Initialize database
-    if !is_stdio {
-        info!("Connecting to database: {}", storage_db_config.url);
-    }
-    let database = DatabaseConnection::new(storage_db_config)
+    let database = DatabaseConnection::new(storage_db_config.clone())
         .await
         .context("Failed to connect to database")?;
 
-    // Run migrations
-    if !is_stdio {
-        info!("Running database migrations");
-    }
+    info!("🔄 Running database migrations...");
     database
         .migrate()
         .await
         .context("Failed to run database migrations")?;
+    info!("✅ Database initialized successfully");
 
-    // Initialize repositories using ratchet-storage
-    let repositories = RepositoryFactory::new(database.clone());
-    let task_repo = Arc::new(repositories.task_repository());
-    let execution_repo = Arc::new(repositories.execution_repository());
+    // Initialize repositories and executor (same as serve)
+    let storage_config = storage_db_config;
+    let _legacy_repositories = convert_to_legacy_repository_factory(storage_config.clone()).await?;
+    let storage_repositories = RepositoryFactory::new(database.clone());
 
-    // For legacy ProcessTaskExecutor, convert to legacy repository factory
-    let storage_config = database.get_config().clone();
-    let legacy_repositories = convert_to_legacy_repository_factory(storage_config).await?;
-
-    // Initialize task executor for MCP
-    if !is_stdio {
-        info!("Initializing task executor for MCP");
-    }
-    
-    // Create executor config from the ratchet config
+    info!("⚙️  Initializing task executor...");
     let executor_config = ProcessExecutorConfig {
-        worker_count: ratchet_config.execution.max_concurrent_tasks,
-        task_timeout_seconds: ratchet_config.execution.max_execution_duration.as_secs(),
+        worker_count: lib_config.execution.max_concurrent_tasks,
+        task_timeout_seconds: lib_config.execution.max_execution_duration,
         restart_on_crash: true,
         max_restart_attempts: 3,
     };
     
     let task_executor = Arc::new(ProcessTaskExecutor::new(executor_config));
+    
+    info!("👷 Starting worker processes...");
+    task_executor
+        .start()
+        .await
+        .context("Failed to start worker processes")?;
+    info!("✅ Worker processes started successfully");
 
-    // Start worker processes for the executor
-    if !is_stdio {
-        // Only log worker startup for non-stdio modes to avoid stderr noise
-        task_executor
-            .start()
-            .await
-            .context("Failed to start worker processes")?;
-    } else {
-        // For stdio mode, start workers silently
-        task_executor
-            .start()
-            .await
-            .context("Failed to start worker processes")?;
-    }
-
-    // Create MCP adapter
-    // Create MCP adapter using the new ProcessTaskExecutor from ratchet-execution
-    use ratchet_execution::ProcessExecutorConfig;
-    let mcp_executor_config = ProcessExecutorConfig {
-        worker_count: ratchet_config.execution.max_concurrent_tasks,
-        task_timeout_seconds: ratchet_config.execution.max_execution_duration.as_secs(),
-        restart_on_crash: true,
-        max_restart_attempts: 3,
-    };
-    let mcp_executor = Arc::new(ratchet_execution::ProcessTaskExecutor::new(mcp_executor_config));
+    // Create MCP adapter (same as serve)
+    info!("🤖 Initializing MCP adapter...");
+    let mcp_task_repo = Arc::new(storage_repositories.task_repository());
+    let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
+    
     let adapter = RatchetMcpAdapter::new(
-        mcp_executor,
-        task_repo.clone(),
-        execution_repo.clone(),
+        task_executor.clone(), 
+        mcp_task_repo,
+        mcp_execution_repo,
     );
 
-    // Build MCP server configuration - use MCP config from ratchet_config if available, otherwise use CLI args
-    let server_config = if let Some(mcp_config) = &ratchet_config.mcp {
-        // Use config from file/environment
-        McpServerConfig::from_ratchet_config(mcp_config)
-    } else {
-        // Use command line arguments
-        match transport_type {
-            SimpleTransportType::Stdio => McpServerConfig {
-                transport: McpServerTransport::Stdio,
-                security: ratchet_mcp::security::SecurityConfig::default(),
-                bind_address: None,
-            },
-            SimpleTransportType::Sse => McpServerConfig {
-                transport: McpServerTransport::Sse {
-                    port,
-                    host: host.to_string(),
-                    tls: false,
-                    cors: CorsConfig {
-                        allowed_origins: vec!["*".to_string()],
-                        allowed_methods: vec![
-                            "GET".to_string(),
-                            "POST".to_string(),
-                            "OPTIONS".to_string(),
-                        ],
-                        allowed_headers: vec![
-                            "Content-Type".to_string(),
-                            "Authorization".to_string(),
-                        ],
-                        allow_credentials: false,
-                    },
-                    timeout: std::time::Duration::from_secs(300), // Default 5 minutes
-                },
-                security: ratchet_mcp::security::SecurityConfig::default(),
-                bind_address: Some(format!("{}:{}", host, port)),
-            },
-        }
-    };
-
-    // Create tool registry with the adapter as task executor
+    // Create tool registry with the adapter
     let mut tool_registry = RatchetToolRegistry::new();
     tool_registry = tool_registry.with_task_executor(Arc::new(adapter));
-
-    // Create auth manager
-    let auth_manager = Arc::new(McpAuthManager::new(
-        McpAuth::default(), // TODO: Configure from mcp_server_config
-    ));
-
-    // Create audit logger
-    let audit_logger = Arc::new(ratchet_mcp::security::AuditLogger::new(true));
-
-    // Create and start MCP server
-    let server = McpServer::new(
-        server_config,
+    
+    // Create security components
+    let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
+    let audit_logger = Arc::new(ratchet_mcp::security::AuditLogger::new(false));
+    
+    // Create MCP server configuration - always stdio for this command
+    let mcp_server_config = McpServerConfig::from_ratchet_config(
+        ratchet_config.mcp.as_ref().unwrap()
+    );
+    
+    // Create and run MCP server
+    info!("🚀 Starting MCP server...");
+    let mut mcp_server = McpServer::new(
+        mcp_server_config,
         Arc::new(tool_registry),
         auth_manager,
         audit_logger,
     );
 
-    if !is_stdio {
-        info!(
-            "Starting MCP server with {} transport on {}:{}",
-            transport, host, port
-        );
-    }
-
-    // Set up graceful shutdown
-    let shutdown_signal = async {
+    info!("✅ MCP server ready - listening on stdin/stdout for JSON-RPC messages");
+    
+    // Setup graceful shutdown
+    let shutdown_future = async {
         signal::ctrl_c()
             .await
-            .expect("Failed to install Ctrl+C handler");
-        if !is_stdio {
-            info!("Received shutdown signal");
-        }
+            .expect("Failed to listen for shutdown signal");
+        info!("🛑 Shutdown signal received, stopping MCP server...");
     };
 
-    // Start server and wait for shutdown
+    // Run stdio server with graceful shutdown
+    let server_future = mcp_server.run_stdio();
+    
     tokio::select! {
-        result = server.start() => {
+        result = server_future => {
             match result {
-                Ok(_) => {
-                    if !is_stdio {
-                        info!("MCP server completed successfully");
-                    }
-                }
-                Err(e) => {
-                    error!("MCP server error: {}", e);
-                    return Err(e.into());
-                }
+                Ok(()) => info!("MCP server stopped gracefully"),
+                Err(e) => error!("MCP server error: {}", e),
             }
         }
-        _ = shutdown_signal => {
-            if !is_stdio {
-                info!("Shutting down MCP server");
-            }
+        _ = shutdown_future => {
+            info!("Graceful shutdown initiated");
         }
     }
 
-    // Stop task executor
-    if !is_stdio {
-        info!("Stopping task executor");
+    // Stop worker processes
+    info!("🛑 Stopping worker processes...");
+    let shutdown_timeout = tokio::time::Duration::from_secs(10);
+    
+    match tokio::time::timeout(shutdown_timeout, task_executor.stop()).await {
+        Ok(Ok(())) => {
+            info!("✅ Worker processes stopped successfully");
+        }
+        Ok(Err(e)) => {
+            warn!("⚠️  Error stopping worker processes: {}", e);
+        }
+        Err(_) => {
+            warn!("⚠️  Worker shutdown timed out after {}s", shutdown_timeout.as_secs());
+        }
     }
-    task_executor
-        .stop()
-        .await
-        .context("Failed to stop task executor")?;
 
-    if !is_stdio {
-        info!("Ratchet MCP server shutdown complete");
-    }
+    info!("Ratchet MCP server shutdown complete");
     Ok(())
 }
 
