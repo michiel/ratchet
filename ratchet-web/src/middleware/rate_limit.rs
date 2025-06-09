@@ -233,7 +233,7 @@ pub fn rate_limit_layer(_config: RateLimitConfig) -> tower::layer::util::Identit
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{routing::get, Router};
+    use axum::{routing::get, Router, http::StatusCode};
     use std::net::{IpAddr, Ipv4Addr};
     use tower::ServiceExt;
 
