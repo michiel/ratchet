@@ -1,4 +1,6 @@
 pub mod api;
+// Re-export ratchet-api-types for backward compatibility
+pub use ratchet_api_types;
 pub mod config;
 pub mod database;
 pub mod errors;
