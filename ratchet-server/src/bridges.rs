@@ -23,13 +23,13 @@ use ratchet_lib;
 
 /// Bridge factory that wraps the ratchet-storage RepositoryFactory
 pub struct BridgeRepositoryFactory {
-    storage_factory: Arc<dyn ratchet_storage::repositories::RepositoryFactory>,
+    storage_factory: Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>,
     task_repository: BridgeTaskRepository,
 }
 
 impl BridgeRepositoryFactory {
-    pub fn new(storage_factory: Arc<dyn ratchet_storage::repositories::RepositoryFactory>) -> Self {
-        let task_repository = BridgeTaskRepository::new(storage_factory.task_repository());
+    pub fn new(storage_factory: Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>) -> Self {
+        let task_repository = BridgeTaskRepository::new(Arc::new(storage_factory.task_repository()));
         Self { 
             storage_factory,
             task_repository,
@@ -68,21 +68,20 @@ impl RepositoryFactory for BridgeRepositoryFactory {
 
 /// Bridge task repository
 pub struct BridgeTaskRepository {
-    legacy_repo: Arc<ratchet_lib::database::repositories::TaskRepository>,
+    storage_repo: Arc<ratchet_storage::seaorm::repositories::TaskRepository>,
 }
 
 impl BridgeTaskRepository {
-    pub fn new(legacy_repo: Arc<ratchet_lib::database::repositories::TaskRepository>) -> Self {
-        Self { legacy_repo }
+    pub fn new(storage_repo: Arc<ratchet_storage::seaorm::repositories::TaskRepository>) -> Self {
+        Self { storage_repo }
     }
 }
 
 #[async_trait]
 impl Repository for BridgeTaskRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
-        // Use count() instead of health_check to avoid Send issues
-        self.legacy_repo.count().await
-            .map(|_| ())
+        // Use ratchet-storage health check
+        self.storage_repo.health_check().await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }

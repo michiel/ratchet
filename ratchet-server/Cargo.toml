@@ -14,11 +14,11 @@ ratchet-web = { path = "../ratchet-web" }
 ratchet-rest-api = { path = "../ratchet-rest-api" }
 ratchet-graphql-api = { path = "../ratchet-graphql-api" }
 ratchet-config = { path = "../ratchet-config" }
+ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-logging = { path = "../ratchet-logging" }
 
 # Workspace dependencies - legacy during migration
 ratchet_lib = { path = "../ratchet-lib" }
-ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 
 # External dependencies
 axum = { workspace = true, features = ["tokio", "query"] }

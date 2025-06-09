@@ -228,6 +228,34 @@ async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
 
 #[cfg(feature = "server")]
 async fn serve_command_with_config(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
+    // Try to use new ratchet-server architecture first, fall back to legacy if needed
+    if let Ok(()) = serve_with_ratchet_server(new_config.clone()).await {
+        return Ok(());
+    }
+    
+    warn!("Falling back to legacy server implementation");
+    serve_with_legacy_server(config, new_config).await
+}
+
+#[cfg(feature = "server")]
+async fn serve_with_ratchet_server(config: RatchetConfig) -> Result<()> {
+    use ratchet_server::{ServerConfig, Server};
+    use std::sync::Arc;
+    
+    info!("🚀 Starting Ratchet server with new modular architecture");
+    
+    // Convert new config to server config
+    let server_config = ServerConfig::from_ratchet_config(config)?;
+    
+    // Create and start the server
+    let server = Server::new(server_config).await?;
+    server.start().await?;
+    
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
     use ratchet_lib::{
         execution::JobQueueManager,
         server::create_app,
