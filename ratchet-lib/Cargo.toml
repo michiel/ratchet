@@ -12,6 +12,7 @@ description = "Core library functionality for the project"
 # Dependencies
 [dependencies]
 # Use workspace-level dependencies
+ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-core = { path = "../ratchet-core" }
 ratchet-http = { path = "../ratchet-http" }
 ratchet-logging = { path = "../ratchet-logging" }

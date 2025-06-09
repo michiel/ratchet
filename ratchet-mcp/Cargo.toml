@@ -46,13 +46,14 @@ serde_yaml = "0.9"
 clap = { version = "4.4", features = ["derive"] }
 
 # Internal dependencies
+ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-core = { path = "../ratchet-core" }
 ratchet-ipc = { path = "../ratchet-ipc" }
 ratchet-runtime = { path = "../ratchet-runtime" }
 ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-execution = { path = "../ratchet-execution" }
-ratchet_lib = { path = "../ratchet-lib" }
+# ratchet_lib = { path = "../ratchet-lib" }  # REMOVED - replaced by ratchet-interfaces
 
 [features]
 default = ["server", "client", "transport-stdio", "transport-sse"]

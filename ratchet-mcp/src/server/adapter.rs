@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ratchet_execution::{ExecutionError, ProcessTaskExecutor, TaskExecutionResult};
-use ratchet_lib::logging::event::{LogEvent, LogLevel};
+use ratchet_interfaces::logging::{LogEvent, LogLevel};
 use ratchet_runtime::executor::TaskExecutor;
 use ratchet_storage::seaorm::entities::ExecutionStatus;
 use ratchet_storage::seaorm::repositories::{

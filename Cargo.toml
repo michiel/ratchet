@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "ratchet-interfaces", # Core interfaces - NEW for breaking circular deps
     "ratchet-core",
     "ratchet-runtime",
     "ratchet-storage", 

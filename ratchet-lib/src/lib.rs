@@ -11,6 +11,15 @@ pub mod js_task;
 // Logging functionality moved to ratchet-logging crate
 pub mod logging {
     pub use ratchet_logging::*;
+    
+    // Re-export logging interfaces for backward compatibility
+    pub mod event {
+        pub use ratchet_interfaces::logging::{LogEvent, LogLevel};
+    }
+    
+    pub mod logger {
+        pub use ratchet_interfaces::logging::StructuredLogger;
+    }
 }
 pub mod output;
 // Recording functionality moved to ratchet-http crate

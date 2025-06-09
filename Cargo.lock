@@ -3826,6 +3826,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratchet-interfaces"
+version = "0.3.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "ratchet-ipc"
 version = "0.3.0"
 dependencies = [
@@ -3903,10 +3915,10 @@ dependencies = [
  "ratchet-config",
  "ratchet-core",
  "ratchet-execution",
+ "ratchet-interfaces",
  "ratchet-ipc",
  "ratchet-runtime",
  "ratchet-storage",
- "ratchet_lib",
  "reqwest",
  "serde",
  "serde_json",
@@ -4064,6 +4076,7 @@ dependencies = [
  "rand 0.8.5",
  "ratchet-core",
  "ratchet-http",
+ "ratchet-interfaces",
  "ratchet-logging",
  "regex",
  "reqwest",

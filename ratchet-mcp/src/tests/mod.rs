@@ -8,10 +8,13 @@ use uuid::Uuid;
 use crate::{server::adapter::RatchetMcpAdapter, McpConfig, McpServer, SimpleTransportType};
 
 /// Convert storage config to legacy repository factory for testing
-async fn convert_to_legacy_repository_factory_for_test(
+// TODO: Re-enable in Phase 3 when legacy config support is restored
+#[allow(dead_code)]
+async fn convert_to_legacy_repository_factory_for_test_disabled(
     storage_config: ratchet_storage::seaorm::config::DatabaseConfig,
-) -> Result<ratchet_lib::database::repositories::RepositoryFactory> {
-    // Convert storage config to legacy config
+) -> Result<std::marker::PhantomData<()>> { // Result<ratchet_lib::database::repositories::RepositoryFactory> {
+    /*
+    // TODO: Re-enable in Phase 3 - Convert storage config to legacy config
     let legacy_config = ratchet_lib::config::DatabaseConfig {
         url: storage_config.url.clone(),
         max_connections: storage_config.max_connections,
@@ -27,6 +30,8 @@ async fn convert_to_legacy_repository_factory_for_test(
     let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
 
     Ok(legacy_repos)
+    */
+    unimplemented!("Legacy config support will be re-enabled in Phase 3")
 }
 
 // Stdio-specific integration tests
