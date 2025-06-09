@@ -5,6 +5,7 @@ members = [
     "ratchet-web",        # Reusable web middleware and utilities
     "ratchet-rest-api",   # REST API implementation with dependency injection
     "ratchet-graphql-api", # GraphQL API implementation with dependency injection
+    "ratchet-server",     # Unified server combining REST and GraphQL APIs
     "ratchet-core",
     "ratchet-runtime",
     "ratchet-storage", 

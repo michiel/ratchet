@@ -4086,6 +4086,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratchet-server"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "async-graphql-axum",
+ "async-trait",
+ "axum",
+ "clap",
+ "ratchet-api-types",
+ "ratchet-config",
+ "ratchet-interfaces",
+ "ratchet-logging",
+ "ratchet-rest-api",
+ "ratchet-web",
+ "ratchet_lib",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-test",
+ "tower 0.4.13",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ratchet-storage"
 version = "0.3.0"
 dependencies = [
