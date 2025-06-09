@@ -28,7 +28,7 @@ use uuid::Uuid;
 use ratchet_core::task::Task as CoreTask;
 
 #[cfg(feature = "runtime")]
-use ratchet_runtime::{InMemoryTaskExecutor, TaskExecutor};
+use ratchet_runtime::InMemoryTaskExecutor;
 
 #[cfg(feature = "javascript")]
 use ratchet_js::{FileSystemTask, load_and_execute_task, JsTaskRunner};
@@ -129,8 +129,9 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
     })
 }
 
-/// Setup file-only logging for MCP serve command
+/// Setup file-only logging for MCP serve command (legacy function)
 #[cfg(feature = "mcp-server")]
+#[allow(dead_code)]
 fn setup_mcp_file_logging(config: &RatchetConfig) -> Result<()> {
     use ratchet_config::domains::logging::{LoggingConfig, LogTarget, LogLevel};
     
@@ -198,8 +199,9 @@ fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     }
 }
 
-/// Start the Ratchet server
+/// Start the Ratchet server (legacy wrapper function)
 #[cfg(feature = "server")]
+#[allow(dead_code)]
 async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     let mut config = load_config(config_path)?;
     
@@ -489,8 +491,9 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
     Ok(())
 }
 
-/// Start the MCP (Model Context Protocol) server
+/// Start the MCP (Model Context Protocol) server (legacy wrapper function)
 #[cfg(feature = "mcp-server")]
+#[allow(dead_code)]
 async fn mcp_serve_command(
     config_path: Option<&PathBuf>,
     transport: &str,
@@ -1065,7 +1068,7 @@ async fn run_single_test_modular(task: &FileSystemTask, test_file: &std::path::P
         .get("expected_output")
         .ok_or_else(|| anyhow::anyhow!("Test file missing 'expected_output' field"))?;
 
-    // Execute the task using ratchet-js
+    // Execute the task using ratchet-js directly
     let js_task = task.to_js_task();
     let runner = ratchet_js::JsTaskRunner::new();
     
@@ -1086,8 +1089,9 @@ async fn run_single_test_modular(task: &FileSystemTask, test_file: &std::path::P
     }
 }
 
-/// Validate a task
+/// Legacy validate task function (deprecated - use validate_task_modular instead)
 #[cfg(feature = "javascript")]
+#[allow(dead_code)]
 fn validate_task(from_fs: &str) -> Result<()> {
     info!("Validating task from: {}", from_fs);
 
@@ -1110,8 +1114,9 @@ fn validate_task(from_fs: &str) -> Result<()> {
     }
 }
 
-/// Test a task by running its test cases
+/// Legacy test task function (deprecated - use test_task_modular instead)
 #[cfg(feature = "javascript")]
+#[allow(dead_code)]
 async fn test_task(from_fs: &str) -> Result<()> {
     info!("Testing task from: {}", from_fs);
 
@@ -1183,8 +1188,9 @@ async fn test_task(from_fs: &str) -> Result<()> {
     }
 }
 
-/// Run a single test case
+/// Legacy run single test function (deprecated - use run_single_test_modular instead)
 #[cfg(feature = "javascript")]
+#[allow(dead_code)]
 async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result<()> {
     use serde_json::Value;
 
