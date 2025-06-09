@@ -19,6 +19,7 @@ pub trait Repository {
 }
 
 /// Repository factory for creating all repositories with shared connection
+#[deprecated(since = "0.1.0", note = "Use ratchet_storage::seaorm::repositories::RepositoryFactory instead")]
 #[derive(Clone)]
 pub struct RepositoryFactory {
     pub task_repo: TaskRepository,

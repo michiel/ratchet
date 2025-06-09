@@ -2,6 +2,8 @@ pub mod api;
 // Re-export ratchet-api-types for backward compatibility
 pub use ratchet_api_types;
 pub mod config;
+#[cfg(feature = "database")]
+#[deprecated(since = "0.1.0", note = "Database functionality has been moved to ratchet-storage. Use ratchet-storage crate instead.")]
 pub mod database;
 pub mod errors;
 pub mod execution;
