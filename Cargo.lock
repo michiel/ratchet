@@ -3795,6 +3795,7 @@ dependencies = [
  "chrono",
  "num_cpus",
  "ratchet-config",
+ "ratchet-interfaces",
  "ratchet-ipc",
  "ratchet-resilience",
  "ratchet-storage",

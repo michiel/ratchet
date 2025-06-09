@@ -9,6 +9,7 @@ use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
 use ratchet_execution::{
     CoordinatorMessage, MessageEnvelope, ProcessExecutorConfig, ProcessTaskExecutor,
     TaskExecutionResult, TaskValidationResult, WorkerMessage, WorkerStatus,
+    ExecutionBridge,
 };
 
 use ratchet_lib::{http::{HttpConfig, HttpManager}, js_executor::execute_task, recording, task::Task};
@@ -284,7 +285,7 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
         legacy_repositories.clone(),
     ));
 
-    // Initialize process task executor
+    // Initialize process task executor and bridge
     info!("⚙️  Initializing task executor...");
     
     // Create executor config from the legacy config
@@ -295,11 +296,13 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
         max_restart_attempts: 3,
     };
     
-    let task_executor = Arc::new(ProcessTaskExecutor::new(executor_config));
+    // Create both ProcessTaskExecutor (for backward compatibility) and ExecutionBridge (for new features)
+    let process_executor = Arc::new(ProcessTaskExecutor::new(executor_config.clone()));
+    let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
 
-    // Start worker processes
+    // Start worker processes on the process executor
     info!("👷 Starting worker processes...");
-    task_executor
+    process_executor
         .start()
         .await
         .context("Failed to start worker processes")?;
@@ -323,12 +326,12 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
                 
                 info!("🤖 Initializing MCP integration for unified server...");
                 
-                // Create MCP adapter using the existing ProcessTaskExecutor
+                // Create MCP adapter using the new ExecutionBridge
                 let mcp_task_repo = Arc::new(storage_repositories.task_repository());
                 let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
                 
-                let adapter = RatchetMcpAdapter::new(
-                    task_executor.clone(), // Use the same ProcessTaskExecutor
+                let adapter = RatchetMcpAdapter::with_bridge_executor(
+                    execution_bridge.clone(), // Use the new ExecutionBridge
                     mcp_task_repo,
                     mcp_execution_repo,
                 );
@@ -467,7 +470,7 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
     info!("Stopping worker processes...");
     let shutdown_timeout = tokio::time::Duration::from_secs(10);
     
-    match tokio::time::timeout(shutdown_timeout, task_executor.stop()).await {
+    match tokio::time::timeout(shutdown_timeout, process_executor.stop()).await {
         Ok(Ok(())) => {
             info!("✅ Worker processes stopped successfully");
         }
@@ -584,22 +587,24 @@ async fn mcp_serve_command_with_config(
         max_restart_attempts: 3,
     };
     
-    let task_executor = Arc::new(ProcessTaskExecutor::new(executor_config));
+    // Create both ProcessTaskExecutor (for worker management) and ExecutionBridge (for MCP)
+    let process_executor = Arc::new(ProcessTaskExecutor::new(executor_config.clone()));
+    let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
     
     info!("👷 Starting worker processes...");
-    task_executor
+    process_executor
         .start()
         .await
         .context("Failed to start worker processes")?;
     info!("✅ Worker processes started successfully");
 
-    // Create MCP adapter (same as serve)
+    // Create MCP adapter using ExecutionBridge
     info!("🤖 Initializing MCP adapter...");
     let mcp_task_repo = Arc::new(storage_repositories.task_repository());
     let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
     
-    let adapter = RatchetMcpAdapter::new(
-        task_executor.clone(), 
+    let adapter = RatchetMcpAdapter::with_bridge_executor(
+        execution_bridge.clone(), 
         mcp_task_repo,
         mcp_execution_repo,
     );
@@ -655,7 +660,7 @@ async fn mcp_serve_command_with_config(
     info!("🛑 Stopping worker processes...");
     let shutdown_timeout = tokio::time::Duration::from_secs(10);
     
-    match tokio::time::timeout(shutdown_timeout, task_executor.stop()).await {
+    match tokio::time::timeout(shutdown_timeout, process_executor.stop()).await {
         Ok(Ok(())) => {
             info!("✅ Worker processes stopped successfully");
         }
