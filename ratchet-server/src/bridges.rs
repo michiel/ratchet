@@ -14,6 +14,7 @@ use ratchet_interfaces::{
     TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
     DatabaseError, Repository
 };
+use ratchet_storage::seaorm::repositories::Repository as StorageRepository;
 use ratchet_api_types::{
     ApiId, PaginationInput, ListResponse,
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
@@ -60,8 +61,8 @@ impl RepositoryFactory for BridgeRepositoryFactory {
     }
     
     async fn health_check(&self) -> Result<(), DatabaseError> {
-        // Delegate to legacy database ping
-        self.legacy_factory.database().ping().await
+        // Delegate to storage health check via task repository
+        self.storage_factory.task_repository().health_check_send().await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -81,54 +82,60 @@ impl BridgeTaskRepository {
 impl Repository for BridgeTaskRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         // Use ratchet-storage health check
-        self.storage_repo.health_check().await
+        self.storage_repo.health_check_send().await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
 
 #[async_trait]
 impl ratchet_interfaces::CrudRepository<UnifiedTask> for BridgeTaskRepository {
-    async fn create(&self, _entity: UnifiedTask) -> Result<UnifiedTask, DatabaseError> {
-        // For now, return an error as task creation through bridge is not yet implemented
-        Err(DatabaseError::Internal { 
-            message: "Task creation through bridge not yet implemented".to_string() 
-        })
+    async fn create(&self, entity: UnifiedTask) -> Result<UnifiedTask, DatabaseError> {
+        // Convert unified task to storage task
+        let storage_task = convert_unified_task_to_storage(entity);
+        
+        match self.storage_repo.create(storage_task).await {
+            Ok(created_task) => Ok(convert_storage_task_to_unified(created_task)),
+            Err(e) => Err(convert_storage_error(e)),
+        }
     }
     
     async fn find_by_id(&self, id: i32) -> Result<Option<UnifiedTask>, DatabaseError> {
-        match self.legacy_repo.find_by_id(id).await {
-            Ok(Some(task)) => Ok(Some(convert_legacy_task_to_unified(task))),
+        match self.storage_repo.find_by_id(id).await {
+            Ok(Some(task)) => Ok(Some(convert_storage_task_to_unified(task))),
             Ok(None) => Ok(None),
-            Err(e) => Err(convert_legacy_error(e)),
+            Err(e) => Err(convert_storage_error(e)),
         }
     }
     
     async fn find_by_uuid(&self, uuid: uuid::Uuid) -> Result<Option<UnifiedTask>, DatabaseError> {
-        match self.legacy_repo.find_by_uuid(uuid).await {
-            Ok(Some(task)) => Ok(Some(convert_legacy_task_to_unified(task))),
+        match self.storage_repo.find_by_uuid(uuid).await {
+            Ok(Some(task)) => Ok(Some(convert_storage_task_to_unified(task))),
             Ok(None) => Ok(None),
-            Err(e) => Err(convert_legacy_error(e)),
+            Err(e) => Err(convert_storage_error(e)),
         }
     }
     
-    async fn update(&self, _entity: UnifiedTask) -> Result<UnifiedTask, DatabaseError> {
-        // For now, return an error as task update through bridge is not yet implemented
-        Err(DatabaseError::Internal { 
-            message: "Task update through bridge not yet implemented".to_string() 
-        })
+    async fn update(&self, entity: UnifiedTask) -> Result<UnifiedTask, DatabaseError> {
+        // Convert unified task to storage task
+        let storage_task = convert_unified_task_to_storage(entity);
+        
+        match self.storage_repo.update(storage_task).await {
+            Ok(updated_task) => Ok(convert_storage_task_to_unified(updated_task)),
+            Err(e) => Err(convert_storage_error(e)),
+        }
     }
     
-    async fn delete(&self, _id: i32) -> Result<(), DatabaseError> {
-        // For now, return an error as task deletion through bridge is not yet implemented
-        Err(DatabaseError::Internal { 
-            message: "Task deletion through bridge not yet implemented".to_string() 
-        })
+    async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
+        match self.storage_repo.delete(id).await {
+            Ok(()) => Ok(()),
+            Err(e) => Err(convert_storage_error(e)),
+        }
     }
     
     async fn count(&self) -> Result<u64, DatabaseError> {
-        match self.legacy_repo.count().await {
+        match self.storage_repo.count().await {
             Ok(count) => Ok(count),
-            Err(e) => Err(convert_legacy_error(e)),
+            Err(e) => Err(convert_storage_error(e)),
         }
     }
 }
@@ -137,58 +144,84 @@ impl ratchet_interfaces::CrudRepository<UnifiedTask> for BridgeTaskRepository {
 impl ratchet_interfaces::FilteredRepository<UnifiedTask, TaskFilters> for BridgeTaskRepository {
     async fn find_with_filters(
         &self, 
-        _filters: TaskFilters, 
-        _pagination: PaginationInput
+        filters: TaskFilters, 
+        pagination: PaginationInput
     ) -> Result<ListResponse<UnifiedTask>, DatabaseError> {
-        // For now, return an error as filtered queries through bridge are not yet implemented
-        Err(DatabaseError::Internal { 
-            message: "Filtered task queries through bridge not yet implemented".to_string() 
-        })
+        // Convert interface filters to storage filters
+        let storage_filters = convert_filters_to_storage(filters);
+        let storage_pagination = convert_pagination_to_storage(pagination.clone());
+        
+        match self.storage_repo.find_with_filters(storage_filters, storage_pagination).await {
+            Ok(tasks) => {
+                let unified_tasks: Vec<UnifiedTask> = tasks.into_iter()
+                    .map(convert_storage_task_to_unified)
+                    .collect();
+                    
+                Ok(ListResponse {
+                    items: unified_tasks,
+                    meta: ratchet_api_types::pagination::PaginationMeta {
+                        page: pagination.page.unwrap_or(1),
+                        limit: pagination.limit.unwrap_or(20),
+                        offset: pagination.offset.unwrap_or(0),
+                        total: 0, // Would need separate count query
+                        has_next: false, // Would need to calculate
+                        has_previous: pagination.offset.unwrap_or(0) > 0,
+                        total_pages: 1, // Would need to calculate
+                    },
+                })
+            },
+            Err(e) => Err(convert_storage_error(e)),
+        }
     }
     
-    async fn count_with_filters(&self, _filters: TaskFilters) -> Result<u64, DatabaseError> {
-        // For now, return an error as filtered count through bridge is not yet implemented
-        Err(DatabaseError::Internal { 
-            message: "Filtered task count through bridge not yet implemented".to_string() 
-        })
+    async fn count_with_filters(&self, filters: TaskFilters) -> Result<u64, DatabaseError> {
+        // Convert interface filters to storage filters
+        let storage_filters = convert_filters_to_storage(filters);
+        
+        match self.storage_repo.count_with_filters(storage_filters).await {
+            Ok(count) => Ok(count),
+            Err(e) => Err(convert_storage_error(e)),
+        }
     }
 }
 
 #[async_trait]
 impl TaskRepository for BridgeTaskRepository {
     async fn find_enabled(&self) -> Result<Vec<UnifiedTask>, DatabaseError> {
-        match self.legacy_repo.find_enabled().await {
-            Ok(tasks) => Ok(tasks.into_iter().map(convert_legacy_task_to_unified).collect()),
-            Err(e) => Err(convert_legacy_error(e)),
+        match self.storage_repo.find_enabled().await {
+            Ok(tasks) => Ok(tasks.into_iter().map(convert_storage_task_to_unified).collect()),
+            Err(e) => Err(convert_storage_error(e)),
         }
     }
     
     async fn find_by_name(&self, name: &str) -> Result<Option<UnifiedTask>, DatabaseError> {
-        match self.legacy_repo.find_by_name(name).await {
-            Ok(Some(task)) => Ok(Some(convert_legacy_task_to_unified(task))),
+        match self.storage_repo.find_by_name(name).await {
+            Ok(Some(task)) => Ok(Some(convert_storage_task_to_unified(task))),
             Ok(None) => Ok(None),
-            Err(e) => Err(convert_legacy_error(e)),
+            Err(e) => Err(convert_storage_error(e)),
         }
     }
     
-    async fn mark_validated(&self, _id: ApiId) -> Result<(), DatabaseError> {
-        // For now, return an error as task validation updates through bridge are not yet implemented
-        Err(DatabaseError::Internal { 
-            message: "Task validation updates through bridge not yet implemented".to_string() 
-        })
+    async fn mark_validated(&self, id: ApiId) -> Result<(), DatabaseError> {
+        let i32_id = id.as_i32().unwrap_or(0);
+        match self.storage_repo.mark_validated(i32_id).await {
+            Ok(()) => Ok(()),
+            Err(e) => Err(convert_storage_error(e)),
+        }
     }
     
-    async fn set_enabled(&self, _id: ApiId, _enabled: bool) -> Result<(), DatabaseError> {
-        // For now, return an error as task enabled updates through bridge are not yet implemented
-        Err(DatabaseError::Internal { 
-            message: "Task enabled updates through bridge not yet implemented".to_string() 
-        })
+    async fn set_enabled(&self, id: ApiId, enabled: bool) -> Result<(), DatabaseError> {
+        let i32_id = id.as_i32().unwrap_or(0);
+        match self.storage_repo.set_enabled(i32_id, enabled).await {
+            Ok(()) => Ok(()),
+            Err(e) => Err(convert_storage_error(e)),
+        }
     }
     
     async fn set_in_sync(&self, _id: ApiId, _in_sync: bool) -> Result<(), DatabaseError> {
-        // For now, return an error as task sync updates through bridge are not yet implemented
+        // For now, return an error as task sync updates are not implemented in ratchet-storage yet
         Err(DatabaseError::Internal { 
-            message: "Task sync updates through bridge not yet implemented".to_string() 
+            message: "Task sync updates not yet implemented in ratchet-storage".to_string() 
         })
     }
 }
@@ -198,13 +231,13 @@ impl TaskRepository for BridgeTaskRepository {
 // - BridgeJobRepository  
 // - BridgeScheduleRepository
 
-/// Helper function to convert ratchet-lib errors to DatabaseError
-fn convert_legacy_error(err: impl std::error::Error) -> DatabaseError {
+/// Helper function to convert ratchet-storage errors to DatabaseError
+fn convert_storage_error(err: ratchet_storage::seaorm::connection::DatabaseError) -> DatabaseError {
     DatabaseError::Internal { message: err.to_string() }
 }
 
-/// Helper function to convert legacy entities to unified types
-fn convert_legacy_task_to_unified(task: ratchet_lib::database::entities::tasks::Model) -> UnifiedTask {
+/// Helper function to convert storage entities to unified types
+fn convert_storage_task_to_unified(task: ratchet_storage::seaorm::entities::Task) -> UnifiedTask {
     UnifiedTask {
         id: ApiId::from_i32(task.id),
         uuid: task.uuid,
@@ -224,27 +257,41 @@ fn convert_legacy_task_to_unified(task: ratchet_lib::database::entities::tasks::
     }
 }
 
-/// Helper function to convert unified types to legacy entities
-fn convert_unified_task_to_legacy(task: UnifiedTask) -> ratchet_lib::database::entities::tasks::ActiveModel {
-    use ratchet_lib::database::entities::tasks::ActiveModel;
-    use sea_orm::Set;
-    
-    ActiveModel {
-        id: Set(task.id.as_i32().unwrap_or(0)),
-        uuid: Set(task.uuid),
-        name: Set(task.name),
-        description: Set(task.description),
-        version: Set(task.version),
-        path: Set(String::new()), // Would need to be provided or inferred
-        metadata: Set(task.metadata.unwrap_or_default()),
-        input_schema: Set(task.input_schema.unwrap_or_default()),
-        output_schema: Set(task.output_schema.unwrap_or_default()),
-        enabled: Set(task.enabled),
-        created_at: Set(task.created_at),
-        updated_at: Set(task.updated_at),
-        validated_at: Set(task.validated_at),
+/// Helper function to convert unified types to storage entities
+fn convert_unified_task_to_storage(task: UnifiedTask) -> ratchet_storage::seaorm::entities::Task {
+    ratchet_storage::seaorm::entities::Task {
+        id: task.id.as_i32().unwrap_or(0),
+        uuid: task.uuid,
+        name: task.name,
+        description: task.description,
+        version: task.version,
+        path: String::new(), // Would need to be provided or inferred
+        metadata: task.metadata.unwrap_or_default(),
+        input_schema: task.input_schema.unwrap_or_default(),
+        output_schema: task.output_schema.unwrap_or_default(),
+        enabled: task.enabled,
+        created_at: task.created_at,
+        updated_at: task.updated_at,
+        validated_at: task.validated_at,
     }
 }
 
-// TODO: Implement filter and pagination conversion functions
-// These would need to properly map between the interface types and legacy types
+/// Convert interface TaskFilters to storage TaskFilters
+fn convert_filters_to_storage(filters: TaskFilters) -> ratchet_storage::seaorm::repositories::TaskFilters {
+    ratchet_storage::seaorm::repositories::TaskFilters {
+        name: filters.name,
+        enabled: filters.enabled,
+        has_validation: filters.validated_after.map(|_| true), // Convert validated_after to has_validation
+        version: None, // Not supported in current interface
+    }
+}
+
+/// Convert interface PaginationInput to storage Pagination
+fn convert_pagination_to_storage(pagination: PaginationInput) -> ratchet_storage::seaorm::repositories::Pagination {
+    ratchet_storage::seaorm::repositories::Pagination {
+        limit: pagination.limit,
+        offset: pagination.offset,
+        order_by: None, // Not supported in current interface
+        order_desc: None, // Not supported in current interface
+    }
+}
