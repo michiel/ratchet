@@ -1,1 +1,2 @@
 - ratchet-lib is a legacy package that we are migrating away from to modularized components
+- docs/ARCHITECTURE.md contains the architecture, TODO.md contains the roadmap and priorities, docs/mcp-transports.md contains the mcp transport protocol descriptions, docs/LLM_TASK_DEVELOPMENT.md contains the instructions and description for an LLM to interactive with the ratchet binary. refer to and update these documents as necessary
