@@ -1,0 +1,88 @@
+{
+  "_comment": "Multiple example configurations for Claude Desktop + Ratchet MCP integration",
+  
+  "_development_config": {
+    "description": "Development configuration using debug build",
+    "config": {
+      "mcpServers": {
+        "ratchet": {
+          "command": "/home/michiel/dev/ratchet/target/debug/ratchet",
+          "args": [
+            "mcp-serve"
+          ],
+          "env": {
+            "RUST_LOG": "debug",
+            "RATCHET_ENV": "development"
+          }
+        }
+      }
+    }
+  },
+
+  "_production_config": {
+    "description": "Production configuration with custom config file",
+    "config": {
+      "mcpServers": {
+        "ratchet": {
+          "command": "ratchet",
+          "args": [
+            "mcp-serve",
+            "--config",
+            "/etc/ratchet/config.yaml"
+          ],
+          "env": {
+            "RUST_LOG": "info",
+            "RATCHET_ENV": "production"
+          }
+        }
+      }
+    }
+  },
+
+  "_minimal_config": {
+    "description": "Minimal configuration using system ratchet binary",
+    "config": {
+      "mcpServers": {
+        "ratchet": {
+          "command": "ratchet",
+          "args": ["mcp-serve"]
+        }
+      }
+    }
+  },
+
+  "_current_recommended": {
+    "description": "Current recommended configuration for this development workspace",
+    "config": {
+      "mcpServers": {
+        "ratchet": {
+          "command": "/home/michiel/dev/ratchet/target/debug/ratchet",
+          "args": [
+            "mcp-serve"
+          ],
+          "env": {
+            "RUST_LOG": "info,ratchet=debug",
+            "RATCHET_ENV": "development"
+          }
+        }
+      }
+    }
+  },
+
+  "_usage_instructions": {
+    "steps": [
+      "1. Choose the appropriate config from the examples above",
+      "2. Copy the 'config' object to ~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%/Claude/claude_desktop_config.json (Windows)",
+      "3. Make sure the ratchet binary path is correct",
+      "4. Test the configuration: ratchet mcp-serve",
+      "5. Restart Claude Desktop",
+      "6. Verify in Claude by asking: 'What Ratchet tasks are available?'"
+    ],
+    "notes": [
+      "The mcp-serve command automatically uses stdio transport for Claude compatibility",
+      "Logging goes to ratchet.log by default to keep stdio clean for JSON-RPC",
+      "No config file is required - defaults will work for basic usage",
+      "Set RUST_LOG environment variable for debugging"
+    ]
+  }
+}

@@ -531,8 +531,8 @@ async fn mcp_serve_command_with_config(
         port: 8090,
     });
 
-    // Setup file-only logging (no console output for clean stdio)
-    setup_mcp_file_logging(&ratchet_config)?;
+    // Note: Logging is already initialized by main() with stderr-only for stdio mode
+    // No need to reinitialize here as it would cause a panic
     
     // Log to file only - stdio must remain clean for JSON-RPC
     info!("🤖 Starting Ratchet MCP server in stdio mode");
