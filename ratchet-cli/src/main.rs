@@ -27,7 +27,7 @@ use uuid::Uuid;
 use ratchet_core::task::Task as CoreTask;
 
 #[cfg(feature = "runtime")]
-use ratchet_runtime::InMemoryTaskExecutor;
+use ratchet_runtime::{InMemoryTaskExecutor, TaskExecutor};
 
 mod cli;
 use cli::{Cli, Commands, ConfigCommands, GenerateCommands};
@@ -861,14 +861,14 @@ fn load_task_as_core_task(from_fs: &str) -> Result<CoreTask> {
 
     // Get the JavaScript content
     let js_content = lib_task
-        .get_js_content()
-        .map_err(|e| anyhow::anyhow!("Failed to get JS content: {}", e))?;
+        .js_content()
+        .ok_or_else(|| anyhow::anyhow!("No JavaScript content available"))?;
 
     // Convert to Core Task
-    let core_task = TaskBuilder::new(&lib_task.metadata.label, &lib_task.metadata.version)
+    let core_task = TaskBuilder::new(&lib_task.metadata.label, &lib_task.metadata.core.version)
         .input_schema(lib_task.input_schema.clone())
         .output_schema(lib_task.output_schema.clone())
-        .javascript_source(js_content.as_str())
+        .javascript_source(js_content)
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to build Core Task: {}", e))?;
 
@@ -1540,15 +1540,26 @@ async fn main() -> Result<()> {
         init_mcp_stdio_logging(cli.log_level.as_ref())?;
     } else {
         // Initialize logging from config
-        let legacy_config = convert_to_legacy_config(config.clone())?;
-        init_logging_with_config(
-            &legacy_config,
-            cli.log_level.as_ref(),
-            cli.command.as_ref().and_then(|cmd| match cmd {
-                Commands::RunOnce { record, .. } => record.as_ref(),
-                _ => None,
-            }),
-        )?;
+        #[cfg(feature = "server")]
+        {
+            let legacy_config = convert_to_legacy_config(config.clone())?;
+            init_logging_with_config(
+                &legacy_config,
+                cli.log_level.as_ref(),
+                cli.command.as_ref().and_then(|cmd| match cmd {
+                    Commands::RunOnce { record, .. } => record.as_ref(),
+                    _ => None,
+                }),
+            )?;
+        }
+        #[cfg(not(feature = "server"))]
+        {
+            init_logging_with_config(
+                &config,
+                cli.log_level.as_ref(),
+                None,
+            )?;
+        }
     }
 
     if !is_mcp_stdio {

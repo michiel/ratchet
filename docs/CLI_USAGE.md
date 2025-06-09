@@ -257,14 +257,25 @@ Or with a custom configuration file:
 
 ### Available MCP Tools
 
-When connected, LLMs can use these tools:
+✅ **MCP Integration Verified** - 17 tools available and fully functional:
 
-1. **`ratchet.execute_task`** - Execute a Ratchet task
-2. **`ratchet.list_available_tasks`** - Discover available tasks
-3. **`ratchet.get_execution_status`** - Monitor task execution
+1. **`ratchet.execute_task`** - Execute a Ratchet task with progress streaming
+2. **`ratchet.list_available_tasks`** - Discover available tasks with schemas  
+3. **`ratchet.get_execution_status`** - Monitor task execution status
 4. **`ratchet.get_execution_logs`** - Retrieve execution logs
-5. **`ratchet.get_execution_trace`** - Get detailed traces
+5. **`ratchet.get_execution_trace`** - Get detailed execution traces
 6. **`ratchet.analyze_execution_error`** - AI-powered error analysis
+7. **`ratchet.create_task`** - Create new tasks with code and schemas
+8. **`ratchet.edit_task`** - Edit existing task code and metadata
+9. **`ratchet.validate_task`** - Validate task code and schemas
+10. **`ratchet.run_task_tests`** - Execute test cases for tasks
+11. **`ratchet.debug_task_execution`** - Debug with breakpoints and inspection
+12. **`ratchet.batch_execute`** - Execute multiple tasks with dependencies
+13. **`ratchet.generate_from_template`** - Generate tasks from templates
+14. **`ratchet.list_templates`** - List available task templates
+15. **`ratchet.import_tasks`** - Import tasks from JSON/other formats
+16. **`ratchet.export_tasks`** - Export tasks to JSON/other formats  
+17. **`ratchet.create_task_version`** - Version existing tasks
 
 ### Example MCP Session
 

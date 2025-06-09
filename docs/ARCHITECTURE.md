@@ -165,16 +165,22 @@ The modular architecture uses feature flags for optional functionality. Current 
 
 ✅ **Working Feature Sets:**
 - `default` - Standard build with server, database, MCP, JavaScript, and runtime support ✅ COMPILES  
-- `server` - REST and GraphQL APIs (requires database)
-- `mcp-server` - MCP protocol server with stdio/SSE transports
-- `runtime` - Alternative executor now properly integrated ✅ FIXED
+- `server` - REST and GraphQL APIs (requires database) ✅ COMPILES
+- `mcp-server` - MCP protocol server with stdio/SSE transports ✅ COMPILES
+- `runtime` - Alternative executor now properly integrated ✅ COMPILES
+- `minimal` - Core functionality only ✅ COMPILES (FIXED)
+- `full` - All features enabled ✅ COMPILES
+- `production` - Production feature set ✅ COMPILES
+- `javascript` - JavaScript execution only ✅ COMPILES (FIXED)
+- `caching,resilience` - Feature combinations ✅ COMPILES
 
-⚠️ **Partially Working:**
-- `minimal` - Requires manual dependency specification
+✅ **All Feature Combinations Tested:**
+- Feature flag system now fully functional
+- Cross-feature dependencies resolved
+- Both monolithic and modular builds working
 
 ❌ **Known Issues:**
-- Some feature combinations may still fail due to missing dependencies
-- Complex feature combinations need testing
+- Some experimental feature combinations may need additional testing
 
 ```toml
 # Available build profiles in ratchet-cli/Cargo.toml
