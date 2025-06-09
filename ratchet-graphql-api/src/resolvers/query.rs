@@ -2,10 +2,10 @@
 
 use async_graphql::{Object, Context, Result};
 use ratchet_interfaces::{TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters};
+use ratchet_api_types::ApiId;
 use crate::{
     context::GraphQLContext,
     types::*,
-    errors::ApiError,
 };
 
 /// Root query resolver
@@ -26,15 +26,24 @@ impl Query {
         
         // Convert GraphQL filters to domain filters
         let domain_filters = filters.map(|f| TaskFilters {
+            name: f.name_contains,
             enabled: f.enabled,
             registry_source: f.registry_source,
-            in_sync: f.in_sync,
-            name_contains: f.name_contains,
-            created_after: f.created_after,
-            created_before: f.created_before,
-        }).unwrap_or_default();
+            validated_after: f.created_after,
+        }).unwrap_or(TaskFilters {
+            name: None,
+            enabled: None,
+            registry_source: None,
+            validated_after: None,
+        });
         
-        let unified_tasks = task_repo.find_filtered(&domain_filters, limit, offset).await?;
+        let pagination = ratchet_api_types::PaginationInput { 
+            page: None,
+            limit: Some(limit.unwrap_or(50) as u32), 
+            offset: Some(offset.unwrap_or(0) as u32),
+        };
+        let result = task_repo.find_with_filters(domain_filters, pagination).await?;
+        let unified_tasks = result.items;
         Ok(unified_tasks.into_iter().map(|task| task.into()).collect())
     }
 
@@ -43,7 +52,8 @@ impl Query {
         let context = ctx.data::<GraphQLContext>()?;
         let task_repo = context.repositories.task_repository();
         
-        match task_repo.find_by_id(id.into()).await? {
+        let api_id: ApiId = id.into();
+        match task_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await? {
             Some(task) => Ok(Some(task.into())),
             None => Ok(None),
         }
@@ -81,14 +91,23 @@ impl Query {
         // Convert GraphQL filters to domain filters
         let domain_filters = filters.map(|f| ExecutionFilters {
             task_id: f.task_id.map(|id| id.into()),
-            job_id: f.job_id.map(|id| id.into()),
             status: f.status.map(|s| s.into()),
-            worker_id: f.worker_id,
-            started_after: f.started_after,
-            started_before: f.started_before,
-        }).unwrap_or_default();
+            queued_after: f.queued_after,
+            completed_after: f.completed_after,
+        }).unwrap_or(ExecutionFilters {
+            task_id: None,
+            status: None,
+            queued_after: None,
+            completed_after: None,
+        });
         
-        let unified_executions = execution_repo.find_filtered(&domain_filters, limit, offset).await?;
+        let pagination = ratchet_api_types::PaginationInput { 
+            page: None,
+            limit: Some(limit.unwrap_or(50) as u32), 
+            offset: Some(offset.unwrap_or(0) as u32),
+        };
+        let result = execution_repo.find_with_filters(domain_filters, pagination).await?;
+        let unified_executions = result.items;
         Ok(unified_executions.into_iter().map(|exec| exec.into()).collect())
     }
 
@@ -97,7 +116,8 @@ impl Query {
         let context = ctx.data::<GraphQLContext>()?;
         let execution_repo = context.repositories.execution_repository();
         
-        match execution_repo.find_by_id(id.into()).await? {
+        let api_id: ApiId = id.into();
+        match execution_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await? {
             Some(execution) => Ok(Some(execution.into())),
             None => Ok(None),
         }
@@ -117,14 +137,25 @@ impl Query {
         // Convert GraphQL filters to domain filters
         let domain_filters = filters.map(|f| JobFilters {
             task_id: f.task_id.map(|id| id.into()),
-            schedule_id: f.schedule_id.map(|id| id.into()),
             status: f.status.map(|s| s.into()),
             priority: f.priority.map(|p| p.into()),
-            scheduled_after: f.scheduled_after,
+            queued_after: f.queued_after,
             scheduled_before: f.scheduled_before,
-        }).unwrap_or_default();
+        }).unwrap_or(JobFilters {
+            task_id: None,
+            status: None,
+            priority: None,
+            queued_after: None,
+            scheduled_before: None,
+        });
         
-        let unified_jobs = job_repo.find_filtered(&domain_filters, limit, offset).await?;
+        let pagination = ratchet_api_types::PaginationInput { 
+            page: None,
+            limit: Some(limit.unwrap_or(50) as u32), 
+            offset: Some(offset.unwrap_or(0) as u32),
+        };
+        let result = job_repo.find_with_filters(domain_filters, pagination).await?;
+        let unified_jobs = result.items;
         Ok(unified_jobs.into_iter().map(|job| job.into()).collect())
     }
 
@@ -133,7 +164,8 @@ impl Query {
         let context = ctx.data::<GraphQLContext>()?;
         let job_repo = context.repositories.job_repository();
         
-        match job_repo.find_by_id(id.into()).await? {
+        let api_id: ApiId = id.into();
+        match job_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await? {
             Some(job) => Ok(Some(job.into())),
             None => Ok(None),
         }
@@ -154,12 +186,20 @@ impl Query {
         let domain_filters = filters.map(|f| ScheduleFilters {
             task_id: f.task_id.map(|id| id.into()),
             enabled: f.enabled,
-            name_contains: f.name_contains,
-            created_after: f.created_after,
-            created_before: f.created_before,
-        }).unwrap_or_default();
+            next_run_before: f.next_run_before,
+        }).unwrap_or(ScheduleFilters {
+            task_id: None,
+            enabled: None,
+            next_run_before: None,
+        });
         
-        let unified_schedules = schedule_repo.find_filtered(&domain_filters, limit, offset).await?;
+        let pagination = ratchet_api_types::PaginationInput { 
+            page: None,
+            limit: Some(limit.unwrap_or(50) as u32), 
+            offset: Some(offset.unwrap_or(0) as u32),
+        };
+        let result = schedule_repo.find_with_filters(domain_filters, pagination).await?;
+        let unified_schedules = result.items;
         Ok(unified_schedules.into_iter().map(|schedule| schedule.into()).collect())
     }
 
@@ -168,7 +208,8 @@ impl Query {
         let context = ctx.data::<GraphQLContext>()?;
         let schedule_repo = context.repositories.schedule_repository();
         
-        match schedule_repo.find_by_id(id.into()).await? {
+        let api_id: ApiId = id.into();
+        match schedule_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await? {
             Some(schedule) => Ok(Some(schedule.into())),
             None => Ok(None),
         }
@@ -197,12 +238,12 @@ impl Query {
             total_workers: 0,
             active_workers: 0,
             idle_workers: 0,
-            busy_workers: 0,
-            offline_workers: 0,
+            running_workers: 0,
+            stopping_workers: 0,
             error_workers: 0,
-            total_executions: 0,
-            average_execution_time_ms: None,
-            throughput_per_hour: None,
+            total_tasks: 0,
+            average_uptime_seconds: None,
+            total_memory_usage_mb: None,
         })
     }
 }

@@ -1,6 +1,6 @@
 //! GraphQL types for tasks
 
-use async_graphql::{Object, InputObject, Enum, SimpleObject};
+use async_graphql::{InputObject, SimpleObject};
 use ratchet_api_types::UnifiedTask;
 use super::scalars::GraphQLApiId;
 use chrono::{DateTime, Utc};
@@ -69,12 +69,10 @@ pub struct UpdateTaskInput {
 /// Input type for task filtering
 #[derive(InputObject)]
 pub struct TaskFiltersInput {
+    pub name_contains: Option<String>,
     pub enabled: Option<bool>,
     pub registry_source: Option<bool>,
-    pub in_sync: Option<bool>,
-    pub name_contains: Option<String>,
     pub created_after: Option<DateTime<Utc>>,
-    pub created_before: Option<DateTime<Utc>>,
 }
 
 /// Task statistics

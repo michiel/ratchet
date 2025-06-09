@@ -6,6 +6,7 @@
 pub mod config;
 pub mod services;
 pub mod startup;
+pub mod bridges;
 
 // Re-export main components
 pub use config::*;

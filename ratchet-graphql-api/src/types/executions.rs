@@ -11,17 +11,19 @@ use serde_json::Value as JsonValue;
 pub struct Execution {
     pub id: GraphQLApiId,
     pub task_id: GraphQLApiId,
-    pub job_id: Option<GraphQLApiId>,
     pub status: ExecutionStatusGraphQL,
-    pub input: Option<JsonValue>,
+    pub input: JsonValue,
     pub output: Option<JsonValue>,
     pub error_message: Option<String>,
-    pub started_at: DateTime<Utc>,
+    pub error_details: Option<JsonValue>,
+    pub queued_at: DateTime<Utc>,
+    pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
-    pub duration_ms: Option<i64>,
-    pub worker_id: Option<String>,
-    pub retry_count: i32,
-    pub metadata: Option<JsonValue>,
+    pub duration_ms: Option<i32>,
+    pub recording_path: Option<String>,
+    pub can_retry: bool,
+    pub can_cancel: bool,
+    pub progress: Option<f32>,
 }
 
 /// GraphQL enum for execution status
@@ -32,8 +34,6 @@ pub enum ExecutionStatusGraphQL {
     Completed,
     Failed,
     Cancelled,
-    Timeout,
-    Retrying,
 }
 
 impl From<ExecutionStatus> for ExecutionStatusGraphQL {
@@ -44,8 +44,6 @@ impl From<ExecutionStatus> for ExecutionStatusGraphQL {
             ExecutionStatus::Completed => ExecutionStatusGraphQL::Completed,
             ExecutionStatus::Failed => ExecutionStatusGraphQL::Failed,
             ExecutionStatus::Cancelled => ExecutionStatusGraphQL::Cancelled,
-            ExecutionStatus::Timeout => ExecutionStatusGraphQL::Timeout,
-            ExecutionStatus::Retrying => ExecutionStatusGraphQL::Retrying,
         }
     }
 }
@@ -58,8 +56,6 @@ impl From<ExecutionStatusGraphQL> for ExecutionStatus {
             ExecutionStatusGraphQL::Completed => ExecutionStatus::Completed,
             ExecutionStatusGraphQL::Failed => ExecutionStatus::Failed,
             ExecutionStatusGraphQL::Cancelled => ExecutionStatus::Cancelled,
-            ExecutionStatusGraphQL::Timeout => ExecutionStatus::Timeout,
-            ExecutionStatusGraphQL::Retrying => ExecutionStatus::Retrying,
         }
     }
 }
@@ -69,17 +65,19 @@ impl From<UnifiedExecution> for Execution {
         Self {
             id: execution.id.into(),
             task_id: execution.task_id.into(),
-            job_id: execution.job_id.map(|id| id.into()),
             status: execution.status.into(),
             input: execution.input,
             output: execution.output,
             error_message: execution.error_message,
+            error_details: execution.error_details,
+            queued_at: execution.queued_at,
             started_at: execution.started_at,
             completed_at: execution.completed_at,
             duration_ms: execution.duration_ms,
-            worker_id: execution.worker_id,
-            retry_count: execution.retry_count,
-            metadata: execution.metadata,
+            recording_path: execution.recording_path,
+            can_retry: execution.can_retry,
+            can_cancel: execution.can_cancel,
+            progress: execution.progress,
         }
     }
 }
@@ -88,20 +86,16 @@ impl From<UnifiedExecution> for Execution {
 #[derive(InputObject)]
 pub struct CreateExecutionInput {
     pub task_id: GraphQLApiId,
-    pub job_id: Option<GraphQLApiId>,
-    pub input: Option<JsonValue>,
-    pub metadata: Option<JsonValue>,
+    pub input: JsonValue,
 }
 
 /// Input type for execution filtering
 #[derive(InputObject)]
 pub struct ExecutionFiltersInput {
     pub task_id: Option<GraphQLApiId>,
-    pub job_id: Option<GraphQLApiId>,
     pub status: Option<ExecutionStatusGraphQL>,
-    pub worker_id: Option<String>,
-    pub started_after: Option<DateTime<Utc>>,
-    pub started_before: Option<DateTime<Utc>>,
+    pub queued_after: Option<DateTime<Utc>>,
+    pub completed_after: Option<DateTime<Utc>>,
 }
 
 /// Execution statistics

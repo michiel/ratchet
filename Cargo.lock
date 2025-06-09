@@ -4097,6 +4097,7 @@ dependencies = [
  "clap",
  "ratchet-api-types",
  "ratchet-config",
+ "ratchet-graphql-api",
  "ratchet-interfaces",
  "ratchet-logging",
  "ratchet-rest-api",
@@ -4112,6 +4113,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

@@ -2,12 +2,22 @@
 
 use std::sync::Arc;
 use anyhow::Result;
+use async_trait::async_trait;
 
 use ratchet_interfaces::{
-    RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator
+    RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator,
+    TaskRepository, ExecutionRepository, JobRepository, ScheduleRepository,
+    Repository, CrudRepository, FilteredRepository,
+    TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
+    DatabaseError, TaskMetadata, RegistryError, ValidationResult, SyncResult
 };
+use ratchet_api_types::{
+    ApiId, PaginationInput, ListResponse,
+    UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule
+};
+use uuid::Uuid;
 use ratchet_rest_api::context::TasksContext;
-// use ratchet_graphql_api::context::GraphQLContext; // Temporarily disabled
+use ratchet_graphql_api::context::GraphQLContext;
 
 use crate::config::ServerConfig;
 
@@ -60,47 +70,40 @@ impl ServiceContainer {
         }
     }
 
-    // Create GraphQL context from service container (temporarily disabled)
-    // pub fn graphql_context(&self) -> GraphQLContext {
-    //     GraphQLContext {
-    //         repositories: self.repositories.clone(),
-    //         registry: self.registry.clone(),
-    //         registry_manager: self.registry_manager.clone(),
-    //         validator: self.validator.clone(),
-    //     }
-    // }
+    /// Create GraphQL context from service container
+    pub fn graphql_context(&self) -> GraphQLContext {
+        GraphQLContext::new(
+            self.repositories.clone(),
+            self.registry.clone(),
+            self.registry_manager.clone(),
+            self.validator.clone(),
+        )
+    }
 }
 
 /// Create repository factory from configuration
-async fn create_repository_factory(_config: &ServerConfig) -> Result<Arc<dyn RepositoryFactory>> {
-    // For now, use the legacy implementation as a bridge
-    // This would be replaced with a proper implementation based on ratchet-storage
-    
-    // Placeholder: In a real implementation, this would:
-    // 1. Set up database connection pool
-    // 2. Run migrations if enabled
-    // 3. Create repository implementations
-    // 4. Return repository factory
-    
-    todo!("Implement repository factory creation - bridge to ratchet-lib for now")
+async fn create_repository_factory(config: &ServerConfig) -> Result<Arc<dyn RepositoryFactory>> {
+    // Create a stub repository factory for now
+    // This will be replaced with proper bridge implementations later
+    Ok(Arc::new(StubRepositoryFactory::new()))
 }
 
 /// Create task registry from configuration
 async fn create_task_registry(_config: &ServerConfig) -> Result<Arc<dyn TaskRegistry>> {
-    // Placeholder: Would create filesystem/HTTP registry implementations
-    todo!("Implement task registry creation - bridge to ratchet-lib for now")
+    // Create a stub task registry for now
+    Ok(Arc::new(StubTaskRegistry::new()))
 }
 
 /// Create registry manager from configuration
 async fn create_registry_manager(_config: &ServerConfig) -> Result<Arc<dyn RegistryManager>> {
-    // Placeholder: Would create registry manager with sync capabilities
-    todo!("Implement registry manager creation - bridge to ratchet-lib for now")
+    // Create a stub registry manager for now
+    Ok(Arc::new(StubRegistryManager::new()))
 }
 
 /// Create task validator from configuration
 async fn create_task_validator(_config: &ServerConfig) -> Result<Arc<dyn TaskValidator>> {
-    // Placeholder: Would create task validator with schema validation
-    todo!("Implement task validator creation - bridge to ratchet-lib for now")
+    // Create a stub task validator for now
+    Ok(Arc::new(StubTaskValidator::new()))
 }
 
 /// Initialize logging system
@@ -140,4 +143,115 @@ pub async fn init_logging(config: &ServerConfig) -> Result<()> {
 
     tracing::info!("Logging initialized");
     Ok(())
+}
+
+// =============================================================================
+// Stub Implementations (Temporary for migration phase)
+// =============================================================================
+
+/// Stub repository factory that returns empty results
+pub struct StubRepositoryFactory;
+
+impl StubRepositoryFactory {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl RepositoryFactory for StubRepositoryFactory {
+    fn task_repository(&self) -> &dyn TaskRepository {
+        unimplemented!("Repository factory stubs not implemented yet")
+    }
+    
+    fn execution_repository(&self) -> &dyn ExecutionRepository {
+        unimplemented!("Repository factory stubs not implemented yet")
+    }
+    
+    fn job_repository(&self) -> &dyn JobRepository {
+        unimplemented!("Repository factory stubs not implemented yet")
+    }
+    
+    fn schedule_repository(&self) -> &dyn ScheduleRepository {
+        unimplemented!("Repository factory stubs not implemented yet")
+    }
+    
+    async fn health_check(&self) -> Result<(), DatabaseError> {
+        Ok(())
+    }
+}
+
+/// Stub task registry
+pub struct StubTaskRegistry;
+
+impl StubTaskRegistry {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl TaskRegistry for StubTaskRegistry {
+    async fn load_task(&self, _name: &str) -> Result<TaskMetadata, RegistryError> {
+        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
+    }
+    
+    async fn list_tasks(&self) -> Result<Vec<TaskMetadata>, RegistryError> {
+        Ok(vec![])
+    }
+    
+    async fn task_exists(&self, _name: &str) -> Result<bool, RegistryError> {
+        Ok(false)
+    }
+}
+
+/// Stub registry manager
+pub struct StubRegistryManager;
+
+impl StubRegistryManager {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl RegistryManager for StubRegistryManager {
+    async fn sync_all(&self) -> Result<SyncResult, RegistryError> {
+        Ok(SyncResult {
+            total_tasks: 0,
+            updated_tasks: 0,
+            new_tasks: 0,
+            removed_tasks: 0,
+            failed_tasks: 0,
+            duration_ms: 0,
+        })
+    }
+    
+    async fn sync_task(&self, _name: &str) -> Result<(), RegistryError> {
+        Ok(())
+    }
+}
+
+/// Stub task validator
+pub struct StubTaskValidator;
+
+impl StubTaskValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl TaskValidator for StubTaskValidator {
+    async fn validate_task(&self, _metadata: &TaskMetadata) -> Result<ValidationResult, RegistryError> {
+        Ok(ValidationResult {
+            is_valid: true,
+            errors: vec![],
+            warnings: vec![],
+        })
+    }
+    
+    async fn validate_all(&self) -> Result<Vec<ValidationResult>, RegistryError> {
+        Ok(vec![])
+    }
 }

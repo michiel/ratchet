@@ -1,6 +1,6 @@
 //! GraphQL schema definition
 
-use async_graphql::{Schema, SchemaBuilder, EmptySubscription, MergedObject};
+use async_graphql::{Schema, SchemaBuilder, EmptySubscription};
 use axum::{
     extract::State,
     response::IntoResponse,
@@ -10,7 +10,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 
 use crate::{
     context::{GraphQLContext, GraphQLConfig},
-    resolvers::{Query, Mutation, Subscription},
+    resolvers::{Query, Mutation},
 };
 
 /// The main GraphQL schema type
@@ -36,8 +36,8 @@ pub fn configure_schema(
         schema = schema.limit_complexity(complexity);
     }
 
-    if config.enable_introspection {
-        schema = schema.enable_introspection();
+    if !config.enable_introspection {
+        schema = schema.disable_introspection();
     }
 
     if config.enable_apollo_tracing {

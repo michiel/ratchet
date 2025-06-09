@@ -12,7 +12,7 @@ ratchet-api-types = { path = "../ratchet-api-types" }
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-web = { path = "../ratchet-web" }
 ratchet-rest-api = { path = "../ratchet-rest-api" }
-# ratchet-graphql-api = { path = "../ratchet-graphql-api" } # Temporarily disabled due to field mismatches
+ratchet-graphql-api = { path = "../ratchet-graphql-api" }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-logging = { path = "../ratchet-logging" }
 
@@ -33,6 +33,7 @@ tracing-subscriber = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
 serde_yaml = "0.9"
+uuid = { workspace = true }
 async-graphql = { workspace = true, features = ["playground", "apollo_tracing"] }
 async-graphql-axum = { workspace = true }
 
