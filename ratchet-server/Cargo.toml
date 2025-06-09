@@ -18,6 +18,7 @@ ratchet-logging = { path = "../ratchet-logging" }
 
 # Workspace dependencies - legacy during migration
 ratchet_lib = { path = "../ratchet-lib" }
+ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 
 # External dependencies
 axum = { workspace = true, features = ["tokio", "query"] }

@@ -21,17 +21,17 @@ use ratchet_api_types::{
 };
 use ratchet_lib;
 
-/// Bridge factory that wraps the legacy RepositoryFactory
+/// Bridge factory that wraps the ratchet-storage RepositoryFactory
 pub struct BridgeRepositoryFactory {
-    legacy_factory: Arc<ratchet_lib::database::repositories::RepositoryFactory>,
+    storage_factory: Arc<dyn ratchet_storage::repositories::RepositoryFactory>,
     task_repository: BridgeTaskRepository,
 }
 
 impl BridgeRepositoryFactory {
-    pub fn new(legacy_factory: Arc<ratchet_lib::database::repositories::RepositoryFactory>) -> Self {
-        let task_repository = BridgeTaskRepository::new(Arc::new(legacy_factory.task_repository()));
+    pub fn new(storage_factory: Arc<dyn ratchet_storage::repositories::RepositoryFactory>) -> Self {
+        let task_repository = BridgeTaskRepository::new(storage_factory.task_repository());
         Self { 
-            legacy_factory,
+            storage_factory,
             task_repository,
         }
     }
