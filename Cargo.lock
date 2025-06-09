@@ -3977,6 +3977,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratchet-output"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "csv",
+ "futures 0.3.31",
+ "handlebars",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-test",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "ratchet-plugin"
 version = "0.3.0"
 dependencies = [
