@@ -40,6 +40,7 @@ ratchet-caching = { path = "../ratchet-caching", optional = true }
 ratchet-resilience = { path = "../ratchet-resilience", optional = true }
 ratchet-plugins = { path = "../ratchet-plugins", optional = true }
 ratchet-runtime = { path = "../ratchet-runtime", optional = true }
+ratchet-js = { path = "../ratchet-js", optional = true }
 
 # Binary-specific dependencies (commented out for now due to network issues)
 # dialoguer = "0.11"
@@ -74,7 +75,7 @@ static-plugins = []
 dynamic-plugins = ["ratchet-plugins/dynamic"]
 
 # JavaScript execution
-javascript = ["ratchet_lib/javascript"]
+javascript = ["ratchet_lib/javascript", "dep:ratchet-js"]
 
 # Output destinations
 output = ["ratchet_lib/output"]

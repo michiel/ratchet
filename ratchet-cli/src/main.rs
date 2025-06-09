@@ -30,6 +30,9 @@ use ratchet_core::task::Task as CoreTask;
 #[cfg(feature = "runtime")]
 use ratchet_runtime::{InMemoryTaskExecutor, TaskExecutor};
 
+#[cfg(feature = "javascript")]
+use ratchet_js::{FileSystemTask, load_and_execute_task, JsTaskRunner};
+
 mod cli;
 use cli::{Cli, Commands, ConfigCommands, GenerateCommands};
 
@@ -912,6 +915,18 @@ async fn run_task_runtime(from_fs: &str, input: &JsonValue) -> Result<JsonValue>
     Ok(result)
 }
 
+/// Run a task from a file system path using modular executor (ratchet-js)
+#[cfg(feature = "javascript")]
+async fn run_task_modular(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
+    info!("Loading task from: {} (using modular executor)", from_fs);
+
+    let result = load_and_execute_task(from_fs, input.clone())
+        .await
+        .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
+
+    Ok(result)
+}
+
 /// Run a task from a file system path using legacy executor
 #[cfg(feature = "javascript")]
 async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
@@ -936,6 +951,139 @@ async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
         .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
 
     Ok(result)
+}
+
+/// Validate a task using modular components
+#[cfg(feature = "javascript")]
+fn validate_task_modular(from_fs: &str) -> Result<()> {
+    info!("Validating task from: {} (using modular validator)", from_fs);
+
+    // Load the task using ratchet-js
+    let task = FileSystemTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+
+    // Validate the task
+    match task.validate() {
+        Ok(_) => {
+            println!("✅ Task validation passed");
+            info!("Task '{}' is valid", task.label());
+            Ok(())
+        }
+        Err(e) => {
+            println!("❌ Task validation failed: {}", e);
+            error!("Task validation failed: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+/// Test a task by running its test cases using modular components
+#[cfg(feature = "javascript")]
+async fn test_task_modular(from_fs: &str) -> Result<()> {
+    info!("Testing task from: {} (using modular executor)", from_fs);
+
+    // Load the task using ratchet-js
+    let task = FileSystemTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+
+    // Validate the task first
+    task.validate().context("Task validation failed")?;
+
+    // Get test directory
+    let task_path = std::path::Path::new(from_fs);
+    let test_dir = task_path.join("tests");
+
+    if !test_dir.exists() {
+        println!("No tests directory found at: {}", test_dir.display());
+        info!("No tests to run for task '{}'", task.label());
+        return Ok(());
+    }
+
+    // Find test files
+    let test_files: Vec<_> = fs::read_dir(&test_dir)
+        .context("Failed to read tests directory")?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension()? == "json" && path.file_name()?.to_str()?.starts_with("test-") {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if test_files.is_empty() {
+        println!("No test files found in: {}", test_dir.display());
+        info!("No test files found for task '{}'", task.label());
+        return Ok(());
+    }
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    for test_file in test_files {
+        let test_name = test_file.file_stem().unwrap().to_str().unwrap();
+        print!("Running test '{}' ... ", test_name);
+
+        match run_single_test_modular(&task, &test_file).await {
+            Ok(_) => {
+                println!("✅ PASSED");
+                passed += 1;
+            }
+            Err(e) => {
+                println!("❌ FAILED: {}", e);
+                failed += 1;
+            }
+        }
+    }
+
+    println!("\nTest Results:");
+    println!("  Passed: {}", passed);
+    println!("  Failed: {}", failed);
+    println!("  Total:  {}", passed + failed);
+
+    if failed > 0 {
+        Err(anyhow::anyhow!("{} test(s) failed", failed))
+    } else {
+        Ok(())
+    }
+}
+
+/// Run a single test case using modular components
+#[cfg(feature = "javascript")]
+async fn run_single_test_modular(task: &FileSystemTask, test_file: &std::path::Path) -> Result<()> {
+    use serde_json::Value;
+
+    // Load test data
+    let test_content = fs::read_to_string(test_file).context("Failed to read test file")?;
+    let test_data: Value = from_str(&test_content).context("Failed to parse test JSON")?;
+
+    // Extract input and expected output
+    let input = test_data.get("input").unwrap_or(&json!({})).clone();
+    let expected = test_data
+        .get("expected_output")
+        .ok_or_else(|| anyhow::anyhow!("Test file missing 'expected_output' field"))?;
+
+    // Execute the task using ratchet-js
+    let js_task = task.to_js_task();
+    let runner = ratchet_js::JsTaskRunner::new();
+    
+    let actual = runner
+        .execute_task(&js_task, input, None)
+        .await
+        .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
+
+    // Compare results
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "Output mismatch.\nExpected: {}\nActual: {}",
+            to_string_pretty(expected)?,
+            to_string_pretty(&actual)?
+        ))
+    }
 }
 
 /// Validate a task
@@ -1577,11 +1725,11 @@ async fn main() -> Result<()> {
             input_json,
             record,
         }) => {
-            // Try runtime executor first if available, then fall back to legacy
-            #[cfg(all(feature = "runtime", feature = "core"))]
+            // Try modular executor first (ratchet-js), then runtime, then fall back to legacy
+            #[cfg(feature = "javascript")]
             {
                 info!(
-                    "Running task from file system path: {} (using runtime executor)",
+                    "Running task from file system path: {} (using modular executor)",
                     from_fs
                 );
 
@@ -1592,65 +1740,56 @@ async fn main() -> Result<()> {
                     info!("Using provided input: {}", input_json.as_ref().unwrap());
                 }
 
-                // Run the task with runtime executor
-                let result = run_task_runtime(from_fs, &input).await?;
+                // Run the task with modular executor (ratchet-js)
+                let result = run_task_modular(from_fs, &input).await?;
 
                 // Pretty-print the result
                 let formatted =
                     to_string_pretty(&result).context("Failed to format result as JSON")?;
 
                 println!("{}", formatted);
-                return Ok(());
-            }
-
-            #[cfg(all(
-                feature = "javascript",
-                not(all(feature = "runtime", feature = "core"))
-            ))]
-            {
-                info!(
-                    "Running task from file system path: {} (using legacy executor)",
-                    from_fs
-                );
-
-                // Parse input JSON
-                let input = parse_input_json(input_json.as_ref())?;
-
-                if input_json.is_some() {
-                    info!("Using provided input: {}", input_json.as_ref().unwrap());
-                }
-
-                // Run the task with legacy executor
-                let result = run_task(from_fs, &input).await?;
-
-                // Pretty-print the result
-                let formatted =
-                    to_string_pretty(&result).context("Failed to format result as JSON")?;
-
-                println!("Result: {}", formatted);
                 info!("Task execution completed");
 
-                // Finalize recording if it was enabled
+                // TODO: Add recording support for modular executor
                 if record.is_some() {
-                    #[cfg(feature = "server")]
-                    {
-                        if let Err(e) = ratchet_lib::recording::finalize_recording() {
-                            warn!("Failed to finalize recording: {}", e);
-                        } else if let Some(dir) = ratchet_lib::recording::get_recording_dir() {
-                            println!("Recording saved to: {:?}", dir);
-                        }
-                    }
-                    #[cfg(not(feature = "server"))]
-                    {
-                        warn!("Recording functionality not available without server features");
-                    }
+                    warn!("Recording functionality not yet implemented for modular executor");
                 }
 
                 Ok(())
             }
-            #[cfg(not(any(feature = "javascript", all(feature = "runtime", feature = "core"))))]
+            
+            #[cfg(not(feature = "javascript"))]
             {
-                Err(anyhow::anyhow!("Task execution not available. Build with --features=javascript or --features=runtime,core"))
+                // Fallback to runtime executor if available
+                #[cfg(all(feature = "runtime", feature = "core"))]
+                {
+                    info!(
+                        "Running task from file system path: {} (using runtime executor)",
+                        from_fs
+                    );
+
+                    // Parse input JSON
+                    let input = parse_input_json(input_json.as_ref())?;
+
+                    if input_json.is_some() {
+                        info!("Using provided input: {}", input_json.as_ref().unwrap());
+                    }
+
+                    // Run the task with runtime executor
+                    let result = run_task_runtime(from_fs, &input).await?;
+
+                    // Pretty-print the result
+                    let formatted =
+                        to_string_pretty(&result).context("Failed to format result as JSON")?;
+
+                    println!("{}", formatted);
+                    return Ok(());
+                }
+
+                #[cfg(not(all(feature = "runtime", feature = "core")))]
+                {
+                    Err(anyhow::anyhow!("Task execution not available. Build with --features=javascript or --features=runtime,core"))
+                }
             }
         }
         Some(Commands::Serve {
@@ -1715,7 +1854,8 @@ async fn main() -> Result<()> {
         Some(Commands::Validate { from_fs }) => {
             #[cfg(feature = "javascript")]
             {
-                validate_task(from_fs)
+                // Use modular validator by default, fallback to legacy if needed
+                validate_task_modular(from_fs)
             }
             #[cfg(not(feature = "javascript"))]
             {
@@ -1727,7 +1867,8 @@ async fn main() -> Result<()> {
         Some(Commands::Test { from_fs }) => {
             #[cfg(feature = "javascript")]
             {
-                test_task(from_fs).await
+                // Use modular test runner by default, fallback to legacy if needed
+                test_task_modular(from_fs).await
             }
             #[cfg(not(feature = "javascript"))]
             {
