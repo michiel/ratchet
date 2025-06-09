@@ -1,0 +1,43 @@
+[package]
+name = "ratchet-rest-api"
+version.workspace = true
+edition.workspace = true
+
+authors.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "REST API implementation for Ratchet task execution system"
+
+[dependencies]
+# Core web framework
+axum = { workspace = true, features = ["tokio", "query"] }
+tower.workspace = true
+tower-http.workspace = true
+
+# Serialization and data handling
+serde.workspace = true
+serde_json.workspace = true
+
+# Utilities
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+
+# Async runtime and observability
+tokio.workspace = true
+tracing.workspace = true
+
+# HTTP utilities
+http.workspace = true
+
+# Internal dependencies
+ratchet-api-types = { path = "../ratchet-api-types" }
+ratchet-interfaces = { path = "../ratchet-interfaces" }
+ratchet-web = { path = "../ratchet-web" }
+
+[dev-dependencies]
+axum-test = "13.0"
+tokio-test = "0.4"
+tower = { workspace = true, features = ["util"] }
