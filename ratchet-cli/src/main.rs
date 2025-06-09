@@ -26,6 +26,9 @@ use uuid::Uuid;
 #[cfg(feature = "core")]
 use ratchet_core::task::Task as CoreTask;
 
+#[cfg(feature = "runtime")]
+use ratchet_runtime::InMemoryTaskExecutor;
+
 mod cli;
 use cli::{Cli, Commands, ConfigCommands, GenerateCommands};
 
