@@ -73,7 +73,7 @@ impl AppContext {
 }
 
 /// Create the complete REST API application
-pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<TasksContext> {
+pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
     let app = Router::new()
         // Health endpoints (no prefix)
         .route("/health", get(handlers::health_check))

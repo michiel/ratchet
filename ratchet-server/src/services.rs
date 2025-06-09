@@ -192,16 +192,28 @@ impl StubTaskRegistry {
 
 #[async_trait]
 impl TaskRegistry for StubTaskRegistry {
-    async fn load_task(&self, _name: &str) -> Result<TaskMetadata, RegistryError> {
+    async fn discover_tasks(&self) -> Result<Vec<TaskMetadata>, RegistryError> {
+        Ok(vec![])
+    }
+    
+    async fn get_task_metadata(&self, _name: &str) -> Result<TaskMetadata, RegistryError> {
         Err(RegistryError::TaskNotFound { name: "stub".to_string() })
     }
     
-    async fn list_tasks(&self) -> Result<Vec<TaskMetadata>, RegistryError> {
-        Ok(vec![])
+    async fn load_task_content(&self, _name: &str) -> Result<String, RegistryError> {
+        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
     }
     
     async fn task_exists(&self, _name: &str) -> Result<bool, RegistryError> {
         Ok(false)
+    }
+    
+    fn registry_id(&self) -> &str {
+        "stub-registry"
+    }
+    
+    async fn health_check(&self) -> Result<(), RegistryError> {
+        Ok(())
     }
 }
 
@@ -216,19 +228,37 @@ impl StubRegistryManager {
 
 #[async_trait]
 impl RegistryManager for StubRegistryManager {
-    async fn sync_all(&self) -> Result<SyncResult, RegistryError> {
-        Ok(SyncResult {
-            total_tasks: 0,
-            updated_tasks: 0,
-            new_tasks: 0,
-            removed_tasks: 0,
-            failed_tasks: 0,
-            duration_ms: 0,
-        })
+    async fn add_registry(&self, _registry: Box<dyn TaskRegistry>) -> Result<(), RegistryError> {
+        Ok(())
     }
     
-    async fn sync_task(&self, _name: &str) -> Result<(), RegistryError> {
+    async fn remove_registry(&self, _registry_id: &str) -> Result<(), RegistryError> {
         Ok(())
+    }
+    
+    async fn list_registries(&self) -> Vec<&str> {
+        vec![]
+    }
+    
+    async fn discover_all_tasks(&self) -> Result<Vec<(String, TaskMetadata)>, RegistryError> {
+        Ok(vec![])
+    }
+    
+    async fn find_task(&self, _name: &str) -> Result<(String, TaskMetadata), RegistryError> {
+        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
+    }
+    
+    async fn load_task(&self, _name: &str) -> Result<String, RegistryError> {
+        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
+    }
+    
+    async fn sync_with_database(&self) -> Result<SyncResult, RegistryError> {
+        Ok(SyncResult {
+            added: vec![],
+            updated: vec![],
+            removed: vec![],
+            errors: vec![],
+        })
     }
 }
 
@@ -243,15 +273,27 @@ impl StubTaskValidator {
 
 #[async_trait]
 impl TaskValidator for StubTaskValidator {
-    async fn validate_task(&self, _metadata: &TaskMetadata) -> Result<ValidationResult, RegistryError> {
+    async fn validate_metadata(&self, _metadata: &TaskMetadata) -> Result<ValidationResult, RegistryError> {
         Ok(ValidationResult {
-            is_valid: true,
+            valid: true,
             errors: vec![],
             warnings: vec![],
         })
     }
     
-    async fn validate_all(&self) -> Result<Vec<ValidationResult>, RegistryError> {
-        Ok(vec![])
+    async fn validate_content(&self, _content: &str, _metadata: &TaskMetadata) -> Result<ValidationResult, RegistryError> {
+        Ok(ValidationResult {
+            valid: true,
+            errors: vec![],
+            warnings: vec![],
+        })
+    }
+    
+    async fn validate_input(&self, _input: &serde_json::Value, _metadata: &TaskMetadata) -> Result<ValidationResult, RegistryError> {
+        Ok(ValidationResult {
+            valid: true,
+            errors: vec![],
+            warnings: vec![],
+        })
     }
 }

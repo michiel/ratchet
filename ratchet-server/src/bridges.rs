@@ -18,6 +18,7 @@ use ratchet_api_types::{
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
     ExecutionStatus, JobStatus, JobPriority
 };
+use ratchet_lib;
 
 /// Bridge factory that wraps the legacy RepositoryFactory
 pub struct BridgeRepositoryFactory {
@@ -51,8 +52,8 @@ impl RepositoryFactory for BridgeRepositoryFactory {
     }
     
     async fn health_check(&self) -> Result<(), DatabaseError> {
-        // Delegate to legacy health check
-        self.legacy_factory.health_check().await
+        // Delegate to legacy database ping
+        self.legacy_factory.database().ping().await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -71,7 +72,9 @@ impl BridgeTaskRepository {
 #[async_trait]
 impl Repository for BridgeTaskRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
-        self.legacy_repo.health_check().await
+        // Use count() instead of health_check to avoid Send issues
+        self.legacy_repo.count().await
+            .map(|_| ())
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }

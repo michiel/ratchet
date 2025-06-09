@@ -40,29 +40,28 @@ impl Server {
     }
 
     /// Build the complete application router
-    pub fn build_app(&self) -> Router {
-        let mut app = Router::new();
+    pub fn build_app(&self) -> Router<()> {
+        // Create REST API context
+        let rest_context = RestAppContext {
+            tasks: self.services.rest_context(),
+            executions: ratchet_rest_api::context::ExecutionsContext::new(self.services.repositories.clone()),
+            jobs: ratchet_rest_api::context::JobsContext::new(self.services.repositories.clone()),
+            schedules: ratchet_rest_api::context::SchedulesContext::new(self.services.repositories.clone()),
+            workers: ratchet_rest_api::context::WorkersContext::new(),
+        };
 
-        // Add REST API if enabled
-        if self.config.rest_api.enabled {
-            let rest_context = RestAppContext {
-                tasks: self.services.rest_context(),
-                executions: ratchet_rest_api::context::ExecutionsContext::new(self.services.repositories.clone()),
-                jobs: ratchet_rest_api::context::JobsContext::new(self.services.repositories.clone()),
-                schedules: ratchet_rest_api::context::SchedulesContext::new(self.services.repositories.clone()),
-                workers: ratchet_rest_api::context::WorkersContext::new(),
-            };
+        let rest_config = RestAppConfig {
+            api_prefix: self.config.rest_api.prefix.clone(),
+            enable_cors: self.config.server.enable_cors,
+            enable_request_id: self.config.server.enable_request_id,
+            enable_tracing: self.config.server.enable_tracing,
+        };
 
-            let rest_config = RestAppConfig {
-                api_prefix: self.config.rest_api.prefix.clone(),
-                enable_cors: self.config.server.enable_cors,
-                enable_request_id: self.config.server.enable_request_id,
-                enable_tracing: self.config.server.enable_tracing,
-            };
-
-            let rest_app = create_rest_app(rest_context, rest_config);
-            app = app.merge(rest_app);
-        }
+        // Always create the REST app (even if disabled, we use its context)
+        let mut app = create_rest_app(rest_context, rest_config);
+        
+        // Add root handler
+        app = app.route("/", get(root_handler));
 
         // Add GraphQL API if enabled (temporarily disabled)
         if self.config.graphql_api.enabled {
@@ -70,24 +69,6 @@ impl Server {
             // TODO: Re-enable once field mappings are fixed
         }
 
-        // Add root health endpoint
-        app = app.route("/", get(root_handler));
-
-        // Add global middleware layers
-        app = app.layer(error_handler_layer());
-        
-        if self.config.server.enable_tracing {
-            app = app.layer(TraceLayer::new_for_http());
-        }
-        
-        if self.config.server.enable_request_id {
-            app = app.layer(request_id_layer());
-        }
-        
-        if self.config.server.enable_cors {
-            app = app.layer(cors_layer());
-        }
-        
         app
     }
 
@@ -104,9 +85,10 @@ impl Server {
         // Start the server
         tracing::info!("Server listening on {}", addr);
 
-        // Use axum 0.6 Server API
+        // Use axum 0.6 Server API with stateful router
+        let make_service = app.into_make_service();
         axum::Server::bind(&addr)
-            .serve(app.into_make_service())
+            .serve(make_service)
             .with_graceful_shutdown(shutdown_signal())
             .await?;
 
