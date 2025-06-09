@@ -3845,10 +3845,12 @@ version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "ratchet-api-types",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

@@ -21,8 +21,21 @@
 pub mod service;
 pub mod execution;
 pub mod logging;
+pub mod database;
+pub mod registry;
 
 // Re-export commonly used types
 pub use service::{Service, ServiceHealth, ServiceMetrics, HealthStatus};
 pub use execution::{TaskExecutor, ExecutionResult, ExecutionContext};
 pub use logging::{LogEvent, LogLevel, StructuredLogger};
+pub use database::{
+    Repository, CrudRepository, FilteredRepository, RepositoryFactory,
+    TaskRepository, ExecutionRepository, JobRepository, ScheduleRepository,
+    TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
+    DatabaseError, TransactionContext, TransactionManager
+};
+pub use registry::{
+    TaskRegistry, FilesystemRegistry, HttpRegistry, RegistryManager,
+    TaskValidator, TaskMetadata, RegistryError, ValidationResult,
+    SyncResult, HttpCredentials
+};
