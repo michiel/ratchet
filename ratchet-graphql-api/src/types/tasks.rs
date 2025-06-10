@@ -5,52 +5,13 @@ use ratchet_api_types::UnifiedTask;
 use super::scalars::GraphQLApiId;
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
-use uuid::Uuid;
 
-/// GraphQL Task type
-#[derive(SimpleObject, Clone)]
-pub struct Task {
-    pub id: GraphQLApiId,
-    pub uuid: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub version: String,
-    pub available_versions: Vec<String>,
-    pub registry_source: bool,
-    pub enabled: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub validated_at: Option<DateTime<Utc>>,
-    pub in_sync: bool,
-    pub input_schema: Option<JsonValue>,
-    pub output_schema: Option<JsonValue>,
-    pub metadata: Option<JsonValue>,
-}
-
-impl From<UnifiedTask> for Task {
-    fn from(task: UnifiedTask) -> Self {
-        Self {
-            id: task.id.into(),
-            uuid: task.uuid,
-            name: task.name,
-            description: task.description,
-            version: task.version,
-            available_versions: task.available_versions,
-            registry_source: task.registry_source,
-            enabled: task.enabled,
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            validated_at: task.validated_at,
-            in_sync: task.in_sync,
-            input_schema: task.input_schema,
-            output_schema: task.output_schema,
-            metadata: task.metadata,
-        }
-    }
-}
+/// GraphQL Task type - using UnifiedTask directly for API consistency
+pub type Task = UnifiedTask;
 
 /// Input type for creating tasks
 #[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct CreateTaskInput {
     pub name: String,
     pub description: Option<String>,
@@ -62,6 +23,7 @@ pub struct CreateTaskInput {
 
 /// Input type for updating tasks
 #[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct UpdateTaskInput {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -73,6 +35,7 @@ pub struct UpdateTaskInput {
 
 /// Input type for task filtering
 #[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct TaskFiltersInput {
     pub name_contains: Option<String>,
     pub enabled: Option<bool>,
@@ -81,7 +44,8 @@ pub struct TaskFiltersInput {
 }
 
 /// Task statistics
-#[derive(SimpleObject)]
+#[derive(async_graphql::SimpleObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct TaskStats {
     pub total_tasks: i32,
     pub enabled_tasks: i32,
@@ -94,6 +58,7 @@ pub struct TaskStats {
 
 /// Task validation result
 #[derive(SimpleObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct TaskValidationResult {
     pub is_valid: bool,
     pub errors: Vec<String>,

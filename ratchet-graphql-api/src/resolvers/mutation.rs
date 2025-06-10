@@ -4,8 +4,8 @@ use async_graphql::{Object, Context, Result};
 use crate::{
     context::GraphQLContext,
     types::*,
-    errors::ApiError,
 };
+use ratchet_api_types::ApiError;
 
 /// Root mutation resolver
 pub struct Mutation;
@@ -21,7 +21,7 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return an error as this is not yet implemented
-        Err(ApiError::InternalError("Task creation not yet implemented".to_string()).into())
+        Err(ApiError::internal_error("Task creation not yet implemented").into())
     }
 
     /// Update an existing task
@@ -34,7 +34,7 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return an error as this is not yet implemented
-        Err(ApiError::InternalError("Task update not yet implemented".to_string()).into())
+        Err(ApiError::internal_error("Task update not yet implemented").into())
     }
 
     /// Delete a task
@@ -46,7 +46,7 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return an error as this is not yet implemented
-        Err(ApiError::InternalError("Task deletion not yet implemented".to_string()).into())
+        Err(ApiError::internal_error("Task deletion not yet implemented").into())
     }
 
     /// Create a new execution
@@ -58,7 +58,7 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return an error as this is not yet implemented
-        Err(ApiError::InternalError("Execution creation not yet implemented".to_string()).into())
+        Err(ApiError::internal_error("Execution creation not yet implemented").into())
     }
 
     /// Create a new job
@@ -70,7 +70,7 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return an error as this is not yet implemented
-        Err(ApiError::InternalError("Job creation not yet implemented".to_string()).into())
+        Err(ApiError::internal_error("Job creation not yet implemented").into())
     }
 
     /// Create a new schedule
@@ -82,7 +82,7 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return an error as this is not yet implemented
-        Err(ApiError::InternalError("Schedule creation not yet implemented".to_string()).into())
+        Err(ApiError::internal_error("Schedule creation not yet implemented").into())
     }
 
     /// Update an existing schedule
@@ -95,6 +95,6 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return an error as this is not yet implemented
-        Err(ApiError::InternalError("Schedule update not yet implemented".to_string()).into())
+        Err(ApiError::internal_error("Schedule update not yet implemented").into())
     }
 }

@@ -261,7 +261,7 @@ mod tests {
 
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("subdir").join("test.db");
-        let db_url = format!("sqlite://{}", db_path.display());
+        let db_url = format!("sqlite:///{}", db_path.display());
 
         // Verify directory doesn't exist initially
         assert!(!db_path.parent().unwrap().exists());
@@ -286,7 +286,7 @@ mod tests {
 
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("nested").join("test.db");
-        let db_url = format!("sqlite://{}", db_path.display());
+        let db_url = format!("sqlite:///{}", db_path.display());
 
         // Verify directory doesn't exist initially
         assert!(!db_path.parent().unwrap().exists());
