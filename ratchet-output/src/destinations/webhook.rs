@@ -44,6 +44,20 @@ impl WebhookDestination {
             template_engine,
         }
     }
+    
+    /// Create a cross-platform HTTP client with appropriate TLS configuration
+    pub fn create_default_client() -> Result<reqwest::Client, reqwest::Error> {
+        reqwest::Client::builder()
+            // Use rustls-tls for cross-platform TLS support
+            .use_rustls_tls()
+            // Set reasonable timeouts
+            .connect_timeout(Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(30))
+            // Enable connection pooling
+            // Set a reasonable user agent
+            .user_agent("ratchet-output/1.0")
+            .build()
+    }
 
     /// Add authentication to the request
     fn add_auth(
@@ -108,8 +122,7 @@ impl WebhookDestination {
                 HttpMethod::Delete => self.client.delete(url),
                 HttpMethod::Head => self.client.head(url),
                 HttpMethod::Options => {
-                    let mut req = self.client.request(reqwest::Method::OPTIONS, url);
-                    req
+                    self.client.request(reqwest::Method::OPTIONS, url)
                 },
             };
 

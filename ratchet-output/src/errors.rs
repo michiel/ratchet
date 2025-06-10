@@ -48,6 +48,12 @@ pub enum DeliveryError {
 
     #[error("S3 error: {operation} - {error}")]
     S3 { operation: String, error: String },
+
+    #[error("Cross-platform path error: {path} - {error}")]
+    CrossPlatformPath { path: String, error: String },
+
+    #[error("Platform-specific operation failed: {operation} - {error}")]
+    PlatformSpecific { operation: String, error: String },
 }
 
 /// Configuration validation errors

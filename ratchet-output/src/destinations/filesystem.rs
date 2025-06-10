@@ -1,10 +1,12 @@
 //! Filesystem output destination implementation
 
 use async_trait::async_trait;
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tokio::fs;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use crate::{
     destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput},
@@ -37,6 +39,66 @@ impl FilesystemDestination {
             config,
             template_engine,
         }
+    }
+    
+    /// Normalize path for cross-platform compatibility
+    fn normalize_path(path: &str) -> PathBuf {
+        // Replace forward slashes with platform-specific separators
+        let normalized = if cfg!(windows) {
+            path.replace('/', &std::path::MAIN_SEPARATOR.to_string())
+        } else {
+            path.to_string()
+        };
+        
+        PathBuf::from(normalized)
+    }
+    
+    /// Validate path for cross-platform compatibility
+    fn validate_path(path: &str) -> Result<(), DeliveryError> {
+        // Check for invalid characters based on platform
+        if cfg!(windows) {
+            // Windows forbidden characters: < > : " | ? * 
+            let forbidden_chars = ['<', '>', ':', '"', '|', '?', '*'];
+            if path.chars().any(|c| forbidden_chars.contains(&c)) {
+                return Err(DeliveryError::Filesystem {
+                    path: path.to_string(),
+                    operation: "validate".to_string(),
+                    error: "Path contains invalid characters for Windows".to_string(),
+                });
+            }
+            
+            // Check for reserved names (CON, PRN, AUX, etc.)
+            let path_obj = Path::new(path);
+            if let Some(filename) = path_obj.file_name().and_then(|n| n.to_str()) {
+                let reserved_names = [
+                    "CON", "PRN", "AUX", "NUL",
+                    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+                    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+                ];
+                
+                let filename_upper = filename.to_uppercase();
+                let base_name = filename_upper.split('.').next().unwrap_or("");
+                
+                if reserved_names.contains(&base_name) {
+                    return Err(DeliveryError::Filesystem {
+                        path: path.to_string(),
+                        operation: "validate".to_string(),
+                        error: format!("Filename '{}' is reserved on Windows", filename),
+                    });
+                }
+            }
+        }
+        
+        // Check for null bytes (invalid on all platforms)
+        if path.contains('\0') {
+            return Err(DeliveryError::Filesystem {
+                path: path.to_string(),
+                operation: "validate".to_string(),
+                error: "Path contains null bytes".to_string(),
+            });
+        }
+        
+        Ok(())
     }
 
     /// Format output data according to the configured format
@@ -215,7 +277,10 @@ impl OutputDestination for FilesystemDestination {
             .template_engine
             .render(&self.config.path_template, &context.template_variables)?;
 
-        let path = Path::new(&rendered_path);
+        // Validate and normalize the path for cross-platform compatibility
+        Self::validate_path(&rendered_path)?;
+        let normalized_path = Self::normalize_path(&rendered_path);
+        let path = normalized_path.as_path();
 
         // Check if file exists and handle overwrite policy
         if path.exists() && !self.config.overwrite {
@@ -264,6 +329,31 @@ impl OutputDestination for FilesystemDestination {
                     error: e.to_string(),
                 })?;
         }
+        
+        // On Windows, permissions are handled differently through ACLs
+        // For now, we just ensure the file is writable
+        #[cfg(windows)]
+        if self.config.permissions != 0 {
+            // On Windows, we can only set read-only flag
+            let mut perms = fs::metadata(path).await
+                .map_err(|e| DeliveryError::Filesystem {
+                    path: rendered_path.clone(),
+                    operation: "get_metadata".to_string(),
+                    error: e.to_string(),
+                })?
+                .permissions();
+            
+            // If permissions don't include write bit (owner write = 0o200), set read-only
+            let readonly = (self.config.permissions & 0o200) == 0;
+            perms.set_readonly(readonly);
+            
+            fs::set_permissions(path, perms).await
+                .map_err(|e| DeliveryError::Filesystem {
+                    path: rendered_path.clone(),
+                    operation: "set_permissions".to_string(),
+                    error: e.to_string(),
+                })?;
+        }
 
         let delivery_time = start_time.elapsed();
 
@@ -285,7 +375,14 @@ impl OutputDestination for FilesystemDestination {
             .validate(&self.config.path_template)
             .map_err(|e| ValidationError::InvalidTemplate(e.to_string()))?;
 
-        // Validate permissions (should be valid octal)
+        // Validate permissions (should be valid octal on Unix, ignored on Windows)
+        #[cfg(unix)]
+        if self.config.permissions > 0o777 {
+            return Err(ValidationError::InvalidPermissions(self.config.permissions));
+        }
+        
+        // On Windows, only validate that permissions are reasonable (not used for ACLs)
+        #[cfg(windows)]
         if self.config.permissions > 0o777 {
             return Err(ValidationError::InvalidPermissions(self.config.permissions));
         }
@@ -303,5 +400,132 @@ impl OutputDestination for FilesystemDestination {
 
     fn estimated_delivery_time(&self) -> std::time::Duration {
         std::time::Duration::from_millis(100) // File I/O is usually fast
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::template::TemplateEngine;
+    use crate::OutputFormat;
+
+    #[test]
+    fn test_cross_platform_path_normalization() {
+        // Test Unix-style paths
+        let unix_path = "/results/2024/01/06/output.json";
+        let normalized = FilesystemDestination::normalize_path(unix_path);
+        
+        if cfg!(windows) {
+            assert_eq!(normalized.to_string_lossy(), "\\results\\2024\\01\\06\\output.json");
+        } else {
+            assert_eq!(normalized.to_string_lossy(), unix_path);
+        }
+    }
+
+    #[test]
+    fn test_path_validation_windows() {
+        if cfg!(windows) {
+            // Test invalid characters
+            assert!(FilesystemDestination::validate_path("output<test>.json").is_err());
+            assert!(FilesystemDestination::validate_path("output|test.json").is_err());
+            assert!(FilesystemDestination::validate_path("output\"test.json").is_err());
+            
+            // Test reserved names
+            assert!(FilesystemDestination::validate_path("CON.txt").is_err());
+            assert!(FilesystemDestination::validate_path("PRN.json").is_err());
+            assert!(FilesystemDestination::validate_path("AUX").is_err());
+            assert!(FilesystemDestination::validate_path("NUL.log").is_err());
+            
+            // Test valid paths
+            assert!(FilesystemDestination::validate_path("output.json").is_ok());
+            assert!(FilesystemDestination::validate_path("results/2024/output.json").is_ok());
+        }
+    }
+
+    #[test]
+    fn test_path_validation_universal() {
+        // Test null bytes (invalid on all platforms)
+        assert!(FilesystemDestination::validate_path("output\0test.json").is_err());
+        
+        // Test valid paths
+        assert!(FilesystemDestination::validate_path("output.json").is_ok());
+        assert!(FilesystemDestination::validate_path("results/sub/output.json").is_ok());
+        assert!(FilesystemDestination::validate_path("./relative/path.json").is_ok());
+    }
+
+    #[test]
+    fn test_filesystem_config_validation() {
+        let template_engine = TemplateEngine::new();
+        
+        // Test valid config
+        let valid_config = FilesystemConfig {
+            path_template: "/results/{{job_id}}.json".to_string(),
+            format: OutputFormat::Json,
+            permissions: 0o644,
+            create_dirs: true,
+            overwrite: false,
+            backup_existing: false,
+        };
+        
+        let destination = FilesystemDestination::new(valid_config, template_engine.clone());
+        assert!(destination.validate_config().is_ok());
+        
+        // Test invalid permissions
+        let invalid_config = FilesystemConfig {
+            path_template: "/results/{{job_id}}.json".to_string(),
+            format: OutputFormat::Json,
+            permissions: 999, // Invalid permissions (not octal)
+            create_dirs: true,
+            overwrite: false,
+            backup_existing: false,
+        };
+        
+        let destination = FilesystemDestination::new(invalid_config, template_engine.clone());
+        assert!(destination.validate_config().is_err());
+        
+        // Test empty path
+        let empty_path_config = FilesystemConfig {
+            path_template: "".to_string(),
+            format: OutputFormat::Json,
+            permissions: 0o644,
+            create_dirs: true,
+            overwrite: false,
+            backup_existing: false,
+        };
+        
+        let destination = FilesystemDestination::new(empty_path_config, template_engine);
+        assert!(destination.validate_config().is_err());
+    }
+
+    #[tokio::test]
+    async fn test_cross_platform_output_formats() {
+        use serde_json::json;
+        
+        let template_engine = TemplateEngine::new();
+        let config = FilesystemConfig {
+            path_template: "test_output.json".to_string(),
+            format: OutputFormat::Json,
+            permissions: 0o644,
+            create_dirs: false,
+            overwrite: true,
+            backup_existing: false,
+        };
+        
+        let destination = FilesystemDestination::new(config, template_engine);
+        
+        // Test format_output with different data types
+        let test_data = json!({
+            "status": "success",
+            "result": 42,
+            "message": "Cross-platform test"
+        });
+        
+        let formatted = destination.format_output(&test_data).unwrap();
+        assert!(!formatted.is_empty());
+        
+        // Verify it's valid JSON
+        let parsed: serde_json::Value = serde_json::from_slice(&formatted).unwrap();
+        assert_eq!(parsed["status"], "success");
+        assert_eq!(parsed["result"], 42);
     }
 }
