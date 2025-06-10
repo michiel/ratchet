@@ -20,7 +20,7 @@ impl Query {
         filters: Option<TaskFiltersInput>,
         limit: Option<i32>,
         offset: Option<i32>,
-    ) -> Result<Vec<Task>> {
+    ) -> Result<TaskList> {
         let context = ctx.data::<GraphQLContext>()?;
         let task_repo = context.repositories.task_repository();
         
@@ -43,8 +43,9 @@ impl Query {
             offset: Some(offset.unwrap_or(0) as u32),
         };
         let result = task_repo.find_with_filters(domain_filters, pagination).await?;
-        let unified_tasks = result.items;
-        Ok(unified_tasks.into_iter().map(|task| task.into()).collect())
+        let items: Vec<Task> = result.items.into_iter().map(|task| task.into()).collect();
+        let meta = result.meta.into();
+        Ok(TaskList { items, meta })
     }
 
     /// Get a single task by ID
@@ -84,7 +85,7 @@ impl Query {
         filters: Option<ExecutionFiltersInput>,
         limit: Option<i32>,
         offset: Option<i32>,
-    ) -> Result<Vec<Execution>> {
+    ) -> Result<ExecutionList> {
         let context = ctx.data::<GraphQLContext>()?;
         let execution_repo = context.repositories.execution_repository();
         
@@ -107,8 +108,9 @@ impl Query {
             offset: Some(offset.unwrap_or(0) as u32),
         };
         let result = execution_repo.find_with_filters(domain_filters, pagination).await?;
-        let unified_executions = result.items;
-        Ok(unified_executions.into_iter().map(|exec| exec.into()).collect())
+        let items: Vec<Execution> = result.items.into_iter().map(|exec| exec.into()).collect();
+        let meta = result.meta.into();
+        Ok(ExecutionList { items, meta })
     }
 
     /// Get a single execution by ID
@@ -130,7 +132,7 @@ impl Query {
         filters: Option<JobFiltersInput>,
         limit: Option<i32>,
         offset: Option<i32>,
-    ) -> Result<Vec<Job>> {
+    ) -> Result<JobList> {
         let context = ctx.data::<GraphQLContext>()?;
         let job_repo = context.repositories.job_repository();
         
@@ -155,8 +157,9 @@ impl Query {
             offset: Some(offset.unwrap_or(0) as u32),
         };
         let result = job_repo.find_with_filters(domain_filters, pagination).await?;
-        let unified_jobs = result.items;
-        Ok(unified_jobs.into_iter().map(|job| job.into()).collect())
+        let items: Vec<Job> = result.items.into_iter().map(|job| job.into()).collect();
+        let meta = result.meta.into();
+        Ok(JobList { items, meta })
     }
 
     /// Get a single job by ID
@@ -178,7 +181,7 @@ impl Query {
         filters: Option<ScheduleFiltersInput>,
         limit: Option<i32>,
         offset: Option<i32>,
-    ) -> Result<Vec<Schedule>> {
+    ) -> Result<ScheduleList> {
         let context = ctx.data::<GraphQLContext>()?;
         let schedule_repo = context.repositories.schedule_repository();
         
@@ -199,8 +202,9 @@ impl Query {
             offset: Some(offset.unwrap_or(0) as u32),
         };
         let result = schedule_repo.find_with_filters(domain_filters, pagination).await?;
-        let unified_schedules = result.items;
-        Ok(unified_schedules.into_iter().map(|schedule| schedule.into()).collect())
+        let items: Vec<Schedule> = result.items.into_iter().map(|schedule| schedule.into()).collect();
+        let meta = result.meta.into();
+        Ok(ScheduleList { items, meta })
     }
 
     /// Get a single schedule by ID
@@ -222,11 +226,20 @@ impl Query {
         filters: Option<WorkerFiltersInput>,
         limit: Option<i32>,
         offset: Option<i32>,
-    ) -> Result<Vec<Worker>> {
+    ) -> Result<WorkerList> {
         let _context = ctx.data::<GraphQLContext>()?;
         
         // For now, return empty list as worker management is not yet implemented
-        Ok(vec![])
+        let pagination = ratchet_api_types::PaginationInput { 
+            page: None,
+            limit: Some(limit.unwrap_or(50) as u32), 
+            offset: Some(offset.unwrap_or(0) as u32),
+        };
+        let meta = ratchet_api_types::pagination::PaginationMeta::new(&pagination, 0);
+        Ok(WorkerList { 
+            items: vec![], 
+            meta: meta.into() 
+        })
     }
 
     /// Get worker statistics

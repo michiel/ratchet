@@ -5,41 +5,46 @@ use ratchet_api_types::UnifiedTask;
 use super::scalars::GraphQLApiId;
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
+use uuid::Uuid;
 
 /// GraphQL Task type
 #[derive(SimpleObject, Clone)]
 pub struct Task {
     pub id: GraphQLApiId,
+    pub uuid: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub enabled: bool,
     pub version: String,
+    pub available_versions: Vec<String>,
     pub registry_source: bool,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub validated_at: Option<DateTime<Utc>>,
     pub in_sync: bool,
     pub input_schema: Option<JsonValue>,
     pub output_schema: Option<JsonValue>,
     pub metadata: Option<JsonValue>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub validated_at: Option<DateTime<Utc>>,
 }
 
 impl From<UnifiedTask> for Task {
     fn from(task: UnifiedTask) -> Self {
         Self {
             id: task.id.into(),
+            uuid: task.uuid,
             name: task.name,
             description: task.description,
-            enabled: task.enabled,
             version: task.version,
+            available_versions: task.available_versions,
             registry_source: task.registry_source,
+            enabled: task.enabled,
+            created_at: task.created_at,
+            updated_at: task.updated_at,
+            validated_at: task.validated_at,
             in_sync: task.in_sync,
             input_schema: task.input_schema,
             output_schema: task.output_schema,
             metadata: task.metadata,
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            validated_at: task.validated_at,
         }
     }
 }
