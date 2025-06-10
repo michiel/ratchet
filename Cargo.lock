@@ -4045,6 +4045,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratchet-registry"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "jsonschema",
+ "notify",
+ "ratchet-caching",
+ "ratchet-config",
+ "ratchet-core",
+ "ratchet-http",
+ "ratchet-storage",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "url",
+ "uuid",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
 name = "ratchet-resilience"
 version = "0.3.0"
 dependencies = [
@@ -4227,6 +4255,7 @@ dependencies = [
  "ratchet-interfaces",
  "ratchet-logging",
  "ratchet-output",
+ "ratchet-registry",
  "regex",
  "reqwest",
  "sea-orm",

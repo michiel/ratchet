@@ -20,7 +20,7 @@ members = [
     "ratchet-output",   # Output destination system
     "ratchet-mcp",      # New MCP implementation
     "ratchet-lib",      # Primary API implementation (REST & GraphQL)
-    "ratchet-cli", "ratchet-config", "ratchet-plugin",
+    "ratchet-cli", "ratchet-config", "ratchet-plugin", "ratchet-registry",
 ]
 resolver = "2"
 
