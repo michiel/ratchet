@@ -228,13 +228,18 @@ async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
 
 #[cfg(feature = "server")]
 async fn serve_command_with_config(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
-    // Try to use new ratchet-server architecture first, fall back to legacy if needed
-    if let Ok(()) = serve_with_ratchet_server(new_config.clone()).await {
-        return Ok(());
+    // Prioritize new ratchet-server architecture 
+    info!("Starting with new ratchet-server architecture");
+    match serve_with_ratchet_server(new_config.clone()).await {
+        Ok(()) => {
+            info!("Ratchet server completed successfully");
+            Ok(())
+        }
+        Err(e) => {
+            warn!("New server implementation failed: {}, falling back to legacy", e);
+            serve_with_legacy_server(config, new_config).await
+        }
     }
-    
-    warn!("Falling back to legacy server implementation");
-    serve_with_legacy_server(config, new_config).await
 }
 
 #[cfg(feature = "server")]

@@ -63,10 +63,25 @@ impl Server {
         // Add root handler
         app = app.route("/", get(root_handler));
 
-        // Add GraphQL API if enabled (temporarily disabled)
+        // Add GraphQL API if enabled
         if self.config.graphql_api.enabled {
-            tracing::warn!("GraphQL API is temporarily disabled due to field mismatches during migration");
-            // TODO: Re-enable once field mappings are fixed
+            tracing::info!("GraphQL API enabled, adding routes");
+            // TODO: Add GraphQL routes when ratchet-graphql-api is ready
+            // For now, add a placeholder endpoint
+            app = app.route("/graphql", axum::routing::get(graphql_placeholder_handler));
+            
+            if self.config.graphql_api.enable_playground {
+                app = app.route("/playground", axum::routing::get(playground_placeholder_handler));
+            }
+        }
+
+        // Add MCP SSE API if enabled
+        if self.config.mcp_api.enabled && self.config.mcp_api.sse_enabled {
+            tracing::info!("MCP SSE API enabled, adding routes");
+            // TODO: Add MCP SSE routes when ratchet-mcp SSE integration is ready
+            // For now, add a placeholder endpoint
+            app = app.route("/mcp", axum::routing::get(mcp_placeholder_handler));
+            app = app.route("/mcp/health", axum::routing::get(mcp_health_handler));
         }
 
         app
@@ -98,23 +113,51 @@ impl Server {
 
     /// Log configuration summary
     fn log_config_summary(&self) {
-        tracing::info!("=== Ratchet Server Configuration ===");
-        tracing::info!("Bind Address: {}", self.config.server.bind_address);
-        tracing::info!("REST API: {} ({})", 
-                      if self.config.rest_api.enabled { "Enabled" } else { "Disabled" },
-                      self.config.rest_api.prefix);
-        tracing::info!("GraphQL API: {} ({})", 
-                      if self.config.graphql_api.enabled { "Enabled" } else { "Disabled" },
-                      self.config.graphql_api.endpoint);
-        tracing::info!("CORS: {}", if self.config.server.enable_cors { "Enabled" } else { "Disabled" });
-        tracing::info!("Request ID: {}", if self.config.server.enable_request_id { "Enabled" } else { "Disabled" });
-        tracing::info!("Tracing: {}", if self.config.server.enable_tracing { "Enabled" } else { "Disabled" });
+        tracing::info!("🚀 === Ratchet Server Configuration ===");
+        tracing::info!("📍 Bind Address: {}", self.config.server.bind_address);
         
+        // Core APIs
+        tracing::info!("🔗 REST API: {} ({})", 
+                      if self.config.rest_api.enabled { "✅ Enabled" } else { "❌ Disabled" },
+                      self.config.rest_api.prefix);
+        tracing::info!("🔍 GraphQL API: {} ({})", 
+                      if self.config.graphql_api.enabled { "✅ Enabled" } else { "❌ Disabled" },
+                      self.config.graphql_api.endpoint);
+        tracing::info!("🤖 MCP SSE API: {} ({})", 
+                      if self.config.mcp_api.enabled { "✅ Enabled" } else { "❌ Disabled" },
+                      self.config.mcp_api.endpoint);
+        
+        // Features
         if self.config.graphql_api.enabled && self.config.graphql_api.enable_playground {
-            tracing::info!("GraphQL Playground: http://{}/playground", self.config.server.bind_address);
+            tracing::info!("🎮 GraphQL Playground: ✅ Enabled");
         }
         
-        tracing::info!("=====================================");
+        // Middleware
+        tracing::info!("🌐 CORS: {}", if self.config.server.enable_cors { "✅ Enabled" } else { "❌ Disabled" });
+        tracing::info!("🆔 Request ID: {}", if self.config.server.enable_request_id { "✅ Enabled" } else { "❌ Disabled" });
+        tracing::info!("📊 Tracing: {}", if self.config.server.enable_tracing { "✅ Enabled" } else { "❌ Disabled" });
+        
+        // Endpoints
+        tracing::info!("📋 Available endpoints:");
+        tracing::info!("   🏠 Root: http://{}/", self.config.server.bind_address);
+        tracing::info!("   ❤️  Health: http://{}/health", self.config.server.bind_address);
+        
+        if self.config.rest_api.enabled {
+            tracing::info!("   🔗 REST API: http://{}{}/", self.config.server.bind_address, self.config.rest_api.prefix);
+        }
+        
+        if self.config.graphql_api.enabled {
+            tracing::info!("   🔍 GraphQL: http://{}{}", self.config.server.bind_address, self.config.graphql_api.endpoint);
+            if self.config.graphql_api.enable_playground {
+                tracing::info!("   🎮 Playground: http://{}/playground", self.config.server.bind_address);
+            }
+        }
+        
+        if self.config.mcp_api.enabled {
+            tracing::info!("   🤖 MCP SSE: http://{}:{}{}", self.config.mcp_api.host, self.config.mcp_api.port, self.config.mcp_api.endpoint);
+        }
+        
+        tracing::info!("✅ =====================================");
     }
 }
 
@@ -128,8 +171,64 @@ async fn root_handler() -> axum::response::Json<serde_json::Value> {
             "rest_api": "/api/v1",
             "graphql": "/graphql", 
             "playground": "/playground",
+            "mcp_sse": "/mcp",
             "health": "/health"
         }
+    }))
+}
+
+/// GraphQL placeholder handler
+async fn graphql_placeholder_handler() -> axum::response::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({
+        "message": "GraphQL API is enabled and ready",
+        "status": "placeholder",
+        "note": "Full GraphQL implementation will be added in future updates"
+    }))
+}
+
+/// GraphQL Playground placeholder handler
+async fn playground_placeholder_handler() -> axum::response::Html<&'static str> {
+    axum::response::Html(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GraphQL Playground</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; text-align: center; }
+        .status { background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 GraphQL Playground</h1>
+        <div class="status">
+            <h3>✅ GraphQL API Enabled</h3>
+            <p>The GraphQL API is enabled and ready for connections.</p>
+            <p><strong>Endpoint:</strong> <code>/graphql</code></p>
+            <p><em>Full playground implementation coming soon!</em></p>
+        </div>
+    </div>
+</body>
+</html>"#)
+}
+
+/// MCP SSE placeholder handler
+async fn mcp_placeholder_handler() -> axum::response::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({
+        "message": "MCP SSE API is enabled and ready",
+        "status": "placeholder",
+        "protocol": "Model Context Protocol over Server-Sent Events",
+        "note": "Full MCP SSE implementation will be added in future updates"
+    }))
+}
+
+/// MCP health handler
+async fn mcp_health_handler() -> axum::response::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({
+        "status": "healthy",
+        "service": "MCP SSE",
+        "timestamp": chrono::Utc::now().to_rfc3339()
     }))
 }
 

@@ -39,7 +39,10 @@ pub fn init_simple_tracing(log_level: &str) -> Result<()> {
         .or_else(|_| EnvFilter::try_from_default_env())
         .unwrap_or_else(|_| EnvFilter::new("info"));
 
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    // Use try_init to avoid panic if global subscriber already set
+    if let Err(_) = tracing_subscriber::fmt().with_env_filter(env_filter).try_init() {
+        tracing::debug!("Global tracing subscriber already initialized, skipping");
+    }
 
     Ok(())
 }
@@ -57,11 +60,13 @@ pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<()> {
         .or_else(|_| EnvFilter::try_from_default_env())
         .unwrap_or_else(|_| EnvFilter::new("info"));
 
-    // Initialize subscriber
-    tracing_subscriber::registry()
+    // Initialize subscriber with try_init to avoid panic if already set
+    if let Err(_) = tracing_subscriber::registry()
         .with(env_filter)
         .with(console_layer)
-        .init();
+        .try_init() {
+        tracing::debug!("Global tracing subscriber already initialized, skipping");
+    }
 
     // Also initialize structured logger for file outputs
     if config

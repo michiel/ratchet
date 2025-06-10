@@ -133,12 +133,21 @@ pub async fn init_logging(config: &ServerConfig) -> Result<()> {
                 .with_ansi(false);
                 
             let subscriber = subscriber.with(file_layer);
-            subscriber.init();
+            // Use try_init to avoid panic if global subscriber already set
+            if let Err(_) = subscriber.try_init() {
+                tracing::debug!("Global tracing subscriber already initialized, skipping");
+            }
         } else {
-            subscriber.init();
+            // Use try_init to avoid panic if global subscriber already set
+            if let Err(_) = subscriber.try_init() {
+                tracing::debug!("Global tracing subscriber already initialized, skipping");
+            }
         }
     } else {
-        subscriber.init();
+        // Use try_init to avoid panic if global subscriber already set
+        if let Err(_) = subscriber.try_init() {
+            tracing::debug!("Global tracing subscriber already initialized, skipping");
+        }
     }
 
     tracing::info!("Logging initialized");

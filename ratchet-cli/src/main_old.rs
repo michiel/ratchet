@@ -712,8 +712,12 @@ fn init_simple_tracing(log_level: Option<&String>) -> Result<()> {
         }
     };
     
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
-    debug!("Simple tracing initialized");
+    // Use try_init to avoid panic if global subscriber already set
+    if let Err(_) = tracing_subscriber::fmt().with_env_filter(env_filter).try_init() {
+        eprintln!("Global tracing subscriber already initialized, skipping");
+    } else {
+        debug!("Simple tracing initialized");
+    }
     Ok(())
 }
 
@@ -734,10 +738,13 @@ fn init_worker_tracing(log_level: Option<&String>) -> Result<()> {
     };
     
     // Configure tracing to output to stderr only (stdout is used for IPC)
-    tracing_subscriber::fmt()
+    // Use try_init to avoid panic if global subscriber already set
+    if let Err(_) = tracing_subscriber::fmt()
         .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
-        .init();
+        .try_init() {
+        eprintln!("Global tracing subscriber already initialized, skipping");
+    }
 
     Ok(())
 }

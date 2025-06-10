@@ -9,6 +9,7 @@ pub struct ServerConfig {
     pub server: HttpServerConfig,
     pub rest_api: RestApiConfig,
     pub graphql_api: GraphQLApiConfig,
+    pub mcp_api: McpApiConfig,
     pub logging: LoggingConfig,
     pub database: DatabaseConfig,
     pub registry: RegistryConfig,
@@ -44,6 +45,16 @@ pub struct GraphQLApiConfig {
     pub max_query_depth: Option<usize>,
     pub max_query_complexity: Option<usize>,
     pub enable_apollo_tracing: bool,
+}
+
+/// MCP API configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpApiConfig {
+    pub enabled: bool,
+    pub sse_enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub endpoint: String,
 }
 
 /// Logging configuration
@@ -82,6 +93,7 @@ impl Default for ServerConfig {
             server: HttpServerConfig::default(),
             rest_api: RestApiConfig::default(),
             graphql_api: GraphQLApiConfig::default(),
+            mcp_api: McpApiConfig::default(),
             logging: LoggingConfig::default(),
             database: DatabaseConfig::default(),
             registry: RegistryConfig::default(),
@@ -123,6 +135,18 @@ impl Default for GraphQLApiConfig {
             max_query_depth: Some(15),
             max_query_complexity: Some(1000),
             enable_apollo_tracing: false,
+        }
+    }
+}
+
+impl Default for McpApiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            sse_enabled: true,
+            host: "127.0.0.1".to_string(),
+            port: 8090,
+            endpoint: "/mcp".to_string(),
         }
     }
 }
@@ -196,6 +220,13 @@ impl ServerConfig {
                 max_query_depth: Some(15),
                 max_query_complexity: Some(1000),
                 enable_apollo_tracing: false,
+            },
+            mcp_api: McpApiConfig {
+                enabled: config.mcp.as_ref().map_or(true, |mcp| mcp.enabled), // Default enabled unless explicitly disabled
+                sse_enabled: config.mcp.as_ref().map_or(true, |mcp| mcp.transport == "sse"), // Default SSE enabled
+                host: config.mcp.as_ref().map_or("127.0.0.1".to_string(), |mcp| mcp.host.clone()),
+                port: config.mcp.as_ref().map_or(8090, |mcp| mcp.port),
+                endpoint: "/mcp".to_string(), // Default endpoint
             },
             logging: LoggingConfig {
                 level: format!("{:?}", config.logging.level).to_lowercase(),
