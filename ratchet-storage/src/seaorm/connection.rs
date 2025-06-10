@@ -55,7 +55,13 @@ impl DatabaseConnection {
             config.max_connections
         );
 
-        Ok(Self { connection, config })
+        let db = Self { connection, config };
+
+        // Automatically run migrations when establishing connection
+        info!("Running database migrations automatically");
+        db.migrate().await?;
+
+        Ok(db)
     }
 
     /// Ensure SQLite database file and directory exist for file-based databases

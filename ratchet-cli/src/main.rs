@@ -301,14 +301,7 @@ async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetC
 
     let database = DatabaseConnection::new(storage_db_config.clone())
         .await
-        .context("Failed to connect to database")?;
-
-    // Run migrations
-    info!("🔄 Running database migrations...");
-    database
-        .migrate()
-        .await
-        .context("Failed to run database migrations")?;
+        .context("Failed to connect to database and run migrations")?;
     info!("✅ Database initialized successfully");
 
     // Initialize repositories using legacy factory for backward compatibility
