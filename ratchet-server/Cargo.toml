@@ -43,6 +43,3 @@ async-graphql-axum = { workspace = true }
 [dev-dependencies]
 tokio-test = "0.4"
 
-[[bin]]
-name = "ratchet-server"
-path = "src/main.rs"
