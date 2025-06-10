@@ -71,7 +71,7 @@ impl DatabaseConnection {
             // Extract the file path from the URL, handling various SQLite URL formats
             let file_path = if database_url.starts_with("sqlite:///") {
                 // Absolute path: sqlite:///path/to/file.db -> /path/to/file.db
-                database_url.strip_prefix("sqlite://").ok_or_else(|| {
+                database_url.strip_prefix("sqlite:///").ok_or_else(|| {
                     DatabaseError::ConfigError(format!(
                         "Invalid SQLite URL format: {}",
                         database_url
@@ -100,6 +100,7 @@ impl DatabaseConnection {
                 )));
             };
 
+            debug!("Parsed SQLite file path: '{}'", file_path);
             let path = std::path::Path::new(file_path);
 
             // Create parent directory if it doesn't exist
