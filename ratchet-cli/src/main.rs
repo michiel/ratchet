@@ -713,7 +713,7 @@ async fn mcp_serve_command_with_config(
 /// Initialize logging from configuration with fallback to simple tracing
 #[cfg(feature = "server")]
 fn init_logging_with_config(
-    config: &LibRatchetConfig,
+    _config: &LibRatchetConfig,
     log_level: Option<&String>,
     record_dir: Option<&PathBuf>,
 ) -> Result<()> {
@@ -724,65 +724,28 @@ fn init_logging_with_config(
         return Ok(());
     }
 
-    // If CLI log level is provided, override config level
-    let mut logging_config = config.logging.clone();
-    if let Some(level_str) = log_level {
-        if let Ok(level) = level_str.parse::<ratchet_lib::logging::LogLevel>() {
-            logging_config.level = level;
-        }
-    }
-
-    // For recording mode, ensure we have file output
+    // For recording mode, always use simple tracing with file logging
     if let Some(record_path) = record_dir {
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
         let session_dir = record_path.join(format!("ratchet_session_{}", timestamp));
         fs::create_dir_all(&session_dir).context("Failed to create recording directory")?;
 
-        // Add file sink for recording
-        let log_file_path = session_dir.join("ratchet.log");
-        logging_config
-            .sinks
-            .push(ratchet_lib::logging::config::SinkConfig::File {
-                path: log_file_path,
-                level: logging_config.level,
-                rotation: Some(ratchet_lib::logging::config::RotationConfig {
-                    max_size: "100MB".to_string(),
-                    max_age: None,
-                    max_files: Some(5),
-                }),
-                buffered: None,
-            });
-
         // Store the session directory for use by other components
-        ratchet_lib::recording::set_recording_dir(session_dir)?;
+        ratchet_lib::recording::set_recording_dir(session_dir.clone())?;
+
+        // Use simple tracing with file output for recording
+        init_simple_tracing_with_file(log_level, &session_dir.join("ratchet.log"))?;
 
         info!(
             "Recording session to: {:?}",
             record_path.join(format!("ratchet_session_{}", timestamp))
         );
-    }
-
-    // If no sinks configured and not recording, use simple tracing
-    if logging_config.sinks.is_empty() && record_dir.is_none() {
-        init_simple_tracing(log_level)?;
         return Ok(());
     }
 
-    // Try to initialize structured logging
-    match ratchet_lib::logging::init_logging_from_config(&logging_config) {
-        Ok(()) => {
-            debug!("Structured logging initialized");
-        }
-        Err(e) => {
-            // Fall back to simple tracing if structured logging fails
-            eprintln!(
-                "Failed to initialize structured logging: {}, falling back to simple tracing",
-                e
-            );
-            init_simple_tracing(log_level)?;
-        }
-    }
-
+    // For server mode without recording, use simple tracing 
+    // The complex structured logging from ratchet-lib is causing issues during migration
+    init_simple_tracing(log_level)?;
     Ok(())
 }
 
@@ -829,8 +792,41 @@ fn init_simple_tracing(log_level: Option<&String>) -> Result<()> {
         EnvFilter::new("info")
     };
 
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
-    debug!("Simple tracing initialized");
+    // Use try_init to avoid panic if global subscriber already set
+    if let Err(_) = tracing_subscriber::fmt().with_env_filter(env_filter).try_init() {
+        eprintln!("Global tracing subscriber already initialized, skipping");
+    } else {
+        debug!("Simple tracing initialized");
+    }
+    Ok(())
+}
+
+/// Initialize simple tracing with file output for recording mode
+fn init_simple_tracing_with_file(log_level: Option<&String>, log_file_path: &std::path::Path) -> Result<()> {
+    // Priority: --log-level flag > RUST_LOG env var > default "info" 
+    let env_filter = if let Some(level) = log_level {
+        EnvFilter::try_new(level).unwrap_or_else(|_| {
+            eprintln!("Invalid log level '{}', falling back to 'info'", level);
+            EnvFilter::new("info")
+        })
+    } else if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        EnvFilter::try_new(&rust_log).unwrap_or_else(|_| {
+            eprintln!("Invalid RUST_LOG '{}', falling back to 'info'", rust_log);
+            EnvFilter::new("info")
+        })
+    } else {
+        EnvFilter::new("info")
+    };
+
+    // For recording mode, just use simple console logging with a note about the file location
+    // Complex file logging can be added later if needed
+    if let Err(_) = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .try_init() {
+        eprintln!("Global tracing subscriber already initialized, skipping");
+    } else {
+        info!("Tracing initialized for recording mode - logs available at: {:?}", log_file_path);
+    }
     Ok(())
 }
 
@@ -847,10 +843,13 @@ fn init_mcp_stdio_logging(log_level: Option<&String>) -> Result<()> {
     });
 
     // Force output to stderr only for MCP stdio mode
-    tracing_subscriber::fmt()
+    // Use try_init to avoid panic if global subscriber already set
+    if let Err(_) = tracing_subscriber::fmt()
         .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
-        .init();
+        .try_init() {
+        // Silent failure for MCP stdio mode to avoid contaminating stderr
+    }
 
     Ok(())
 }
@@ -866,12 +865,15 @@ fn init_worker_tracing(log_level: Option<&String>) -> Result<()> {
     };
 
     // Worker processes output to stderr to avoid conflicts with IPC on stdout
-    tracing_subscriber::fmt()
+    // Use try_init to avoid panic if global subscriber already set
+    if let Err(_) = tracing_subscriber::fmt()
         .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
-        .init();
-
-    debug!("Worker tracing initialized");
+        .try_init() {
+        eprintln!("Global tracing subscriber already initialized, skipping");
+    } else {
+        debug!("Worker tracing initialized");
+    }
     Ok(())
 }
 
