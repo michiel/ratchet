@@ -156,8 +156,8 @@ pub async fn get_task(
     // Try to get detailed information from registry if available
     if let Some(registry) = &ctx.registry {
         if let Ok(Some(registry_task)) = registry.get_task(uuid, None).await {
-            api_task.input_schema = Some(registry_task.input_schema.clone());
-            api_task.output_schema = Some(registry_task.output_schema.clone());
+            api_task.input_schema = registry_task.input_schema.clone();
+            api_task.output_schema = registry_task.output_schema.clone();
         }
     }
 
