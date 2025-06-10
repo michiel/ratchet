@@ -23,6 +23,7 @@ pub use job::JobRepository;
 pub use schedule::ScheduleRepository;
 pub use task::TaskRepository;
 
+
 /// Base repository trait with generic CRUD operations
 #[async_trait]
 pub trait Repository<T>: Send + Sync

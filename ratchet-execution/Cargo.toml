@@ -20,6 +20,7 @@ thiserror = "1.0"
 num_cpus = "1.16"
 
 # Local crates
+ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-storage = { path = "../ratchet-storage" }
 ratchet-resilience = { path = "../ratchet-resilience" }

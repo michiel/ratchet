@@ -18,7 +18,7 @@ pub use tools::{McpTaskExecutor, McpTaskInfo, McpTool, RatchetToolRegistry, Tool
 
 // Main server types are defined in this module, no need to re-export
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -49,6 +49,12 @@ pub struct McpServer {
 
     /// Whether the server is initialized
     initialized: Arc<RwLock<bool>>,
+    
+    /// Server-issued session IDs (for validation)
+    server_issued_sessions: Arc<RwLock<HashSet<String>>>,
+    
+    /// Message history for resumability (session_id -> Vec<(event_id, message)>)
+    message_history: Arc<RwLock<HashMap<String, Vec<(String, String)>>>>,
 }
 
 impl McpServer {
@@ -66,6 +72,8 @@ impl McpServer {
             audit_logger,
             _sessions: Arc::new(RwLock::new(HashMap::new())),
             initialized: Arc::new(RwLock::new(false)),
+            server_issued_sessions: Arc::new(RwLock::new(HashSet::new())),
+            message_history: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -117,6 +125,8 @@ impl McpServer {
             audit_logger,
             _sessions: Arc::new(RwLock::new(HashMap::new())),
             initialized: Arc::new(RwLock::new(false)),
+            server_issued_sessions: Arc::new(RwLock::new(HashSet::new())),
+            message_history: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -312,13 +322,17 @@ impl McpServer {
         struct SseServerState {
             server: Arc<McpServer>,
             connections: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<String>>>>,
+            server_issued_sessions: Arc<RwLock<HashSet<String>>>,
+            message_history: Arc<RwLock<HashMap<String, Vec<(String, String)>>>>,
         }
 
         impl SseServerState {
             fn new(server: Arc<McpServer>) -> Self {
                 Self {
-                    server,
+                    server: server.clone(),
                     connections: Arc::new(RwLock::new(HashMap::new())),
+                    server_issued_sessions: server.server_issued_sessions.clone(),
+                    message_history: server.message_history.clone(),
                 }
             }
         }
@@ -483,7 +497,7 @@ impl McpServer {
             extract::{Path, State},
             http::{HeaderMap, StatusCode},
             response::{sse::Event, Sse},
-            routing::{get, post},
+            routing::{get, post, delete},
             Json, Router,
         };
         use serde_json::Value;
@@ -497,13 +511,17 @@ impl McpServer {
         struct SseServerState {
             server: Arc<McpServer>,
             connections: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<String>>>>,
+            server_issued_sessions: Arc<RwLock<HashSet<String>>>,
+            message_history: Arc<RwLock<HashMap<String, Vec<(String, String)>>>>,
         }
 
         impl SseServerState {
             fn new(server: Arc<McpServer>) -> Self {
                 Self {
-                    server,
+                    server: server.clone(),
                     connections: Arc::new(RwLock::new(HashMap::new())),
+                    server_issued_sessions: server.server_issued_sessions.clone(),
+                    message_history: server.message_history.clone(),
                 }
             }
         }
@@ -618,11 +636,392 @@ impl McpServer {
             }))
         }
 
-        // Build the MCP routes
+        // Create new MCP session endpoint
+        async fn create_session_handler() -> Json<Value> {
+            let session_id = uuid::Uuid::new_v4().to_string();
+            tracing::info!("Created new MCP session: {}", session_id);
+            
+            Json(serde_json::json!({
+                "session_id": session_id,
+                "sse_url": format!("/mcp/sse/{}", session_id),
+                "message_url": format!("/mcp/message/{}", session_id),
+                "created_at": chrono::Utc::now().to_rfc3339()
+            }))
+        }
+
+        // MCP connection info endpoint (for clients that just want to connect)
+        async fn connection_info_handler() -> Json<Value> {
+            Json(serde_json::json!({
+                "service": "ratchet-mcp-server",
+                "version": env!("CARGO_PKG_VERSION"),
+                "transport": "sse",
+                "instructions": {
+                    "step1": "POST /mcp/session to create a new session",
+                    "step2": "Connect to the SSE endpoint with the session_id",
+                    "step3": "Send JSON-RPC messages to the message endpoint"
+                },
+                "endpoints": {
+                    "create_session": "POST /mcp/session",
+                    "sse_endpoint": "GET /mcp/sse/{session_id}",
+                    "message_endpoint": "POST /mcp/message/{session_id}",
+                    "health": "GET /mcp/health"
+                }
+            }))
+        }
+
+        // MCP protocol compliant endpoint - handles GET, POST, DELETE
+        async fn mcp_endpoint_handler(
+            method: axum::http::Method,
+            headers: HeaderMap,
+            State(state): State<SseServerState>,
+            body: Option<String>,
+        ) -> impl axum::response::IntoResponse {
+            use axum::response::IntoResponse;
+            use axum::http::{header, StatusCode};
+
+            // Validate Origin header for DNS rebinding protection
+            if let Some(origin) = headers.get("origin").and_then(|h| h.to_str().ok()) {
+                // Only allow localhost origins for security
+                if !origin.starts_with("http://localhost") && !origin.starts_with("https://localhost") &&
+                   !origin.starts_with("http://127.0.0.1") && !origin.starts_with("https://127.0.0.1") &&
+                   !origin.starts_with("http://[::1]") && !origin.starts_with("https://[::1]") {
+                    tracing::warn!("Rejected request from disallowed origin: {}", origin);
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+            }
+
+            // Extract session ID from headers if present
+            let session_id = headers
+                .get("mcp-session-id")
+                .and_then(|h| h.to_str().ok())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    // Generate a new session ID if none provided
+                    uuid::Uuid::new_v4().to_string()
+                });
+
+            match method {
+                // GET - Open SSE stream for server-to-client messages
+                axum::http::Method::GET => {
+                    // Check Accept header for text/event-stream
+                    let accept_header = headers.get("accept").and_then(|h| h.to_str().ok()).unwrap_or("");
+                    if !accept_header.contains("text/event-stream") {
+                        return StatusCode::NOT_ACCEPTABLE.into_response();
+                    }
+
+                    // Check for Last-Event-ID header for resumability
+                    let last_event_id = headers.get("last-event-id").and_then(|h| h.to_str().ok());
+                    
+                    let (tx, mut rx) = mpsc::unbounded_channel();
+
+                    // Store connection
+                    {
+                        let mut connections = state.connections.write().await;
+                        connections.insert(session_id.clone(), tx.clone());
+                    }
+                    
+                    // Handle resumability - replay messages after last event ID
+                    let mut starting_event_id = 0u64;
+                    if let Some(last_id) = last_event_id {
+                        tracing::debug!("Resuming MCP SSE connection from event ID: {} for session: {}", last_id, session_id);
+                        
+                        // Parse the last event ID
+                        if let Ok(last_id_num) = last_id.parse::<u64>() {
+                            starting_event_id = last_id_num;
+                            
+                            // Replay messages from history
+                            let history = state.message_history.read().await;
+                            if let Some(messages) = history.get(&session_id) {
+                                for (event_id, message) in messages {
+                                    if let Ok(event_id_num) = event_id.parse::<u64>() {
+                                        if event_id_num > last_id_num {
+                                            // Send the historical message
+                                            let _ = tx.send(message.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        tracing::info!("New MCP SSE connection established for session: {}", session_id);
+                    }
+
+                    let session_id_clone = session_id.clone();
+                    let message_history = state.message_history.clone();
+                    
+                    let stream = async_stream::stream! {
+                        let mut event_counter = starting_event_id;
+                        while let Some(data) = rx.recv().await {
+                            event_counter += 1;
+                            let event_id = event_counter.to_string();
+                            
+                            // Store message in history for resumability
+                            {
+                                let mut history = message_history.write().await;
+                                let session_history = history.entry(session_id_clone.clone()).or_insert_with(Vec::new);
+                                session_history.push((event_id.clone(), data.clone()));
+                                
+                                // Keep only last 1000 messages per session to prevent memory bloat
+                                if session_history.len() > 1000 {
+                                    session_history.drain(0..100);
+                                }
+                            }
+                            
+                            // Add event ID for resumability support
+                            let event = Event::default()
+                                .data(data)
+                                .id(event_id);
+                            yield Ok::<Event, std::convert::Infallible>(event);
+                        }
+                    };
+
+                    let sse_response = Sse::new(stream).keep_alive(
+                        axum::response::sse::KeepAlive::new()
+                            .interval(std::time::Duration::from_secs(30))
+                            .text("keep-alive"),
+                    );
+
+                    sse_response.into_response()
+                }
+
+                // POST - Send JSON-RPC messages
+                axum::http::Method::POST => {
+                    let body = match body {
+                        Some(b) => b,
+                        None => return StatusCode::BAD_REQUEST.into_response(),
+                    };
+                    
+                    // Check Accept header - both application/json and text/event-stream should be supported
+                    let accept_header = headers.get("accept").and_then(|h| h.to_str().ok()).unwrap_or("");
+                    let accepts_json = accept_header.contains("application/json");
+                    let accepts_sse = accept_header.contains("text/event-stream");
+
+                    if !accepts_json && !accepts_sse {
+                        return StatusCode::NOT_ACCEPTABLE.into_response();
+                    }
+
+                    tracing::debug!("MCP POST request received for session: {}, body: {}", session_id, body);
+
+                    // Parse JSON-RPC message(s)
+                    let json_value: Value = match serde_json::from_str(&body) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::error!("Failed to parse JSON-RPC message: {}", e);
+                            return StatusCode::BAD_REQUEST.into_response();
+                        }
+                    };
+
+                    // Check if this contains requests (vs only responses/notifications)
+                    let contains_requests = if json_value.is_array() {
+                        json_value.as_array().unwrap().iter().any(|msg| {
+                            msg.get("method").is_some() && msg.get("id").is_some()
+                        })
+                    } else {
+                        json_value.get("method").is_some() && json_value.get("id").is_some()
+                    };
+
+                    // Check if this contains only responses or notifications
+                    let only_responses_or_notifications = if json_value.is_array() {
+                        json_value.as_array().unwrap().iter().all(|msg| {
+                            // Response: has "result" or "error" field
+                            // Notification: has "method" but no "id"
+                            msg.get("result").is_some() || msg.get("error").is_some() || 
+                            (msg.get("method").is_some() && msg.get("id").is_none())
+                        })
+                    } else {
+                        json_value.get("result").is_some() || json_value.get("error").is_some() ||
+                        (json_value.get("method").is_some() && json_value.get("id").is_none())
+                    };
+
+                    if only_responses_or_notifications && !contains_requests {
+                        // Only responses/notifications - return 202 Accepted with no body
+                        tracing::debug!("Received only responses/notifications for session: {}", session_id);
+                        return StatusCode::ACCEPTED.into_response();
+                    }
+
+                    // Check if session ID is required for non-initialize requests
+                    // Only require session ID if the server has previously issued one
+                    let requires_session = json_value.get("method").and_then(|m| m.as_str()) != Some("initialize");
+                    if requires_session {
+                        let server_sessions = state.server_issued_sessions.read().await;
+                        let has_session_header = headers.contains_key("mcp-session-id");
+                        
+                        // If we have issued sessions and client doesn't provide one, that's an error
+                        if !server_sessions.is_empty() && !has_session_header {
+                            tracing::warn!("Request requires session ID but none provided (server has issued sessions)");
+                            return StatusCode::BAD_REQUEST.into_response();
+                        }
+                        
+                        // If client provides session ID, verify it's one we issued
+                        if has_session_header && !server_sessions.is_empty() {
+                            let provided_session = headers
+                                .get("mcp-session-id")
+                                .and_then(|h| h.to_str().ok())
+                                .unwrap_or("");
+                            
+                            if !server_sessions.contains(provided_session) {
+                                tracing::warn!("Invalid session ID provided: {}", provided_session);
+                                return StatusCode::NOT_FOUND.into_response();
+                            }
+                        }
+                    }
+
+                    // Handle the message using the server
+                    let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
+
+                    match state.server.handle_message(&body, auth_header).await {
+                        Ok(Some(response)) => {
+                            let response_data = match serde_json::to_string(&response) {
+                                Ok(data) => data,
+                                Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                            };
+
+                            if accepts_sse {
+                                // Return SSE stream with response
+                                let (tx, mut rx) = mpsc::unbounded_channel();
+
+                                // Store connection
+                                {
+                                    let mut connections = state.connections.write().await;
+                                    connections.insert(session_id.clone(), tx.clone());
+                                }
+
+                                // Send the response immediately with event ID
+                                let _ = tx.send(format!("data: {}\n\n", response_data));
+
+                                let stream = async_stream::stream! {
+                                    let mut event_counter = 1u64;
+                                    while let Some(data) = rx.recv().await {
+                                        event_counter += 1;
+                                        let event = Event::default()
+                                            .data(data)
+                                            .id(event_counter.to_string());
+                                        yield Ok::<Event, std::convert::Infallible>(event);
+                                    }
+                                };
+
+                                let sse_response = Sse::new(stream).keep_alive(
+                                    axum::response::sse::KeepAlive::new()
+                                        .interval(std::time::Duration::from_secs(30))
+                                        .text("keep-alive"),
+                                );
+
+                                sse_response.into_response()
+                            } else {
+                                // Return JSON response with session header if this is an initialize request
+                                let mut response_builder = axum::response::Response::builder()
+                                    .status(StatusCode::OK)
+                                    .header(header::CONTENT_TYPE, "application/json");
+                                
+                                // Check if this was an initialize request to add session header
+                                if json_value.get("method").and_then(|m| m.as_str()) == Some("initialize") {
+                                    response_builder = response_builder.header("mcp-session-id", &session_id);
+                                    tracing::info!("Assigned session ID {} for initialize request", session_id);
+                                    
+                                    // Track that we issued this session ID
+                                    {
+                                        let mut server_sessions = state.server_issued_sessions.write().await;
+                                        server_sessions.insert(session_id.clone());
+                                    }
+                                }
+
+                                match response_builder.body(response_data) {
+                                    Ok(response) => response.into_response(),
+                                    Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            // No response expected - return 202
+                            StatusCode::ACCEPTED.into_response()
+                        }
+                        Err(e) => {
+                            tracing::error!("Error handling MCP message: {}", e);
+
+                            let error_response = crate::protocol::JsonRpcResponse::error(
+                                crate::protocol::JsonRpcError::internal_error(e.to_string()),
+                                None,
+                            );
+
+                            let error_data = match serde_json::to_string(&error_response) {
+                                Ok(data) => data,
+                                Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                            };
+
+                            (
+                                StatusCode::BAD_REQUEST,
+                                [(header::CONTENT_TYPE, "application/json")],
+                                error_data,
+                            ).into_response()
+                        }
+                    }
+                }
+
+                // DELETE - Terminate session
+                axum::http::Method::DELETE => {
+                    // Extract session ID from headers
+                    let session_to_delete = headers
+                        .get("mcp-session-id")
+                        .and_then(|h| h.to_str().ok())
+                        .unwrap_or(&session_id);
+                        
+                    tracing::info!("MCP session termination requested for: {}", session_to_delete);
+
+                    // Remove connection
+                    {
+                        let mut connections = state.connections.write().await;
+                        connections.remove(session_to_delete);
+                    }
+                    
+                    // Remove from server-issued sessions
+                    {
+                        let mut server_sessions = state.server_issued_sessions.write().await;
+                        server_sessions.remove(session_to_delete);
+                    }
+                    
+                    // Clean up message history
+                    {
+                        let mut history = state.message_history.write().await;
+                        history.remove(session_to_delete);
+                    }
+
+                    StatusCode::NO_CONTENT.into_response()
+                }
+
+                _ => {
+                    StatusCode::METHOD_NOT_ALLOWED.into_response()
+                }
+            }
+        }
+
+        // MCP endpoint handlers with proper method routing
+        async fn mcp_get_handler(
+            headers: HeaderMap,
+            State(state): State<SseServerState>,
+        ) -> impl axum::response::IntoResponse {
+            mcp_endpoint_handler(axum::http::Method::GET, headers, State(state), None).await
+        }
+
+        async fn mcp_post_handler(
+            headers: HeaderMap,
+            State(state): State<SseServerState>,
+            body: String,
+        ) -> impl axum::response::IntoResponse {
+            mcp_endpoint_handler(axum::http::Method::POST, headers, State(state), Some(body)).await
+        }
+
+        async fn mcp_delete_handler(
+            headers: HeaderMap,
+            State(state): State<SseServerState>,
+        ) -> impl axum::response::IntoResponse {
+            mcp_endpoint_handler(axum::http::Method::DELETE, headers, State(state), None).await
+        }
+
+        // Build the MCP routes - single endpoint as per protocol        
         Router::new()
-            .route("/sse/:session_id", get(sse_handler))
-            .route("/message/:session_id", post(post_message_handler))
-            .route("/health", get(mcp_health_handler))
+            .route("/", get(mcp_get_handler).post(mcp_post_handler).delete(mcp_delete_handler))
+            .route("/health", get(mcp_health_handler))  // Keep health for debugging
+            .route("/info", get(connection_info_handler))  // Keep info for debugging
             .with_state(state)
     }
 

@@ -1,0 +1,46 @@
+[package]
+name = "ratchet-registry"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Core dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true, features = ["fs", "time", "rt", "macros"] }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Ratchet dependencies
+ratchet-core = { path = "../ratchet-core" }
+ratchet-storage = { path = "../ratchet-storage" }
+ratchet-http = { path = "../ratchet-http" }
+ratchet-config = { path = "../ratchet-config" }
+ratchet-caching = { path = "../ratchet-caching" }
+
+# Registry-specific dependencies
+notify = { version = "6.1", features = ["serde"], optional = true }  # File watching
+walkdir = { version = "2.4", optional = true }                       # Directory traversal
+zip = { version = "0.6", optional = true }                           # ZIP file handling
+jsonschema = { workspace = true, optional = true }                   # Schema validation
+regex = "1.10"                                                        # Pattern matching
+url = { workspace = true }                                            # URL handling
+
+[features]
+default = ["filesystem", "http", "watcher"]
+filesystem = ["dep:walkdir", "dep:zip"]
+http = []
+watcher = ["dep:notify"]
+validation = ["dep:jsonschema"]
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.8"

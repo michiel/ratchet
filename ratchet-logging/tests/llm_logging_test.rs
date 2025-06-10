@@ -1,7 +1,6 @@
-use ratchet_lib::errors::RatchetError;
-use ratchet_lib::logging::{
+use ratchet_logging::{
     format_markdown_report, ErrorCategory, ErrorInfo, ErrorPattern, ErrorPatternMatcher,
-    ErrorSeverity, LLMExportConfig, LLMExporter, LogEvent, LogLevel, MatchingRule,
+    ErrorSeverity, LLMExportConfig, LLMExporter, LogEvent, LogLevel, MatchingRule, LogContext,
 };
 
 #[test]
@@ -163,12 +162,21 @@ fn test_llm_export_with_patterns() {
 
 #[test]
 fn test_markdown_report_generation() {
-    let error = RatchetError::TaskNotFound("weather-api".to_string());
-    let context = ratchet_lib::logging::LogContext::new()
+    let error_info = ErrorInfo::new(
+        "TaskNotFound",
+        "TASK_NOT_FOUND",
+        "Task 'weather-api' not found"
+    ).with_context_value("task_name", "weather-api");
+    
+    let context = LogContext::new()
         .with_field("request_id", "req-123")
         .with_field("user_id", 456);
 
-    let event = error.to_log_event(&context);
+    let event = LogEvent::new(LogLevel::Error, "Task not found")
+        .with_error(error_info)
+        .with_trace_id(context.trace_id.clone())
+        .with_field("request_id", "req-123")
+        .with_field("user_id", 456);
 
     let exporter = LLMExporter::new(LLMExportConfig {
         include_system_context: true,

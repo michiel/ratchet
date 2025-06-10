@@ -233,23 +233,30 @@ impl RateLimiter {
             let mut interval = tokio::time::interval(cleanup_interval);
 
             loop {
-                interval.tick().await;
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let mut clients_guard = clients.write().await;
+                        let now = Instant::now();
 
-                let mut clients_guard = clients.write().await;
-                let now = Instant::now();
+                        // Remove clients that haven't been seen for twice the window size
+                        let cleanup_threshold = window_size * 2;
+                        let initial_count = clients_guard.len();
 
-                // Remove clients that haven't been seen for twice the window size
-                let cleanup_threshold = window_size * 2;
-                let initial_count = clients_guard.len();
+                        clients_guard
+                            .retain(|_, client| now.duration_since(client.last_seen) < cleanup_threshold);
 
-                clients_guard
-                    .retain(|_, client| now.duration_since(client.last_seen) < cleanup_threshold);
-
-                let removed_count = initial_count - clients_guard.len();
-                if removed_count > 0 {
-                    debug!("Cleaned up {} inactive rate limit entries", removed_count);
+                        let removed_count = initial_count - clients_guard.len();
+                        if removed_count > 0 {
+                            debug!("Cleaned up {} inactive rate limit entries", removed_count);
+                        }
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        debug!("Rate limiter cleanup task received shutdown signal");
+                        break;
+                    }
                 }
             }
+            debug!("Rate limiter cleanup task terminated");
         });
     }
 }

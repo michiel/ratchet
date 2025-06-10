@@ -12,9 +12,13 @@ description = "Core library functionality for the project"
 # Dependencies
 [dependencies]
 # Use workspace-level dependencies
+ratchet-interfaces = { path = "../ratchet-interfaces" }
+ratchet-api-types = { path = "../ratchet-api-types" }
 ratchet-core = { path = "../ratchet-core" }
 ratchet-http = { path = "../ratchet-http" }
 ratchet-logging = { path = "../ratchet-logging" }
+ratchet-output = { path = "../ratchet-output" }
+ratchet-registry = { path = "../ratchet-registry" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -41,13 +45,7 @@ async-trait = "0.1"
 num_cpus = "1.16"
 notify = { version = "6.1", features = ["serde"] }
 
-# Logging dependencies
-colored = "2.0"
-hostname = "0.3"
-sysinfo = "0.29"
-once_cell = "1.18"
-humantime-serde = "1.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
+# Logging dependencies moved to ratchet-logging
 
 # Output destination dependencies (optional)
 csv = { version = "1.3", optional = true }

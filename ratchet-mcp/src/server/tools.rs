@@ -11,7 +11,7 @@ use crate::security::SecurityContext;
 use crate::{McpError, McpResult};
 
 // Import Ratchet's execution types
-use ratchet_lib::logging::logger::StructuredLogger;
+use ratchet_interfaces::logging::StructuredLogger;
 
 /// MCP tool definition with execution capability
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -16,9 +16,9 @@ This document outlines the architecture, design principles, and conventions used
 
 ## Overview
 
-Ratchet is a JavaScript task execution framework written in Rust, designed with modularity, type safety, and maintainability as core principles. The architecture follows a **fully modular approach** with clear separation of concerns across **10+ specialized crates**.
+Ratchet is a JavaScript task execution framework written in Rust, designed with modularity, type safety, and maintainability as core principles. The architecture is **transitioning** to a fully modular approach with clear separation of concerns across **15+ specialized crates**.
 
-**🎉 MIGRATION COMPLETE**: Ratchet has successfully migrated from a monolithic `ratchet_lib` architecture to a fully modular crate system with optional dependencies, feature flags, and multiple execution paths while maintaining 100% backward compatibility.
+**🚧 MIGRATION IN PROGRESS**: Ratchet is actively migrating from a monolithic `ratchet_lib` architecture to a fully modular crate system. **Phase 1 (infrastructure extraction) is complete**, while Phase 2 (server component extraction) and Phase 3 (business logic decomposition) are in progress. The system maintains backward compatibility during this transition.
 
 ### Core Components
 
@@ -132,27 +132,55 @@ The following diagram shows the high-level architecture of Ratchet, illustrating
 
 ### Modular Crate Architecture
 
-**✅ COMPLETED MIGRATION**: Ratchet has successfully migrated from a monolithic structure to a fully modular architecture with 11 specialized crates:
+**🚧 MIGRATION STATUS**: Ratchet is transitioning from a monolithic structure to a modular architecture with 15+ specialized crates. Current status by phase:
+
+- **Phase 1** ✅: Infrastructure extraction (config, logging, storage, http, ipc)
+- **Phase 2** 🚧: Server component extraction (REST, GraphQL, server core) 
+- **Phase 3** 📋: Business logic decomposition (services, registry, output)
+- **Phase 4** 📋: Complete ratchet-lib elimination
 
 ```
 ratchet/
-├── ratchet-core/         # Core domain models and types (Task, Execution, etc.)
-├── ratchet-lib/          # Legacy API implementation (REST & GraphQL) - maintained for compatibility
-├── ratchet-caching/      # Caching abstractions and implementations (LRU, TTL, Moka)
-├── ratchet-cli/          # Command-line interface with dual execution paths
-├── ratchet-config/       # Configuration management with domain separation
-├── ratchet-ipc/          # Inter-process communication abstractions
-├── ratchet-mcp/          # Model Context Protocol server for LLM integration
-├── ratchet-plugin/       # Plugin infrastructure and lifecycle management
-├── ratchet-plugins/      # Plugin implementations (logging, metrics, notifications)
-├── ratchet-resilience/   # Resilience patterns (circuit breakers, retry, shutdown)
-├── ratchet-runtime/      # Modern task execution runtime with worker management
-└── ratchet-storage/      # Storage abstraction layer with repository pattern
+├── ratchet-cli/          # Command-line interface (still depends on ratchet-lib)
+├── ratchet-lib/          # Legacy monolith - being decomposed (contains most business logic)
+├── ratchet-core/         # Core domain models and types ✅ (extracted)
+├── ratchet-config/       # Configuration management ✅ (fully migrated)
+├── ratchet-logging/      # Structured logging system ✅ (fully migrated)
+├── ratchet-storage/      # Database layer with SeaORM ✅ (extracted)
+├── ratchet-http/         # HTTP client functionality ✅ (extracted)
+├── ratchet-execution/    # Process-based task execution 🟡 (extracted but not integrated)
+├── ratchet-mcp/          # Model Context Protocol server ✅ (new, comprehensive)
+├── ratchet-caching/      # Cache abstractions 🟡 (extracted but not integrated)
+├── ratchet-resilience/   # Resilience patterns 🟡 (basic implementation)
+├── ratchet-runtime/      # Alternative execution runtime 🔴 (compilation issues)
+├── ratchet-js/           # JavaScript engine 🟡 (overlaps with ratchet-lib)
+├── ratchet-ipc/          # IPC protocols 🟡 (basic implementation)
+├── ratchet-plugin/       # Plugin infrastructure 🔴 (skeleton only)
+└── ratchet-plugins/      # Plugin examples 🔴 (not production ready)
 ```
 
 ### Feature Flag System
 
-The modular architecture is enhanced with a comprehensive feature flag system:
+The modular architecture uses feature flags for optional functionality. Current build status:
+
+✅ **Working Feature Sets:**
+- `default` - Standard build with server, database, MCP, JavaScript, and runtime support ✅ COMPILES  
+- `server` - REST and GraphQL APIs (requires database) ✅ COMPILES
+- `mcp-server` - MCP protocol server with stdio/SSE transports ✅ COMPILES
+- `runtime` - Alternative executor now properly integrated ✅ COMPILES
+- `minimal` - Core functionality only ✅ COMPILES (FIXED)
+- `full` - All features enabled ✅ COMPILES
+- `production` - Production feature set ✅ COMPILES
+- `javascript` - JavaScript execution only ✅ COMPILES (FIXED)
+- `caching,resilience` - Feature combinations ✅ COMPILES
+
+✅ **All Feature Combinations Tested:**
+- Feature flag system now fully functional
+- Cross-feature dependencies resolved
+- Both monolithic and modular builds working
+
+❌ **Known Issues:**
+- Some experimental feature combinations may need additional testing
 
 ```toml
 # Available build profiles in ratchet-cli/Cargo.toml

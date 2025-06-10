@@ -1,0 +1,45 @@
+[package]
+name = "ratchet-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Workspace dependencies - modular API implementations
+ratchet-api-types = { path = "../ratchet-api-types" }
+ratchet-interfaces = { path = "../ratchet-interfaces" }
+ratchet-web = { path = "../ratchet-web" }
+ratchet-rest-api = { path = "../ratchet-rest-api" }
+ratchet-graphql-api = { path = "../ratchet-graphql-api" }
+ratchet-config = { path = "../ratchet-config" }
+ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
+ratchet-logging = { path = "../ratchet-logging" }
+
+# Workspace dependencies - legacy during migration
+ratchet_lib = { path = "../ratchet-lib" }
+
+# External dependencies
+axum = { workspace = true, features = ["tokio", "query"] }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait = { workspace = true }
+clap = { workspace = true }
+serde_yaml = "0.9"
+uuid = { workspace = true }
+chrono = { workspace = true }
+sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-chrono", "with-uuid", "with-json"] }
+async-graphql = { workspace = true, features = ["playground", "apollo_tracing"] }
+async-graphql-axum = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+

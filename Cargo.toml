@@ -1,5 +1,11 @@
 [workspace]
 members = [
+    "ratchet-interfaces", # Core interfaces - NEW for breaking circular deps
+    "ratchet-api-types",  # Unified API types for REST and GraphQL
+    "ratchet-web",        # Reusable web middleware and utilities
+    "ratchet-rest-api",   # REST API implementation with dependency injection
+    "ratchet-graphql-api", # GraphQL API implementation with dependency injection
+    "ratchet-server",     # Unified server combining REST and GraphQL APIs
     "ratchet-core",
     "ratchet-runtime",
     "ratchet-storage", 
@@ -11,9 +17,10 @@ members = [
     "ratchet-http",     # HTTP client functionality
     "ratchet-js",       # JavaScript execution engine
     "ratchet-logging",  # Structured logging infrastructure
+    "ratchet-output",   # Output destination system
     "ratchet-mcp",      # New MCP implementation
     "ratchet-lib",      # Primary API implementation (REST & GraphQL)
-    "ratchet-cli", "ratchet-config", "ratchet-plugin",
+    "ratchet-cli", "ratchet-config", "ratchet-plugin", "ratchet-registry",
 ]
 resolver = "2"
 

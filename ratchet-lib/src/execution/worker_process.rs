@@ -226,8 +226,8 @@ impl WorkerProcess {
 
         // Wait for graceful shutdown with timeout
         if let Some(mut child) = self.child.take() {
-            // Use a shorter timeout and check if process is still alive
-            let shutdown_timeout = Duration::from_millis(500);
+            // Use a reasonable timeout for graceful shutdown
+            let shutdown_timeout = Duration::from_secs(5);
 
             match tokio::time::timeout(shutdown_timeout, child.wait()).await {
                 Ok(Ok(_exit_status)) => {
@@ -376,12 +376,14 @@ pub struct WorkerProcessManager {
     _pending_validations: Arc<Mutex<HashMap<Uuid, oneshot::Sender<TaskValidationResult>>>>,
     _pending_health_checks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<WorkerStatus>>>>,
     message_tx: mpsc::UnboundedSender<WorkerToManagerMessage>,
+    shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl WorkerProcessManager {
     /// Create a new worker process manager
     pub fn new(config: WorkerConfig) -> Self {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let workers = Arc::new(Mutex::new(Vec::new()));
         let pending_tasks = Arc::new(Mutex::new(HashMap::new()));
         let _pending_validations = Arc::new(Mutex::new(HashMap::new()));
@@ -399,6 +401,7 @@ impl WorkerProcessManager {
                 pending_validations_clone,
                 pending_health_checks_clone,
                 message_rx,
+                shutdown_rx,
             )
             .await;
         });
@@ -410,6 +413,7 @@ impl WorkerProcessManager {
             _pending_validations,
             _pending_health_checks,
             message_tx,
+            shutdown_tx: Some(shutdown_tx),
         }
     }
 
@@ -443,6 +447,12 @@ impl WorkerProcessManager {
     pub async fn stop(&mut self) -> Result<(), WorkerProcessError> {
         info!("Stopping all worker processes");
 
+        // Signal message processing task to stop
+        if let Some(shutdown_tx) = self.shutdown_tx.take() {
+            let _ = shutdown_tx.send(());
+            debug!("Sent shutdown signal to message processing task");
+        }
+
         let mut workers = self.workers.lock().await;
         // Stop all workers sequentially but with improved error handling
         for worker in workers.iter_mut() {
@@ -464,8 +474,15 @@ impl WorkerProcessManager {
         pending_validations: Arc<Mutex<HashMap<Uuid, oneshot::Sender<TaskValidationResult>>>>,
         pending_health_checks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<WorkerStatus>>>>,
         mut message_rx: mpsc::UnboundedReceiver<WorkerToManagerMessage>,
+        mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     ) {
-        while let Some(worker_msg) = message_rx.recv().await {
+        loop {
+            tokio::select! {
+                worker_msg = message_rx.recv() => {
+                    let Some(worker_msg) = worker_msg else {
+                        debug!("Worker message channel closed");
+                        break;
+                    };
             debug!(
                 "Processing message from worker {}: {:?}",
                 worker_msg.worker_id, worker_msg.message
@@ -602,6 +619,12 @@ impl WorkerProcessManager {
                 }
                 _ => {
                     // Already handled above
+                }
+            }
+                }
+                _ = &mut shutdown_rx => {
+                    debug!("Worker message processing task received shutdown signal");
+                    break;
                 }
             }
         }

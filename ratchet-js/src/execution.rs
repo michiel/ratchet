@@ -14,49 +14,148 @@ pub async fn call_js_function(
     input_data: &JsonValue,
     http_manager: &impl ratchet_http::HttpClient,
 ) -> Result<JsonValue, JsExecutionError> {
+    call_js_function_with_code(context, script, None, input_data, http_manager).await
+}
+
+/// Internal function to call JavaScript with access to original code for fallback parsing
+async fn call_js_function_with_code(
+    context: &mut BoaContext,
+    script: &Script,
+    js_code: Option<&str>,
+    input_data: &JsonValue,
+    http_manager: &impl ratchet_http::HttpClient,
+) -> Result<JsonValue, JsExecutionError> {
     // Prepare input argument
     let input_arg = prepare_input_argument(context, input_data)?;
 
-    // Execute the script first to define functions
-    script.evaluate(context).map_err(|e| {
+    // Execute the script first
+    let script_result = script.evaluate(context).map_err(|e| {
         let parsed_error = parse_js_error(&e.to_string());
         JsExecutionError::TypedJsError(parsed_error)
     })?;
 
-    // Get the main function from the global context
-    let main_function = context.global_object().get(PropertyKey::from(JsString::from("main")), context).map_err(|e| {
-        JsExecutionError::RuntimeError(format!("Failed to get main function: {}", e))
-    })?;
+    // Try to get the main function from the global context first
+    let main_function_result = context.global_object().get(PropertyKey::from(JsString::from("main")), context);
+    
+    let result = if let Ok(main_fn) = main_function_result {
+        // Check if main function exists and is callable
+        if main_fn.is_callable() {
+            debug!("Using named main function");
+            // Check for HTTP fetch calls
+            if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
+                debug!("Detected HTTP fetch call to: {}", url);
+                let js_result = crate::http_integration::handle_fetch_processing(
+                    context,
+                    &main_fn,
+                    &input_arg,
+                    http_manager,
+                    url,
+                    params,
+                    body,
+                )
+                .await?;
+                convert_js_result_to_json(context, js_result)?
+            } else {
+                // Call the main function normally
+                let result = main_fn
+                    .as_callable()
+                    .ok_or_else(|| JsExecutionError::RuntimeError("main is not a function".to_string()))?
+                    .call(&boa_engine::JsValue::undefined(), &[input_arg], context)
+                    .map_err(|e| {
+                        let parsed_error = parse_js_error(&e.to_string());
+                        JsExecutionError::TypedJsError(parsed_error)
+                    })?;
 
-    // Check for HTTP fetch calls
-    let result = if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
-        debug!("Detected HTTP fetch call to: {}", url);
-        let js_result = crate::http_integration::handle_fetch_processing(
-            context,
-            &main_function,
-            &input_arg,
-            http_manager,
-            url,
-            params,
-            body,
-        )
-        .await?;
-        convert_js_result_to_json(context, js_result)?
+                convert_js_result_to_json(context, result)?
+            }
+        } else {
+            // main exists but is not callable, fall through to anonymous function handling
+            debug!("main exists but is not callable, trying anonymous function handling");
+            handle_anonymous_function(context, script_result, input_arg, js_code)?
+        }
     } else {
-        // Call the main function normally
-        let result = main_function
+        // Failed to get main function or main doesn't exist, try anonymous function handling
+        debug!("Failed to get main function or main doesn't exist, trying anonymous function handling");
+        handle_anonymous_function(context, script_result, input_arg, js_code)?
+    };
+
+    Ok(result)
+}
+
+/// Handle anonymous function execution when no main function is found
+fn handle_anonymous_function(
+    context: &mut BoaContext,
+    script_result: boa_engine::JsValue,
+    input_arg: boa_engine::JsValue,
+    js_code: Option<&str>,
+) -> Result<JsonValue, JsExecutionError> {
+    debug!("Handling anonymous function. Script result type: {:?}, is_callable: {}, is_undefined: {}", 
+           script_result.type_of(), script_result.is_callable(), script_result.is_undefined());
+    
+    if script_result.is_callable() {
+        debug!("Using anonymous function result");
+        // The script itself is a function, call it with input
+        let result = script_result
             .as_callable()
-            .ok_or_else(|| JsExecutionError::RuntimeError("main is not a function".to_string()))?
+            .ok_or_else(|| JsExecutionError::RuntimeError("Script result is not callable".to_string()))?
             .call(&boa_engine::JsValue::undefined(), &[input_arg], context)
             .map_err(|e| {
                 let parsed_error = parse_js_error(&e.to_string());
                 JsExecutionError::TypedJsError(parsed_error)
             })?;
 
-        convert_js_result_to_json(context, result)?
-    };
+        convert_js_result_to_json(context, result)
+    } else if !script_result.is_undefined() && !script_result.is_null() {
+        debug!("Using script result directly as value");
+        convert_js_result_to_json(context, script_result)
+    } else {
+        // The script didn't return a function or value, which means it might be a function expression
+        // that wasn't returned. Let's try to re-execute it as a function expression.
+        debug!("Script returned undefined, trying to handle as function expression");
+        
+        // For function expressions like (function(input) { ... }), we need to wrap them to return the function
+        if let Some(code) = js_code {
+            let wrapped_code = format!("({})", code.trim());
+            
+            // Try to parse and execute the wrapped code
+            let wrapped_source = Source::from_bytes(&wrapped_code);
+            match Script::parse(wrapped_source, None, context) {
+                Ok(wrapped_script) => {
+                    let wrapped_result = wrapped_script.evaluate(context).map_err(|e| {
+                        let parsed_error = parse_js_error(&e.to_string());
+                        JsExecutionError::TypedJsError(parsed_error)
+                    })?;
+                    
+                    if wrapped_result.is_callable() {
+                        debug!("Successfully extracted function from expression");
+                        let result = wrapped_result
+                            .as_callable()
+                            .ok_or_else(|| JsExecutionError::RuntimeError("Wrapped result is not callable".to_string()))?
+                            .call(&boa_engine::JsValue::undefined(), &[input_arg], context)
+                            .map_err(|e| {
+                                let parsed_error = parse_js_error(&e.to_string());
+                                JsExecutionError::TypedJsError(parsed_error)
+                            })?;
 
-    Ok(result)
+                        convert_js_result_to_json(context, result)
+                    } else {
+                        Err(JsExecutionError::RuntimeError(
+                            "Wrapped script does not return a callable function".to_string()
+                        ))
+                    }
+                }
+                Err(_) => {
+                    Err(JsExecutionError::RuntimeError(
+                        "No main function found and script does not return a callable function or value. For anonymous functions, use format: (function(input) { ... }) or define a function main(input) { ... }".to_string()
+                    ))
+                }
+            }
+        } else {
+            Err(JsExecutionError::RuntimeError(
+                "No main function found and script does not return a callable function or value".to_string()
+            ))
+        }
+    }
 }
 
 /// Call a JavaScript function with input data and execution context
@@ -205,7 +304,7 @@ pub async fn execute_js_with_content(
     let result = if let Some(exec_ctx) = execution_context {
         call_js_function_with_context(&mut context, &script, &input_data, http_manager, exec_ctx).await?
     } else {
-        call_js_function(&mut context, &script, &input_data, http_manager).await?
+        call_js_function_with_code(&mut context, &script, Some(js_code), &input_data, http_manager).await?
     };
 
     // Validate output against schema if provided

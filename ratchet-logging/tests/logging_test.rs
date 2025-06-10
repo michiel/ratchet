@@ -1,10 +1,9 @@
-use ratchet_lib::errors::RatchetError;
-use ratchet_lib::logging::{
+use ratchet_logging::{
     enrichment::{ProcessEnricher, SystemEnricher},
     init_logger, logger,
     logger::LogSink,
     sinks::{ConsoleSink, FileSink},
-    LogContext, LogEvent, LogLevel, LoggerBuilder,
+    LogContext, LogEvent, LogLevel, LoggerBuilder, ErrorInfo, ErrorSeverity,
 };
 use std::sync::Arc;
 use tempfile::tempdir;
@@ -47,13 +46,17 @@ fn test_error_logging() {
         .add_enricher(Box::new(ProcessEnricher::new()))
         .build();
 
-    // Test error conversion to log event
-    let error = RatchetError::TaskNotFound("test-task".to_string());
-    let context = LogContext::new()
+    // Test direct error info creation and logging
+    let error_info = ErrorInfo::new(
+        "TaskNotFound",
+        "TASK_NOT_FOUND", 
+        "Task 'test-task' not found"
+    ).with_context_value("task_name", "test-task");
+    
+    let log_event = LogEvent::new(LogLevel::Error, "Task not found")
+        .with_error(error_info)
         .with_field("request_id", "req-123")
         .with_field("task_name", "test-task");
-
-    let log_event = error.to_log_event(&context);
     logger.log(log_event);
 
     // Flush the logger
@@ -99,14 +102,13 @@ fn test_context_propagation() {
 
 #[test]
 fn test_structured_error_info() {
-    use ratchet_lib::logging::ErrorInfo;
 
     let error_info = ErrorInfo::new(
         "DatabaseError",
         "DB_CONN_TIMEOUT",
         "Connection to database timed out",
     )
-    .with_severity(ratchet_lib::logging::ErrorSeverity::High)
+    .with_severity(ErrorSeverity::High)
     .with_retryable(true)
     .with_context_value("database", "postgres://localhost:5432/ratchet")
     .with_context_value("timeout_ms", 5000)

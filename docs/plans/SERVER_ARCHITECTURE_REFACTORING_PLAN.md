@@ -1,5 +1,7 @@
 # Server Architecture Refactoring Plan
 
+> **Status**: This plan was created during the architecture migration process. The core issues identified have since been resolved through infrastructure extraction and the current architecture is the intended target state. See [ARCHITECTURE_MIGRATION_ANALYSIS.md](../ARCHITECTURE_MIGRATION_ANALYSIS.md) for the final architecture.
+
 ## Executive Summary
 
 This document outlines a comprehensive plan to refactor the Ratchet server architecture, breaking down the monolithic `ratchet-lib` server components into focused, reusable crates. This refactoring builds on successful extractions of HTTP, logging, JavaScript execution, and task consolidation components.

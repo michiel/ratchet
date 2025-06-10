@@ -8,6 +8,7 @@ pub mod error_handling;
 pub mod execution;
 pub mod http_integration;
 pub mod js_task;
+pub mod task_loader;
 pub mod types;
 
 #[cfg(feature = "http")]
@@ -18,6 +19,7 @@ pub use conversion::{convert_js_result_to_json, prepare_input_argument};
 pub use error_handling::{parse_js_error, register_error_types};
 pub use execution::{execute_js_file, execute_js_with_content};
 pub use js_task::JsTaskRunner;
+pub use task_loader::{FileSystemTask, TaskLoadError, load_and_execute_task};
 pub use types::{ExecutionContext, JsTask};
 
 #[cfg(feature = "http")]

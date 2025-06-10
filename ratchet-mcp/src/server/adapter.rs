@@ -7,8 +7,9 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ratchet_execution::{ExecutionError, ProcessTaskExecutor, TaskExecutionResult};
-use ratchet_lib::logging::event::{LogEvent, LogLevel};
+use ratchet_execution::{ExecutionError, ProcessTaskExecutor, TaskExecutionResult, ExecutionBridge};
+use ratchet_interfaces::execution::TaskExecutor as InterfaceTaskExecutor;
+use ratchet_interfaces::logging::{LogEvent, LogLevel};
 use ratchet_runtime::executor::TaskExecutor;
 use ratchet_storage::seaorm::entities::ExecutionStatus;
 use ratchet_storage::seaorm::repositories::{
@@ -20,8 +21,10 @@ use super::tools::{McpExecutionStatus, McpTaskExecutor, McpTaskInfo};
 
 /// Executor type that can handle both execution engines
 pub enum ExecutorType {
-    /// Process executor from ratchet-execution
+    /// Process executor from ratchet-execution (legacy)
     Process(Arc<ProcessTaskExecutor>),
+    /// Bridge executor from ratchet-execution (new modular approach)
+    Bridge(Arc<ExecutionBridge>),
     /// New modular task executor from ratchet-runtime
     Runtime(Arc<dyn TaskExecutor>),
 }
@@ -38,6 +41,42 @@ impl ExecutorType {
         match self {
             ExecutorType::Process(executor) => {
                 executor.execute_task_direct(task_id, task_path, input_data, context).await
+            }
+            ExecutorType::Bridge(executor) => {
+                // Use the bridge's execute_task method with interface-style parameters
+                use ratchet_interfaces::execution::ExecutionContext;
+                use std::time::Duration;
+                
+                // Convert task_id to string and create execution context if provided
+                let task_id_str = task_id.to_string();
+                let exec_context = context.map(|_| {
+                    ExecutionContext::new()
+                        .with_timeout(Duration::from_secs(300))
+                });
+                
+                // Execute using the bridge interface
+                match executor.execute_task(&task_id_str, input_data, exec_context).await {
+                    Ok(result) => {
+                        // Convert interface ExecutionResult back to TaskExecutionResult
+                        use chrono::Utc;
+                        let now = Utc::now();
+                        let started_at = now - chrono::Duration::milliseconds(result.execution_time_ms as i64);
+                        
+                        Ok(TaskExecutionResult {
+                            success: result.status.is_success(),
+                            output: Some(result.output),
+                            error_message: match result.status {
+                                ratchet_interfaces::execution::ExecutionStatus::Failed { error_message } => Some(error_message),
+                                _ => None,
+                            },
+                            error_details: result.trace,
+                            started_at,
+                            completed_at: now,
+                            duration_ms: result.execution_time_ms as i32,
+                        })
+                    }
+                    Err(e) => Err(e),
+                }
             }
             ExecutorType::Runtime(_executor) => {
                 // For runtime executor, we need to implement this
@@ -66,7 +105,7 @@ pub struct RatchetMcpAdapter {
 }
 
 impl RatchetMcpAdapter {
-    /// Create a new adapter with ProcessTaskExecutor from ratchet-execution
+    /// Create a new adapter with ProcessTaskExecutor from ratchet-execution (legacy)
     pub fn new(
         executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
@@ -74,6 +113,20 @@ impl RatchetMcpAdapter {
     ) -> Self {
         Self {
             executor: ExecutorType::Process(executor),
+            task_repository,
+            execution_repository,
+            log_file_path: None,
+        }
+    }
+
+    /// Create a new adapter with ExecutionBridge (recommended for new implementations)
+    pub fn with_bridge_executor(
+        executor: Arc<ExecutionBridge>,
+        task_repository: Arc<TaskRepository>,
+        execution_repository: Arc<ExecutionRepository>,
+    ) -> Self {
+        Self {
+            executor: ExecutorType::Bridge(executor),
             task_repository,
             execution_repository,
             log_file_path: None,
@@ -94,7 +147,7 @@ impl RatchetMcpAdapter {
         }
     }
 
-    /// Create a new adapter with log file path for log retrieval
+    /// Create a new adapter with log file path for log retrieval (legacy)
     pub fn with_log_file(
         executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
@@ -103,6 +156,21 @@ impl RatchetMcpAdapter {
     ) -> Self {
         Self {
             executor: ExecutorType::Process(executor),
+            task_repository,
+            execution_repository,
+            log_file_path: Some(log_file_path),
+        }
+    }
+
+    /// Create a new adapter with ExecutionBridge and log file path for log retrieval
+    pub fn with_bridge_executor_and_log_file(
+        executor: Arc<ExecutionBridge>,
+        task_repository: Arc<TaskRepository>,
+        execution_repository: Arc<ExecutionRepository>,
+        log_file_path: PathBuf,
+    ) -> Self {
+        Self {
+            executor: ExecutorType::Bridge(executor),
             task_repository,
             execution_repository,
             log_file_path: Some(log_file_path),
@@ -519,7 +587,7 @@ impl RatchetMcpAdapter {
 
 /// Builder for creating the MCP adapter with all required components
 pub struct RatchetMcpAdapterBuilder {
-    executor: Option<Arc<ProcessTaskExecutor>>,
+    executor: Option<ExecutorType>,
     task_repository: Option<Arc<TaskRepository>>,
     execution_repository: Option<Arc<ExecutionRepository>>,
 }
@@ -534,9 +602,15 @@ impl RatchetMcpAdapterBuilder {
         }
     }
 
-    /// Set the process task executor
+    /// Set the process task executor (legacy)
     pub fn with_executor(mut self, executor: Arc<ProcessTaskExecutor>) -> Self {
-        self.executor = Some(executor);
+        self.executor = Some(ExecutorType::Process(executor));
+        self
+    }
+
+    /// Set the execution bridge executor (recommended)
+    pub fn with_bridge_executor(mut self, executor: Arc<ExecutionBridge>) -> Self {
+        self.executor = Some(ExecutorType::Bridge(executor));
         self
     }
 
@@ -560,7 +634,12 @@ impl RatchetMcpAdapterBuilder {
             .execution_repository
             .ok_or("Execution repository is required")?;
 
-        Ok(RatchetMcpAdapter::new(executor, task_repo, exec_repo))
+        Ok(RatchetMcpAdapter {
+            executor,
+            task_repository: task_repo,
+            execution_repository: exec_repo,
+            log_file_path: None,
+        })
     }
 }
 

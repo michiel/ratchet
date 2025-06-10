@@ -1,5 +1,9 @@
 pub mod api;
+// Re-export ratchet-api-types for backward compatibility
+pub use ratchet_api_types;
 pub mod config;
+#[cfg(feature = "database")]
+#[deprecated(since = "0.1.0", note = "Database functionality has been moved to ratchet-storage. Use ratchet-storage crate instead.")]
 pub mod database;
 pub mod errors;
 pub mod execution;
@@ -11,8 +15,20 @@ pub mod js_task;
 // Logging functionality moved to ratchet-logging crate
 pub mod logging {
     pub use ratchet_logging::*;
+    
+    // Re-export logging interfaces for backward compatibility
+    pub mod event {
+        pub use ratchet_interfaces::logging::{LogEvent, LogLevel};
+    }
+    
+    pub mod logger {
+        pub use ratchet_interfaces::logging::StructuredLogger;
+    }
 }
-pub mod output;
+// Output functionality moved to ratchet-output crate
+pub mod output {
+    pub use ratchet_output::*;
+}
 // Recording functionality moved to ratchet-http crate
 #[cfg(feature = "default")]
 pub mod recording {

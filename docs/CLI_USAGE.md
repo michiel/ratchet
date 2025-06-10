@@ -1,18 +1,25 @@
 # Ratchet CLI Usage Guide
 
-Ratchet provides multiple server modes for different use cases:
+Ratchet provides a comprehensive command-line interface for task execution, server management, and configuration:
+
+## Command Overview
 
 - **`ratchet serve`** - Full HTTP/GraphQL API server for web applications
-- **`ratchet mcp-serve`** - MCP (Model Context Protocol) server for LLM integration
+- **`ratchet mcp-serve`** - MCP (Model Context Protocol) server for LLM integration  
 - **`ratchet run-once`** - Execute single tasks without a server
+- **`ratchet validate`** - Validate task structure and schemas
+- **`ratchet test`** - Run task test suites
+- **`ratchet replay`** - Replay recorded task executions
+- **`ratchet generate`** - Generate code templates
+- **`ratchet config`** - Configuration management utilities
 
-## Server Commands Overview
+## Server Commands
 
 ### Regular Server (`ratchet serve`)
-Full-featured server with HTTP REST API, GraphQL API, and WebSocket support.
+Full-featured server with HTTP REST API, GraphQL API, and job queue management.
 
 ### MCP Server (`ratchet mcp-serve`)
-Specialized server for AI/LLM integration using the Model Context Protocol.
+Specialized server for AI/LLM integration using the Model Context Protocol. By default, uses stdio transport for tool integration.
 
 ### Task Runner (`ratchet run-once`)
 Direct task execution without starting a persistent server.
@@ -203,15 +210,14 @@ The MCP (Model Context Protocol) server is designed for AI/LLM integration, part
 
 ### Basic Usage
 ```bash
-# Start MCP server with stdio transport (for Claude Desktop)
+# Start MCP server (always uses stdio transport for Claude Desktop)
 ratchet mcp-serve
 
 # With custom configuration
 ratchet mcp-serve --config config.yaml
-
-# With specific transport and port
-ratchet mcp-serve --transport sse --host 0.0.0.0 --port 8090
 ```
+
+**Note:** The `mcp-serve` command automatically forces stdio transport mode and uses file-only logging to keep stdin/stdout clean for JSON-RPC communication. Transport arguments are accepted but ignored.
 
 ### Command Line Options
 | Option | Description | Default |
@@ -221,44 +227,55 @@ ratchet mcp-serve --transport sse --host 0.0.0.0 --port 8090
 | `--host HOST` | Host to bind (SSE transport) | `127.0.0.1` |
 | `--port PORT` | Port to bind (SSE transport) | `8090` |
 
-### Transport Types
+### Claude Desktop Configuration
 
-#### STDIO Transport (Recommended for Claude)
-Direct process communication - ideal for desktop AI applications:
+To use Ratchet with Claude Desktop, add this to your Claude Desktop configuration:
 
-```bash
-ratchet mcp-serve --transport stdio
-```
-
-**Claude Desktop Configuration:**
 ```json
 {
   "mcpServers": {
     "ratchet": {
       "command": "ratchet",
+      "args": ["mcp-serve"]
+    }
+  }
+}
+```
+
+Or with a custom configuration file:
+
+```json
+{
+  "mcpServers": {
+    "ratchet": {
+      "command": "ratchet", 
       "args": ["mcp-serve", "--config", "/path/to/config.yaml"]
     }
   }
 }
 ```
 
-#### SSE Transport (Future Web Integration)
-HTTP Server-Sent Events for web applications:
-
-```bash
-ratchet mcp-serve --transport sse --host 0.0.0.0 --port 8090
-```
-
 ### Available MCP Tools
 
-When connected, LLMs can use these tools:
+✅ **MCP Integration Verified** - 17 tools available and fully functional:
 
-1. **`ratchet.execute_task`** - Execute a Ratchet task
-2. **`ratchet.list_available_tasks`** - Discover available tasks
-3. **`ratchet.get_execution_status`** - Monitor task execution
+1. **`ratchet.execute_task`** - Execute a Ratchet task with progress streaming
+2. **`ratchet.list_available_tasks`** - Discover available tasks with schemas  
+3. **`ratchet.get_execution_status`** - Monitor task execution status
 4. **`ratchet.get_execution_logs`** - Retrieve execution logs
-5. **`ratchet.get_execution_trace`** - Get detailed traces
+5. **`ratchet.get_execution_trace`** - Get detailed execution traces
 6. **`ratchet.analyze_execution_error`** - AI-powered error analysis
+7. **`ratchet.create_task`** - Create new tasks with code and schemas
+8. **`ratchet.edit_task`** - Edit existing task code and metadata
+9. **`ratchet.validate_task`** - Validate task code and schemas
+10. **`ratchet.run_task_tests`** - Execute test cases for tasks
+11. **`ratchet.debug_task_execution`** - Debug with breakpoints and inspection
+12. **`ratchet.batch_execute`** - Execute multiple tasks with dependencies
+13. **`ratchet.generate_from_template`** - Generate tasks from templates
+14. **`ratchet.list_templates`** - List available task templates
+15. **`ratchet.import_tasks`** - Import tasks from JSON/other formats
+16. **`ratchet.export_tasks`** - Export tasks to JSON/other formats  
+17. **`ratchet.create_task_version`** - Version existing tasks
 
 ### Example MCP Session
 
@@ -344,6 +361,47 @@ ratchet test --from-fs ./my-task
 ```bash
 # Generate a new task template
 ratchet generate task --path ./new-task --label "My Task" --description "Task description"
+```
+
+### Configuration Management
+
+#### Validate Configuration
+```bash
+# Validate a configuration file
+ratchet config validate --config-file ./config.yaml
+```
+
+#### Generate Configuration Templates
+```bash
+# Generate development configuration
+ratchet config generate --config-type dev --output ./dev-config.yaml
+
+# Generate production configuration  
+ratchet config generate --config-type production --output ./prod-config.yaml
+
+# Available types: dev, production, enterprise, minimal, claude
+# Use --force to overwrite existing files
+```
+
+#### Show Current Configuration
+```bash
+# Show full configuration (with defaults applied)
+ratchet config show
+
+# Show configuration from specific file
+ratchet config show --config-file ./my-config.yaml
+
+# Show only MCP configuration
+ratchet config show --mcp-only
+
+# Output in JSON format
+ratchet config show --format json
+```
+
+### Replay Task Executions
+```bash
+# Replay a previously recorded execution
+ratchet replay --from-fs ./my-task --recording ./debug-output/session_20240115_143022
 ```
 
 ## Configuration Integration

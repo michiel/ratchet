@@ -1,0 +1,31 @@
+[package]
+name = "ratchet-api-types"
+version.workspace = true
+edition.workspace = true
+
+authors.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Unified API types for Ratchet REST and GraphQL APIs"
+
+[dependencies]
+# Core serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# ID handling
+uuid.workspace = true
+
+# Date/time handling
+chrono.workspace = true
+
+# GraphQL support (optional for lighter builds)
+async-graphql = { workspace = true, optional = true }
+
+# Error handling
+thiserror.workspace = true
+
+[features]
+default = ["graphql"]
+graphql = ["async-graphql"]

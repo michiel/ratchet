@@ -9,12 +9,16 @@ pub mod executor;
 pub mod ipc;
 pub mod process;
 pub mod worker;
+pub mod bridge;
 
 // Re-export main types
 pub use error::{ExecutionError, ExecutionResult};
 pub use executor::{LocalExecutionContext, TaskExecutor};
 pub use process::{ProcessTaskExecutor, ProcessExecutorConfig};
 pub use worker::{WorkerConfig, WorkerProcess, WorkerProcessManager, WorkerProcessStatus};
+
+// Re-export bridge types for interface compatibility
+pub use bridge::{ExecutionBridge, ExecutionConfigAdapter};
 
 // Re-export IPC types for backward compatibility
 pub use ipc::{

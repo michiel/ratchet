@@ -23,7 +23,7 @@ impl TaskSyncService {
         }
     }
 
-    /// Synchronize a task from registry to database
+    /// Synchronize a task from registry to database (ratchet-lib Task)
     /// This is called when a task is loaded into the registry
     pub async fn sync_task_to_db(&self, task: &Task) -> Result<()> {
         let task_uuid = task.metadata.uuid;
@@ -58,6 +58,41 @@ impl TaskSyncService {
         }
     }
 
+    /// Synchronize a task definition from registry to database
+    /// This is called when working with registry TaskDefinition
+    pub async fn sync_task_definition_to_db(&self, task_def: &ratchet_registry::TaskDefinition) -> Result<()> {
+        let task_uuid = task_def.metadata.uuid;
+        let version = &task_def.metadata.version;
+
+        // Check if this exact version already exists in database
+        if let Ok(Some(existing)) = self.task_repo.find_by_uuid(task_uuid).await {
+            if existing.version == *version {
+                info!(
+                    "Task {} version {} already exists in database",
+                    task_uuid, version
+                );
+                return Ok(());
+            }
+        }
+
+        // Create task entity from registry definition
+        let task_entity = TaskEntity::from_task_definition(task_def);
+
+        match self.task_repo.create(task_entity).await {
+            Ok(_) => {
+                info!(
+                    "Synchronized task {} version {} to database",
+                    task_uuid, version
+                );
+                Ok(())
+            }
+            Err(e) => {
+                warn!("Failed to sync task {} to database: {}", task_uuid, e);
+                Err(crate::errors::RatchetError::Database(e.to_string()))
+            }
+        }
+    }
+
     /// Synchronize all tasks from registry to database
     pub async fn sync_all_registry_tasks(&self) -> Result<()> {
         info!("Starting registry to database synchronization");
@@ -67,7 +102,7 @@ impl TaskSyncService {
         let mut failed = 0;
 
         for task in tasks {
-            match self.sync_task_to_db(&task).await {
+            match self.sync_task_definition_to_db(&task).await {
                 Ok(_) => synced += 1,
                 Err(e) => {
                     error!("Failed to sync task: {}", e);
@@ -111,9 +146,9 @@ impl TaskSyncService {
                 // Core data from registry
                 id: db_task.map(|t| t.id),
                 uuid: task_uuid,
-                version: registry_task.metadata.core.version.clone(),
-                label: registry_task.metadata.label.clone(),
-                description: registry_task.metadata.core.description.clone().unwrap_or_default(),
+                version: registry_task.metadata.version.clone(),
+                label: registry_task.metadata.name.clone(),
+                description: registry_task.metadata.description.clone().unwrap_or_default(),
 
                 // Registry info
                 available_versions: self.registry.list_versions(task_uuid).await?,
@@ -147,9 +182,9 @@ impl TaskSyncService {
             let unified = UnifiedTask {
                 id: db_task.as_ref().map(|t| t.id),
                 uuid: registry_task.metadata.uuid,
-                version: registry_task.metadata.core.version.clone(),
-                label: registry_task.metadata.label.clone(),
-                description: registry_task.metadata.core.description.clone().unwrap_or_default(),
+                version: registry_task.metadata.version.clone(),
+                label: registry_task.metadata.name.clone(),
+                description: registry_task.metadata.description.clone().unwrap_or_default(),
 
                 available_versions: self.registry.list_versions(uuid).await?,
                 registry_source: true,

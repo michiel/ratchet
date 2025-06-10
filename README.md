@@ -4,7 +4,7 @@
 
 Ratchet is a high-performance, scalable task execution platform that runs JavaScript code with enterprise-grade reliability. Built with Rust for performance and safety, it provides comprehensive APIs, persistent storage, and advanced execution capabilities.
 
-[![Tests](https://img.shields.io/badge/tests-116%20passing-brightgreen)](.) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Status](https://img.shields.io/badge/status-production--ready-green)]()
+[![Tests](https://img.shields.io/badge/tests-486%20passing-brightgreen)](.) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Status](https://img.shields.io/badge/status-production--ready-green)]()
 
 ## 🎯 Key Features by Category
 
@@ -104,19 +104,34 @@ ratchet run-once --from-fs sample/js-tasks/weather-api \
 
 ## 📁 Project Structure
 
+Ratchet is migrating to a fully modular architecture. **Phase 1** (infrastructure extraction) is complete, **Phase 2** (server component extraction) is next:
+
 ```
 ratchet/
 ├── ratchet-cli/          # Command-line interface
-├── ratchet-lib/          # Core library
-│   ├── database/         # Persistence layer (entities, migrations, repositories)
-│   ├── execution/        # Task execution engine (workers, queue, scheduler)
-│   ├── graphql/          # GraphQL API (schema, resolvers)
-│   ├── rest/             # REST API (handlers, middleware)
-│   ├── registry/         # Task registry and management
-│   └── services/         # Business logic layer
+├── ratchet-lib/          # 🎯 Monolith targeted for decomposition
+│   ├── rest/             # → ratchet-rest (Phase 2)
+│   ├── graphql/          # → ratchet-graphql (Phase 2)
+│   ├── server/           # → ratchet-server-core (Phase 2)
+│   └── services/         # → ratchet-services (Phase 3)
+├── ratchet-mcp/          # Model Context Protocol server for LLM integration
+├── ratchet-execution/    # ✅ Process execution infrastructure (extracted)
+├── ratchet-storage/      # ✅ Database layer with repositories (extracted)
+├── ratchet-core/         # ✅ Domain types and models
+├── ratchet-http/         # ✅ HTTP client with mocking (extracted)
+├── ratchet-logging/      # ✅ Structured logging system (extracted)
+├── ratchet-js/           # ✅ JavaScript execution engine (extracted)
+├── ratchet-config/       # ✅ Configuration management (extracted)
+├── ratchet-caching/      # ✅ Caching abstractions
+├── ratchet-resilience/   # ✅ Circuit breakers, retry logic
+├── ratchet-runtime/      # ✅ Alternative task execution patterns
+├── ratchet-ipc/          # ✅ Inter-process communication
+├── ratchet-plugin/       # ✅ Plugin infrastructure
 ├── sample/               # Example tasks and configurations
 └── docs/                 # Documentation and API specs
 ```
+
+**Goal**: Complete decomposition of ratchet-lib into focused, single-responsibility crates.
 
 ## 🔧 Task Structure
 
@@ -442,16 +457,16 @@ http:
 
 See [TODO.md](TODO.md) for the comprehensive architectural roadmap including:
 
-1. **Phase 1**: Security & Authentication (JWT, RBAC)
-2. **Phase 2**: Distributed Architecture (Redis queue, multi-node)
-3. **Phase 3**: Observability (Prometheus, OpenTelemetry)
-4. **Phase 4**: Developer Experience (SDKs, tooling)
-5. **Phase 5**: Advanced Features (workflows, multi-tenancy)
+1. **Phase 1 ✅**: Infrastructure Extraction (HTTP, logging, JS, execution, config)
+2. **Phase 2 🎯**: Server Component Extraction (REST, GraphQL, server core)
+3. **Phase 3 📋**: Business Logic Decomposition (services, output, registry)
+4. **Phase 4 📋**: Complete ratchet-lib Elimination
+5. **Future**: Advanced Features (security, distributed arch, observability)
 
 ## 🧪 Testing
 
 ```bash
-# Run all tests (currently 116 passing)
+# Run all tests (currently 486 passing)
 cargo test
 
 # Run with coverage

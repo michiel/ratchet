@@ -1,0 +1,21 @@
+[package]
+name = "ratchet-interfaces"
+version = "0.3.0"
+edition = "2021"
+description = "Core interfaces and traits for Ratchet modular architecture"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/your-org/ratchet"
+
+[dependencies]
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Import ratchet-api-types for unified types
+ratchet-api-types = { path = "../ratchet-api-types" }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }

@@ -103,4 +103,32 @@ impl Model {
             validated_at: None,
         }
     }
+
+    /// Create a new task from registry TaskDefinition
+    pub fn from_task_definition(task_def: &ratchet_registry::TaskDefinition) -> Self {
+        Self {
+            id: 0, // Will be set by database
+            uuid: task_def.metadata.uuid,
+            name: task_def.metadata.name.clone(),
+            description: task_def.metadata.description.clone(),
+            version: task_def.metadata.version.clone(),
+            path: task_def.reference.source.clone(),
+            metadata: serde_json::json!({
+                "uuid": task_def.metadata.uuid,
+                "version": task_def.metadata.version,
+                "name": task_def.metadata.name,
+                "description": task_def.metadata.description,
+                "tags": task_def.metadata.tags,
+                "created_at": task_def.metadata.created_at,
+                "updated_at": task_def.metadata.updated_at,
+                "checksum": task_def.metadata.checksum,
+            }),
+            input_schema: task_def.input_schema.clone().unwrap_or(serde_json::json!({})),
+            output_schema: task_def.output_schema.clone().unwrap_or(serde_json::json!({})),
+            enabled: true,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            validated_at: None,
+        }
+    }
 }

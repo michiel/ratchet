@@ -134,6 +134,9 @@ pub enum RatchetError {
     #[error("Load error: {0}")]
     LoadError(String),
 
+    #[error("Registry error: {0}")]
+    Registry(#[from] ratchet_registry::RegistryError),
+
     #[error("Other error: {0}")]
     Other(String),
 }
@@ -178,6 +181,7 @@ impl RatchetError {
             Self::Validation(_) => "ValidationError",
             Self::WatcherError(_) => "WatcherError",
             Self::LoadError(_) => "LoadError",
+            Self::Registry(_) => "RegistryError",
             Self::Other(_) => "Other",
         }
         .to_string()
@@ -203,6 +207,7 @@ impl RatchetError {
             Self::Validation(_) => "VALIDATION_ERROR",
             Self::WatcherError(_) => "WATCHER_ERROR",
             Self::LoadError(_) => "LOAD_ERROR",
+            Self::Registry(_) => "REGISTRY_ERROR",
             Self::Other(_) => "OTHER_ERROR",
         }
         .to_string()
@@ -219,6 +224,7 @@ impl RatchetError {
             Self::Validation(_) => ErrorSeverity::Medium,
             Self::WatcherError(_) => ErrorSeverity::Medium,
             Self::LoadError(_) => ErrorSeverity::High,
+            Self::Registry(_) => ErrorSeverity::Medium,
             Self::Other(_) => ErrorSeverity::Medium,
         }
     }
@@ -227,6 +233,7 @@ impl RatchetError {
         match self {
             Self::Io(_) => true,
             Self::Database(_) => true,
+            Self::Registry(_) => true,
             Self::JsExecution(e) => matches!(
                 e,
                 JsExecutionError::TypedJsError(JsErrorType::NetworkError(_))

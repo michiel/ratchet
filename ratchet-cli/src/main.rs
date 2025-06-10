@@ -9,6 +9,7 @@ use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
 use ratchet_execution::{
     CoordinatorMessage, MessageEnvelope, ProcessExecutorConfig, ProcessTaskExecutor,
     TaskExecutionResult, TaskValidationResult, WorkerMessage, WorkerStatus,
+    ExecutionBridge,
 };
 
 use ratchet_lib::{http::{HttpConfig, HttpManager}, js_executor::execute_task, recording, task::Task};
@@ -25,6 +26,12 @@ use uuid::Uuid;
 
 #[cfg(feature = "core")]
 use ratchet_core::task::Task as CoreTask;
+
+#[cfg(feature = "runtime")]
+use ratchet_runtime::InMemoryTaskExecutor;
+
+#[cfg(feature = "javascript")]
+use ratchet_js::{FileSystemTask, load_and_execute_task, JsTaskRunner};
 
 mod cli;
 use cli::{Cli, Commands, ConfigCommands, GenerateCommands};
@@ -122,6 +129,49 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
     })
 }
 
+/// Setup file-only logging for MCP serve command (legacy function)
+#[cfg(feature = "mcp-server")]
+#[allow(dead_code)]
+fn setup_mcp_file_logging(config: &RatchetConfig) -> Result<()> {
+    use ratchet_config::domains::logging::{LoggingConfig, LogTarget, LogLevel};
+    
+    // Default to ratchet.log if no file logging configured
+    let log_file_path = config.logging
+        .targets.iter().find_map(|target| {
+            if let LogTarget::File { path, .. } = target {
+                Some(path.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "ratchet.log".to_string());
+
+    // Create file-only logging config
+    let file_logging = LoggingConfig {
+        level: LogLevel::Info,
+        format: ratchet_config::domains::logging::LogFormat::Text,
+        targets: vec![LogTarget::File {
+            path: log_file_path,
+            level: Some(LogLevel::Info),
+            max_size_bytes: 10 * 1024 * 1024, // 10MB
+            max_files: 5,
+        }],
+        include_location: false,
+        structured: true,
+    };
+    
+    // Convert to legacy config and initialize
+    let legacy_config = convert_to_legacy_config(RatchetConfig {
+        logging: file_logging,
+        ..config.clone()
+    })?;
+    
+    // Initialize the logging system
+    init_logging_with_config(&legacy_config, Some(&"info".to_string()), None)?;
+        
+    Ok(())
+}
+
 /// Load configuration from file or use defaults
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     let loader = ConfigLoader::new();
@@ -149,8 +199,9 @@ fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     }
 }
 
-/// Start the Ratchet server
+/// Start the Ratchet server (legacy wrapper function)
 #[cfg(feature = "server")]
+#[allow(dead_code)]
 async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
     let mut config = load_config(config_path)?;
     
@@ -164,8 +215,8 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
         }
     }
     
-    let lib_config = convert_to_legacy_config(config)?;
-    serve_command_with_config(lib_config).await
+    let lib_config = convert_to_legacy_config(config.clone())?;
+    serve_command_with_config(lib_config, config).await
 }
 
 #[cfg(not(feature = "server"))]
@@ -176,7 +227,35 @@ async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
 }
 
 #[cfg(feature = "server")]
-async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
+async fn serve_command_with_config(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
+    // Try to use new ratchet-server architecture first, fall back to legacy if needed
+    if let Ok(()) = serve_with_ratchet_server(new_config.clone()).await {
+        return Ok(());
+    }
+    
+    warn!("Falling back to legacy server implementation");
+    serve_with_legacy_server(config, new_config).await
+}
+
+#[cfg(feature = "server")]
+async fn serve_with_ratchet_server(config: RatchetConfig) -> Result<()> {
+    use ratchet_server::{ServerConfig, Server};
+    use std::sync::Arc;
+    
+    info!("🚀 Starting Ratchet server with new modular architecture");
+    
+    // Convert new config to server config
+    let server_config = ServerConfig::from_ratchet_config(config)?;
+    
+    // Create and start the server
+    let server = Server::new(server_config).await?;
+    server.start().await?;
+    
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
     use ratchet_lib::{
         execution::JobQueueManager,
         server::create_app,
@@ -239,7 +318,7 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
         legacy_repositories.clone(),
     ));
 
-    // Initialize process task executor
+    // Initialize process task executor and bridge
     info!("⚙️  Initializing task executor...");
     
     // Create executor config from the legacy config
@@ -250,11 +329,13 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
         max_restart_attempts: 3,
     };
     
-    let task_executor = Arc::new(ProcessTaskExecutor::new(executor_config));
+    // Create both ProcessTaskExecutor (for backward compatibility) and ExecutionBridge (for new features)
+    let process_executor = Arc::new(ProcessTaskExecutor::new(executor_config.clone()));
+    let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
 
-    // Start worker processes
+    // Start worker processes on the process executor
     info!("👷 Starting worker processes...");
-    task_executor
+    process_executor
         .start()
         .await
         .context("Failed to start worker processes")?;
@@ -263,37 +344,72 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     // Note: MCP service is now integrated as routes rather than a separate service
 
     // Check if MCP is enabled for logging
-    let mcp_enabled = config.mcp.as_ref().map_or(false, |mcp| mcp.enabled);
+    let mcp_enabled = new_config.mcp.as_ref().map_or(false, |mcp| mcp.enabled);
     
     // Create MCP routes if MCP service is enabled
-    let mcp_routes = if let Some(mcp_config) = &config.mcp {
+    let mcp_routes = if let Some(mcp_config) = &new_config.mcp {
         if mcp_config.enabled {
             #[cfg(feature = "mcp-server")]
             {
                 use ratchet_mcp::server::adapter::RatchetMcpAdapter;
                 use ratchet_mcp::server::McpServer;
+                use ratchet_mcp::server::tools::RatchetToolRegistry;
+                use ratchet_mcp::security::{McpAuth, McpAuthManager, AuditLogger};
+                use ratchet_mcp::server::config::McpServerConfig;
                 
-                // Create MCP adapter for route integration
+                info!("🤖 Initializing MCP integration for unified server...");
+                
+                // Create MCP adapter using the new ExecutionBridge
                 let mcp_task_repo = Arc::new(storage_repositories.task_repository());
                 let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
                 
-                // TODO: Update MCP adapter to use new ProcessTaskExecutor
-                // For now, disable MCP integration in unified server mode
-                warn!("MCP integration temporarily disabled during ProcessTaskExecutor migration");
-                None
+                let adapter = RatchetMcpAdapter::with_bridge_executor(
+                    execution_bridge.clone(), // Use the new ExecutionBridge
+                    mcp_task_repo,
+                    mcp_execution_repo,
+                );
+                
+                // Create tool registry with the adapter
+                let mut tool_registry = RatchetToolRegistry::new();
+                tool_registry = tool_registry.with_task_executor(Arc::new(adapter));
+                
+                // Create security components
+                let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
+                let audit_logger = Arc::new(AuditLogger::new(false));
+                
+                // Create MCP server configuration for SSE
+                let mcp_server_config = McpServerConfig::from_ratchet_config(mcp_config);
+                
+                // Create MCP server
+                let mcp_server = McpServer::new(
+                    mcp_server_config,
+                    Arc::new(tool_registry),
+                    auth_manager,
+                    audit_logger,
+                );
+                
+                // Create SSE routes for the unified server
+                let routes = mcp_server.create_sse_routes();
+                info!("✅ MCP SSE routes created successfully for unified server");
+                Some(routes)
             }
             
             #[cfg(not(feature = "mcp-server"))]
             {
-                warn!("MCP service enabled but mcp-server feature not available");
+                warn!("⚠️  MCP service enabled in config but mcp-server feature not available at compile time");
                 None
             }
         } else {
+            info!("   • MCP Service: Disabled (not configured)");
             None
         }
     } else {
+        info!("   • MCP Service: Disabled (no configuration)");
         None
     };
+
+    // Check if MCP routes were created for logging before moving the value
+    let has_mcp_routes = mcp_routes.is_some();
 
     // Create the application
     // TODO: Update create_app to use new ProcessTaskExecutor
@@ -342,20 +458,25 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
     info!("   🎮 GraphQL Playground: http://{}/playground", addr);
     
     // Log MCP routes if enabled
-    if mcp_enabled {
-        info!("   🤖 MCP SSE Service:   http://{}/mcp/", addr);
-        info!("      • SSE Endpoint:    http://{}/mcp/sse/{{session_id}}", addr);
-        info!("      • Message Endpoint: http://{}/mcp/message/{{session_id}}", addr);
+    if mcp_enabled && has_mcp_routes {
+        info!("   🤖 MCP SSE Service:   ✅ Enabled - http://{}/mcp/", addr);
+        info!("      • Direct SSE:      http://{}/mcp/ (for simple clients)", addr);
+        info!("      • Simple Messages: http://{}/mcp/message", addr);
+        info!("      • Advanced SSE:    http://{}/mcp/sse/{{session_id}}", addr);
         info!("      • Health Check:    http://{}/mcp/health", addr);
+    } else if mcp_enabled {
+        info!("   🤖 MCP SSE Service:   ⚠️  Enabled in config but routes not created");
     } else {
         info!("   🤖 MCP SSE Service:   ❌ Disabled");
     }
 
-    // Graceful shutdown signal
+    // Graceful shutdown signal with better responsiveness
     let shutdown_signal = async {
         signal::ctrl_c()
             .await
             .expect("Failed to install Ctrl+C handler");
+        
+        info!("🛑 Shutdown signal received, initiating graceful shutdown...");
     };
 
     // Start the server with graceful shutdown (axum 0.6 style)
@@ -378,19 +499,29 @@ async fn serve_command_with_config(config: LibRatchetConfig) -> Result<()> {
 
     // Note: MCP service is now integrated as routes and will stop with the main server
 
-    // Stop worker processes
-    info!("Stopping worker processes");
-    task_executor
-        .stop()
-        .await
-        .context("Failed to stop worker processes")?;
+    // Stop worker processes with timeout
+    info!("Stopping worker processes...");
+    let shutdown_timeout = tokio::time::Duration::from_secs(10);
+    
+    match tokio::time::timeout(shutdown_timeout, process_executor.stop()).await {
+        Ok(Ok(())) => {
+            info!("✅ Worker processes stopped successfully");
+        }
+        Ok(Err(e)) => {
+            warn!("⚠️  Error stopping worker processes: {}", e);
+        }
+        Err(_) => {
+            warn!("⚠️  Worker shutdown timed out after {}s, forcing termination", shutdown_timeout.as_secs());
+        }
+    }
 
     info!("Ratchet server shutdown complete");
     Ok(())
 }
 
-/// Start the MCP (Model Context Protocol) server
+/// Start the MCP (Model Context Protocol) server (legacy wrapper function)
 #[cfg(feature = "mcp-server")]
+#[allow(dead_code)]
 async fn mcp_serve_command(
     config_path: Option<&PathBuf>,
     transport: &str,
@@ -415,242 +546,167 @@ async fn mcp_serve_command(
 
 #[cfg(feature = "mcp-server")]
 async fn mcp_serve_command_with_config(
-    ratchet_config: RatchetConfig,
-    transport: &str,
-    host: &str,
-    port: u16,
+    mut ratchet_config: RatchetConfig,
+    _transport: &str,
+    _host: &str,
+    _port: u16,
 ) -> Result<()> {
-    let is_stdio = transport == "stdio";
     use ratchet_mcp::{
         security::{McpAuth, McpAuthManager},
         server::{
             adapter::RatchetMcpAdapter,
-            config::{CorsConfig, McpServerConfig, McpServerTransport},
+            config::McpServerConfig,
             tools::RatchetToolRegistry,
         },
-        McpServer, SimpleTransportType,
+        McpServer,
     };
     use std::sync::Arc;
     use tokio::signal;
 
-    if !is_stdio {
-        info!("Starting Ratchet MCP server");
-    }
+    // Force stdio transport for MCP serve (ignore CLI args)
+    ratchet_config.mcp = Some(ratchet_config::domains::mcp::McpConfig {
+        enabled: true,
+        transport: "stdio".to_string(),
+        host: "127.0.0.1".to_string(),
+        port: 8090,
+    });
 
-    // Parse transport type
-    let transport_type = match transport.to_lowercase().as_str() {
-        "stdio" => SimpleTransportType::Stdio,
-        "sse" => SimpleTransportType::Sse,
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Invalid transport type: {}. Use 'stdio' or 'sse'",
-                transport
-            ));
-        }
-    };
+    // Note: Logging is already initialized by main() with stderr-only for stdio mode
+    // No need to reinitialize here as it would cause a panic
+    
+    // Log to file only - stdio must remain clean for JSON-RPC
+    info!("🤖 Starting Ratchet MCP server in stdio mode");
+    
+    // Convert to lib config (reuse the same conversion logic as serve)
+    let lib_config = convert_to_legacy_config(ratchet_config.clone())?;
 
-    // Get database configuration (use server config if available, otherwise default)
-    let database_config = if let Some(server_config) = &ratchet_config.server {
-        if !is_stdio {
-            info!("Using server database configuration for MCP");
-        }
-        &server_config.database
-    } else {
-        if !is_stdio {
-            info!("No server configuration found, using default database config");
-        }
-        // Use default from server config
-        &ratchet_config::domains::server::ServerConfig::default().database
-    };
+    // Initialize the exact same infrastructure as serve command
+    let server_config = lib_config.server.as_ref().unwrap();
+    
+    info!("📋 MCP Configuration:");
+    info!("   • Transport: stdio (JSON-RPC over stdin/stdout)");
+    info!("   • Database: {}", server_config.database.url);
+    info!("   • Max Workers: {}", lib_config.execution.max_concurrent_tasks);
+    info!("   • Logging: file-only (ratchet.log)");
 
-    // Convert new database config to storage database config
+    // Initialize database (same as serve)
+    info!("💾 Initializing database connection...");
     let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
-        url: database_config.url.clone(),
-        max_connections: database_config.max_connections,
-        connection_timeout: database_config.connection_timeout,
+        url: server_config.database.url.clone(),
+        max_connections: server_config.database.max_connections,
+        connection_timeout: server_config.database.connection_timeout,
     };
 
-    // Initialize database
-    if !is_stdio {
-        info!("Connecting to database: {}", storage_db_config.url);
-    }
-    let database = DatabaseConnection::new(storage_db_config)
+    let database = DatabaseConnection::new(storage_db_config.clone())
         .await
         .context("Failed to connect to database")?;
 
-    // Run migrations
-    if !is_stdio {
-        info!("Running database migrations");
-    }
+    info!("🔄 Running database migrations...");
     database
         .migrate()
         .await
         .context("Failed to run database migrations")?;
+    info!("✅ Database initialized successfully");
 
-    // Initialize repositories using ratchet-storage
-    let repositories = RepositoryFactory::new(database.clone());
-    let task_repo = Arc::new(repositories.task_repository());
-    let execution_repo = Arc::new(repositories.execution_repository());
+    // Initialize repositories and executor (same as serve)
+    let storage_config = storage_db_config;
+    let _legacy_repositories = convert_to_legacy_repository_factory(storage_config.clone()).await?;
+    let storage_repositories = RepositoryFactory::new(database.clone());
 
-    // For legacy ProcessTaskExecutor, convert to legacy repository factory
-    let storage_config = database.get_config().clone();
-    let legacy_repositories = convert_to_legacy_repository_factory(storage_config).await?;
-
-    // Initialize task executor for MCP
-    if !is_stdio {
-        info!("Initializing task executor for MCP");
-    }
-    
-    // Create executor config from the ratchet config
+    info!("⚙️  Initializing task executor...");
     let executor_config = ProcessExecutorConfig {
-        worker_count: ratchet_config.execution.max_concurrent_tasks,
-        task_timeout_seconds: ratchet_config.execution.max_execution_duration.as_secs(),
+        worker_count: lib_config.execution.max_concurrent_tasks,
+        task_timeout_seconds: lib_config.execution.max_execution_duration,
         restart_on_crash: true,
         max_restart_attempts: 3,
     };
     
-    let task_executor = Arc::new(ProcessTaskExecutor::new(executor_config));
+    // Create both ProcessTaskExecutor (for worker management) and ExecutionBridge (for MCP)
+    let process_executor = Arc::new(ProcessTaskExecutor::new(executor_config.clone()));
+    let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
+    
+    info!("👷 Starting worker processes...");
+    process_executor
+        .start()
+        .await
+        .context("Failed to start worker processes")?;
+    info!("✅ Worker processes started successfully");
 
-    // Start worker processes for the executor
-    if !is_stdio {
-        // Only log worker startup for non-stdio modes to avoid stderr noise
-        task_executor
-            .start()
-            .await
-            .context("Failed to start worker processes")?;
-    } else {
-        // For stdio mode, start workers silently
-        task_executor
-            .start()
-            .await
-            .context("Failed to start worker processes")?;
-    }
-
-    // Create MCP adapter
-    // Create MCP adapter using the new ProcessTaskExecutor from ratchet-execution
-    use ratchet_execution::ProcessExecutorConfig;
-    let mcp_executor_config = ProcessExecutorConfig {
-        worker_count: ratchet_config.execution.max_concurrent_tasks,
-        task_timeout_seconds: ratchet_config.execution.max_execution_duration.as_secs(),
-        restart_on_crash: true,
-        max_restart_attempts: 3,
-    };
-    let mcp_executor = Arc::new(ratchet_execution::ProcessTaskExecutor::new(mcp_executor_config));
-    let adapter = RatchetMcpAdapter::new(
-        mcp_executor,
-        task_repo.clone(),
-        execution_repo.clone(),
+    // Create MCP adapter using ExecutionBridge
+    info!("🤖 Initializing MCP adapter...");
+    let mcp_task_repo = Arc::new(storage_repositories.task_repository());
+    let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
+    
+    let adapter = RatchetMcpAdapter::with_bridge_executor(
+        execution_bridge.clone(), 
+        mcp_task_repo,
+        mcp_execution_repo,
     );
 
-    // Build MCP server configuration - use MCP config from ratchet_config if available, otherwise use CLI args
-    let server_config = if let Some(mcp_config) = &ratchet_config.mcp {
-        // Use config from file/environment
-        McpServerConfig::from_ratchet_config(mcp_config)
-    } else {
-        // Use command line arguments
-        match transport_type {
-            SimpleTransportType::Stdio => McpServerConfig {
-                transport: McpServerTransport::Stdio,
-                security: ratchet_mcp::security::SecurityConfig::default(),
-                bind_address: None,
-            },
-            SimpleTransportType::Sse => McpServerConfig {
-                transport: McpServerTransport::Sse {
-                    port,
-                    host: host.to_string(),
-                    tls: false,
-                    cors: CorsConfig {
-                        allowed_origins: vec!["*".to_string()],
-                        allowed_methods: vec![
-                            "GET".to_string(),
-                            "POST".to_string(),
-                            "OPTIONS".to_string(),
-                        ],
-                        allowed_headers: vec![
-                            "Content-Type".to_string(),
-                            "Authorization".to_string(),
-                        ],
-                        allow_credentials: false,
-                    },
-                    timeout: std::time::Duration::from_secs(300), // Default 5 minutes
-                },
-                security: ratchet_mcp::security::SecurityConfig::default(),
-                bind_address: Some(format!("{}:{}", host, port)),
-            },
-        }
-    };
-
-    // Create tool registry with the adapter as task executor
+    // Create tool registry with the adapter
     let mut tool_registry = RatchetToolRegistry::new();
     tool_registry = tool_registry.with_task_executor(Arc::new(adapter));
-
-    // Create auth manager
-    let auth_manager = Arc::new(McpAuthManager::new(
-        McpAuth::default(), // TODO: Configure from mcp_server_config
-    ));
-
-    // Create audit logger
-    let audit_logger = Arc::new(ratchet_mcp::security::AuditLogger::new(true));
-
-    // Create and start MCP server
-    let server = McpServer::new(
-        server_config,
+    
+    // Create security components
+    let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
+    let audit_logger = Arc::new(ratchet_mcp::security::AuditLogger::new(false));
+    
+    // Create MCP server configuration - always stdio for this command
+    let mcp_server_config = McpServerConfig::from_ratchet_config(
+        ratchet_config.mcp.as_ref().unwrap()
+    );
+    
+    // Create and run MCP server
+    info!("🚀 Starting MCP server...");
+    let mut mcp_server = McpServer::new(
+        mcp_server_config,
         Arc::new(tool_registry),
         auth_manager,
         audit_logger,
     );
 
-    if !is_stdio {
-        info!(
-            "Starting MCP server with {} transport on {}:{}",
-            transport, host, port
-        );
-    }
-
-    // Set up graceful shutdown
-    let shutdown_signal = async {
+    info!("✅ MCP server ready - listening on stdin/stdout for JSON-RPC messages");
+    
+    // Setup graceful shutdown
+    let shutdown_future = async {
         signal::ctrl_c()
             .await
-            .expect("Failed to install Ctrl+C handler");
-        if !is_stdio {
-            info!("Received shutdown signal");
-        }
+            .expect("Failed to listen for shutdown signal");
+        info!("🛑 Shutdown signal received, stopping MCP server...");
     };
 
-    // Start server and wait for shutdown
+    // Run stdio server with graceful shutdown
+    let server_future = mcp_server.run_stdio();
+    
     tokio::select! {
-        result = server.start() => {
+        result = server_future => {
             match result {
-                Ok(_) => {
-                    if !is_stdio {
-                        info!("MCP server completed successfully");
-                    }
-                }
-                Err(e) => {
-                    error!("MCP server error: {}", e);
-                    return Err(e.into());
-                }
+                Ok(()) => info!("MCP server stopped gracefully"),
+                Err(e) => error!("MCP server error: {}", e),
             }
         }
-        _ = shutdown_signal => {
-            if !is_stdio {
-                info!("Shutting down MCP server");
-            }
+        _ = shutdown_future => {
+            info!("Graceful shutdown initiated");
         }
     }
 
-    // Stop task executor
-    if !is_stdio {
-        info!("Stopping task executor");
+    // Stop worker processes
+    info!("🛑 Stopping worker processes...");
+    let shutdown_timeout = tokio::time::Duration::from_secs(10);
+    
+    match tokio::time::timeout(shutdown_timeout, process_executor.stop()).await {
+        Ok(Ok(())) => {
+            info!("✅ Worker processes stopped successfully");
+        }
+        Ok(Err(e)) => {
+            warn!("⚠️  Error stopping worker processes: {}", e);
+        }
+        Err(_) => {
+            warn!("⚠️  Worker shutdown timed out after {}s", shutdown_timeout.as_secs());
+        }
     }
-    task_executor
-        .stop()
-        .await
-        .context("Failed to stop task executor")?;
 
-    if !is_stdio {
-        info!("Ratchet MCP server shutdown complete");
-    }
+    info!("Ratchet MCP server shutdown complete");
     Ok(())
 }
 
@@ -661,6 +717,13 @@ fn init_logging_with_config(
     log_level: Option<&String>,
     record_dir: Option<&PathBuf>,
 ) -> Result<()> {
+    // Check if RUST_LOG is set - if so, prefer simple tracing
+    if std::env::var("RUST_LOG").is_ok() && record_dir.is_none() {
+        // RUST_LOG is set and we're not recording, use simple tracing
+        init_simple_tracing(log_level)?;
+        return Ok(());
+    }
+
     // If CLI log level is provided, override config level
     let mut logging_config = config.logging.clone();
     if let Some(level_str) = log_level {
@@ -699,6 +762,12 @@ fn init_logging_with_config(
         );
     }
 
+    // If no sinks configured and not recording, use simple tracing
+    if logging_config.sinks.is_empty() && record_dir.is_none() {
+        init_simple_tracing(log_level)?;
+        return Ok(());
+    }
+
     // Try to initialize structured logging
     match ratchet_lib::logging::init_logging_from_config(&logging_config) {
         Ok(()) => {
@@ -729,12 +798,35 @@ fn init_logging_with_config(
 
 /// Initialize simple tracing with environment variable override support (fallback)
 fn init_simple_tracing(log_level: Option<&String>) -> Result<()> {
-    let env_filter = match log_level {
-        Some(level) => EnvFilter::try_new(level).unwrap_or_else(|_| {
+    // Priority: RUST_LOG env var > --log-level flag > default "info"
+    let env_filter = if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        // RUST_LOG is set, use it but allow --log-level to set a minimum level
+        if let Some(level) = log_level {
+            // Combine RUST_LOG with minimum level from --log-level
+            let combined = format!("{},{}", rust_log, level);
+            EnvFilter::try_new(&combined).unwrap_or_else(|_| {
+                // If combination fails, just use RUST_LOG
+                EnvFilter::try_new(&rust_log).unwrap_or_else(|_| {
+                    eprintln!("Invalid RUST_LOG '{}', falling back to 'info'", rust_log);
+                    EnvFilter::new("info")
+                })
+            })
+        } else {
+            // Just use RUST_LOG
+            EnvFilter::try_new(&rust_log).unwrap_or_else(|_| {
+                eprintln!("Invalid RUST_LOG '{}', falling back to 'info'", rust_log);
+                EnvFilter::new("info")
+            })
+        }
+    } else if let Some(level) = log_level {
+        // No RUST_LOG, use --log-level
+        EnvFilter::try_new(level).unwrap_or_else(|_| {
             eprintln!("Invalid log level '{}', falling back to 'info'", level);
             EnvFilter::new("info")
-        }),
-        None => EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        })
+    } else {
+        // Neither RUST_LOG nor --log-level, use default
+        EnvFilter::new("info")
     };
 
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
@@ -808,14 +900,14 @@ fn load_task_as_core_task(from_fs: &str) -> Result<CoreTask> {
 
     // Get the JavaScript content
     let js_content = lib_task
-        .get_js_content()
-        .map_err(|e| anyhow::anyhow!("Failed to get JS content: {}", e))?;
+        .js_content()
+        .ok_or_else(|| anyhow::anyhow!("No JavaScript content available"))?;
 
     // Convert to Core Task
-    let core_task = TaskBuilder::new(&lib_task.metadata.label, &lib_task.metadata.version)
+    let core_task = TaskBuilder::new(&lib_task.metadata.label, &lib_task.metadata.core.version)
         .input_schema(lib_task.input_schema.clone())
         .output_schema(lib_task.output_schema.clone())
-        .javascript_source(js_content.as_str())
+        .javascript_source(js_content)
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to build Core Task: {}", e))?;
 
@@ -854,6 +946,18 @@ async fn run_task_runtime(from_fs: &str, input: &JsonValue) -> Result<JsonValue>
     Ok(result)
 }
 
+/// Run a task from a file system path using modular executor (ratchet-js)
+#[cfg(feature = "javascript")]
+async fn run_task_modular(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
+    info!("Loading task from: {} (using modular executor)", from_fs);
+
+    let result = load_and_execute_task(from_fs, input.clone())
+        .await
+        .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
+
+    Ok(result)
+}
+
 /// Run a task from a file system path using legacy executor
 #[cfg(feature = "javascript")]
 async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
@@ -880,8 +984,142 @@ async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
     Ok(result)
 }
 
-/// Validate a task
+/// Validate a task using modular components
 #[cfg(feature = "javascript")]
+fn validate_task_modular(from_fs: &str) -> Result<()> {
+    info!("Validating task from: {} (using modular validator)", from_fs);
+
+    // Load the task using ratchet-js
+    let task = FileSystemTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+
+    // Validate the task
+    match task.validate() {
+        Ok(_) => {
+            println!("✅ Task validation passed");
+            info!("Task '{}' is valid", task.label());
+            Ok(())
+        }
+        Err(e) => {
+            println!("❌ Task validation failed: {}", e);
+            error!("Task validation failed: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+/// Test a task by running its test cases using modular components
+#[cfg(feature = "javascript")]
+async fn test_task_modular(from_fs: &str) -> Result<()> {
+    info!("Testing task from: {} (using modular executor)", from_fs);
+
+    // Load the task using ratchet-js
+    let task = FileSystemTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+
+    // Validate the task first
+    task.validate().context("Task validation failed")?;
+
+    // Get test directory
+    let task_path = std::path::Path::new(from_fs);
+    let test_dir = task_path.join("tests");
+
+    if !test_dir.exists() {
+        println!("No tests directory found at: {}", test_dir.display());
+        info!("No tests to run for task '{}'", task.label());
+        return Ok(());
+    }
+
+    // Find test files
+    let test_files: Vec<_> = fs::read_dir(&test_dir)
+        .context("Failed to read tests directory")?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension()? == "json" && path.file_name()?.to_str()?.starts_with("test-") {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if test_files.is_empty() {
+        println!("No test files found in: {}", test_dir.display());
+        info!("No test files found for task '{}'", task.label());
+        return Ok(());
+    }
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    for test_file in test_files {
+        let test_name = test_file.file_stem().unwrap().to_str().unwrap();
+        print!("Running test '{}' ... ", test_name);
+
+        match run_single_test_modular(&task, &test_file).await {
+            Ok(_) => {
+                println!("✅ PASSED");
+                passed += 1;
+            }
+            Err(e) => {
+                println!("❌ FAILED: {}", e);
+                failed += 1;
+            }
+        }
+    }
+
+    println!("\nTest Results:");
+    println!("  Passed: {}", passed);
+    println!("  Failed: {}", failed);
+    println!("  Total:  {}", passed + failed);
+
+    if failed > 0 {
+        Err(anyhow::anyhow!("{} test(s) failed", failed))
+    } else {
+        Ok(())
+    }
+}
+
+/// Run a single test case using modular components
+#[cfg(feature = "javascript")]
+async fn run_single_test_modular(task: &FileSystemTask, test_file: &std::path::Path) -> Result<()> {
+    use serde_json::Value;
+
+    // Load test data
+    let test_content = fs::read_to_string(test_file).context("Failed to read test file")?;
+    let test_data: Value = from_str(&test_content).context("Failed to parse test JSON")?;
+
+    // Extract input and expected output
+    let input = test_data.get("input").unwrap_or(&json!({})).clone();
+    let expected = test_data
+        .get("expected_output")
+        .ok_or_else(|| anyhow::anyhow!("Test file missing 'expected_output' field"))?;
+
+    // Execute the task using ratchet-js directly
+    let js_task = task.to_js_task();
+    let runner = ratchet_js::JsTaskRunner::new();
+    
+    let actual = runner
+        .execute_task(&js_task, input, None)
+        .await
+        .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
+
+    // Compare results
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "Output mismatch.\nExpected: {}\nActual: {}",
+            to_string_pretty(expected)?,
+            to_string_pretty(&actual)?
+        ))
+    }
+}
+
+/// Legacy validate task function (deprecated - use validate_task_modular instead)
+#[cfg(feature = "javascript")]
+#[allow(dead_code)]
 fn validate_task(from_fs: &str) -> Result<()> {
     info!("Validating task from: {}", from_fs);
 
@@ -904,8 +1142,9 @@ fn validate_task(from_fs: &str) -> Result<()> {
     }
 }
 
-/// Test a task by running its test cases
+/// Legacy test task function (deprecated - use test_task_modular instead)
 #[cfg(feature = "javascript")]
+#[allow(dead_code)]
 async fn test_task(from_fs: &str) -> Result<()> {
     info!("Testing task from: {}", from_fs);
 
@@ -977,8 +1216,9 @@ async fn test_task(from_fs: &str) -> Result<()> {
     }
 }
 
-/// Run a single test case
+/// Legacy run single test function (deprecated - use run_single_test_modular instead)
 #[cfg(feature = "javascript")]
+#[allow(dead_code)]
 async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result<()> {
     use serde_json::Value;
 
@@ -1487,15 +1727,26 @@ async fn main() -> Result<()> {
         init_mcp_stdio_logging(cli.log_level.as_ref())?;
     } else {
         // Initialize logging from config
-        let legacy_config = convert_to_legacy_config(config.clone())?;
-        init_logging_with_config(
-            &legacy_config,
-            cli.log_level.as_ref(),
-            cli.command.as_ref().and_then(|cmd| match cmd {
-                Commands::RunOnce { record, .. } => record.as_ref(),
-                _ => None,
-            }),
-        )?;
+        #[cfg(feature = "server")]
+        {
+            let legacy_config = convert_to_legacy_config(config.clone())?;
+            init_logging_with_config(
+                &legacy_config,
+                cli.log_level.as_ref(),
+                cli.command.as_ref().and_then(|cmd| match cmd {
+                    Commands::RunOnce { record, .. } => record.as_ref(),
+                    _ => None,
+                }),
+            )?;
+        }
+        #[cfg(not(feature = "server"))]
+        {
+            init_logging_with_config(
+                &config,
+                cli.log_level.as_ref(),
+                None,
+            )?;
+        }
     }
 
     if !is_mcp_stdio {
@@ -1508,11 +1759,11 @@ async fn main() -> Result<()> {
             input_json,
             record,
         }) => {
-            // Try runtime executor first if available, then fall back to legacy
-            #[cfg(all(feature = "runtime", feature = "core"))]
+            // Try modular executor first (ratchet-js), then runtime, then fall back to legacy
+            #[cfg(feature = "javascript")]
             {
                 info!(
-                    "Running task from file system path: {} (using runtime executor)",
+                    "Running task from file system path: {} (using modular executor)",
                     from_fs
                 );
 
@@ -1523,65 +1774,56 @@ async fn main() -> Result<()> {
                     info!("Using provided input: {}", input_json.as_ref().unwrap());
                 }
 
-                // Run the task with runtime executor
-                let result = run_task_runtime(from_fs, &input).await?;
+                // Run the task with modular executor (ratchet-js)
+                let result = run_task_modular(from_fs, &input).await?;
 
                 // Pretty-print the result
                 let formatted =
                     to_string_pretty(&result).context("Failed to format result as JSON")?;
 
                 println!("{}", formatted);
-                return Ok(());
-            }
-
-            #[cfg(all(
-                feature = "javascript",
-                not(all(feature = "runtime", feature = "core"))
-            ))]
-            {
-                info!(
-                    "Running task from file system path: {} (using legacy executor)",
-                    from_fs
-                );
-
-                // Parse input JSON
-                let input = parse_input_json(input_json.as_ref())?;
-
-                if input_json.is_some() {
-                    info!("Using provided input: {}", input_json.as_ref().unwrap());
-                }
-
-                // Run the task with legacy executor
-                let result = run_task(from_fs, &input).await?;
-
-                // Pretty-print the result
-                let formatted =
-                    to_string_pretty(&result).context("Failed to format result as JSON")?;
-
-                println!("Result: {}", formatted);
                 info!("Task execution completed");
 
-                // Finalize recording if it was enabled
+                // TODO: Add recording support for modular executor
                 if record.is_some() {
-                    #[cfg(feature = "server")]
-                    {
-                        if let Err(e) = ratchet_lib::recording::finalize_recording() {
-                            warn!("Failed to finalize recording: {}", e);
-                        } else if let Some(dir) = ratchet_lib::recording::get_recording_dir() {
-                            println!("Recording saved to: {:?}", dir);
-                        }
-                    }
-                    #[cfg(not(feature = "server"))]
-                    {
-                        warn!("Recording functionality not available without server features");
-                    }
+                    warn!("Recording functionality not yet implemented for modular executor");
                 }
 
                 Ok(())
             }
-            #[cfg(not(any(feature = "javascript", all(feature = "runtime", feature = "core"))))]
+            
+            #[cfg(not(feature = "javascript"))]
             {
-                Err(anyhow::anyhow!("Task execution not available. Build with --features=javascript or --features=runtime,core"))
+                // Fallback to runtime executor if available
+                #[cfg(all(feature = "runtime", feature = "core"))]
+                {
+                    info!(
+                        "Running task from file system path: {} (using runtime executor)",
+                        from_fs
+                    );
+
+                    // Parse input JSON
+                    let input = parse_input_json(input_json.as_ref())?;
+
+                    if input_json.is_some() {
+                        info!("Using provided input: {}", input_json.as_ref().unwrap());
+                    }
+
+                    // Run the task with runtime executor
+                    let result = run_task_runtime(from_fs, &input).await?;
+
+                    // Pretty-print the result
+                    let formatted =
+                        to_string_pretty(&result).context("Failed to format result as JSON")?;
+
+                    println!("{}", formatted);
+                    return Ok(());
+                }
+
+                #[cfg(not(all(feature = "runtime", feature = "core")))]
+                {
+                    Err(anyhow::anyhow!("Task execution not available. Build with --features=javascript or --features=runtime,core"))
+                }
             }
         }
         Some(Commands::Serve {
@@ -1607,8 +1849,8 @@ async fn main() -> Result<()> {
                     }
                 }
                 
-                let lib_config = convert_to_legacy_config(server_config)?;
-                serve_command_with_config(lib_config).await
+                let lib_config = convert_to_legacy_config(server_config.clone())?;
+                serve_command_with_config(lib_config, server_config).await
             }
             #[cfg(not(feature = "server"))]
             {
@@ -1646,7 +1888,8 @@ async fn main() -> Result<()> {
         Some(Commands::Validate { from_fs }) => {
             #[cfg(feature = "javascript")]
             {
-                validate_task(from_fs)
+                // Use modular validator by default, fallback to legacy if needed
+                validate_task_modular(from_fs)
             }
             #[cfg(not(feature = "javascript"))]
             {
@@ -1658,7 +1901,8 @@ async fn main() -> Result<()> {
         Some(Commands::Test { from_fs }) => {
             #[cfg(feature = "javascript")]
             {
-                test_task(from_fs).await
+                // Use modular test runner by default, fallback to legacy if needed
+                test_task_modular(from_fs).await
             }
             #[cfg(not(feature = "javascript"))]
             {

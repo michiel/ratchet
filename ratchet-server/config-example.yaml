@@ -1,0 +1,47 @@
+# Example Ratchet Server Configuration
+
+server:
+  bind_address: "127.0.0.1:3000"
+  enable_cors: true
+  enable_request_id: true
+  enable_tracing: true
+  shutdown_timeout_seconds: 30
+
+rest_api:
+  enabled: true
+  prefix: "/api/v1"
+  enable_health_checks: true
+  enable_detailed_health: true
+  enable_openapi_docs: true
+
+graphql_api:
+  enabled: true
+  endpoint: "/graphql"
+  enable_playground: true
+  enable_introspection: true
+  max_query_depth: 15
+  max_query_complexity: 1000
+  enable_apollo_tracing: false
+
+logging:
+  level: "info"
+  format: "json"
+  enable_structured: true
+  enable_file_logging: false
+  file_path: null
+
+database:
+  url: "sqlite://ratchet.db"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_seconds: 30
+  enable_migrations: true
+
+registry:
+  filesystem_paths:
+    - "./tasks"
+    - "./examples/tasks"
+  http_endpoints: []
+  sync_interval_seconds: 300
+  enable_auto_sync: true
+  enable_validation: true

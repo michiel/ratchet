@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -8,7 +9,7 @@ use crate::{
     database::repositories::RepositoryFactory,
     execution::executor::ExecutionError,
     execution::{ipc::TaskExecutionResult, ExecutionResult, TaskExecutor, WorkerProcessManager},
-    output::{destination::TaskOutput, JobContext, OutputDeliveryManager, OutputDestinationConfig},
+    output::{destination::TaskOutput, OutputDeliveryManager, OutputDestinationConfig},
     services::ServiceError,
 };
 
@@ -294,34 +295,56 @@ impl ProcessTaskExecutor {
                     execution_duration: std::time::Duration::from_millis(duration_ms as u64),
                 };
 
-                // Create job context
-                let job_context = JobContext {
-                    job_uuid: job_entity.uuid.to_string(),
+                // Create delivery context
+                let mut template_variables = HashMap::new();
+                template_variables.insert("job_id".to_string(), job_entity.id.to_string());
+                template_variables.insert("task_name".to_string(), task_entity.name.clone());
+                template_variables.insert("task_version".to_string(), task_entity.version.clone());
+                template_variables.insert("job_uuid".to_string(), job_entity.uuid.to_string());
+                template_variables.insert("execution_id".to_string(), execution_id.to_string());
+                if let Some(schedule_id) = job_entity.schedule_id {
+                    template_variables.insert("schedule_id".to_string(), schedule_id.to_string());
+                }
+                template_variables.insert("priority".to_string(), job_entity.priority.to_string());
+                template_variables.insert("environment".to_string(), 
+                    std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()));
+                template_variables.insert("timestamp".to_string(), chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string());
+
+                let delivery_context = crate::output::DeliveryContext {
+                    job_id: job_entity.id,
                     task_name: task_entity.name.clone(),
                     task_version: task_entity.version.clone(),
-                    schedule_id: job_entity.schedule_id,
-                    priority: job_entity.priority.to_string(),
+                    timestamp: chrono::Utc::now(),
                     environment: std::env::var("ENVIRONMENT")
                         .unwrap_or_else(|_| "development".to_string()),
+                    trace_id: format!("exec_{}", execution_id),
+                    template_variables,
                 };
 
                 // Deliver to all destinations
                 let delivery_results = delivery_manager
-                    .deliver_output(task_output, job_context)
-                    .await
-                    .map_err(|e| {
-                        ExecutionError::ExecutionFailed(format!("Output delivery failed: {}", e))
-                    })?;
+                    .deliver_to_all(&task_output, &delivery_context)
+                    .await;
 
                 // Log delivery results
-                for result in delivery_results {
-                    log::info!(
-                        "Output delivered to {}: {} ({}ms, {} bytes)",
-                        result.destination_id,
-                        if result.success { "success" } else { "failed" },
-                        result.delivery_time.as_millis(),
-                        result.size_bytes
-                    );
+                for (destination_name, result) in delivery_results {
+                    match result {
+                        Ok(delivery_result) => {
+                            log::info!(
+                                "Output delivered to {}: SUCCESS ({}ms, {} bytes)",
+                                destination_name,
+                                delivery_result.delivery_time.as_millis(),
+                                delivery_result.size_bytes
+                            );
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "Output delivery to {} failed: {}",
+                                destination_name,
+                                e
+                            );
+                        }
+                    }
                 }
             }
         }

@@ -1,0 +1,79 @@
+# Ratchet Full Server Configuration
+# This configuration enables all server features: HTTP APIs, MCP SSE, and file logging
+# Use with: ratchet serve --config=ratchet-full-server-config.yaml
+
+# Task execution configuration
+execution:
+  max_execution_duration: 300  # 5 minutes
+  validate_schemas: true
+  max_concurrent_tasks: 20
+  timeout_grace_period: 10
+
+# HTTP client configuration for tasks
+http:
+  timeout: 30
+  max_redirects: 10
+  user_agent: "Ratchet-Server/1.0"
+  verify_ssl: true
+
+# Task caching configuration
+cache:
+  enabled: true
+  task_content_cache_size: 1000
+
+# Output destinations configuration
+output:
+  max_concurrent_deliveries: 50
+  default_timeout: 30
+  validate_on_startup: true
+  
+  # Global output destinations for all executions
+  global_destinations:
+    # File system logging for audit trail
+    - name: "execution-logs"
+      description: "Execution logs for audit and debugging"
+      destination:
+        type: "filesystem"
+        path: "/tmp/ratchet/outputs/{date}/{task_name}-{execution_id}.json"
+        format: "json"
+        permissions: "644"
+        create_dirs: true
+        overwrite: false
+        backup_existing: false
+
+# Main server configuration with all services enabled
+server:
+  bind_address: "0.0.0.0"  # Listen on all interfaces
+  port: 8080               # Main HTTP server port
+  
+  # Database configuration for persistence
+  database:
+    url: "sqlite::memory:"
+    max_connections: 50
+    connection_timeout: 30
+
+# MCP server configuration for LLM integration
+mcp:
+  enabled: true
+  transport: "sse"         # Server-Sent Events transport
+  host: "0.0.0.0"         # Listen on all interfaces  
+  port: 8090              # MCP SSE server port
+
+# Task registry configuration for local task directory
+registry:
+  sources:
+    # Local task directory
+    - name: "local-tasks"
+      polling_interval: 10
+      uri: "file:///tmp/ratchet/tasks"
+      config:
+        watch_for_changes: true
+        auto_reload: true
+    
+    # Sample tasks from the project
+    - name: "sample-tasks"
+      polling_interval: 10
+      uri: "file:///home/michiel/dev/ratchet/sample/js-tasks"
+      config:
+        watch_for_changes: false
+        auto_reload: false

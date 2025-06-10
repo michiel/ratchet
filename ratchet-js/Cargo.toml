@@ -34,6 +34,9 @@ ratchet-logging = { path = "../ratchet-logging", optional = true }
 # Regex for error parsing
 regex = "1.10"
 
+[dev-dependencies]
+tempfile = "3.0"
+
 [features]
 default = ["javascript", "http", "logging"]
 javascript = ["boa_engine", "boa_runtime"]
