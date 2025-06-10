@@ -59,9 +59,13 @@ pub async fn graphql_handler(
 
 /// GraphQL playground handler for development
 pub async fn graphql_playground() -> impl IntoResponse {
-    async_graphql::http::playground_source(
+    use axum::response::Html;
+    
+    let playground_html = async_graphql::http::playground_source(
         async_graphql::http::GraphQLPlaygroundConfig::new("/graphql")
-    )
+    );
+    
+    Html(playground_html)
 }
 
 /// GraphQL introspection schema handler
