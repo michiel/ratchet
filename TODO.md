@@ -1018,34 +1018,107 @@ ratchet-plugin/       # ✅ Plugin infrastructure
 
 ---
 
+## 🔄 **API Interface Unification Plan** (HIGH PRIORITY - IMMEDIATE)
+
+Based on comprehensive interface analysis, the following plan addresses gaps and inconsistencies across GraphQL, REST, and MCP interfaces:
+
+### **Current State Assessment**
+- **GraphQL Interface** ✅ Strong pagination, ⚠️ limited filtering/sorting, ❌ incomplete mutations
+- **REST Interface** ✅ Excellent Refine.dev compatibility, ⚠️ incomplete CRUD operations  
+- **MCP Interface** ✅ Advanced tools, ❌ no pagination/systematic CRUD
+- **Backend Consistency** ✅ Excellent unified types and repositories
+
+### **Priority 1: Complete GraphQL Interface** (Week 1-2)
+- [ ] **Add sorting support** to all list resolvers in `ratchet-graphql-api/src/resolvers/query.rs`
+  - Implement `SortInput` parameter handling in tasks, executions, jobs, schedules resolvers
+  - Integrate with repository `FilteredRepository::find_with_filters` sorting capabilities
+- [ ] **Implement missing mutations** for create/update/delete operations
+  - Add task CRUD mutations (create_task, update_task, delete_task)
+  - Add execution control mutations (cancel_execution, retry_execution)
+  - Add job management mutations (create_job, cancel_job, retry_job)
+  - Add schedule CRUD mutations (create_schedule, update_schedule, delete_schedule)
+- [ ] **Add advanced filtering** to match REST interface capabilities
+  - Implement comprehensive filter inputs for all entity types
+  - Add support for all FilterOperator types (contains, startsWith, gt, lt, etc.)
+
+### **Priority 2: Complete REST CRUD Operations** (Week 3-4)
+- [ ] **Implement missing handlers** in `ratchet-rest-api/src/handlers/`
+  - Complete tasks handler: POST /tasks, PUT /tasks/:id, DELETE /tasks/:id
+  - Complete executions handler: POST /executions, DELETE /executions/:id
+  - Complete jobs handler: POST /jobs, PUT /jobs/:id, DELETE /jobs/:id
+  - Complete schedules handler: POST /schedules, PUT /schedules/:id, DELETE /schedules/:id
+- [ ] **Add update/delete endpoints** for all entities with proper error handling
+- [ ] **Ensure proper HTTP status codes** (201 for creation, 204 for deletion, etc.)
+
+### **Priority 3: Enhance MCP Interface** (Week 5-6)
+- [ ] **Add paginated list tools** in `ratchet-mcp/src/server/tools.rs`
+  - Implement `list_tasks_paginated` tool returning structured `ListResponse<UnifiedTask>`
+  - Add `list_executions_paginated`, `list_jobs_paginated`, `list_schedules_paginated` tools
+  - Support pagination parameters (page, limit, offset) in tool inputs
+- [ ] **Implement systematic CRUD tools** following MCP conventions
+  - Add `create_task`, `update_task`, `delete_task` tools
+  - Add `create_job`, `cancel_job`, `retry_job` tools  
+  - Add `create_schedule`, `update_schedule`, `delete_schedule` tools
+- [ ] **Add filtering/sorting parameters** to existing tools
+  - Extend existing tools with filter and sort parameter support
+  - Implement consistent parameter naming across all tools
+
+### **Priority 4: Standardize Error Handling** (Week 7-8)
+- [ ] **Unify error responses** across all three interfaces
+  - Create consistent error format with error codes and correlation IDs
+  - Implement proper error mapping from `DatabaseError` to interface-specific errors
+- [ ] **Add structured error details** for debugging
+  - Include request correlation IDs in all error responses
+  - Add detailed error context for development environments
+  - Implement client-safe error messages for production
+
+### **Interface Parity Matrix**
+| Feature | GraphQL | REST | MCP | Target |
+|---------|---------|------|-----|--------|
+| Pagination | ✅ | ✅ | ❌ | ✅ All |
+| Filtering | ⚠️ | ✅ | ⚠️ | ✅ All |
+| Sorting | ❌ | ✅ | ❌ | ✅ All |
+| CRUD Create | ❌ | ⚠️ | ⚠️ | ✅ All |
+| CRUD Update | ❌ | ❌ | ⚠️ | ✅ All |
+| CRUD Delete | ❌ | ❌ | ⚠️ | ✅ All |
+| Error Handling | ⚠️ | ⚠️ | ⚠️ | ✅ All |
+
+### **Implementation Benefits**
+- **Consistent User Experience**: All interfaces provide the same capabilities
+- **Refine.dev Full Compatibility**: Complete REST interface for admin dashboards
+- **Enhanced MCP Functionality**: Systematic data access for LLM integrations
+- **Developer Experience**: Unified patterns across all API interfaces
+- **Maintainability**: Single source of truth for business logic and types
+
 ## 📈 **Implementation Timeline**
 
-### **Quarter 1: MCP Server Foundation** (Next 3 months)
+### **Quarter 1: API Interface Unification** (Next 2 months)
 ```
-Month 1: MCP architecture foundation & protocol implementation
-Month 2: MCP server with tool registry & security
-Month 3: Performance optimization & production hardening
-```
-
-### **Quarter 2: Security & Scalability** (Months 4-6)
-```
-Month 4: JWT authentication & authorization system
-Month 5: Distributed job queue implementation
-Month 6: Worker node discovery & performance optimization
+Week 1-2: Complete GraphQL interface (sorting, mutations, filtering)
+Week 3-4: Complete REST CRUD operations and error handling
+Week 5-6: Enhance MCP interface with pagination and systematic CRUD
+Week 7-8: Standardize error handling and testing across all interfaces
 ```
 
-### **Quarter 3: Observability** (Months 7-9)
+### **Quarter 2: Security & Scalability** (Months 3-5)
 ```
-Month 7: Metrics & monitoring system
-Month 8: Distributed tracing & logging
-Month 9: Health monitoring & alerting
+Month 3: JWT authentication & authorization system
+Month 4: Distributed job queue implementation
+Month 5: Worker node discovery & performance optimization
 ```
 
-### **Quarter 4: JavaScript Integration & Developer Experience** (Months 10-12)
+### **Quarter 3: Observability** (Months 6-8)
 ```
-Month 10: JavaScript MCP API implementation
-Month 11: Task SDK development & enhanced APIs
-Month 12: Documentation & developer tools
+Month 6: Metrics & monitoring system
+Month 7: Distributed tracing & logging
+Month 8: Health monitoring & alerting
+```
+
+### **Quarter 4: JavaScript Integration & Developer Experience** (Months 9-11)
+```
+Month 9: JavaScript MCP API implementation
+Month 10: Task SDK development & enhanced APIs
+Month 11: Documentation & developer tools
 ```
 
 ---
