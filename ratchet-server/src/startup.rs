@@ -12,12 +12,18 @@ use tower_http::{
 use ratchet_rest_api::context::TasksContext;
 
 use ratchet_rest_api::app::{create_rest_app, AppConfig as RestAppConfig, AppContext as RestAppContext};
-// GraphQL temporarily disabled due to field mismatches
-// use ratchet_graphql_api::{
-//     schema::{create_schema, configure_schema, graphql_handler, graphql_playground},
-//     context::GraphQLConfig,
-// };
+use ratchet_graphql_api::{
+    schema::{create_schema, configure_schema, graphql_handler, graphql_playground},
+    context::{GraphQLContext, GraphQLConfig},
+};
 use ratchet_web::middleware::{cors_layer, request_id_layer, error_handler_layer};
+
+#[cfg(feature = "mcp")]
+use ratchet_mcp::{
+    server::{McpServer, tools::RatchetToolRegistry, adapter::RatchetMcpAdapter},
+    security::{McpAuth, McpAuthManager, AuditLogger},
+    server::config::McpServerConfig,
+};
 
 use crate::{config::ServerConfig, services::ServiceContainer};
 
@@ -65,23 +71,89 @@ impl Server {
 
         // Add GraphQL API if enabled
         if self.config.graphql_api.enabled {
-            tracing::info!("GraphQL API enabled, adding routes");
-            // TODO: Add GraphQL routes when ratchet-graphql-api is ready
-            // For now, add a placeholder endpoint
-            app = app.route("/graphql", axum::routing::get(graphql_placeholder_handler));
+            tracing::info!("GraphQL API enabled, creating schema and routes");
             
+            // Create GraphQL context
+            let graphql_context = GraphQLContext::new(
+                self.services.repositories.clone(),
+                self.services.registry.clone(),
+                self.services.registry_manager.clone(),
+                self.services.validator.clone(),
+            );
+            
+            // Create GraphQL configuration
+            let graphql_config = GraphQLConfig {
+                enable_playground: self.config.graphql_api.enable_playground,
+                enable_introspection: self.config.graphql_api.enable_introspection,
+                max_query_depth: self.config.graphql_api.max_query_depth,
+                max_query_complexity: self.config.graphql_api.max_query_complexity,
+                enable_tracing: true, // Enable tracing for GraphQL operations
+                enable_apollo_tracing: self.config.graphql_api.enable_apollo_tracing,
+            };
+            
+            // Create and configure the GraphQL schema
+            let schema = configure_schema(create_schema(), &graphql_config);
+            
+            // Add GraphQL endpoint (supporting both GET and POST)
+            app = app.route(
+                &self.config.graphql_api.endpoint,
+                axum::routing::get(graphql_handler).post(graphql_handler)
+                    .with_state(graphql_context.clone())
+            );
+            
+            // Add GraphQL Playground if enabled
             if self.config.graphql_api.enable_playground {
-                app = app.route("/playground", axum::routing::get(playground_placeholder_handler));
+                app = app.route("/playground", axum::routing::get(graphql_playground)
+                    .with_state(graphql_context.clone()));
             }
+            
+            // Add GraphQL schema extension as shared state
+            app = app.layer(axum::extract::Extension(schema));
         }
 
         // Add MCP SSE API if enabled
         if self.config.mcp_api.enabled && self.config.mcp_api.sse_enabled {
-            tracing::info!("MCP SSE API enabled, adding routes");
-            // TODO: Add MCP SSE routes when ratchet-mcp SSE integration is ready
-            // For now, add a placeholder endpoint
-            app = app.route("/mcp", axum::routing::get(mcp_placeholder_handler));
-            app = app.route("/mcp/health", axum::routing::get(mcp_health_handler));
+            tracing::info!("MCP SSE API enabled, creating MCP server and routes");
+            
+            #[cfg(feature = "mcp")]
+            {
+                // Create MCP server configuration
+                let mcp_server_config = McpServerConfig {
+                    host: self.config.mcp_api.host.clone(),
+                    port: self.config.mcp_api.port,
+                    transport: "sse".to_string(),
+                    enabled: true,
+                    max_concurrent_requests: 50,
+                    request_timeout_secs: 30,
+                    enable_cors: true,
+                    cors_allow_origins: vec!["*".to_string()],
+                };
+                
+                // Create MCP adapter (placeholder - would need actual task executor)
+                // For now, create a minimal MCP server with basic tools
+                let tool_registry = RatchetToolRegistry::new();
+                let auth_manager = std::sync::Arc::new(McpAuthManager::new(McpAuth::default()));
+                let audit_logger = std::sync::Arc::new(AuditLogger::new(false));
+                
+                let mcp_server = McpServer::new(
+                    mcp_server_config,
+                    std::sync::Arc::new(tool_registry),
+                    auth_manager,
+                    audit_logger,
+                );
+                
+                // Create and nest MCP SSE routes
+                let mcp_routes = mcp_server.create_sse_routes();
+                app = app.nest(&self.config.mcp_api.endpoint, mcp_routes);
+            }
+            
+            #[cfg(not(feature = "mcp"))]
+            {
+                tracing::warn!("MCP API enabled in config but mcp feature not available at compile time");
+                // Add placeholder endpoints
+                app = app.route(&self.config.mcp_api.endpoint, axum::routing::get(mcp_placeholder_handler));
+                app = app.route(&format!("{}/health", self.config.mcp_api.endpoint), axum::routing::get(mcp_health_handler));
+            }
         }
 
         app
@@ -177,41 +249,6 @@ async fn root_handler() -> axum::response::Json<serde_json::Value> {
     }))
 }
 
-/// GraphQL placeholder handler
-async fn graphql_placeholder_handler() -> axum::response::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "message": "GraphQL API is enabled and ready",
-        "status": "placeholder",
-        "note": "Full GraphQL implementation will be added in future updates"
-    }))
-}
-
-/// GraphQL Playground placeholder handler
-async fn playground_placeholder_handler() -> axum::response::Html<&'static str> {
-    axum::response::Html(r#"
-<!DOCTYPE html>
-<html>
-<head>
-    <title>GraphQL Playground</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 600px; margin: 0 auto; text-align: center; }
-        .status { background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎮 GraphQL Playground</h1>
-        <div class="status">
-            <h3>✅ GraphQL API Enabled</h3>
-            <p>The GraphQL API is enabled and ready for connections.</p>
-            <p><strong>Endpoint:</strong> <code>/graphql</code></p>
-            <p><em>Full playground implementation coming soon!</em></p>
-        </div>
-    </div>
-</body>
-</html>"#)
-}
 
 /// MCP SSE placeholder handler
 async fn mcp_placeholder_handler() -> axum::response::Json<serde_json::Value> {

@@ -83,9 +83,16 @@ impl ServiceContainer {
 
 /// Create repository factory from configuration
 async fn create_repository_factory(config: &ServerConfig) -> Result<Arc<dyn RepositoryFactory>> {
-    // Create a stub repository factory for now
-    // This will be replaced with proper bridge implementations later
-    Ok(Arc::new(StubRepositoryFactory::new()))
+    // Create storage database connection
+    let storage_config = ratchet_storage::seaorm::config::DatabaseConfig {
+        url: config.database.url.clone(),
+        max_connections: config.database.max_connections,
+        connection_timeout: std::time::Duration::from_secs(config.database.connection_timeout_seconds),
+    };
+    
+    let db_connection = ratchet_storage::seaorm::connection::DatabaseConnection::new(storage_config).await?;
+    let storage_factory = ratchet_storage::seaorm::repositories::RepositoryFactory::new(db_connection);
+    Ok(Arc::new(crate::bridges::BridgeRepositoryFactory::new(Arc::new(storage_factory))))
 }
 
 /// Create task registry from configuration

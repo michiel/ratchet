@@ -114,6 +114,7 @@ registry:
   sources:
     - name: "local-tasks"              # Source name
       uri: "file://./sample/js-tasks"  # Local filesystem path
+      polling_interval: 30             # Required field for polling interval in seconds
       config:
         watch_for_changes: true        # Enable file watching
         auto_reload: false             # Auto-reload on changes
