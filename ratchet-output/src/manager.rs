@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
@@ -10,11 +10,21 @@ use tracing::{debug, error, info, warn};
 use crate::{
     destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput},
     destinations::{FilesystemDestination, WebhookDestination},
-    errors::{ConfigError, DeliveryError},
+    errors::{ConfigError, DeliveryError, ValidationError},
     metrics::DeliveryMetrics,
     template::TemplateEngine,
     OutputDestinationConfig,
 };
+
+/// Result of testing a destination configuration
+#[derive(Debug, Clone)]
+pub struct TestResult {
+    pub index: usize,
+    pub destination_type: String,
+    pub success: bool,
+    pub error: Option<String>,
+    pub estimated_time: Duration,
+}
 
 /// Manager for handling output delivery to multiple destinations
 pub struct OutputDeliveryManager {
@@ -39,7 +49,7 @@ impl OutputDeliveryManager {
         name: String,
         config: OutputDestinationConfig,
     ) -> Result<(), ConfigError> {
-        let destination = self.create_destination(config).await?;
+        let destination = Self::create_destination_static(config, &self.template_engine)?;
         
         // Validate the destination configuration
         destination.validate_config()
@@ -166,10 +176,81 @@ impl OutputDeliveryManager {
         destinations.keys().cloned().collect()
     }
 
-    /// Create a destination from configuration
-    async fn create_destination(
-        &self,
+    /// Create a delivery manager from destination configurations
+    pub fn from_configs(
+        configs: &[OutputDestinationConfig],
+        max_concurrent: usize,
+    ) -> Result<Self, ConfigError> {
+        let manager = Self::new();
+
+        for (index, config) in configs.iter().enumerate() {
+            let destination = Self::create_destination_static(config.clone(), &manager.template_engine)?;
+            destination
+                .validate_config()
+                .map_err(|e| ConfigError::InvalidDestination {
+                    destination_type: destination.destination_type().to_string(),
+                    error: e,
+                })?;
+            
+            // Use index as the destination name for now
+            let destination_name = format!("destination_{}", index);
+            tokio::runtime::Handle::current().block_on(async {
+                let mut destinations = manager.destinations.write().await;
+                destinations.insert(destination_name, destination);
+            });
+        }
+
+        Ok(manager)
+    }
+
+    /// Test delivery configurations without actually delivering
+    pub async fn test_configurations(
+        configs: &[OutputDestinationConfig],
+    ) -> Result<Vec<TestResult>, ConfigError> {
+        let mut results = Vec::new();
+        let template_engine = TemplateEngine::new();
+
+        for (idx, config) in configs.iter().enumerate() {
+            match Self::create_destination_static(config.clone(), &template_engine) {
+                Ok(destination) => match destination.validate_config() {
+                    Ok(()) => {
+                        results.push(TestResult {
+                            index: idx,
+                            destination_type: destination.destination_type().to_string(),
+                            success: true,
+                            error: None,
+                            estimated_time: destination.estimated_delivery_time(),
+                        });
+                    }
+                    Err(e) => {
+                        results.push(TestResult {
+                            index: idx,
+                            destination_type: destination.destination_type().to_string(),
+                            success: false,
+                            error: Some(e.to_string()),
+                            estimated_time: Duration::ZERO,
+                        });
+                    }
+                },
+                Err(e) => {
+                    results.push(TestResult {
+                        index: idx,
+                        destination_type: "unknown".to_string(),
+                        success: false,
+                        error: Some(e.to_string()),
+                        estimated_time: Duration::ZERO,
+                    });
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Create a destination from configuration (static version)
+    fn create_destination_static(
         config: OutputDestinationConfig,
+        template_engine: &TemplateEngine,
     ) -> Result<Arc<dyn OutputDestination>, ConfigError> {
         match config {
             OutputDestinationConfig::Filesystem {
@@ -191,7 +272,7 @@ impl OutputDeliveryManager {
                 
                 Ok(Arc::new(FilesystemDestination::new(
                     fs_config,
-                    self.template_engine.clone(),
+                    template_engine.clone(),
                 )))
             }
             OutputDestinationConfig::Webhook {
@@ -221,7 +302,7 @@ impl OutputDeliveryManager {
                 Ok(Arc::new(WebhookDestination::new(
                     webhook_config,
                     client,
-                    self.template_engine.clone(),
+                    template_engine.clone(),
                 )))
             }
             OutputDestinationConfig::Database { .. } => {
@@ -231,6 +312,14 @@ impl OutputDeliveryManager {
                 Err(ConfigError::UnsupportedDestination("s3".to_string()))
             }
         }
+    }
+
+    /// Create a destination from configuration (instance method)
+    async fn create_destination(
+        &self,
+        config: OutputDestinationConfig,
+    ) -> Result<Arc<dyn OutputDestination>, ConfigError> {
+        Self::create_destination_static(config, &self.template_engine)
     }
 }
 

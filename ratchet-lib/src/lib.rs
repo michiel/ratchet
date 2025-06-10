@@ -25,7 +25,10 @@ pub mod logging {
         pub use ratchet_interfaces::logging::StructuredLogger;
     }
 }
-pub mod output;
+// Output functionality moved to ratchet-output crate
+pub mod output {
+    pub use ratchet_output::*;
+}
 // Recording functionality moved to ratchet-http crate
 #[cfg(feature = "default")]
 pub mod recording {

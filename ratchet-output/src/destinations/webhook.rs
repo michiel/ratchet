@@ -106,6 +106,11 @@ impl WebhookDestination {
                 HttpMethod::Put => self.client.put(url),
                 HttpMethod::Patch => self.client.patch(url),
                 HttpMethod::Delete => self.client.delete(url),
+                HttpMethod::Head => self.client.head(url),
+                HttpMethod::Options => {
+                    let mut req = self.client.request(reqwest::Method::OPTIONS, url);
+                    req
+                },
             };
 
             // Add headers

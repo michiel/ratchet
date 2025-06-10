@@ -48,27 +48,15 @@ pub mod template;
 pub use destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput};
 pub use destinations::{FilesystemDestination, WebhookDestination};
 pub use errors::{ConfigError, DeliveryError, ValidationError};
-pub use manager::OutputDeliveryManager;
+pub use manager::{OutputDeliveryManager, TestResult};
 pub use template::TemplateEngine;
+
+// Re-export HttpMethod from ratchet-http for consistency
+pub use ratchet_http::HttpMethod;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-
-/// HTTP method enumeration for webhooks
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum HttpMethod {
-    #[serde(rename = "GET")]
-    Get,
-    #[serde(rename = "POST")]
-    Post,
-    #[serde(rename = "PUT")]
-    Put,
-    #[serde(rename = "PATCH")]
-    Patch,
-    #[serde(rename = "DELETE")]
-    Delete,
-}
 
 /// Configuration for output destinations
 #[derive(Debug, Clone, Serialize, Deserialize)]

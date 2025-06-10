@@ -19,6 +19,9 @@ tokio = { workspace = true, features = ["fs"] }
 chrono = { workspace = true, features = ["serde"] }
 uuid = { workspace = true }
 
+# Ratchet dependencies
+ratchet-http = { path = "../ratchet-http" }
+
 # HTTP client for webhooks
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 
