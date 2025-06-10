@@ -118,10 +118,9 @@ pub async fn graphql_playground() -> impl IntoResponse {
                         name: 'Task Executions',
                         endpoint: '/graphql',
                         query: `query TaskExecutions($taskId: String) {
-  executions(taskId: $taskId) {
+  executions(filters: { taskId: $taskId }) {
     items {
       id
-      uuid
       taskId
       input
       output
@@ -145,73 +144,25 @@ pub async fn graphql_playground() -> impl IntoResponse {
                         variables: '{"taskId": null}'
                     },
                     {
-                        name: 'Execute Task',
+                        name: 'Task Statistics',
                         endpoint: '/graphql',
-                        query: `mutation ExecuteTask($input: ExecuteTaskInput!) {
-  executeTask(input: $input) {
-    id
-    taskId
-    priority
-    status
-    retryCount
-    maxRetries
-    queuedAt
-    scheduledFor
-    errorMessage
-  }
-}`,
-                        variables: '{"input": {"taskId": "1", "inputData": {}, "priority": "NORMAL"}}'
-                    },
-                    {
-                        name: 'Execute Task Direct',
-                        endpoint: '/graphql',
-                        query: `mutation ExecuteTaskDirect($taskId: String!, $inputData: JSON!) {
-  executeTaskDirect(taskId: $taskId, inputData: $inputData) {
-    success
-    output
-    error
-    durationMs
-  }
-}`,
-                        variables: '{"taskId": "1", "inputData": {}}'
-                    },
-                    {
-                        name: 'System Health',
-                        endpoint: '/graphql',
-                        query: `query SystemHealth {
-  health {
-    database
-    jobQueue
-    scheduler
-    message
-  }
+                        query: `query TaskStatistics {
   taskStats {
     totalTasks
     enabledTasks
     disabledTasks
-  }
-  executionStats {
     totalExecutions
-    pending
-    running
-    completed
-    failed
-  }
-  jobStats {
-    totalJobs
-    queued
-    processing
-    completed
-    failed
-    retrying
+    successfulExecutions
+    failedExecutions
+    averageExecutionTimeMs
   }
 }`
                     },
                     {
                         name: 'Jobs Queue',
                         endpoint: '/graphql',
-                        query: `query JobsQueue($status: JobStatus) {
-  jobs(status: $status) {
+                        query: `query JobsQueue($status: JobStatusGraphQL) {
+  jobs(filters: { status: $status }) {
     items {
       id
       taskId
@@ -222,10 +173,6 @@ pub async fn graphql_playground() -> impl IntoResponse {
       queuedAt
       scheduledFor
       errorMessage
-      outputDestinations {
-        destinationType
-        template
-      }
     }
     meta {
       page
@@ -240,10 +187,10 @@ pub async fn graphql_playground() -> impl IntoResponse {
                         variables: '{"status": null}'
                     },
                     {
-                        name: 'Get Task by UUID',
+                        name: 'Get Task by ID',
                         endpoint: '/graphql',
-                        query: `query GetTaskByUUID($uuid: UUID!, $version: String) {
-  task(uuid: $uuid, version: $version) {
+                        query: `query GetTaskById($id: String!) {
+  task(id: $id) {
     id
     uuid
     name
@@ -261,35 +208,44 @@ pub async fn graphql_playground() -> impl IntoResponse {
     metadata
   }
 }`,
-                        variables: '{"uuid": "00000000-0000-0000-0000-000000000000", "version": null}'
+                        variables: '{"id": "1"}'
                     },
                     {
-                        name: 'Update Task Status',
+                        name: 'Get Single Job by ID',
                         endpoint: '/graphql',
-                        query: `mutation UpdateTaskStatus($id: String!, $enabled: Boolean!) {
-  updateTaskStatus(id: $id, enabled: $enabled) {
+                        query: `query GetJobById($id: String!) {
+  job(id: $id) {
     id
-    uuid
-    name
-    enabled
-    updatedAt
+    taskId
+    priority
+    status
+    retryCount
+    maxRetries
+    queuedAt
+    scheduledFor
+    errorMessage
   }
 }`,
-                        variables: '{"id": "1", "enabled": true}'
+                        variables: '{"id": "1"}'
                     },
                     {
-                        name: 'Test Output Destinations',
+                        name: 'Get Single Execution by ID',
                         endpoint: '/graphql',
-                        query: `mutation TestOutputDestinations($input: TestOutputDestinationsInput!) {
-  testOutputDestinations(input: $input) {
-    index
-    destinationType
-    success
-    error
-    estimatedTimeMs
+                        query: `query GetExecutionById($id: String!) {
+  execution(id: $id) {
+    id
+    taskId
+    status
+    input
+    output
+    errorMessage
+    queuedAt
+    startedAt
+    completedAt
+    durationMs
   }
 }`,
-                        variables: '{"input": {"destinations": [{"destinationType": "FILESYSTEM", "filesystem": {"path": "/tmp/test.json", "format": "JSON"}}]}}'
+                        variables: '{"id": "1"}'
                     }
                 ]
             })
