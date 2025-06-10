@@ -3713,6 +3713,7 @@ dependencies = [
  "ratchet-config",
  "ratchet-core",
  "ratchet-execution",
+ "ratchet-http",
  "ratchet-js",
  "ratchet-mcp",
  "ratchet-plugins",

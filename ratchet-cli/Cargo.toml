@@ -41,6 +41,7 @@ ratchet-resilience = { path = "../ratchet-resilience", optional = true }
 ratchet-plugins = { path = "../ratchet-plugins", optional = true }
 ratchet-runtime = { path = "../ratchet-runtime", optional = true }
 ratchet-js = { path = "../ratchet-js", optional = true }
+ratchet-http = { path = "../ratchet-http", optional = true }
 ratchet-server = { path = "../ratchet-server", optional = true }
 
 # Binary-specific dependencies (commented out for now due to network issues)
@@ -49,7 +50,7 @@ ratchet-server = { path = "../ratchet-server", optional = true }
 
 # Feature flags for optional functionality
 [features]
-default = ["server", "database", "mcp-server", "plugins", "javascript", "output", "runtime"]
+default = ["server", "database", "mcp-server", "plugins", "javascript", "output", "runtime", "http"]
 
 # Core functionality (minimal build)
 core = []
@@ -89,6 +90,9 @@ resilience = ["dep:ratchet-resilience"]
 
 # Runtime execution engine
 runtime = ["dep:ratchet-runtime"]
+
+# HTTP client functionality
+http = ["dep:ratchet-http"]
 
 # Full feature set (everything enabled)
 full = ["server", "database", "mcp-server", "plugins", "javascript", "output", "caching", "resilience", "runtime"]

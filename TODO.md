@@ -165,6 +165,7 @@
   - [ ] Interactive API documentation endpoint
   - [ ] GraphQL schema documentation and introspection
   - [ ] API client generation tools
+  - [ ] **Known Issue**: Fix GraphQL playground predefined queries - currently only ListAllTasks works
   
 - [ ] **Monitoring & Observability**
   - [ ] Prometheus metrics endpoint (`/metrics`)

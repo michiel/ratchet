@@ -12,7 +12,13 @@ use ratchet_execution::{
     ExecutionBridge,
 };
 
-use ratchet_lib::{http::{HttpConfig, HttpManager}, js_executor::execute_task, recording, task::Task};
+use ratchet_lib::{js_executor::execute_task, recording, task::Task};
+
+#[cfg(feature = "http")]
+use ratchet_http::HttpConfig;
+
+// Keep using ratchet_lib's HttpManager for compatibility with execute_task
+use ratchet_lib::http::HttpManager;
 
 #[cfg(feature = "database")]
 use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
@@ -27,11 +33,9 @@ use uuid::Uuid;
 #[cfg(feature = "core")]
 use ratchet_core::task::Task as CoreTask;
 
-#[cfg(feature = "runtime")]
-use ratchet_runtime::InMemoryTaskExecutor;
 
 #[cfg(feature = "javascript")]
-use ratchet_js::{FileSystemTask, load_and_execute_task, JsTaskRunner};
+use ratchet_js::{FileSystemTask, load_and_execute_task};
 
 mod cli;
 use cli::{Cli, Commands, ConfigCommands, GenerateCommands};
@@ -99,7 +103,11 @@ fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfi
     };
 
     // Convert HTTP config
-    let http_config = HttpConfig {
+    #[cfg(feature = "http")]
+    let http_config = HttpConfig::from(new_config.http.clone());
+    
+    #[cfg(not(feature = "http"))]
+    let http_config = ratchet_lib::config::HttpConfig {
         timeout: new_config.http.timeout,
         user_agent: new_config.http.user_agent,
         verify_ssl: new_config.http.verify_ssl,
@@ -245,7 +253,6 @@ async fn serve_command_with_config(config: LibRatchetConfig, new_config: Ratchet
 #[cfg(feature = "server")]
 async fn serve_with_ratchet_server(config: RatchetConfig) -> Result<()> {
     use ratchet_server::{ServerConfig, Server};
-    use std::sync::Arc;
     
     info!("🚀 Starting Ratchet server with new modular architecture");
     
@@ -887,27 +894,21 @@ fn parse_input_json(input_json: Option<&String>) -> Result<JsonValue> {
 #[cfg(all(feature = "runtime", feature = "core", feature = "javascript"))]
 fn load_task_as_core_task(from_fs: &str) -> Result<CoreTask> {
     use ratchet_core::task::TaskBuilder;
-    use ratchet_lib::task::Task as LibTask;
 
-    // Load using ratchet_lib's filesystem loader
-    let mut lib_task =
-        LibTask::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
+    // Load using ratchet_js's filesystem loader
+    let fs_task = FileSystemTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
 
-    // Ensure JavaScript content is loaded
-    lib_task
-        .ensure_content_loaded()
-        .map_err(|e| anyhow::anyhow!("Failed to load task content: {}", e))?;
+    // Convert to Core Task using the loaded content
+    let version = fs_task.metadata.core
+        .as_ref()
+        .map(|c| c.version.clone())
+        .unwrap_or_else(|| fs_task.metadata.version.clone());
 
-    // Get the JavaScript content
-    let js_content = lib_task
-        .js_content()
-        .ok_or_else(|| anyhow::anyhow!("No JavaScript content available"))?;
-
-    // Convert to Core Task
-    let core_task = TaskBuilder::new(&lib_task.metadata.label, &lib_task.metadata.core.version)
-        .input_schema(lib_task.input_schema.clone())
-        .output_schema(lib_task.output_schema.clone())
-        .javascript_source(js_content)
+    let core_task = TaskBuilder::new(&fs_task.metadata.label, &version)
+        .input_schema(fs_task.input_schema)
+        .output_schema(fs_task.output_schema)
+        .javascript_source(&fs_task.content)
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to build Core Task: {}", e))?;
 
@@ -919,7 +920,7 @@ fn load_task_as_core_task(from_fs: &str) -> Result<CoreTask> {
 async fn run_task_runtime(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
     info!("Loading task from: {} (using runtime executor)", from_fs);
 
-    // Load the task as Core Task (with conversion from ratchet_lib if available)
+    // Load the task as Core Task (using ratchet_js filesystem loader)
     #[cfg(feature = "javascript")]
     let task = load_task_as_core_task(from_fs)?;
 
