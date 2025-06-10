@@ -15,8 +15,11 @@
 //! ## Example
 //!
 //! ```rust
-//! use ratchet_output::{OutputDeliveryManager, OutputDestinationConfig, OutputFormat};
+//! use ratchet_output::{OutputDeliveryManager, OutputDestinationConfig, OutputFormat, TaskOutput, DeliveryContext};
 //! use serde_json::json;
+//! use chrono::Utc;
+//! use std::collections::HashMap;
+//! use std::time::Duration;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = OutputDestinationConfig::Filesystem {
@@ -29,10 +32,18 @@
 //! };
 //!
 //! let manager = OutputDeliveryManager::new();
-//! manager.add_destination("results", config);
+//! manager.add_destination("results".to_string(), config).await?;
 //!
-//! let output = json!({"status": "success", "result": 42});
-//! let context = Default::default();
+//! let output = TaskOutput {
+//!     job_id: 1,
+//!     task_id: 1,
+//!     execution_id: 1,
+//!     output_data: json!({"status": "success", "result": 42}),
+//!     metadata: HashMap::new(),
+//!     completed_at: Utc::now(),
+//!     execution_duration: Duration::from_secs(1),
+//! };
+//! let context = DeliveryContext::default();
 //! manager.deliver_output("results", &output, &context).await?;
 //! # Ok(())
 //! # }
@@ -50,6 +61,7 @@ pub use destinations::{FilesystemDestination, WebhookDestination};
 pub use errors::{ConfigError, DeliveryError, ValidationError};
 pub use manager::{OutputDeliveryManager, TestResult};
 pub use template::TemplateEngine;
+
 
 // Re-export HttpMethod from ratchet-http for consistency
 pub use ratchet_http::HttpMethod;

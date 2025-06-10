@@ -176,29 +176,29 @@ impl ServerConfig {
         Ok(Self {
             server: HttpServerConfig {
                 bind_address,
-                enable_cors: server_config.enable_cors.unwrap_or(true),
-                enable_request_id: server_config.enable_request_id.unwrap_or(true),
-                enable_tracing: server_config.enable_tracing.unwrap_or(true),
-                shutdown_timeout_seconds: server_config.shutdown_timeout.map(|t| t as u64).unwrap_or(30),
+                enable_cors: server_config.cors.allowed_origins.contains(&"*".to_string()),
+                enable_request_id: true, // Default enabled
+                enable_tracing: true, // Default enabled  
+                shutdown_timeout_seconds: 30, // Default value
             },
             rest_api: RestApiConfig {
-                enabled: config.rest_api.map(|r| r.enabled).unwrap_or(true),
-                prefix: config.rest_api.map(|r| r.prefix).unwrap_or_else(|| "/api/v1".to_string()),
+                enabled: true, // Default enabled
+                prefix: "/api/v1".to_string(), // Default prefix
                 enable_health_checks: true,
                 enable_detailed_health: true,
                 enable_openapi_docs: true,
             },
             graphql_api: GraphQLApiConfig {
-                enabled: config.graphql_api.map(|g| g.enabled).unwrap_or(true),
-                endpoint: config.graphql_api.map(|g| g.endpoint).unwrap_or_else(|| "/graphql".to_string()),
-                enable_playground: config.graphql_api.and_then(|g| g.enable_playground).unwrap_or(true),
+                enabled: true, // Default enabled
+                endpoint: "/graphql".to_string(), // Default endpoint
+                enable_playground: true, // Default enabled
                 enable_introspection: true,
                 max_query_depth: Some(15),
                 max_query_complexity: Some(1000),
                 enable_apollo_tracing: false,
             },
             logging: LoggingConfig {
-                level: config.logging.map(|l| l.level.to_string()).unwrap_or_else(|| "info".to_string()),
+                level: format!("{:?}", config.logging.level).to_lowercase(),
                 format: "json".to_string(),
                 enable_structured: true,
                 enable_file_logging: false,
@@ -208,25 +208,15 @@ impl ServerConfig {
                 url: server_config.database.url,
                 max_connections: server_config.database.max_connections as u32,
                 min_connections: 1,
-                connection_timeout_seconds: server_config.database.connection_timeout.unwrap_or(30),
+                connection_timeout_seconds: server_config.database.connection_timeout.as_secs(),
                 enable_migrations: true,
             },
             registry: RegistryConfig {
-                filesystem_paths: config.registry
-                    .and_then(|r| r.filesystem_paths)
-                    .unwrap_or_else(|| vec!["./tasks".to_string()]),
-                http_endpoints: config.registry
-                    .and_then(|r| r.http_endpoints)
-                    .unwrap_or_else(Vec::new),
-                sync_interval_seconds: config.registry
-                    .and_then(|r| r.sync_interval_seconds.map(|s| s as u64))
-                    .unwrap_or(300),
-                enable_auto_sync: config.registry
-                    .and_then(|r| r.enable_auto_sync)
-                    .unwrap_or(true),
-                enable_validation: config.registry
-                    .and_then(|r| r.enable_validation)
-                    .unwrap_or(true),
+                filesystem_paths: vec!["./tasks".to_string()], // Default value
+                http_endpoints: Vec::new(), // Default empty
+                sync_interval_seconds: 300, // Default 5 minutes
+                enable_auto_sync: true, // Default enabled
+                enable_validation: true, // Default enabled
             },
         })
     }

@@ -14,7 +14,7 @@ use ratchet_interfaces::{
     TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
     DatabaseError, Repository
 };
-use ratchet_storage::seaorm::repositories::Repository as StorageRepository;
+use ratchet_storage::seaorm::repositories::{Repository as StorageRepository, task_repository};
 use ratchet_api_types::{
     ApiId, PaginationInput, ListResponse,
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
@@ -277,8 +277,8 @@ fn convert_unified_task_to_storage(task: UnifiedTask) -> ratchet_storage::seaorm
 }
 
 /// Convert interface TaskFilters to storage TaskFilters
-fn convert_filters_to_storage(filters: TaskFilters) -> ratchet_storage::seaorm::repositories::TaskFilters {
-    ratchet_storage::seaorm::repositories::TaskFilters {
+fn convert_filters_to_storage(filters: TaskFilters) -> ratchet_storage::seaorm::repositories::task_repository::TaskFilters {
+    ratchet_storage::seaorm::repositories::task_repository::TaskFilters {
         name: filters.name,
         enabled: filters.enabled,
         has_validation: filters.validated_after.map(|_| true), // Convert validated_after to has_validation
@@ -287,11 +287,11 @@ fn convert_filters_to_storage(filters: TaskFilters) -> ratchet_storage::seaorm::
 }
 
 /// Convert interface PaginationInput to storage Pagination
-fn convert_pagination_to_storage(pagination: PaginationInput) -> ratchet_storage::seaorm::repositories::Pagination {
-    ratchet_storage::seaorm::repositories::Pagination {
-        limit: pagination.limit,
-        offset: pagination.offset,
-        order_by: None, // Not supported in current interface
-        order_desc: None, // Not supported in current interface
+fn convert_pagination_to_storage(pagination: PaginationInput) -> ratchet_storage::seaorm::repositories::task_repository::Pagination {
+    ratchet_storage::seaorm::repositories::task_repository::Pagination {
+        limit: Some(pagination.get_limit() as u64),
+        offset: Some(pagination.get_offset() as u64),
+        order_by: None,
+        order_desc: None,
     }
 }

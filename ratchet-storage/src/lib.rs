@@ -26,7 +26,7 @@ pub use config::StorageConfig;
 pub use connection::{Connection, ConnectionManager};
 pub use error::{StorageError, StorageResult};
 pub use filters::SafeFilterBuilder;
-pub use repositories::Repository;
+pub use repositories::{Repository, BaseRepository, BaseRepositoryImpl, RepositoryFactory};
 pub use transaction::{Transaction, TransactionManager};
 
 // Entity re-exports

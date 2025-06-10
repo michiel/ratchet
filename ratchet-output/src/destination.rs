@@ -48,7 +48,7 @@ pub struct TaskOutput {
 }
 
 /// Context information for delivery
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct DeliveryContext {
     pub job_id: i32,
     pub task_name: String,
@@ -57,6 +57,20 @@ pub struct DeliveryContext {
     pub environment: String,
     pub trace_id: String,
     pub template_variables: HashMap<String, String>,
+}
+
+impl Default for DeliveryContext {
+    fn default() -> Self {
+        Self {
+            job_id: 0,
+            task_name: String::new(),
+            task_version: String::new(),
+            timestamp: Utc::now(),
+            environment: String::new(),
+            trace_id: String::new(),
+            template_variables: HashMap::new(),
+        }
+    }
 }
 
 /// Result of a delivery attempt
