@@ -453,6 +453,6 @@ mcp:
 - Monitor logs: `tail -f ratchet.log`
 
 For detailed setup instructions, see:
-- [Claude MCP Setup Guide](CLAUDE_MCP_SETUP.md)
-- [Server Configuration Guide](SERVER_CONFIGURATION_GUIDE.md)
+- [MCP Integration Guide](MCP_INTEGRATION_GUIDE.md)
+- [Configuration Guide](CONFIGURATION_GUIDE.md)
 - [MCP Server Documentation](MCP_SERVER.md)

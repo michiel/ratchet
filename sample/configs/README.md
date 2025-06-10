@@ -49,6 +49,6 @@ ratchet mcp-serve --config path/to/your-mcp-config.yaml
 - **Enterprise**: Full-featured configuration with all bells and whistles
 
 For detailed configuration documentation, see:
-- [MCP Configuration Guide](/docs/MCP_CONFIGURATION_GUIDE.md)
-- [Server Configuration Guide](/docs/SERVER_CONFIGURATION_GUIDE.md)
-- [Claude Desktop Setup](/docs/CLAUDE_DESKTOP_SETUP.md)
+- [Configuration Guide](/docs/CONFIGURATION_GUIDE.md)
+- [MCP Integration Guide](/docs/MCP_INTEGRATION_GUIDE.md)
+- [CLI Usage Guide](/docs/CLI_USAGE.md)

@@ -201,10 +201,10 @@ mcp:
 
 ```bash
 # Start with stdio transport (for local LLM integration)
-ratchet mcp serve --transport stdio
+ratchet mcp-serve --transport stdio
 
 # Start with SSE transport (for network access)
-ratchet mcp serve --transport sse --port 8090
+ratchet mcp-serve --transport sse --port 8090
 ```
 
 ### Client Integration
@@ -214,7 +214,7 @@ ratchet mcp serve --transport sse --port 8090
 import mcp_client
 
 # Connect to Ratchet MCP server
-client = mcp_client.StdioClient("ratchet mcp serve")
+client = mcp_client.StdioClient("ratchet mcp-serve")
 await client.initialize()
 
 # List available tasks
@@ -270,7 +270,7 @@ result = await client.call_tool("ratchet.execute_task", {
 cargo test -p ratchet-mcp
 
 # Test with a mock client
-cargo run --bin ratchet-mcp-test-client
+ratchet mcp-serve --config test-config.yaml
 ```
 
 ## Troubleshooting
