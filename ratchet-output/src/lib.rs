@@ -6,11 +6,13 @@
 //! ## Features
 //!
 //! - **Multiple Destinations**: Support for filesystem, webhooks, databases, and cloud storage
+//! - **Cross-Platform**: Full compatibility with Linux, macOS, and Windows
 //! - **Template Engine**: Dynamic configuration using Handlebars templates
 //! - **Retry Logic**: Configurable retry policies with exponential backoff
 //! - **Authentication**: Multiple auth methods for webhooks (Bearer, Basic, API Key, HMAC)
 //! - **Format Support**: JSON, YAML, CSV, and custom templates
 //! - **Async/Await**: Full async support for non-blocking operations
+//! - **Path Safety**: Automatic path normalization and validation for all platforms
 //!
 //! ## Example
 //!

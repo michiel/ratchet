@@ -10,7 +10,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput},
     destinations::{FilesystemDestination, WebhookDestination},
-    errors::{ConfigError, DeliveryError, ValidationError},
+    errors::{ConfigError, DeliveryError},
     metrics::DeliveryMetrics,
     template::TemplateEngine,
     OutputDestinationConfig,
@@ -179,7 +179,7 @@ impl OutputDeliveryManager {
     /// Create a delivery manager from destination configurations
     pub fn from_configs(
         configs: &[OutputDestinationConfig],
-        max_concurrent: usize,
+        _max_concurrent: usize,
     ) -> Result<Self, ConfigError> {
         let manager = Self::new();
 
@@ -294,9 +294,7 @@ impl OutputDeliveryManager {
                     content_type,
                 };
 
-                let client = reqwest::Client::builder()
-                    .timeout(timeout)
-                    .build()
+                let client = WebhookDestination::create_default_client()
                     .map_err(|e| ConfigError::HttpClientCreate { source: e })?;
 
                 Ok(Arc::new(WebhookDestination::new(
@@ -314,13 +312,6 @@ impl OutputDeliveryManager {
         }
     }
 
-    /// Create a destination from configuration (instance method)
-    async fn create_destination(
-        &self,
-        config: OutputDestinationConfig,
-    ) -> Result<Arc<dyn OutputDestination>, ConfigError> {
-        Self::create_destination_static(config, &self.template_engine)
-    }
 }
 
 impl Default for OutputDeliveryManager {
