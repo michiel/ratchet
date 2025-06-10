@@ -2,7 +2,6 @@
 
 use async_graphql::{InputObject, SimpleObject};
 use ratchet_api_types::UnifiedTask;
-use super::scalars::GraphQLApiId;
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 

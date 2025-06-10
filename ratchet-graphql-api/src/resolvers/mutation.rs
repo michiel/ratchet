@@ -16,7 +16,7 @@ impl Mutation {
     async fn create_task(
         &self,
         ctx: &Context<'_>,
-        input: CreateTaskInput,
+        _input: CreateTaskInput,
     ) -> Result<Task> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -28,8 +28,8 @@ impl Mutation {
     async fn update_task(
         &self,
         ctx: &Context<'_>,
-        id: GraphQLApiId,
-        input: UpdateTaskInput,
+        _id: GraphQLApiId,
+        _input: UpdateTaskInput,
     ) -> Result<Task> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -41,7 +41,7 @@ impl Mutation {
     async fn delete_task(
         &self,
         ctx: &Context<'_>,
-        id: GraphQLApiId,
+        _id: GraphQLApiId,
     ) -> Result<bool> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -53,7 +53,7 @@ impl Mutation {
     async fn create_execution(
         &self,
         ctx: &Context<'_>,
-        input: CreateExecutionInput,
+        _input: CreateExecutionInput,
     ) -> Result<Execution> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -65,7 +65,7 @@ impl Mutation {
     async fn create_job(
         &self,
         ctx: &Context<'_>,
-        input: CreateJobInput,
+        _input: CreateJobInput,
     ) -> Result<Job> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -77,7 +77,7 @@ impl Mutation {
     async fn create_schedule(
         &self,
         ctx: &Context<'_>,
-        input: CreateScheduleInput,
+        _input: CreateScheduleInput,
     ) -> Result<Schedule> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -89,8 +89,8 @@ impl Mutation {
     async fn update_schedule(
         &self,
         ctx: &Context<'_>,
-        id: GraphQLApiId,
-        input: UpdateScheduleInput,
+        _id: GraphQLApiId,
+        _input: UpdateScheduleInput,
     ) -> Result<Schedule> {
         let _context = ctx.data::<GraphQLContext>()?;
         

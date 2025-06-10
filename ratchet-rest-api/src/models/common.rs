@@ -1,7 +1,6 @@
 //! Common types for REST API requests and responses
 
 use serde::{Deserialize, Serialize};
-use ratchet_api_types::pagination::PaginationMeta;
 
 /// Standard API response wrapper
 pub use ratchet_web::ApiResponse;

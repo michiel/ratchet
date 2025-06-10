@@ -64,7 +64,7 @@ pub async fn get_task(
 
 /// Create a new task
 pub async fn create_task(
-    State(ctx): State<TasksContext>,
+    State(_ctx): State<TasksContext>,
     Json(request): Json<CreateTaskRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Creating task: {}", request.name);
@@ -83,9 +83,9 @@ pub async fn create_task(
 
 /// Update an existing task
 pub async fn update_task(
-    State(ctx): State<TasksContext>,
+    State(_ctx): State<TasksContext>,
     Path(task_id): Path<String>,
-    Json(request): Json<UpdateTaskRequest>,
+    Json(_request): Json<UpdateTaskRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Updating task with ID: {}", task_id);
     
@@ -103,7 +103,7 @@ pub async fn update_task(
 
 /// Delete a task
 pub async fn delete_task(
-    State(ctx): State<TasksContext>,
+    State(_ctx): State<TasksContext>,
     Path(task_id): Path<String>,
 ) -> RestResult<impl IntoResponse> {
     info!("Deleting task with ID: {}", task_id);

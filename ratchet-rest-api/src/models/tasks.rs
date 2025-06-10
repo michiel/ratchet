@@ -1,7 +1,6 @@
 //! Task-related request and response models
 
 use serde::{Deserialize, Serialize};
-use ratchet_api_types::{UnifiedTask, ApiId};
 
 /// Request to create a new task
 #[derive(Debug, Clone, Serialize, Deserialize)]

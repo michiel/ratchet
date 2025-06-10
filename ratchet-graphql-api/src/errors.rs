@@ -1,12 +1,10 @@
 //! GraphQL error handling using unified error types
 
 use ratchet_api_types::ApiError;
-use ratchet_api_types::errors::ApiResult;
 use thiserror::Error;
 
 // Re-export the unified error types for consistency
 pub use ratchet_api_types::ApiError as UnifiedApiError;
-pub use ratchet_api_types::errors::ApiResult as UnifiedApiResult;
 
 /// GraphQL-specific error wrapper for external errors
 #[derive(Error, Debug)]

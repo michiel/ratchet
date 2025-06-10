@@ -1,7 +1,7 @@
 //! Execution-related request and response models
 
 use serde::{Deserialize, Serialize};
-use ratchet_api_types::{UnifiedExecution, ApiId, ExecutionStatus};
+use ratchet_api_types::{ApiId, ExecutionStatus};
 
 /// Request to create a new execution
 #[derive(Debug, Clone, Serialize, Deserialize)]

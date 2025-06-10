@@ -212,21 +212,61 @@ impl Server {
         // Endpoints
         tracing::info!("📋 Available endpoints:");
         tracing::info!("   🏠 Root: http://{}/", self.config.server.bind_address);
-        tracing::info!("   ❤️  Health: http://{}/health", self.config.server.bind_address);
+        
+        // Health endpoints
+        tracing::info!("   ❤️  Health Endpoints:");
+        tracing::info!("      • Basic Health:     http://{}/health", self.config.server.bind_address);
+        tracing::info!("      • Detailed Health:  http://{}/health/detailed", self.config.server.bind_address);
+        tracing::info!("      • Readiness:        http://{}/ready", self.config.server.bind_address);
+        tracing::info!("      • Liveness:         http://{}/live", self.config.server.bind_address);
         
         if self.config.rest_api.enabled {
-            tracing::info!("   🔗 REST API: http://{}{}/", self.config.server.bind_address, self.config.rest_api.prefix);
+            let base_url = format!("http://{}", self.config.server.bind_address);
+            let api_prefix = &self.config.rest_api.prefix;
+            tracing::info!("   🔗 REST API Base: {}{}/", base_url, api_prefix);
+            tracing::info!("      📝 Task Management:");
+            tracing::info!("      • List Tasks:       GET    {}{}/tasks", base_url, api_prefix);
+            tracing::info!("      • Create Task:      POST   {}{}/tasks", base_url, api_prefix);
+            tracing::info!("      • Get Task:         GET    {}{}/tasks/:id", base_url, api_prefix);
+            tracing::info!("      • Update Task:      PATCH  {}{}/tasks/:id", base_url, api_prefix);
+            tracing::info!("      • Delete Task:      DELETE {}{}/tasks/:id", base_url, api_prefix);
+            tracing::info!("      • Enable Task:      POST   {}{}/tasks/:id/enable", base_url, api_prefix);
+            tracing::info!("      • Disable Task:     POST   {}{}/tasks/:id/disable", base_url, api_prefix);
+            tracing::info!("      • Task Stats:       GET    {}{}/tasks/stats", base_url, api_prefix);
+            tracing::info!("      • Sync Tasks:       POST   {}{}/tasks/sync", base_url, api_prefix);
+            tracing::info!("      🔄 Execution Management:");
+            tracing::info!("      • List Executions:  GET    {}{}/executions", base_url, api_prefix);
+            tracing::info!("      • Get Execution:    GET    {}{}/executions/:id", base_url, api_prefix);
+            tracing::info!("      ⚙️  Job Management:");
+            tracing::info!("      • List Jobs:        GET    {}{}/jobs", base_url, api_prefix);
+            tracing::info!("      • Get Job:          GET    {}{}/jobs/:id", base_url, api_prefix);
+            tracing::info!("      📅 Schedule Management:");
+            tracing::info!("      • List Schedules:   GET    {}{}/schedules", base_url, api_prefix);
+            tracing::info!("      • Get Schedule:     GET    {}{}/schedules/:id", base_url, api_prefix);
+            tracing::info!("      👷 Worker Management:");
+            tracing::info!("      • List Workers:     GET    {}{}/workers", base_url, api_prefix);
+            tracing::info!("      • Worker Stats:     GET    {}{}/workers/stats", base_url, api_prefix);
         }
         
         if self.config.graphql_api.enabled {
-            tracing::info!("   🔍 GraphQL: http://{}{}", self.config.server.bind_address, self.config.graphql_api.endpoint);
+            tracing::info!("   🔍 GraphQL API:");
+            tracing::info!("      • Endpoint:         http://{}{}", self.config.server.bind_address, self.config.graphql_api.endpoint);
+            tracing::info!("      • Queries:          tasks, executions, jobs, schedules, workers");
+            tracing::info!("      • Mutations:        createTask, updateTask, deleteTask, etc.");
             if self.config.graphql_api.enable_playground {
-                tracing::info!("   🎮 Playground: http://{}/playground", self.config.server.bind_address);
+                tracing::info!("      • Playground:       http://{}/playground", self.config.server.bind_address);
+            }
+            if self.config.graphql_api.enable_introspection {
+                tracing::info!("      • Introspection:    ✅ Enabled");
             }
         }
         
         if self.config.mcp_api.enabled {
-            tracing::info!("   🤖 MCP SSE: http://{}:{}{}", self.config.mcp_api.host, self.config.mcp_api.port, self.config.mcp_api.endpoint);
+            tracing::info!("   🤖 MCP Server-Sent Events API:");
+            tracing::info!("      • Base Endpoint:    http://{}:{}{}", self.config.mcp_api.host, self.config.mcp_api.port, self.config.mcp_api.endpoint);
+            tracing::info!("      • Tools Available:  execute_task, list_tasks, get_status, get_logs");
+            tracing::info!("      • Protocol:         Model Context Protocol v2024-11-05");
+            tracing::info!("      • Transport:        Server-Sent Events (SSE)");
         }
         
         tracing::info!("✅ =====================================");

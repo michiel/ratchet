@@ -62,8 +62,7 @@ impl Query {
 
     /// Get task statistics
     async fn task_stats(&self, ctx: &Context<'_>) -> Result<TaskStats> {
-        let context = ctx.data::<GraphQLContext>()?;
-        let task_repo = context.repositories.task_repository();
+        let _context = ctx.data::<GraphQLContext>()?;
         
         // This would be implemented based on your repository interface
         // For now, return placeholder values
@@ -223,7 +222,7 @@ impl Query {
     async fn workers(
         &self,
         ctx: &Context<'_>,
-        filters: Option<WorkerFiltersInput>,
+        _filters: Option<WorkerFiltersInput>,
         limit: Option<i32>,
         offset: Option<i32>,
     ) -> Result<WorkerList> {

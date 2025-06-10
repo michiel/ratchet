@@ -1,7 +1,7 @@
 //! Schedule-related request and response models
 
 use serde::{Deserialize, Serialize};
-use ratchet_api_types::{UnifiedSchedule, ApiId};
+use ratchet_api_types::ApiId;
 
 /// Request to create a new schedule
 #[derive(Debug, Clone, Serialize, Deserialize)]
