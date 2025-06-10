@@ -35,10 +35,10 @@ To use any of these configurations:
 
 ```bash
 # For general Ratchet server
-ratchet server --config path/to/your-config.yaml
+ratchet serve --config path/to/your-config.yaml
 
 # For MCP server
-ratchet-mcp -c path/to/your-mcp-config.yaml serve
+ratchet mcp-serve --config path/to/your-mcp-config.yaml
 ```
 
 ## Configuration Hierarchy

@@ -1,0 +1,25 @@
+{
+  "name": "ratchet-mcp-sse-client",
+  "version": "1.0.0",
+  "description": "MCP SSE client for connecting Claude Desktop to running Ratchet MCP servers",
+  "main": "mcp-sse-client.js",
+  "scripts": {
+    "start": "node mcp-sse-client.js",
+    "test": "node -c mcp-sse-client.js"
+  },
+  "dependencies": {
+    "eventsource": "^2.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "ratchet",
+    "sse",
+    "claude",
+    "llm"
+  ],
+  "author": "Ratchet Project",
+  "license": "MIT"
+}
