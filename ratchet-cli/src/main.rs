@@ -13,7 +13,7 @@ use ratchet_execution::{
     ExecutionBridge,
 };
 
-use ratchet_lib::{js_executor::execute_task, recording, task::Task};
+use ratchet_lib::task::Task;
 
 #[cfg(feature = "http")]
 
@@ -612,7 +612,7 @@ fn init_logging_with_config(
         fs::create_dir_all(&session_dir).context("Failed to create recording directory")?;
 
         // Store the session directory for use by other components
-        ratchet_lib::recording::set_recording_dir(session_dir.clone())?;
+        ratchet_cli_tools::set_recording_dir(session_dir.clone())?;
 
         // Use simple tracing with file output for recording
         init_simple_tracing_with_file(log_level, &session_dir.join("ratchet.log"))?;
@@ -853,10 +853,13 @@ async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
     // Create HTTP manager for the task execution
     let http_manager = HttpManager::new();
 
-    // Execute the task
-    let result = execute_task(&mut task, input.clone(), &http_manager)
-        .await
-        .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
+    // Execute the task using CLI tools
+    let result = ratchet_cli_tools::execute_task_with_lib_compatibility(
+        from_fs,
+        ratchet_cli_tools::TaskInput::legacy(input.clone())
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
 
     Ok(result)
 }
@@ -1097,6 +1100,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
 #[cfg(feature = "javascript")]
 #[allow(dead_code)]
 async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result<()> {
+    let task_dir = task.path.parent().unwrap();
     use serde_json::Value;
 
     // Load test data
@@ -1112,10 +1116,13 @@ async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result
     // Create HTTP manager for the task execution
     let http_manager = HttpManager::new();
 
-    // Execute the task
-    let actual = execute_task(task, input, &http_manager)
-        .await
-        .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
+    // Execute the task using CLI tools
+    let actual = ratchet_cli_tools::execute_task_with_lib_compatibility(
+        &task_dir.to_string_lossy(),
+        ratchet_cli_tools::TaskInput::legacy(input.clone())
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
 
     // Compare results
     if &actual == expected {
@@ -1157,7 +1164,7 @@ async fn replay_task(from_fs: &str, recording: &Option<PathBuf>) -> Result<JsonV
     info!("Using recorded input: {}", to_string_pretty(&input)?);
 
     // Set up recording replay context
-    recording::set_recording_dir(recording_path.clone())?;
+    ratchet_cli_tools::set_recording_dir(recording_path.clone())?;
 
     // Run the task with recorded input
     let result = run_task(from_fs, &input).await?;
@@ -1263,7 +1270,10 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
                     // Create HTTP manager for the task execution
                     let http_manager = HttpManager::new();
 
-                    match execute_task(&mut task, input_data, &http_manager).await {
+                    match ratchet_cli_tools::execute_task_with_lib_compatibility(
+                        &task_path,
+                        ratchet_cli_tools::TaskInput::legacy(input_data)
+                    ).await {
                         Ok(output) => {
                             let completed_at = Utc::now();
                             let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
@@ -1397,15 +1407,8 @@ async fn handle_generate_task(
 ) -> Result<()> {
     info!("Generating task template at: {:?}", path);
 
-    // Create directory if it doesn't exist
-    if path.exists() {
-        return Err(anyhow::anyhow!("Directory already exists: {:?}", path));
-    }
-
-    fs::create_dir_all(path).context("Failed to create task directory")?;
-
-    // Generate task files
-    let config = ratchet_lib::generate::TaskGenerationConfig::new(path.clone())
+    // Generate task files (the generator will create the directory and check for conflicts)
+    let config = ratchet_cli_tools::TaskGenerationConfig::new(path.clone())
         .with_label(label.as_deref().unwrap_or("My Task"))
         .with_description(
             description
@@ -1415,7 +1418,7 @@ async fn handle_generate_task(
         .with_version(version.as_deref().unwrap_or("1.0.0"));
 
     let _result =
-        ratchet_lib::generate::generate_task(config).context("Failed to generate task template")?;
+        ratchet_cli_tools::generate_task(config).context("Failed to generate task template")?;
 
     println!("✅ Task template generated at: {:?}", path);
     println!("📝 Edit the files to customize your task:");

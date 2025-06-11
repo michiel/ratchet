@@ -3881,6 +3881,7 @@ dependencies = [
  "env_logger",
  "log",
  "ratchet-caching",
+ "ratchet-cli-tools",
  "ratchet-config",
  "ratchet-core",
  "ratchet-execution",
@@ -3933,6 +3934,22 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "ratchet-cli-tools"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "ratchet-http",
+ "ratchet-js",
+ "ratchet_lib",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
  "uuid",
 ]
 

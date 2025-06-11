@@ -44,6 +44,7 @@ ratchet-js = { path = "../ratchet-js", optional = true }
 ratchet-http = { path = "../ratchet-http", optional = true }
 ratchet-server = { path = "../ratchet-server", optional = true }
 ratchet-registry = { path = "../ratchet-registry", optional = true }
+ratchet-cli-tools = { path = "../ratchet-cli-tools", features = ["javascript", "recording", "legacy", "http"] }
 
 # Binary-specific dependencies (commented out for now due to network issues)
 # dialoguer = "0.11"
