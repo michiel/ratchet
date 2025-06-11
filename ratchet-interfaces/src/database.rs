@@ -134,6 +134,9 @@ pub trait ExecutionRepository: FilteredRepository<UnifiedExecution, ExecutionFil
     /// Find executions by status
     async fn find_by_status(&self, status: ExecutionStatus) -> Result<Vec<UnifiedExecution>, DatabaseError>;
     
+    /// Update execution status
+    async fn update_status(&self, id: ApiId, status: ExecutionStatus) -> Result<(), DatabaseError>;
+    
     /// Mark execution as started
     async fn mark_started(&self, id: ApiId) -> Result<(), DatabaseError>;
     

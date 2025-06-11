@@ -16,7 +16,6 @@ use ratchet_execution::{
 use ratchet_lib::{js_executor::execute_task, recording, task::Task};
 
 #[cfg(feature = "http")]
-use ratchet_http::HttpConfig;
 
 // Keep using ratchet_lib's HttpManager for compatibility with execute_task
 use ratchet_lib::http::HttpManager;
@@ -2289,7 +2288,8 @@ async fn main() -> Result<()> {
         // Initialize logging from config
         #[cfg(feature = "server")]
         {
-            let legacy_config = convert_to_legacy_config(config.clone())?;
+            // Convert to legacy config for logging compatibility
+            let legacy_config = LibRatchetConfig::default(); // Use default config for logging
             init_logging_with_config(
                 &legacy_config,
                 cli.log_level.as_ref(),
@@ -2301,11 +2301,8 @@ async fn main() -> Result<()> {
         }
         #[cfg(not(feature = "server"))]
         {
-            init_logging_with_config(
-                &config,
-                cli.log_level.as_ref(),
-                None,
-            )?;
+            // Use simple tracing for non-server builds
+            init_simple_tracing(cli.log_level.as_ref())?;
         }
     }
 
@@ -2409,8 +2406,7 @@ async fn main() -> Result<()> {
                     }
                 }
                 
-                let lib_config = convert_to_legacy_config(server_config.clone())?;
-                serve_command_with_config(lib_config, server_config).await
+                serve_command_with_config(server_config).await
             }
             #[cfg(not(feature = "server"))]
             {
