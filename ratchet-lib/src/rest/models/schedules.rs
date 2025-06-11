@@ -10,13 +10,13 @@ pub struct ScheduleResponse {
     pub task_id: i32,
     pub name: String,
     pub cron_expression: String,
-    pub input_data: sea_orm::prelude::Json,
+    pub input_data: serde_json::Value,
     pub enabled: bool,
     pub next_run_at: Option<DateTime<Utc>>,
     pub last_run_at: Option<DateTime<Utc>>,
     pub execution_count: i32,
     pub max_executions: Option<i32>,
-    pub metadata: Option<sea_orm::prelude::Json>,
+    pub metadata: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -29,13 +29,13 @@ pub struct ScheduleDetailResponse {
     pub task_name: Option<String>,
     pub name: String,
     pub cron_expression: String,
-    pub input_data: sea_orm::prelude::Json,
+    pub input_data: serde_json::Value,
     pub enabled: bool,
     pub next_run_at: Option<DateTime<Utc>>,
     pub last_run_at: Option<DateTime<Utc>>,
     pub execution_count: i32,
     pub max_executions: Option<i32>,
-    pub metadata: Option<sea_orm::prelude::Json>,
+    pub metadata: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub is_exhausted: bool,
@@ -70,21 +70,21 @@ pub struct ScheduleFilters {
     pub name_like: Option<String>,
 }
 
-impl From<crate::database::entities::schedules::Model> for ScheduleResponse {
-    fn from(schedule: crate::database::entities::schedules::Model) -> Self {
+impl From<ratchet_storage::Schedule> for ScheduleResponse {
+    fn from(schedule: ratchet_storage::Schedule) -> Self {
         Self {
             id: schedule.id,
             uuid: schedule.uuid,
             task_id: schedule.task_id,
             name: schedule.name,
             cron_expression: schedule.cron_expression,
-            input_data: schedule.input_data.clone(),
+            input_data: schedule.input_data,
             enabled: schedule.enabled,
             next_run_at: schedule.next_run_at,
             last_run_at: schedule.last_run_at,
             execution_count: schedule.execution_count,
             max_executions: schedule.max_executions,
-            metadata: schedule.metadata.clone(),
+            metadata: Some(schedule.metadata),
             created_at: schedule.created_at,
             updated_at: schedule.updated_at,
         }

@@ -18,8 +18,8 @@ pub mod task;
 
 // Re-export concrete repositories
 pub use delivery_result::DeliveryResultRepository;
-pub use execution::ExecutionRepository;
-pub use job::JobRepository;
+pub use execution::{ExecutionRepository, ExecutionStatistics};
+pub use job::{JobRepository, QueueStats};
 pub use schedule::ScheduleRepository;
 pub use task::TaskRepository;
 
@@ -84,6 +84,7 @@ where
 }
 
 /// Base repository implementation with common functionality
+#[derive(Clone)]
 pub struct BaseRepositoryImpl<T> {
     connection_manager: Arc<dyn ConnectionManager>,
     table_name: String,
@@ -132,6 +133,7 @@ where
 }
 
 /// Repository factory for creating repository instances
+#[derive(Clone)]
 pub struct RepositoryFactory {
     connection_manager: Arc<dyn ConnectionManager>,
 }
@@ -170,6 +172,11 @@ impl RepositoryFactory {
     /// Get the connection manager
     pub fn connection_manager(&self) -> Arc<dyn ConnectionManager> {
         self.connection_manager.clone()
+    }
+
+    /// Get a database connection (legacy compatibility method)
+    pub async fn database(&self) -> crate::StorageResult<Arc<dyn crate::Connection>> {
+        self.connection_manager.get_connection().await
     }
 }
 

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
 
-use crate::database::repositories::RepositoryFactory;
+use ratchet_storage::RepositoryFactory;
 use crate::execution::{JobQueueManager, ProcessTaskExecutor};
 use crate::graphql::{create_schema, RatchetSchema};
 use crate::registry::TaskRegistry;

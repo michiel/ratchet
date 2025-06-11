@@ -6,12 +6,12 @@ use tokio::sync::RwLock;
 
 use crate::{
     config::RatchetConfig,
-    database::repositories::RepositoryFactory,
     execution::executor::ExecutionError,
     execution::{ipc::TaskExecutionResult, ExecutionResult, TaskExecutor, WorkerProcessManager},
     output::{destination::TaskOutput, OutputDeliveryManager, OutputDestinationConfig},
     services::ServiceError,
 };
+use ratchet_storage::{RepositoryFactory, Execution, Job, Task, BaseRepository};
 
 /// Process-based task executor that uses worker processes for task execution
 /// This solves the Send/Sync issues by running JavaScript tasks in separate processes
@@ -65,8 +65,8 @@ impl ProcessTaskExecutor {
         _context: Option<crate::execution::ipc::ExecutionContext>,
     ) -> Result<ExecutionResult, ExecutionError> {
         // Direct implementation to avoid ?Send trait issues
-        let task_repo = &self.repositories.task_repo;
-        let execution_repo = &self.repositories.execution_repo;
+        let task_repo = &self.repositories.task_repository();
+        let execution_repo = self.repositories.execution_repository();
 
         // Load task details
         let task_entity = task_repo
@@ -75,8 +75,8 @@ impl ProcessTaskExecutor {
             .ok_or_else(|| ExecutionError::TaskNotFound(task_id.to_string()))?;
 
         // Create execution record
-        let execution = crate::database::entities::Execution::new(task_id, input_data.clone());
-        let created_execution = execution_repo.create(execution).await?;
+        let execution = Execution::new(task_id, input_data.clone());
+        let created_execution = execution_repo.create(&execution).await?;
         let execution_id = created_execution.id;
 
         // Execute task using worker process
@@ -133,9 +133,9 @@ impl ProcessTaskExecutor {
     /// Send-compatible execute job method for GraphQL resolvers  
     pub async fn execute_job_send(&self, job_id: i32) -> Result<ExecutionResult, ExecutionError> {
         // Direct implementation to avoid ?Send trait issues
-        let job_repo = &self.repositories.job_repo;
-        let task_repo = &self.repositories.task_repo;
-        let execution_repo = &self.repositories.execution_repo;
+        let job_repo = &self.repositories.job_repository();
+        let task_repo = &self.repositories.task_repository();
+        let execution_repo = self.repositories.execution_repository();
 
         // Load job details
         let job_entity = job_repo
@@ -150,11 +150,11 @@ impl ProcessTaskExecutor {
             .ok_or_else(|| ExecutionError::TaskNotFound(job_entity.task_id.to_string()))?;
 
         // Create execution record for this job
-        let execution = crate::database::entities::Execution::new(
+        let execution = Execution::new(
             job_entity.task_id,
             job_entity.input_data.clone(),
         );
-        let created_execution = execution_repo.create(execution).await?;
+        let created_execution = execution_repo.create(&execution).await?;
         let execution_id = created_execution.id;
 
         // Update job status to processing
@@ -253,8 +253,8 @@ impl ProcessTaskExecutor {
     /// Deliver task output to configured destinations
     async fn deliver_output(
         &self,
-        job_entity: &crate::database::entities::Job,
-        task_entity: &crate::database::entities::Task,
+        job_entity: &Job,
+        task_entity: &Task,
         execution_id: i32,
         output_data: &JsonValue,
         duration_ms: u128,
@@ -286,10 +286,7 @@ impl ProcessTaskExecutor {
                     task_id: task_entity.id,
                     execution_id,
                     output_data: output_data.clone(),
-                    metadata: job_entity
-                        .metadata
-                        .as_ref()
-                        .map(|m| serde_json::from_value(m.clone()).unwrap_or_default())
+                    metadata: serde_json::from_value(job_entity.metadata.clone())
                         .unwrap_or_default(),
                     completed_at: chrono::Utc::now(),
                     execution_duration: std::time::Duration::from_millis(duration_ms as u64),
@@ -355,7 +352,7 @@ impl ProcessTaskExecutor {
     /// Create a test instance with minimal configuration
     #[cfg(test)]
     pub fn new_test() -> Self {
-        use crate::database::connection::DatabaseConnection;
+        use ratchet_storage::Connection;
 
         // Create minimal repositories with in-memory database
         let db_config = crate::config::DatabaseConfig {
@@ -392,8 +389,8 @@ impl TaskExecutor for ProcessTaskExecutor {
         input_data: JsonValue,
         _context: Option<crate::execution::ipc::ExecutionContext>,
     ) -> Result<ExecutionResult, ExecutionError> {
-        let task_repo = &self.repositories.task_repo;
-        let execution_repo = &self.repositories.execution_repo;
+        let task_repo = &self.repositories.task_repository();
+        let execution_repo = self.repositories.execution_repository();
 
         // Load task details
         let task_entity = task_repo
@@ -402,8 +399,8 @@ impl TaskExecutor for ProcessTaskExecutor {
             .ok_or_else(|| ExecutionError::TaskNotFound(task_id.to_string()))?;
 
         // Create execution record
-        let execution = crate::database::entities::Execution::new(task_id, input_data.clone());
-        let created_execution = execution_repo.create(execution).await?;
+        let execution = Execution::new(task_id, input_data.clone());
+        let created_execution = execution_repo.create(&execution).await?;
         let execution_id = created_execution.id;
 
         // Execute task using worker process
@@ -458,9 +455,9 @@ impl TaskExecutor for ProcessTaskExecutor {
     }
 
     async fn execute_job(&self, job_id: i32) -> Result<ExecutionResult, ExecutionError> {
-        let job_repo = &self.repositories.job_repo;
-        let task_repo = &self.repositories.task_repo;
-        let execution_repo = &self.repositories.execution_repo;
+        let job_repo = &self.repositories.job_repository();
+        let task_repo = &self.repositories.task_repository();
+        let execution_repo = self.repositories.execution_repository();
 
         // Load job details
         let job_entity = job_repo
@@ -475,11 +472,11 @@ impl TaskExecutor for ProcessTaskExecutor {
             .ok_or_else(|| ExecutionError::TaskNotFound(job_entity.task_id.to_string()))?;
 
         // Create execution record for this job
-        let execution = crate::database::entities::Execution::new(
+        let execution = Execution::new(
             job_entity.task_id,
             job_entity.input_data.clone(),
         );
-        let created_execution = execution_repo.create(execution).await?;
+        let created_execution = execution_repo.create(&execution).await?;
         let execution_id = created_execution.id;
 
         // Update job status to processing
@@ -619,8 +616,8 @@ impl ProcessTaskExecutor {
 mod tests {
     use super::*;
     use crate::config::DatabaseConfig;
-    use crate::database::connection::DatabaseConnection;
-    use crate::database::entities::Job as JobEntity;
+    use ratchet_storage::Connection;
+    use ratchet_storage::Job as JobEntity;
     use serde_json::json;
     use std::fs;
     use std::time::Duration;
@@ -702,7 +699,7 @@ mod tests {
         let task_path_str = task_path.to_string_lossy().to_string();
 
         // Create task entity in database
-        let task_entity = crate::database::entities::tasks::Model {
+        let task_entity = Task {
             id: 0,                      // Will be set by database
             uuid: uuid::Uuid::new_v4(), // Generate unique UUID for each test
             name: "Test Task".to_string(),
@@ -719,7 +716,7 @@ mod tests {
         };
 
         let created_task = repositories
-            .task_repo
+            .task_repository()
             .create(task_entity)
             .await
             .expect("Failed to create task in database");
@@ -810,7 +807,7 @@ mod tests {
 
         // Verify execution was recorded in database
         let execution = repositories
-            .execution_repo
+            .execution_repository()
             .find_by_id(execution_result.execution_id)
             .await
             .expect("Database query should succeed")
@@ -822,7 +819,7 @@ mod tests {
         assert_eq!(execution_input, input_data);
 
         // Status should be either completed or failed (depending on worker availability)
-        use crate::database::entities::executions::ExecutionStatus;
+        use ratchet_storage::ExecutionStatus;
         assert!(matches!(
             execution.status,
             ExecutionStatus::Completed | ExecutionStatus::Failed
@@ -847,7 +844,7 @@ mod tests {
         let job_entity = JobEntity::new(
             task_id,
             input_data.clone(),
-            crate::database::entities::jobs::JobPriority::Normal,
+            ratchet_storage::JobPriority::Normal,
         );
 
         let created_job = repositories
@@ -868,7 +865,7 @@ mod tests {
 
         // Verify both execution and job were updated in database
         let execution = repositories
-            .execution_repo
+            .execution_repository()
             .find_by_id(execution_result.execution_id)
             .await
             .expect("Database query should succeed")
@@ -887,8 +884,8 @@ mod tests {
         assert_eq!(execution_input, input_data);
 
         // Both execution and job status should be updated (may be completed, failed, or retrying since workers might not be available)
-        use crate::database::entities::executions::ExecutionStatus;
-        use crate::database::entities::jobs::JobStatus;
+        use ratchet_storage::ExecutionStatus;
+        use ratchet_storage::JobStatus;
         assert!(matches!(
             execution.status,
             ExecutionStatus::Completed | ExecutionStatus::Failed

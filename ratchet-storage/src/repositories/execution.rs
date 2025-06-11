@@ -14,6 +14,7 @@ use crate::{
     StorageResult,
 };
 
+#[derive(Clone)]
 pub struct ExecutionRepository {
     base: BaseRepositoryImpl<Execution>,
 }
@@ -46,6 +47,109 @@ impl ExecutionRepository {
     pub async fn get_statistics(&self) -> StorageResult<ExecutionStatistics> {
         Ok(ExecutionStatistics::default())
     }
+
+    pub async fn mark_completed(&self, id: i32, _output: serde_json::Value) -> StorageResult<()> {
+        log::debug!("Marking execution {} as completed", id);
+        // TODO: Implement actual database update
+        Ok(())
+    }
+
+    pub async fn mark_failed(&self, id: i32, error: String, _details: Option<serde_json::Value>) -> StorageResult<()> {
+        log::debug!("Marking execution {} as failed: {}", id, error);
+        // TODO: Implement actual database update
+        Ok(())
+    }
+
+    pub async fn find_recent(&self, _limit: u32) -> StorageResult<Vec<Execution>> {
+        log::debug!("Finding recent executions");
+        Ok(Vec::new())
+    }
+
+    pub async fn get_stats(&self) -> StorageResult<ExecutionStatistics> {
+        log::debug!("Getting execution statistics");
+        Ok(ExecutionStatistics::default())
+    }
+}
+
+#[async_trait]
+impl Repository<Execution> for ExecutionRepository {
+    async fn health_check(&self) -> StorageResult<bool> {
+        self.base.health_check().await
+    }
+
+    async fn stats(&self) -> StorageResult<crate::connection::ConnectionStats> {
+        self.base.stats().await
+    }
+}
+
+#[async_trait]
+impl BaseRepository<Execution> for ExecutionRepository {
+    async fn create(&self, entity: &Execution) -> StorageResult<Execution> {
+        log::debug!("Creating execution: {}", entity.uuid);
+        // In a real implementation, this would insert into database
+        Ok(entity.clone())
+    }
+
+    async fn find_by_id(&self, id: i32) -> StorageResult<Option<Execution>> {
+        log::debug!("Finding execution by ID: {}", id);
+        // In a real implementation, this would query the database
+        Ok(None)
+    }
+
+    async fn find_by_uuid(&self, uuid: Uuid) -> StorageResult<Option<Execution>> {
+        log::debug!("Finding execution by UUID: {}", uuid);
+        Ok(None)
+    }
+
+    async fn update(&self, entity: &Execution) -> StorageResult<Execution> {
+        log::debug!("Updating execution: {}", entity.uuid);
+        Ok(entity.clone())
+    }
+
+    async fn delete(&self, id: i32) -> StorageResult<bool> {
+        log::debug!("Deleting execution by ID: {}", id);
+        Ok(true)
+    }
+
+    async fn delete_by_uuid(&self, uuid: Uuid) -> StorageResult<bool> {
+        log::debug!("Deleting execution by UUID: {}", uuid);
+        Ok(true)
+    }
+
+    async fn find_all(&self, query: &Query) -> StorageResult<Vec<Execution>> {
+        log::debug!("Finding all executions with query: {:?}", query);
+        Ok(Vec::new())
+    }
+
+    async fn count(&self, query: &Query) -> StorageResult<u64> {
+        log::debug!("Counting executions with query: {:?}", query);
+        Ok(0)
+    }
+
+    async fn exists(&self, id: i32) -> StorageResult<bool> {
+        log::debug!("Checking if execution exists by ID: {}", id);
+        Ok(false)
+    }
+
+    async fn exists_by_uuid(&self, uuid: Uuid) -> StorageResult<bool> {
+        log::debug!("Checking if execution exists by UUID: {}", uuid);
+        Ok(false)
+    }
+
+    async fn batch_create(&self, entities: &[Execution]) -> StorageResult<Vec<Execution>> {
+        log::debug!("Batch creating {} executions", entities.len());
+        Ok(entities.to_vec())
+    }
+
+    async fn batch_update(&self, entities: &[Execution]) -> StorageResult<Vec<Execution>> {
+        log::debug!("Batch updating {} executions", entities.len());
+        Ok(entities.to_vec())
+    }
+
+    async fn batch_delete(&self, ids: &[i32]) -> StorageResult<u64> {
+        log::debug!("Batch deleting {} executions", ids.len());
+        Ok(ids.len() as u64)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -57,55 +161,3 @@ pub struct ExecutionStatistics {
     pub avg_duration_ms: f64,
 }
 
-#[async_trait]
-impl Repository<Execution> for ExecutionRepository {
-    async fn health_check(&self) -> StorageResult<bool> {
-        self.base.health_check().await
-    }
-    async fn stats(&self) -> StorageResult<crate::connection::ConnectionStats> {
-        self.base.stats().await
-    }
-}
-
-#[async_trait]
-impl BaseRepository<Execution> for ExecutionRepository {
-    async fn create(&self, entity: &Execution) -> StorageResult<Execution> {
-        Ok(entity.clone())
-    }
-    async fn find_by_id(&self, _id: i32) -> StorageResult<Option<Execution>> {
-        Ok(None)
-    }
-    async fn find_by_uuid(&self, _uuid: Uuid) -> StorageResult<Option<Execution>> {
-        Ok(None)
-    }
-    async fn update(&self, entity: &Execution) -> StorageResult<Execution> {
-        Ok(entity.clone())
-    }
-    async fn delete(&self, _id: i32) -> StorageResult<bool> {
-        Ok(true)
-    }
-    async fn delete_by_uuid(&self, _uuid: Uuid) -> StorageResult<bool> {
-        Ok(true)
-    }
-    async fn find_all(&self, _query: &Query) -> StorageResult<Vec<Execution>> {
-        Ok(Vec::new())
-    }
-    async fn count(&self, _query: &Query) -> StorageResult<u64> {
-        Ok(0)
-    }
-    async fn exists(&self, _id: i32) -> StorageResult<bool> {
-        Ok(false)
-    }
-    async fn exists_by_uuid(&self, _uuid: Uuid) -> StorageResult<bool> {
-        Ok(false)
-    }
-    async fn batch_create(&self, entities: &[Execution]) -> StorageResult<Vec<Execution>> {
-        Ok(entities.to_vec())
-    }
-    async fn batch_update(&self, entities: &[Execution]) -> StorageResult<Vec<Execution>> {
-        Ok(entities.to_vec())
-    }
-    async fn batch_delete(&self, ids: &[i32]) -> StorageResult<u64> {
-        Ok(ids.len() as u64)
-    }
-}

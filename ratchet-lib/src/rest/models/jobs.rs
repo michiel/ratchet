@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::database::entities::jobs::{JobPriority as Priority, JobStatus};
+use ratchet_storage::{JobPriority as Priority, JobStatus};
 use crate::output::OutputDestinationConfig;
 
 #[derive(Debug, Serialize)]
@@ -125,8 +125,8 @@ pub struct TestOutputDestinationsResponse {
     pub overall_success: bool,
 }
 
-impl From<crate::database::entities::jobs::Model> for JobResponse {
-    fn from(job: crate::database::entities::jobs::Model) -> Self {
+impl From<ratchet_storage::Job> for JobResponse {
+    fn from(job: ratchet_storage::Job) -> Self {
         let output_destinations = job
             .output_destinations
             .and_then(|json| serde_json::from_value(json).ok());
@@ -149,7 +149,7 @@ impl From<crate::database::entities::jobs::Model> for JobResponse {
             process_at: job.process_at,
             started_at: job.started_at,
             completed_at: job.completed_at,
-            metadata: job.metadata.clone(),
+            metadata: Some(job.metadata.clone()),
             output_destinations,
         }
     }

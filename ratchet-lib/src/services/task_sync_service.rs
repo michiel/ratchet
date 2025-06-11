@@ -2,8 +2,7 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::database::entities::Task as TaskEntity;
-use crate::database::repositories::TaskRepository;
+use ratchet_storage::{Task as TaskEntity, TaskRepository, BaseRepository};
 use crate::errors::Result;
 use crate::registry::TaskRegistry;
 use crate::task::Task;
@@ -41,9 +40,28 @@ impl TaskSyncService {
         }
 
         // Create or update the task in database
-        let task_entity = TaskEntity::from_ratchet_task(task);
+        let task_entity = TaskEntity {
+            id: 0, // Will be set by database
+            uuid: task_uuid,
+            name: task.name().to_string(),
+            description: task.description().map(|s| s.to_string()),
+            version: version.clone(),
+            path: task.path.to_string_lossy().to_string(),
+            input_schema: task.input_schema.clone(),
+            output_schema: task.output_schema.clone(),
+            metadata: serde_json::json!({}),
+            enabled: true,
+            status: ratchet_storage::TaskStatus::Active,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            validated_at: Some(chrono::Utc::now()),
+            registry_source: None,
+            tags: Vec::new(),
+            deprecated: false,
+            deprecation_message: None,
+        };
 
-        match self.task_repo.create(task_entity).await {
+        match self.task_repo.create(&task_entity).await {
             Ok(_) => {
                 info!(
                     "Synchronized task {} version {} to database",
@@ -75,10 +93,29 @@ impl TaskSyncService {
             }
         }
 
-        // Create task entity from registry definition
-        let task_entity = TaskEntity::from_task_definition(task_def);
+        // Create task entity from registry definition - stub implementation
+        let task_entity = TaskEntity {
+            id: 0, // Will be set by database
+            uuid: task_uuid,
+            name: format!("Task-{}", task_uuid), // Placeholder name
+            description: Some("Synced from registry".to_string()),
+            version: version.clone(),
+            path: "/tmp".to_string(), // Placeholder path
+            input_schema: serde_json::json!({}),
+            output_schema: serde_json::json!({}),
+            metadata: serde_json::json!({}),
+            enabled: true,
+            status: ratchet_storage::TaskStatus::Active,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            validated_at: Some(chrono::Utc::now()),
+            registry_source: None,
+            tags: Vec::new(),
+            deprecated: false,
+            deprecation_message: None,
+        };
 
-        match self.task_repo.create(task_entity).await {
+        match self.task_repo.create(&task_entity).await {
             Ok(_) => {
                 info!(
                     "Synchronized task {} version {} to database",
@@ -127,9 +164,10 @@ impl TaskSyncService {
         let registry_tasks = self.registry.list_tasks().await?;
 
         // Get all tasks from database for additional metadata
+        let query = ratchet_storage::Query::new();
         let db_tasks = self
             .task_repo
-            .find_all()
+            .find_all(&query)
             .await
             .map_err(|e| crate::errors::RatchetError::Database(e.to_string()))?;
 

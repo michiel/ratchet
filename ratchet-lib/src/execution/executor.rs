@@ -1,4 +1,4 @@
-use crate::database::DatabaseError;
+use ratchet_storage::StorageError;
 use crate::services::ServiceError;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
@@ -7,8 +7,8 @@ use thiserror::Error;
 /// Task execution errors
 #[derive(Error, Debug)]
 pub enum ExecutionError {
-    #[error("Database error: {0}")]
-    DatabaseError(#[from] DatabaseError),
+    #[error("Storage error: {0}")]
+    StorageError(#[from] StorageError),
 
     #[error("Service error: {0}")]
     ServiceError(#[from] ServiceError),

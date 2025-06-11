@@ -38,7 +38,6 @@ pub use config::StorageConfig;
 pub use connection::{Connection, ConnectionManager};
 pub use error::{StorageError, StorageResult};
 pub use filters::SafeFilterBuilder;
-pub use repositories::{Repository, BaseRepository, BaseRepositoryImpl, RepositoryFactory};
 pub use transaction::{Transaction, TransactionManager};
 
 // Entity re-exports
@@ -48,10 +47,15 @@ pub use entities::{
     job::{Job, JobPriority, JobStatus},
     schedule::{Schedule, ScheduleStatus},
     task::{Task, TaskStatus},
+    Query, // Common query types
 };
 
 // Repository re-exports
 pub use repositories::{
-    delivery_result::DeliveryResultRepository, execution::ExecutionRepository, job::JobRepository,
-    schedule::ScheduleRepository, task::TaskRepository,
+    BaseRepository, Repository, BaseRepositoryImpl, RepositoryFactory,
+    delivery_result::DeliveryResultRepository, 
+    execution::{ExecutionRepository, ExecutionStatistics}, 
+    job::{JobRepository, QueueStats},
+    schedule::ScheduleRepository, 
+    task::TaskRepository,
 };

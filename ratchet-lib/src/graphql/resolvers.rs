@@ -1,6 +1,7 @@
 use async_graphql::*;
 use std::sync::Arc;
 use uuid::Uuid;
+use ratchet_storage::{RepositoryFactory, ExecutionStatus, BaseRepository};
 
 use super::types::*;
 use crate::{
@@ -9,7 +10,6 @@ use crate::{
         pagination::{ListResponse, PaginationInput},
         types::*,
     },
-    database::repositories::RepositoryFactory,
     execution::{job_queue::JobQueueManager, ProcessTaskExecutor},
     output::{OutputDeliveryManager, OutputDestinationConfig},
     registry::TaskRegistry,
@@ -66,10 +66,11 @@ impl Query {
             Ok(ListResponse::new(items, &pagination, total))
         } else {
             // Fallback to database-only view
+            let query = ratchet_storage::Query::new();
             let db_tasks = context
                 .repositories
                 .task_repository()
-                .find_all()
+                .find_all(&query)
                 .await
                 .map_err(|e| {
                     let api_error = ApiError::internal_error(format!("Database error: {}", e));
@@ -169,7 +170,7 @@ impl Query {
             context
                 .repositories
                 .execution_repository()
-                .find_recent(limit as u64)
+                .find_recent(limit as u32)
                 .await
         }
         .map_err(|e| {
@@ -221,7 +222,7 @@ impl Query {
             context
                 .repositories
                 .job_repository()
-                .find_ready_for_processing(limit)
+                .find_ready_for_processing(limit as u32)
                 .await
         }
         .map_err(|e| {
@@ -250,10 +251,11 @@ impl Query {
     async fn task_stats(&self, ctx: &Context<'_>) -> Result<TaskStats> {
         let context = ctx.data::<GraphQLContext>()?;
 
+        let query = ratchet_storage::Query::new();
         let total_tasks = context
             .repositories
             .task_repository()
-            .count()
+            .count(&query)
             .await
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
         let enabled_tasks = context
@@ -283,11 +285,11 @@ impl Query {
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
         Ok(ExecutionStats {
-            total_executions: stats.total,
-            pending: stats.pending,
-            running: stats.running,
-            completed: stats.completed,
-            failed: stats.failed,
+            total_executions: stats.total_executions,
+            pending: 0, // ExecutionStatistics doesn't have pending, use default
+            running: stats.running_executions,
+            completed: stats.successful_executions,
+            failed: stats.failed_executions,
         })
     }
 
@@ -463,10 +465,9 @@ impl Mutation {
         let priority = input
             .priority
             .map(Into::into)
-            .unwrap_or(crate::database::entities::JobPriority::Normal);
+            .unwrap_or(ratchet_storage::JobPriority::Normal);
 
-        let mut job =
-            crate::database::entities::jobs::Model::new(task_id, input.input_data, priority);
+        let mut job = ratchet_storage::Job::new(task_id, input.input_data).with_priority(priority);
 
         if let Some(destinations) = output_destinations {
             job.output_destinations = Some(serde_json::to_value(destinations).unwrap());
@@ -475,7 +476,7 @@ impl Mutation {
         let created_job = context
             .repositories
             .job_repository()
-            .create(job)
+            .create(&job)
             .await
             .map_err(|e| {
                 let api_error = ApiError::internal_error(format!("Database error: {}", e));
@@ -557,7 +558,7 @@ impl Mutation {
         let _context = ctx.data::<GraphQLContext>()?;
 
         // TODO: Implement mark_cancelled method
-        // context.repositories.job_repo.mark_cancelled(id).await
+        // context.repositories.job_repository().mark_cancelled(id).await
         //     .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
         // Return a placeholder job for now
@@ -565,7 +566,7 @@ impl Mutation {
             id: ApiId::from_i32(id),
             task_id: ApiId::from_i32(0),
             priority: JobPriority::Normal,
-            status: JobStatus::Cancelled,
+            status: crate::api::types::JobStatus::Cancelled,
             retry_count: 0,
             max_retries: 0,
             queued_at: chrono::Utc::now(),
@@ -631,64 +632,67 @@ impl Subscription {
 // Helper conversion functions
 #[allow(dead_code)]
 fn convert_execution_status(
-    status: crate::database::entities::executions::ExecutionStatus,
+    status: ratchet_storage::ExecutionStatus,
 ) -> ExecutionStatus {
     match status {
-        crate::database::entities::executions::ExecutionStatus::Pending => ExecutionStatus::Pending,
-        crate::database::entities::executions::ExecutionStatus::Running => ExecutionStatus::Running,
-        crate::database::entities::executions::ExecutionStatus::Completed => {
+        ratchet_storage::ExecutionStatus::Pending => ExecutionStatus::Pending,
+        ratchet_storage::ExecutionStatus::Running => ExecutionStatus::Running,
+        ratchet_storage::ExecutionStatus::Completed => {
             ExecutionStatus::Completed
         }
-        crate::database::entities::executions::ExecutionStatus::Failed => ExecutionStatus::Failed,
-        crate::database::entities::executions::ExecutionStatus::Cancelled => {
+        ratchet_storage::ExecutionStatus::Failed => ExecutionStatus::Failed,
+        ratchet_storage::ExecutionStatus::Cancelled => {
             ExecutionStatus::Cancelled
         }
+        ratchet_storage::ExecutionStatus::TimedOut => ExecutionStatus::Failed, // Map TimedOut to Failed
+        ratchet_storage::ExecutionStatus::Retrying => ExecutionStatus::Pending, // Map Retrying to Pending
     }
 }
 
 #[allow(dead_code)]
-fn convert_job_priority(priority: crate::database::entities::jobs::JobPriority) -> JobPriority {
+fn convert_job_priority(priority: ratchet_storage::JobPriority) -> LegacyJobPriority {
     match priority {
-        crate::database::entities::jobs::JobPriority::Low => JobPriority::Low,
-        crate::database::entities::jobs::JobPriority::Normal => JobPriority::Normal,
-        crate::database::entities::jobs::JobPriority::High => JobPriority::High,
-        crate::database::entities::jobs::JobPriority::Urgent => JobPriority::Critical,
+        ratchet_storage::JobPriority::Low => LegacyJobPriority::Low,
+        ratchet_storage::JobPriority::Normal => LegacyJobPriority::Normal,
+        ratchet_storage::JobPriority::High => LegacyJobPriority::High,
+        ratchet_storage::JobPriority::Urgent => LegacyJobPriority::Critical,
     }
 }
 
 #[allow(dead_code)]
 fn convert_job_priority_to_db(
-    priority: JobPriority,
-) -> crate::database::entities::jobs::JobPriority {
+    priority: LegacyJobPriority,
+) -> ratchet_storage::JobPriority {
     match priority {
-        JobPriority::Low => crate::database::entities::jobs::JobPriority::Low,
-        JobPriority::Normal => crate::database::entities::jobs::JobPriority::Normal,
-        JobPriority::High => crate::database::entities::jobs::JobPriority::High,
-        JobPriority::Critical => crate::database::entities::jobs::JobPriority::Urgent,
+        LegacyJobPriority::Low => ratchet_storage::JobPriority::Low,
+        LegacyJobPriority::Normal => ratchet_storage::JobPriority::Normal,
+        LegacyJobPriority::High => ratchet_storage::JobPriority::High,
+        LegacyJobPriority::Critical => ratchet_storage::JobPriority::Urgent,
     }
 }
 
 #[allow(dead_code)]
-fn convert_job_status(status: crate::database::entities::jobs::JobStatus) -> JobStatus {
+fn convert_job_status(status: ratchet_storage::JobStatus) -> JobStatus {
     match status {
-        crate::database::entities::jobs::JobStatus::Queued => JobStatus::Queued,
-        crate::database::entities::jobs::JobStatus::Processing => JobStatus::Processing,
-        crate::database::entities::jobs::JobStatus::Completed => JobStatus::Completed,
-        crate::database::entities::jobs::JobStatus::Failed => JobStatus::Failed,
-        crate::database::entities::jobs::JobStatus::Retrying => JobStatus::Retrying,
-        crate::database::entities::jobs::JobStatus::Cancelled => JobStatus::Cancelled,
+        ratchet_storage::JobStatus::Queued => JobStatus::Queued,
+        ratchet_storage::JobStatus::Processing => JobStatus::Processing,
+        ratchet_storage::JobStatus::Completed => JobStatus::Completed,
+        ratchet_storage::JobStatus::Failed => JobStatus::Failed,
+        ratchet_storage::JobStatus::Retrying => JobStatus::Retrying,
+        ratchet_storage::JobStatus::Cancelled => JobStatus::Cancelled,
+        ratchet_storage::JobStatus::Scheduled => JobStatus::Queued, // Map Scheduled to Queued
     }
 }
 
 #[allow(dead_code)]
-fn convert_job_status_to_db(status: JobStatus) -> crate::database::entities::jobs::JobStatus {
+fn convert_job_status_to_db(status: JobStatus) -> ratchet_storage::JobStatus {
     match status {
-        JobStatus::Queued => crate::database::entities::jobs::JobStatus::Queued,
-        JobStatus::Processing => crate::database::entities::jobs::JobStatus::Processing,
-        JobStatus::Completed => crate::database::entities::jobs::JobStatus::Completed,
-        JobStatus::Failed => crate::database::entities::jobs::JobStatus::Failed,
-        JobStatus::Retrying => crate::database::entities::jobs::JobStatus::Retrying,
-        JobStatus::Cancelled => crate::database::entities::jobs::JobStatus::Cancelled,
+        JobStatus::Queued => ratchet_storage::JobStatus::Queued,
+        JobStatus::Processing => ratchet_storage::JobStatus::Processing,
+        JobStatus::Completed => ratchet_storage::JobStatus::Completed,
+        JobStatus::Failed => ratchet_storage::JobStatus::Failed,
+        JobStatus::Retrying => ratchet_storage::JobStatus::Retrying,
+        JobStatus::Cancelled => ratchet_storage::JobStatus::Cancelled,
     }
 }
 

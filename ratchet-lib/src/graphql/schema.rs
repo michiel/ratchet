@@ -1,7 +1,7 @@
 use async_graphql::*;
 use std::sync::Arc;
 
-use crate::database::repositories::RepositoryFactory;
+use ratchet_storage::RepositoryFactory;
 use crate::execution::{JobQueueManager, ProcessTaskExecutor};
 use crate::registry::TaskRegistry;
 use crate::services::TaskSyncService;

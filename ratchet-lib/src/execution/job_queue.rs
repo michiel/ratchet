@@ -1,7 +1,8 @@
-use crate::database::{
-    entities::{Job, JobPriority, JobStatus},
-    repositories::RepositoryFactory,
-    DatabaseError,
+use ratchet_storage::{
+    Job, JobPriority, JobStatus,
+    RepositoryFactory,
+    StorageError,
+    BaseRepository,
 };
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
@@ -13,8 +14,8 @@ use tracing::{debug, info};
 /// Job queue errors
 #[derive(Error, Debug)]
 pub enum JobQueueError {
-    #[error("Database error: {0}")]
-    DatabaseError(#[from] DatabaseError),
+    #[error("Storage error: {0}")]
+    StorageError(#[from] StorageError),
 
     #[error("Job not found: {0}")]
     JobNotFound(i32),
@@ -124,7 +125,7 @@ impl JobQueueManager {
             return Ok(false); // Unlimited
         }
 
-        let stats = self.repositories.job_repo.get_queue_stats().await?;
+        let stats = self.repositories.job_repository().get_queue_stats().await?;
         Ok(stats.total >= self.config.max_queue_size)
     }
 
@@ -138,18 +139,18 @@ impl JobQueueManager {
         // Direct implementation to avoid ?Send trait issues
         // Check queue capacity
         if self.config.max_queue_size > 0 {
-            let stats = self.repositories.job_repo.get_queue_stats().await?;
+            let stats = self.repositories.job_repository().get_queue_stats().await?;
             if stats.total >= self.config.max_queue_size {
                 return Err(JobQueueError::QueueFull);
             }
         }
 
         // Create job
-        let mut job = Job::new(task_id, input_data, priority);
+        let mut job = Job::new(task_id, input_data).with_priority(priority);
         job.max_retries = self.config.default_max_retries;
         job.retry_delay_seconds = self.config.default_retry_delay;
 
-        let created_job = self.repositories.job_repo.create(job).await?;
+        let created_job = self.repositories.job_repository().create(&job).await?;
 
         info!(
             "Enqueued job {} for task {} with priority {:?}",
@@ -174,11 +175,11 @@ impl JobQueue for JobQueueManager {
         }
 
         // Create job
-        let mut job = Job::new(task_id, input_data, priority);
+        let mut job = Job::new(task_id, input_data).with_priority(priority);
         job.max_retries = self.config.default_max_retries;
         job.retry_delay_seconds = self.config.default_retry_delay;
 
-        let created_job = self.repositories.job_repo.create(job).await?;
+        let created_job = self.repositories.job_repository().create(&job).await?;
 
         info!(
             "Enqueued job {} for task {} with priority {:?}",
@@ -201,11 +202,12 @@ impl JobQueue for JobQueueManager {
         }
 
         // Create scheduled job
-        let mut job = Job::new_scheduled(task_id, schedule_id, input_data, process_at);
+        let mut job = Job::new_scheduled(task_id, input_data, process_at);
+        job.schedule_id = Some(schedule_id);
         job.max_retries = self.config.default_max_retries;
         job.retry_delay_seconds = self.config.default_retry_delay;
 
-        let created_job = self.repositories.job_repo.create(job).await?;
+        let created_job = self.repositories.job_repository().create(&job).await?;
 
         info!(
             "Enqueued scheduled job {} for task {} from schedule {} to process at {}",
@@ -220,8 +222,8 @@ impl JobQueue for JobQueueManager {
 
         let jobs = self
             .repositories
-            .job_repo
-            .find_ready_for_processing(batch_limit)
+            .job_repository()
+            .find_ready_for_processing(batch_limit as u32)
             .await?;
 
         debug!("Dequeued {} jobs ready for processing", jobs.len());
@@ -230,7 +232,7 @@ impl JobQueue for JobQueueManager {
     }
 
     async fn get_stats(&self) -> Result<JobQueueStats, JobQueueError> {
-        let db_stats = self.repositories.job_repo.get_queue_stats().await?;
+        let db_stats = self.repositories.job_repository().get_queue_stats().await?;
 
         Ok(JobQueueStats {
             total_jobs: db_stats.total,
@@ -243,14 +245,14 @@ impl JobQueue for JobQueueManager {
     }
 
     async fn cancel_job(&self, job_id: i32) -> Result<(), JobQueueError> {
-        let job = self.repositories.job_repo.find_by_id(job_id).await?;
+        let job = self.repositories.job_repository().find_by_id(job_id).await?;
         let job = job.ok_or_else(|| JobQueueError::JobNotFound(job_id))?;
 
         // Can only cancel queued or retrying jobs
         match job.status {
             JobStatus::Queued | JobStatus::Retrying => {
                 self.repositories
-                    .job_repo
+                    .job_repository()
                     .update_status(job_id, JobStatus::Cancelled)
                     .await?;
 
@@ -265,7 +267,7 @@ impl JobQueue for JobQueueManager {
     }
 
     async fn retry_job(&self, job_id: i32) -> Result<(), JobQueueError> {
-        let job = self.repositories.job_repo.find_by_id(job_id).await?;
+        let job = self.repositories.job_repository().find_by_id(job_id).await?;
         let job = job.ok_or_else(|| JobQueueError::JobNotFound(job_id))?;
 
         // Can only retry failed jobs
@@ -281,7 +283,7 @@ impl JobQueue for JobQueueManager {
                 updated_job.started_at = None;
                 updated_job.completed_at = None;
 
-                self.repositories.job_repo.update(updated_job).await?;
+                self.repositories.job_repository().update(&updated_job).await?;
 
                 info!("Reset job {} for retry", job_id);
                 Ok(())

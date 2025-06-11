@@ -10,9 +10,9 @@ use tower_http::{
     // limit::RequestBodyLimitLayer,
     // compression::CompressionLayer,
 };
+use ratchet_storage::RepositoryFactory;
 
 use crate::{
-    database::repositories::RepositoryFactory,
     execution::{JobQueueManager, ProcessTaskExecutor},
     registry::TaskRegistry,
     rest::{

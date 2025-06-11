@@ -1,9 +1,9 @@
 /// Conversion utilities between internal types and unified API types
 use crate::{
     api::types::*,
-    database::entities::{Execution, Job, Schedule, Task},
     services::UnifiedTask as ServiceUnifiedTask,
 };
+use ratchet_storage::{Execution, Job, Schedule, Task};
 
 /// Convert database Task to unified API type
 impl From<Task> for UnifiedTask {
@@ -60,13 +60,15 @@ impl From<Execution> for UnifiedExecution {
         // Calculate computed fields
         let can_retry = matches!(
             execution.status,
-            crate::database::entities::executions::ExecutionStatus::Failed
-                | crate::database::entities::executions::ExecutionStatus::Cancelled
+            ratchet_storage::ExecutionStatus::Failed
+                | ratchet_storage::ExecutionStatus::Cancelled
+                | ratchet_storage::ExecutionStatus::TimedOut
         );
         let can_cancel = matches!(
             execution.status,
-            crate::database::entities::executions::ExecutionStatus::Pending
-                | crate::database::entities::executions::ExecutionStatus::Running
+            ratchet_storage::ExecutionStatus::Pending
+                | ratchet_storage::ExecutionStatus::Running
+                | ratchet_storage::ExecutionStatus::Retrying
         );
 
         Self {
@@ -139,19 +141,21 @@ impl From<Schedule> for UnifiedSchedule {
 
 /// Convert between internal and API enum types
 
-impl From<crate::database::entities::executions::ExecutionStatus> for ExecutionStatus {
-    fn from(status: crate::database::entities::executions::ExecutionStatus) -> Self {
+impl From<ratchet_storage::ExecutionStatus> for ExecutionStatus {
+    fn from(status: ratchet_storage::ExecutionStatus) -> Self {
         match status {
-            crate::database::entities::executions::ExecutionStatus::Pending => Self::Pending,
-            crate::database::entities::executions::ExecutionStatus::Running => Self::Running,
-            crate::database::entities::executions::ExecutionStatus::Completed => Self::Completed,
-            crate::database::entities::executions::ExecutionStatus::Failed => Self::Failed,
-            crate::database::entities::executions::ExecutionStatus::Cancelled => Self::Cancelled,
+            ratchet_storage::ExecutionStatus::Pending => Self::Pending,
+            ratchet_storage::ExecutionStatus::Running => Self::Running,
+            ratchet_storage::ExecutionStatus::Completed => Self::Completed,
+            ratchet_storage::ExecutionStatus::Failed => Self::Failed,
+            ratchet_storage::ExecutionStatus::Cancelled => Self::Cancelled,
+            ratchet_storage::ExecutionStatus::TimedOut => Self::Failed, // Map TimedOut to Failed
+            ratchet_storage::ExecutionStatus::Retrying => Self::Pending, // Map Retrying to Pending
         }
     }
 }
 
-impl From<ExecutionStatus> for crate::database::entities::executions::ExecutionStatus {
+impl From<ExecutionStatus> for ratchet_storage::ExecutionStatus {
     fn from(status: ExecutionStatus) -> Self {
         match status {
             ExecutionStatus::Pending => Self::Pending,
@@ -163,18 +167,18 @@ impl From<ExecutionStatus> for crate::database::entities::executions::ExecutionS
     }
 }
 
-impl From<crate::database::entities::jobs::JobPriority> for JobPriority {
-    fn from(priority: crate::database::entities::jobs::JobPriority) -> Self {
+impl From<ratchet_storage::JobPriority> for JobPriority {
+    fn from(priority: ratchet_storage::JobPriority) -> Self {
         match priority {
-            crate::database::entities::jobs::JobPriority::Low => Self::Low,
-            crate::database::entities::jobs::JobPriority::Normal => Self::Normal,
-            crate::database::entities::jobs::JobPriority::High => Self::High,
-            crate::database::entities::jobs::JobPriority::Urgent => Self::Critical,
+            ratchet_storage::JobPriority::Low => Self::Low,
+            ratchet_storage::JobPriority::Normal => Self::Normal,
+            ratchet_storage::JobPriority::High => Self::High,
+            ratchet_storage::JobPriority::Urgent => Self::Critical,
         }
     }
 }
 
-impl From<JobPriority> for crate::database::entities::jobs::JobPriority {
+impl From<JobPriority> for ratchet_storage::JobPriority {
     fn from(priority: JobPriority) -> Self {
         match priority {
             JobPriority::Low => Self::Low,
@@ -185,20 +189,21 @@ impl From<JobPriority> for crate::database::entities::jobs::JobPriority {
     }
 }
 
-impl From<crate::database::entities::jobs::JobStatus> for JobStatus {
-    fn from(status: crate::database::entities::jobs::JobStatus) -> Self {
+impl From<ratchet_storage::JobStatus> for JobStatus {
+    fn from(status: ratchet_storage::JobStatus) -> Self {
         match status {
-            crate::database::entities::jobs::JobStatus::Queued => Self::Queued,
-            crate::database::entities::jobs::JobStatus::Processing => Self::Processing,
-            crate::database::entities::jobs::JobStatus::Completed => Self::Completed,
-            crate::database::entities::jobs::JobStatus::Failed => Self::Failed,
-            crate::database::entities::jobs::JobStatus::Cancelled => Self::Cancelled,
-            crate::database::entities::jobs::JobStatus::Retrying => Self::Retrying,
+            ratchet_storage::JobStatus::Queued => Self::Queued,
+            ratchet_storage::JobStatus::Processing => Self::Processing,
+            ratchet_storage::JobStatus::Completed => Self::Completed,
+            ratchet_storage::JobStatus::Failed => Self::Failed,
+            ratchet_storage::JobStatus::Cancelled => Self::Cancelled,
+            ratchet_storage::JobStatus::Retrying => Self::Retrying,
+            ratchet_storage::JobStatus::Scheduled => Self::Queued, // Map Scheduled to Queued
         }
     }
 }
 
-impl From<JobStatus> for crate::database::entities::jobs::JobStatus {
+impl From<JobStatus> for ratchet_storage::JobStatus {
     fn from(status: JobStatus) -> Self {
         match status {
             JobStatus::Queued => Self::Queued,

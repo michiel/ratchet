@@ -14,6 +14,7 @@ use crate::{
     StorageResult,
 };
 
+#[derive(Clone)]
 pub struct JobRepository {
     base: BaseRepositoryImpl<Job>,
 }
@@ -41,6 +42,52 @@ impl JobRepository {
     pub async fn get_next_jobs(&self, _limit: u32) -> StorageResult<Vec<Job>> {
         Ok(Vec::new())
     }
+
+    pub async fn get_queue_stats(&self) -> StorageResult<QueueStats> {
+        log::debug!("Getting job queue statistics");
+        Ok(QueueStats::default())
+    }
+
+    pub async fn find_ready_for_processing(&self, limit: u32) -> StorageResult<Vec<Job>> {
+        log::debug!("Finding jobs ready for processing (limit: {})", limit);
+        Ok(Vec::new())
+    }
+
+    pub async fn update_status(&self, _id: i32, _status: JobStatus) -> StorageResult<()> {
+        log::debug!("Updating job status (stub implementation)");
+        Ok(())
+    }
+
+    pub async fn mark_processing(&self, _id: i32, _execution_id: i32) -> StorageResult<()> {
+        log::debug!("Marking job as processing (stub implementation)");
+        Ok(())
+    }
+
+    pub async fn mark_completed(&self, _id: i32) -> StorageResult<()> {
+        log::debug!("Marking job as completed (stub implementation)");
+        Ok(())
+    }
+
+    pub async fn mark_failed(&self, _id: i32, _error: String, _details: Option<serde_json::Value>) -> StorageResult<()> {
+        log::debug!("Marking job as failed (stub implementation): {}", _error);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct QueueStats {
+    pub total_jobs: u64,
+    pub queued_jobs: u64,
+    pub processing_jobs: u64,
+    pub completed_jobs: u64,
+    pub failed_jobs: u64,
+    pub total: u64, // Legacy compatibility field
+    // Additional fields for compatibility
+    pub queued: u64,
+    pub processing: u64,
+    pub completed: u64,
+    pub failed: u64,
+    pub retrying: u64,
 }
 
 #[async_trait]

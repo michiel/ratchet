@@ -4,10 +4,10 @@ use axum::{
     Json,
 };
 use thiserror::Error;
+use ratchet_storage::StorageError;
 
 use crate::{
     api::errors::ApiError as UnifiedApiError,
-    database::{ErrorCode, SafeDatabaseError},
     rest::models::common::ApiError,
 };
 
@@ -35,8 +35,8 @@ pub enum RestError {
     #[error("Request timeout: {0}")]
     Timeout(String),
 
-    #[error("Safe database error")]
-    SafeDatabase(#[from] SafeDatabaseError),
+    #[error("Storage error")]
+    Storage(#[from] StorageError),
 
     #[error("Database error: {0}")]
     Database(#[from] sea_orm::DbErr),
@@ -75,14 +75,8 @@ impl RestError {
             RestError::ServiceUnavailable(msg) => UnifiedApiError::service_unavailable(Some(msg)),
             RestError::Conflict(msg) => UnifiedApiError::conflict("Resource", msg),
             RestError::Timeout(_msg) => UnifiedApiError::timeout("Request"),
-            RestError::SafeDatabase(safe_err) => match safe_err.code {
-                ErrorCode::NotFound => UnifiedApiError::not_found("Resource", &safe_err.message),
-                ErrorCode::Conflict => UnifiedApiError::conflict("Resource", &safe_err.message),
-                ErrorCode::ValidationError => {
-                    UnifiedApiError::validation_error("field", &safe_err.message)
-                }
-                ErrorCode::Timeout => UnifiedApiError::timeout("Database operation"),
-                _ => UnifiedApiError::internal_error(&safe_err.message),
+            RestError::Storage(storage_err) => {
+                UnifiedApiError::internal_error(format!("Storage error: {}", storage_err))
             },
             RestError::Database(err) => {
                 UnifiedApiError::internal_error(format!("Database error: {}", err))
@@ -113,28 +107,10 @@ impl RestError {
             ),
             RestError::Conflict(msg) => (StatusCode::CONFLICT, ApiError::conflict(msg)),
             RestError::Timeout(msg) => (StatusCode::REQUEST_TIMEOUT, ApiError::timeout(msg)),
-            RestError::SafeDatabase(safe_err) => {
-                let status_code = match safe_err.code {
-                    ErrorCode::NotFound => StatusCode::NOT_FOUND,
-                    ErrorCode::Conflict => StatusCode::CONFLICT,
-                    ErrorCode::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
-                    ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-                    ErrorCode::ValidationError => StatusCode::BAD_REQUEST,
-                    ErrorCode::Timeout => StatusCode::REQUEST_TIMEOUT,
-                };
-
-                let api_error = ApiError {
-                    error: safe_err.message.clone(),
-                    error_code: Some(format!("{:?}", safe_err.code)),
-                    request_id: Some(safe_err.request_id.clone()),
-                    timestamp: safe_err.timestamp,
-                    path: None, // Will be set by the calling handler if needed
-                    #[cfg(debug_assertions)]
-                    debug_info: safe_err.debug_info.clone(),
-                };
-
-                (status_code, api_error)
-            }
+            RestError::Storage(storage_err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiError::internal_error(&format!("Storage error: {}", storage_err)),
+            ),
             RestError::Database(err) => {
                 // For database errors, we can't directly convert to SafeDatabaseError from a reference
                 // Instead, we'll create an appropriate API error based on the error message

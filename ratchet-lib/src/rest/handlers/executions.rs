@@ -6,12 +6,11 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use ratchet_storage::{
+    Execution, ExecutionStatus, ExecutionRepository, RepositoryFactory, BaseRepository,
+};
 
 use crate::{
-    database::{
-        entities::{Execution, ExecutionStatus},
-        repositories::{ExecutionRepository, RepositoryFactory},
-    },
     execution::job_queue::JobQueueManager,
     rest::{
         extractors::ListQueryExtractor,
@@ -58,15 +57,16 @@ pub async fn list_executions(
     let _sort_direction = sort.sort_direction();
 
     // For now, use simple recent query - TODO: implement proper filtering and sorting
+    let count_query = ratchet_storage::Query::new();
     let total = ctx
         .repository
-        .count()
+        .count(&count_query)
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 
     let executions = ctx
         .repository
-        .find_recent(limit)
+        .find_recent(limit as u32)
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 
@@ -121,7 +121,7 @@ pub async fn create_execution(
 
     let created_execution = ctx
         .repository
-        .create(execution)
+        .create(&execution)
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 
@@ -160,11 +160,10 @@ pub async fn update_execution(
     // Status updates
     if let Some(new_status) = request.status {
         // Convert API status to database status
-        let db_new_status: crate::database::entities::executions::ExecutionStatus =
-            new_status.into();
+        let db_new_status: ExecutionStatus = new_status.into();
 
         // Validate status transitions
-        use crate::database::entities::executions::ExecutionStatus as DbExecutionStatus;
+        use ExecutionStatus as DbExecutionStatus;
         match (&execution.status, &db_new_status) {
             // Allow cancellation of pending/running executions
             (
@@ -225,7 +224,7 @@ pub async fn update_execution(
 
     let updated_execution = ctx
         .repository
-        .update(execution)
+        .update(&execution)
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 
@@ -300,7 +299,7 @@ pub async fn retry_execution(
 
     let created_execution = ctx
         .repository
-        .create(new_execution)
+        .create(&new_execution)
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 
@@ -353,7 +352,7 @@ pub async fn cancel_execution(
 
     let updated_execution = ctx
         .repository
-        .update(execution)
+        .update(&execution)
         .await
         .map_err(|e| RestError::InternalError(e.to_string()))?;
 

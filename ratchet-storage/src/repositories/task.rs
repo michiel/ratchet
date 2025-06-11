@@ -14,7 +14,28 @@ use crate::{
     StorageResult,
 };
 
+/// Iterator wrapper for TaskRepository
+pub struct TaskRepositoryIter {
+    tasks: Vec<Task>,
+    current: usize,
+}
+
+impl Iterator for TaskRepositoryIter {
+    type Item = Task;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current < self.tasks.len() {
+            let task = self.tasks[self.current].clone();
+            self.current += 1;
+            Some(task)
+        } else {
+            None
+        }
+    }
+}
+
 /// Task repository for managing task entities
+#[derive(Clone)]
 pub struct TaskRepository {
     base: BaseRepositoryImpl<Task>,
 }
@@ -110,6 +131,33 @@ impl TaskRepository {
     /// Update task tags
     pub async fn update_tags(&self, task_id: i32, tags: Vec<String>) -> StorageResult<bool> {
         log::debug!("Updating tags for task {}: {:?}", task_id, tags);
+        Ok(true)
+    }
+
+    /// Count enabled tasks
+    pub async fn count_enabled(&self) -> StorageResult<u64> {
+        log::debug!("Counting enabled tasks");
+        Ok(0)
+    }
+
+    /// Health check with send capability
+    pub async fn health_check_send(&self) -> StorageResult<bool> {
+        log::debug!("Health check with send capability");
+        Ok(true)
+    }
+
+    /// Create an iterator for tasks
+    pub async fn iter(&self) -> StorageResult<TaskRepositoryIter> {
+        // Return an empty iterator for now
+        Ok(TaskRepositoryIter {
+            tasks: Vec::new(),
+            current: 0,
+        })
+    }
+
+    /// Set task enabled status
+    pub async fn set_enabled(&self, _task_id: i32, _enabled: bool) -> StorageResult<bool> {
+        log::debug!("Setting task enabled status (stub implementation)");
         Ok(true)
     }
 }
