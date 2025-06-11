@@ -126,24 +126,26 @@ ratchet_storage::entities::{task::Task, execution::Execution, ...}
 ### Phase 3: Mark Legacy Systems as Deprecated (Weeks 5-6)
 
 #### 3.1 Add Deprecation Warnings
-- [ ] **Database layer deprecations**
-  ```rust
-  #[deprecated(
-      since = "0.4.0",
-      note = "Use ratchet_storage crate instead. Will be removed in 0.5.0"
-  )]
-  pub mod database { ... }
-  ```
+- [x] **Database layer deprecations** ✅ COMPLETED
+  - ✅ Added comprehensive deprecation warnings to entire `ratchet_lib::database` module
+  - ✅ Enhanced all module deprecations with version-specific guidance (0.4.0 deprecated, 0.5.0 removal)
+  - ✅ Updated all re-export statements with detailed migration instructions
+  - ✅ Added comprehensive migration guide in module documentation with code examples
+  - **Result**: Complete deprecation coverage for database layer with clear migration paths
 
-- [ ] **Server implementation deprecations**
-  - Mark `serve_with_legacy_server()` as deprecated
-  - Add runtime warnings when fallback occurs
-  - Provide clear migration guidance in error messages
+- [x] **Server implementation deprecations** ✅ COMPLETED
+  - ✅ Marked `serve_with_legacy_server()` as deprecated with version guidance
+  - ✅ Added runtime warnings when legacy server is used with clear messaging
+  - ✅ Provided migration guidance pointing to `docs/migration/server_migration.md`
+  - ✅ Enhanced server startup logging to indicate legacy mode
+  - **Result**: Legacy server usage clearly marked and warned at both compile and runtime
 
-- [ ] **Entity model deprecations**
-  - Deprecate all legacy entity types
-  - Add `#[deprecated]` attributes with migration paths
-  - Update documentation to reference modern entities
+- [x] **Entity model deprecations** ✅ COMPLETED
+  - ✅ Added comprehensive deprecation warnings to all legacy entity modules
+  - ✅ Enhanced entity re-exports with migration paths to `ratchet-api-types`
+  - ✅ Updated entity module documentation with migration examples
+  - ✅ Provided clear mapping from legacy to modern entity types
+  - **Result**: All entity models properly deprecated with clear migration guidance
 
 #### 3.2 Update Documentation
 - [ ] **Migration guides**

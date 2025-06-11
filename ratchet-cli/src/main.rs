@@ -368,6 +368,10 @@ async fn serve_with_ratchet_server(config: RatchetConfig) -> Result<()> {
 }
 
 #[cfg(feature = "server")]
+#[deprecated(
+    since = "0.4.0",
+    note = "Legacy server implementation is deprecated and will be removed in 0.5.0. Use serve_with_ratchet_server() instead. See migration guide: docs/migration/server_migration.md"
+)]
 async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
     use ratchet_lib::{
         execution::JobQueueManager,
@@ -376,7 +380,14 @@ async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetC
     use std::sync::Arc;
     use tokio::signal;
 
-    info!("🔧 Starting Ratchet server");
+    // Runtime deprecation warning
+    warn!("⚠️  DEPRECATED: Using legacy server implementation");
+    warn!("   This server implementation is deprecated as of v0.4.0 and will be removed in v0.5.0");
+    warn!("   Please migrate to the modern ratchet-server implementation");
+    warn!("   Migration guide: docs/migration/server_migration.md");
+    warn!("");
+    
+    info!("🔧 Starting Ratchet server (legacy)");
 
     // Get server configuration (guaranteed to exist from load_config)
     let server_config = config.server.as_ref().unwrap();
