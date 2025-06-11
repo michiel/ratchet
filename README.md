@@ -6,57 +6,11 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 
 [![Tests](https://img.shields.io/badge/tests-486%20passing-brightgreen)](.) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Status](https://img.shields.io/badge/status-production--ready-green)]()
 
-## 🎯 Key Features by Category
+## 🎯 Key Features
 
-### **Task Execution Engine**
-- **JavaScript Runtime**: Secure, isolated JavaScript execution with Boa engine
-- **Schema Validation**: Input/output validation using JSON Schema
-- **Process Isolation**: Thread-safe execution through process separation architecture
-- **Resource Management**: Configurable execution timeouts and resource limits
-- **Error Handling**: Comprehensive error types with stack traces and context
+Ratchet is a comprehensive JavaScript task execution platform built with Rust for performance and reliability. At its core, it provides secure, isolated JavaScript execution with schema validation, process separation for thread safety, and configurable resource management. The platform includes both GraphQL and REST APIs with OpenAPI documentation, making it ideal for web applications and microservices architectures.
 
-### **API & Integration**
-- **GraphQL API**: Full-featured GraphQL server with queries, mutations, and subscriptions
-- **REST API**: Refine.dev compatible REST endpoints for web applications
-- **OpenAPI Spec**: Complete API documentation with OpenAPI 3.0
-- **Rate Limiting**: Token bucket algorithm with configurable limits per client
-- **CORS Support**: Ready for cross-origin web application integration
-
-### **Job Queue & Scheduling**
-- **Priority Queue**: Multi-priority job execution with configurable batch sizes
-- **Retry Logic**: Exponential backoff with circuit breaker patterns
-- **Cron Scheduling**: Schedule tasks with cron expressions
-- **Worker Pool**: Scalable worker processes with health monitoring
-- **Job Management**: Cancel, retry, and monitor job execution
-
-### **Data Persistence**
-- **Database Layer**: SQLite with Sea-ORM for reliable data persistence
-- **Migration System**: Schema evolution with versioned migrations
-- **Repository Pattern**: Clean, testable database operations
-- **Connection Pooling**: Efficient database connection management
-- **Transaction Support**: ACID compliance for data integrity
-
-### **Development Tools**
-- **CLI Interface**: Comprehensive command-line tools for all operations
-- **Task Registry**: Automatic task discovery and version management
-- **File Watching**: Auto-reload tasks on file changes during development
-- **Recording & Replay**: Capture and replay task executions for debugging
-- **Test Framework**: Built-in testing with mock HTTP responses
-- **MCP Server**: Model Context Protocol server for LLM integration
-
-### **Security & Reliability**
-- **SQL Injection Prevention**: Safe query builder with input sanitization
-- **Input Validation**: Comprehensive validation for all user inputs
-- **Rate Limiting**: Protect against abuse with configurable limits
-- **Error Isolation**: Failures in one task don't affect others
-- **Audit Ready**: Structured logging and error tracking
-
-### **Monitoring & Operations**
-- **Health Checks**: REST and GraphQL health endpoints
-- **Metrics Collection**: Execution metrics and performance data
-- **Worker Monitoring**: Real-time worker status and load distribution
-- **Structured Logging**: JSON logs with correlation IDs
-- **Performance Tracking**: Execution duration and resource usage metrics
+The system features a robust job queue with priority handling, retry logic with exponential backoff, worker pools that scale with your hardware, and comprehensive monitoring capabilities. For development, Ratchet offers CLI tools, automatic task discovery, file watching for live reloading, recording and replay for debugging, and a complete test framework. Enterprise features include SQLite persistence with migrations, rate limiting, structured logging, health checks, and a Model Context Protocol (MCP) server for seamless LLM integration.
 
 ## 🚀 Quick Start
 
@@ -155,34 +109,30 @@ ratchet run-once --from-fs sample/js-tasks/weather-api \
 
 ## 📁 Project Structure
 
-Ratchet is migrating to a fully modular architecture. **Phase 1** (infrastructure extraction) is complete, **Phase 2** (server component extraction) is next:
+Ratchet uses a modular architecture with specialized crates for different responsibilities:
 
 ```
 ratchet/
-├── ratchet-cli/          # Command-line interface
-├── ratchet-lib/          # 🎯 Monolith targeted for decomposition
-│   ├── rest/             # → ratchet-rest (Phase 2)
-│   ├── graphql/          # → ratchet-graphql (Phase 2)
-│   ├── server/           # → ratchet-server-core (Phase 2)
-│   └── services/         # → ratchet-services (Phase 3)
-├── ratchet-mcp/          # Model Context Protocol server for LLM integration
-├── ratchet-execution/    # ✅ Process execution infrastructure (extracted)
-├── ratchet-storage/      # ✅ Database layer with repositories (extracted)
-├── ratchet-core/         # ✅ Domain types and models
-├── ratchet-http/         # ✅ HTTP client with mocking (extracted)
-├── ratchet-logging/      # ✅ Structured logging system (extracted)
-├── ratchet-js/           # ✅ JavaScript execution engine (extracted)
-├── ratchet-config/       # ✅ Configuration management (extracted)
-├── ratchet-caching/      # ✅ Caching abstractions
-├── ratchet-resilience/   # ✅ Circuit breakers, retry logic
-├── ratchet-runtime/      # ✅ Alternative task execution patterns
-├── ratchet-ipc/          # ✅ Inter-process communication
-├── ratchet-plugin/       # ✅ Plugin infrastructure
-├── sample/               # Example tasks and configurations
-└── docs/                 # Documentation and API specs
+├── ratchet-cli/            # Command-line interface and main binary
+├── ratchet-server/         # HTTP server with REST/GraphQL/MCP APIs
+├── ratchet-mcp/            # Model Context Protocol server for LLM integration
+├── ratchet-rest-api/       # REST API endpoints and handlers
+├── ratchet-graphql-api/    # GraphQL schema and resolvers
+├── ratchet-storage/        # Database layer with Sea-ORM repositories
+├── ratchet-execution/      # Process execution and worker management
+├── ratchet-js/             # JavaScript runtime with Boa engine
+├── ratchet-http/           # HTTP client with recording and mocking
+├── ratchet-config/         # Configuration management and validation
+├── ratchet-logging/        # Structured logging system
+├── ratchet-core/           # Core domain types and business logic
+├── ratchet-caching/        # Caching abstractions and implementations
+├── ratchet-resilience/     # Circuit breakers and retry logic
+├── ratchet-registry/       # Task discovery and registry management
+├── ratchet-output/         # Result delivery to various destinations
+├── scripts/                # Installation scripts (install.sh, install.ps1)
+├── sample/                 # Example tasks and configurations
+└── docs/                   # Documentation and API specifications
 ```
-
-**Goal**: Complete decomposition of ratchet-lib into focused, single-responsibility crates.
 
 ## 🔧 Task Structure
 
@@ -295,35 +245,55 @@ Ratchet includes a built-in MCP server that allows Language Learning Models (LLM
 
 ### Available MCP Tools
 
-- **`ratchet.execute_task`**: Execute any Ratchet task with input data
-- **`ratchet.list_available_tasks`**: Discover available tasks with filtering
-- **`ratchet.get_execution_status`**: Monitor running executions
-- **`ratchet.get_execution_logs`**: Retrieve execution logs
-- **`ratchet.get_execution_trace`**: Get detailed execution traces
+**Core Execution:**
+- **`ratchet.execute_task`**: Execute tasks with input data and progress streaming
+- **`ratchet.list_available_tasks`**: Discover available tasks with metadata
+- **`ratchet.get_execution_status`**: Monitor running executions in real-time
+- **`ratchet.get_execution_logs`**: Retrieve execution logs and traces
 - **`ratchet.analyze_execution_error`**: Analyze failures with suggestions
+- **`ratchet.batch_execute`**: Execute multiple tasks with dependency handling
+
+**Task Development:**
+- **`ratchet.create_task`**: Create new tasks with code and schemas
+- **`ratchet.edit_task`**: Modify existing tasks and validation
+- **`ratchet.delete_task`**: Remove tasks with backup options
+- **`ratchet.validate_task`**: Validate task code and schemas
+- **`ratchet.run_task_tests`**: Execute task test suites
+- **`ratchet.create_task_version`**: Manage task versioning
+- **`ratchet.import_tasks`**: Import task collections
+- **`ratchet.export_tasks`**: Export tasks for distribution
+- **`ratchet.generate_from_template`**: Create tasks from templates
+- **`ratchet.list_templates`**: Browse available task templates
+
+**Result Management:**
+- **`ratchet.store_result`**: Store execution results for analysis
+- **`ratchet.get_results`**: Retrieve stored execution results
 
 ### Starting the MCP Server
 
 ```bash
-# Start with stdio transport (for local LLM integration)
-ratchet mcp-serve --transport stdio
+# Start the main server with MCP enabled
+ratchet serve --config config.yaml
 
-# Start with SSE transport (for network access)
-ratchet mcp-serve --transport sse --port 3001
+# Or start standalone MCP server (planned)
+# ratchet mcp-serve --transport stdio
+```
 
-# Or configure in your config.yaml and start with the main server
-server:
-  # ... server config ...
+Configure MCP in your `config.yaml`:
 
-mcp:
+```yaml
+# Enable MCP API
+mcp_api:
   enabled: true
-  transport: sse
-  host: localhost
-  port: 3001
-  auth_type: none
-  max_connections: 10
-  request_timeout: 30
-  rate_limit_per_minute: 100
+  sse_enabled: true
+  host: "127.0.0.1"
+  port: 8081
+  endpoint: "/mcp"
+
+# Server configuration
+server:
+  host: "127.0.0.1"
+  port: 8080
 ```
 
 ### LLM Integration Example
@@ -335,13 +305,16 @@ For Claude Desktop, add to your config:
   "mcpServers": {
     "ratchet": {
       "command": "ratchet",
-      "args": ["mcp-serve", "--config", "/path/to/config.yaml"]
+      "args": ["serve", "--config", "/path/to/mcp-config.yaml"],
+      "env": {
+        "RATCHET_MCP_ENABLED": "true"
+      }
     }
   }
 }
 ```
 
-See [MCP User Guide](docs/MCP_USER_GUIDE.md) for detailed configuration and usage.
+The MCP server will be available at `http://127.0.0.1:8081/mcp` when configured with SSE transport. See the sample configs in `sample/configs/` for complete MCP setup examples.
 
 ## 🔐 Configuration
 
