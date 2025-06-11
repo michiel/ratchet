@@ -67,10 +67,16 @@ ratchet_storage::entities::{task::Task, execution::Execution, ...}
   - ✅ Ensured feature parity for all database operations
   - **Result**: ratchet-storage now has equivalent testing capabilities to ratchet-lib
 
-- [ ] **Create migration utilities** 🔄 IN PROGRESS
-  - Build tools to migrate existing data from legacy schema to modern schema
-  - Add database schema version detection and upgrade paths
-  - Implement data validation after migration
+- [x] **Create migration utilities** ✅ COMPLETED
+  - ✅ Built comprehensive migration framework in ratchet-storage:
+    - LegacyMigrator for data transformation between ratchet-lib and ratchet-storage
+    - SchemaVersionDetector for database version detection and compatibility checking
+    - MigrationValidator for data integrity validation and verification
+    - CLI interface for running migrations with detailed reporting
+    - Data transformation utilities for field mapping and type conversion
+  - ✅ Added database schema version detection and upgrade paths
+  - ✅ Implemented comprehensive data validation after migration
+  - **Result**: Complete migration toolkit ready for legacy database migration
 
 #### 1.2 Server Architecture Consolidation
 - [ ] **Improve ratchet-server reliability**
