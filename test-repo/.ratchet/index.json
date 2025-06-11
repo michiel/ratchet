@@ -1,0 +1,41 @@
+{
+  "collections": {},
+  "generated_at": "2025-06-11T06:38:21.747138942+00:00",
+  "repository": {
+    "description": "A test repository for validating repo commands",
+    "name": "Test Repository",
+    "version": "1.0.0"
+  },
+  "statistics": {
+    "categories": {
+      "examples": 1
+    },
+    "complexity_distribution": {},
+    "total_tasks": 1
+  },
+  "tasks": [
+    {
+      "author": "Ratchet Contributors",
+      "category": "examples",
+      "created_at": "2024-01-15T10:30:00Z",
+      "description": "A simple mathematical task that adds two numbers together and returns both sum and product. Demonstrates basic input validation and arithmetic operations.",
+      "label": "Addition Task",
+      "license": "MIT",
+      "name": "addition",
+      "path": "tasks/addition",
+      "ratchet_version": ">=0.6.0",
+      "supports_streaming": false,
+      "tags": [
+        "math",
+        "basic",
+        "tutorial",
+        "validation"
+      ],
+      "updated_at": "2024-03-01T14:20:00Z",
+      "uuid": "bd6c6f98-4896-44cc-8c82-30328c3aefda",
+      "version": "1.0.0"
+    }
+  ],
+  "templates": {},
+  "version": "1.0"
+}
