@@ -202,3 +202,118 @@ pub async fn get_task_stats(
     
     Ok(Json(StatsResponse::new(stats)))
 }
+
+/// MCP task development - create a new task with full JavaScript code and testing
+pub async fn mcp_create_task(
+    State(_ctx): State<TasksContext>,
+    Json(_request): Json<serde_json::Value>,
+) -> RestResult<impl IntoResponse> {
+    info!("MCP: Creating task with development features");
+    
+    // For now, return a placeholder response
+    // In a full implementation, this would:
+    // 1. Validate the JavaScript code
+    // 2. Validate input/output schemas  
+    // 3. Create task in database with full metadata
+    // 4. Run test cases if provided
+    // 5. Return the created task with validation results
+    
+    Err(RestError::InternalError(
+        "MCP task creation requires MCP service integration".to_string(),
+    )) as RestResult<Json<serde_json::Value>>
+}
+
+/// MCP task development - edit an existing task
+pub async fn mcp_edit_task(
+    State(_ctx): State<TasksContext>,
+    Path(task_name): Path<String>,
+    Json(_request): Json<serde_json::Value>,
+) -> RestResult<impl IntoResponse> {
+    info!("MCP: Editing task: {}", task_name);
+    
+    // For now, return a placeholder response
+    // In a full implementation, this would:
+    // 1. Validate the task exists
+    // 2. Update JavaScript code and/or metadata
+    // 3. Validate changes
+    // 4. Run test cases if provided
+    // 5. Return the updated task
+    
+    Err(RestError::InternalError(
+        "MCP task editing requires MCP service integration".to_string(),
+    )) as RestResult<Json<serde_json::Value>>
+}
+
+/// MCP task development - delete a task
+pub async fn mcp_delete_task(
+    State(_ctx): State<TasksContext>,
+    Path(task_name): Path<String>,
+) -> RestResult<impl IntoResponse> {
+    info!("MCP: Deleting task: {}", task_name);
+    
+    // For now, return a placeholder response
+    // In a full implementation, this would:
+    // 1. Validate the task exists
+    // 2. Remove from database and filesystem
+    // 3. Clean up related executions
+    // 4. Return deletion confirmation
+    
+    Err(RestError::InternalError(
+        "MCP task deletion requires MCP service integration".to_string(),
+    )) as RestResult<Json<serde_json::Value>>
+}
+
+/// MCP task development - test a task
+pub async fn mcp_test_task(
+    State(_ctx): State<TasksContext>,
+    Path(task_name): Path<String>,
+) -> RestResult<impl IntoResponse> {
+    info!("MCP: Testing task: {}", task_name);
+    
+    // For now, return a placeholder response
+    // In a full implementation, this would:
+    // 1. Load task from database
+    // 2. Run all test cases
+    // 3. Execute JavaScript code
+    // 4. Return detailed test results
+    
+    Err(RestError::InternalError(
+        "MCP task testing requires MCP service integration".to_string(),
+    )) as RestResult<Json<serde_json::Value>>
+}
+
+/// MCP task development - store execution result
+pub async fn mcp_store_result(
+    State(_ctx): State<TasksContext>,
+    Json(_request): Json<serde_json::Value>,
+) -> RestResult<impl IntoResponse> {
+    info!("MCP: Storing task execution result");
+    
+    // For now, return a placeholder response
+    // In a full implementation, this would:
+    // 1. Validate the execution data
+    // 2. Store in execution repository
+    // 3. Update task statistics
+    // 4. Return storage confirmation
+    
+    Err(RestError::InternalError(
+        "MCP result storage requires MCP service integration".to_string(),
+    )) as RestResult<Json<serde_json::Value>>
+}
+
+/// MCP task development - get stored results for a task
+pub async fn mcp_get_results(
+    State(_ctx): State<TasksContext>,
+    Path(task_name): Path<String>,
+) -> RestResult<impl IntoResponse> {
+    info!("MCP: Getting results for task: {}", task_name);
+    
+    // For now, return a placeholder response
+    // In a full implementation, this would:
+    // 1. Query execution repository by task name
+    // 2. Return paginated results with execution data
+    
+    Err(RestError::InternalError(
+        "MCP result retrieval requires MCP service integration".to_string(),
+    )) as RestResult<Json<serde_json::Value>>
+}

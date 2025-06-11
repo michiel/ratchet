@@ -20,8 +20,8 @@ use ratchet_web::middleware::{cors_layer, request_id_layer, error_handler_layer}
 
 #[cfg(feature = "mcp")]
 use ratchet_mcp::{
-    server::{McpServer, tools::RatchetToolRegistry, adapter::RatchetMcpAdapter},
-    security::{McpAuth, McpAuthManager, AuditLogger},
+    server::{McpServer, tools::{RatchetToolRegistry, ToolRegistry}, adapter::RatchetMcpAdapter},
+    security::{McpAuth, McpAuthManager, AuditLogger, SecurityContext, SecurityConfig, ClientContext, ClientPermissions},
     server::config::McpServerConfig,
 };
 
@@ -118,16 +118,10 @@ impl Server {
             #[cfg(feature = "mcp")]
             {
                 // Create MCP server configuration
-                let mcp_server_config = McpServerConfig {
-                    host: self.config.mcp_api.host.clone(),
-                    port: self.config.mcp_api.port,
-                    transport: "sse".to_string(),
-                    enabled: true,
-                    max_concurrent_requests: 50,
-                    request_timeout_secs: 30,
-                    enable_cors: true,
-                    cors_allow_origins: vec!["*".to_string()],
-                };
+                let mcp_server_config = McpServerConfig::sse_with_host(
+                    self.config.mcp_api.port,
+                    &self.config.mcp_api.host
+                );
                 
                 // Create MCP adapter (placeholder - would need actual task executor)
                 // For now, create a minimal MCP server with basic tools
@@ -181,6 +175,38 @@ impl Server {
 
         tracing::info!("Server shutdown complete");
         Ok(())
+    }
+
+    /// Get list of available MCP tools
+    #[cfg(feature = "mcp")]
+    fn get_mcp_tools_list(&self) -> Vec<String> {
+        // For startup logging, return a static list of known tools to avoid runtime issues
+        // The actual tool registry initialization happens during MCP server setup
+        vec![
+            // Core execution tools
+            "ratchet.execute_task".to_string(),
+            "ratchet.get_execution_status".to_string(),
+            "ratchet.get_execution_logs".to_string(),
+            "ratchet.get_execution_trace".to_string(),
+            "ratchet.list_available_tasks".to_string(),
+            "ratchet.analyze_execution_error".to_string(),
+            "ratchet.batch_execute".to_string(),
+            
+            // Task development tools
+            "ratchet.create_task".to_string(),
+            "ratchet.validate_task".to_string(),
+            "ratchet.debug_task_execution".to_string(),
+            "ratchet.run_task_tests".to_string(),
+            "ratchet.create_task_version".to_string(),
+            "ratchet.edit_task".to_string(),
+            "ratchet.delete_task".to_string(),
+            "ratchet.import_tasks".to_string(),
+            "ratchet.export_tasks".to_string(),
+            "ratchet.generate_from_template".to_string(),
+            "ratchet.list_templates".to_string(),
+            "ratchet.store_result".to_string(),
+            "ratchet.get_results".to_string(),
+        ]
     }
 
     /// Log configuration summary
@@ -264,7 +290,23 @@ impl Server {
         if self.config.mcp_api.enabled {
             tracing::info!("   🤖 MCP Server-Sent Events API:");
             tracing::info!("      • Base Endpoint:    http://{}:{}{}", self.config.mcp_api.host, self.config.mcp_api.port, self.config.mcp_api.endpoint);
-            tracing::info!("      • Tools Available:  execute_task, list_tasks, get_status, get_logs");
+            
+            // Dynamically list available MCP tools
+            #[cfg(feature = "mcp")]
+            {
+                let tools = self.get_mcp_tools_list();
+                if !tools.is_empty() {
+                    tracing::info!("      • Tools Available:  {}", tools.join(", "));
+                } else {
+                    tracing::info!("      • Tools Available:  None");
+                }
+            }
+            
+            #[cfg(not(feature = "mcp"))]
+            {
+                tracing::info!("      • Tools Available:  MCP feature not compiled");
+            }
+            
             tracing::info!("      • Protocol:         Model Context Protocol v2024-11-05");
             tracing::info!("      • Transport:        Server-Sent Events (SSE)");
         }

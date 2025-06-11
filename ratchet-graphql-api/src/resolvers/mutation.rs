@@ -6,6 +6,7 @@ use crate::{
     types::*,
 };
 use ratchet_api_types::ApiError;
+use serde_json::Value as JsonValue;
 
 /// Root mutation resolver
 pub struct Mutation;
@@ -96,5 +97,65 @@ impl Mutation {
         
         // For now, return an error as this is not yet implemented
         Err(ApiError::internal_error("Schedule update not yet implemented").into())
+    }
+
+    /// MCP task development - create a new task with full JavaScript code and testing
+    async fn mcp_create_task(
+        &self,
+        ctx: &Context<'_>,
+        input: McpCreateTaskInput,
+    ) -> Result<JsonValue> {
+        let _context = ctx.data::<GraphQLContext>()?;
+        
+        // For now, return an error as this requires MCP service integration
+        Err(ApiError::internal_error("MCP task creation requires MCP service integration").into())
+    }
+
+    /// MCP task development - edit an existing task
+    async fn mcp_edit_task(
+        &self,
+        ctx: &Context<'_>,
+        input: McpEditTaskInput,
+    ) -> Result<JsonValue> {
+        let _context = ctx.data::<GraphQLContext>()?;
+        
+        // For now, return an error as this requires MCP service integration
+        Err(ApiError::internal_error("MCP task editing requires MCP service integration").into())
+    }
+
+    /// MCP task development - delete a task
+    async fn mcp_delete_task(
+        &self,
+        ctx: &Context<'_>,
+        task_name: String,
+    ) -> Result<bool> {
+        let _context = ctx.data::<GraphQLContext>()?;
+        
+        // For now, return an error as this requires MCP service integration
+        Err(ApiError::internal_error("MCP task deletion requires MCP service integration").into())
+    }
+
+    /// MCP task development - test a task
+    async fn mcp_test_task(
+        &self,
+        ctx: &Context<'_>,
+        task_name: String,
+    ) -> Result<McpTaskTestResults> {
+        let _context = ctx.data::<GraphQLContext>()?;
+        
+        // For now, return an error as this requires MCP service integration
+        Err(ApiError::internal_error("MCP task testing requires MCP service integration").into())
+    }
+
+    /// MCP task development - store execution result
+    async fn mcp_store_result(
+        &self,
+        ctx: &Context<'_>,
+        input: McpStoreResultInput,
+    ) -> Result<JsonValue> {
+        let _context = ctx.data::<GraphQLContext>()?;
+        
+        // For now, return an error as this requires MCP service integration
+        Err(ApiError::internal_error("MCP result storage requires MCP service integration").into())
     }
 }

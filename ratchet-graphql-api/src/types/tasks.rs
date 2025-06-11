@@ -63,3 +63,66 @@ pub struct TaskValidationResult {
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
 }
+
+/// Task test case input
+#[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
+pub struct TaskTestCaseInput {
+    pub name: String,
+    pub input: JsonValue,
+    pub expected_output: Option<JsonValue>,
+    pub should_fail: Option<bool>,
+    pub description: Option<String>,
+}
+
+/// MCP task development - create task input
+#[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
+pub struct McpCreateTaskInput {
+    pub name: String,
+    pub description: String,
+    pub code: String,
+    pub input_schema: JsonValue,
+    pub output_schema: JsonValue,
+    pub tags: Option<Vec<String>>,
+    pub version: Option<String>,
+    pub enabled: Option<bool>,
+    pub test_cases: Option<Vec<TaskTestCaseInput>>,
+}
+
+/// MCP task development - edit task input
+#[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
+pub struct McpEditTaskInput {
+    pub name: String,
+    pub description: Option<String>,
+    pub code: Option<String>,
+    pub input_schema: Option<JsonValue>,
+    pub output_schema: Option<JsonValue>,
+    pub tags: Option<Vec<String>>,
+    pub version: Option<String>,
+    pub enabled: Option<bool>,
+    pub test_cases: Option<Vec<TaskTestCaseInput>>,
+}
+
+/// MCP task test results
+#[derive(SimpleObject)]
+#[graphql(rename_fields = "camelCase")]
+pub struct McpTaskTestResults {
+    pub total: i32,
+    pub passed: i32,
+    pub failed: i32,
+    pub skipped: i32,
+    pub test_results: Vec<JsonValue>,
+}
+
+/// MCP store result input
+#[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
+pub struct McpStoreResultInput {
+    pub task_id: String,
+    pub input: JsonValue,
+    pub output: JsonValue,
+    pub execution_time_ms: Option<i64>,
+    pub status: Option<String>,
+}
