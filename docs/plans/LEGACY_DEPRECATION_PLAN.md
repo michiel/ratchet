@@ -165,26 +165,32 @@ ratchet_storage::entities::{task::Task, execution::Execution, ...}
 ### Phase 4: Remove Legacy Code (Weeks 7-8)
 
 #### 4.1 Legacy Database Removal
-- [ ] **Remove ratchet-lib database module**
-  - Delete `ratchet-lib/src/database/` directory
-  - Remove database-related exports from ratchet-lib
-  - Update all imports to use ratchet-storage
+- [x] **Remove ratchet-lib database module** ✅ COMPLETED
+  - ✅ Deleted entire `ratchet-lib/src/database/` directory with all legacy entities, repositories, and migrations
+  - ✅ Removed database module export from ratchet-lib crate
+  - ✅ Eliminated all legacy database functionality while maintaining modern storage layer
+  - **Result**: Complete removal of legacy database layer - only ratchet-storage remains
 
-- [ ] **Clean up repository factories**
-  - Remove `convert_to_legacy_repository_factory()` function
-  - Simplify server startup to use single repository system
-  - Remove compatibility adapters
+- [x] **Clean up repository factories** ✅ COMPLETED
+  - ✅ Removed `convert_to_legacy_repository_factory()` function entirely
+  - ✅ Simplified server startup to use only modern ratchet-storage repositories
+  - ✅ Eliminated all compatibility adapters and legacy repository conversion logic
+  - **Result**: Single repository system using ratchet-storage and ratchet-interfaces
 
 #### 4.2 Server Implementation Cleanup
-- [ ] **Remove legacy server**
-  - Delete `serve_with_legacy_server()` function
-  - Remove fallback mechanism from `serve_command_with_config()`
-  - Simplify server startup flow
+- [x] **Remove legacy server** ✅ COMPLETED
+  - ✅ Deleted entire `serve_with_legacy_server()` function (300+ lines removed)
+  - ✅ Removed fallback mechanism from `serve_command_with_config()`
+  - ✅ Simplified server startup flow to use only modern ratchet-server architecture
+  - ✅ Updated function signatures to eliminate LibRatchetConfig parameters
+  - **Result**: Single modern server implementation with no legacy fallback
 
-- [ ] **Configuration cleanup**
-  - Remove `LibRatchetConfig` type
-  - Delete config conversion utilities
-  - Use only modern config throughout codebase
+- [x] **Configuration cleanup** ✅ COMPLETED
+  - ✅ Removed `convert_to_legacy_config()` function and all legacy config conversion utilities
+  - ✅ Updated MCP server configuration to use RatchetConfig directly
+  - ✅ Eliminated LibRatchetConfig usage throughout CLI codebase
+  - ✅ Simplified function signatures to use only modern RatchetConfig
+  - **Result**: Unified configuration using only modern RatchetConfig format
 
 ### Phase 5: Validation and Testing (Weeks 9-10)
 
