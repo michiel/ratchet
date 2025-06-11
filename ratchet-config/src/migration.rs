@@ -11,7 +11,7 @@ use serde_yaml;
 
 use crate::{
     ConfigError, ConfigResult,
-    domains::RatchetConfig as ModernConfig,
+    domains::{RatchetConfig as ModernConfig, logging::{LogTarget, LogFormat, LogLevel}, server::ServerConfig},
     compat::{LegacyRatchetConfig, to_legacy_config}
 };
 
@@ -58,10 +58,7 @@ impl ConfigMigrator {
 
         // Read the configuration file
         let content = fs::read_to_string(config_path)
-            .map_err(|e| ConfigError::FileIo {
-                path: config_path.to_path_buf(),
-                error: e,
-            })?;
+            .map_err(ConfigError::FileReadError)?;
 
         // Detect configuration format
         let format = self.detect_config_format(&content, config_path)?;
@@ -81,9 +78,9 @@ impl ConfigMigrator {
                 (modern_config, true)
             }
             ConfigFormat::Unknown => {
-                return Err(ConfigError::ParseError {
-                    message: "Unable to determine configuration format".to_string(),
-                });
+                return Err(ConfigError::ValidationError(
+                    "Unable to determine configuration format".to_string(),
+                ));
             }
         };
 
@@ -184,18 +181,14 @@ impl ConfigMigrator {
     fn load_modern_config(&self, content: &str, format: ConfigFormat) -> ConfigResult<ModernConfig> {
         match format {
             ConfigFormat::ModernYaml => {
-                serde_yaml::from_str(content).map_err(|e| ConfigError::ParseError {
-                    message: format!("Failed to parse modern YAML config: {}", e),
-                })
+                serde_yaml::from_str(content).map_err(ConfigError::ParseError)
             }
             ConfigFormat::ModernJson => {
-                serde_json::from_str(content).map_err(|e| ConfigError::ParseError {
-                    message: format!("Failed to parse modern JSON config: {}", e),
-                })
+                serde_json::from_str(content).map_err(ConfigError::JsonError)
             }
-            _ => Err(ConfigError::ParseError {
-                message: "Invalid format for modern config".to_string(),
-            }),
+            _ => Err(ConfigError::ValidationError(
+                "Invalid format for modern config".to_string(),
+            )),
         }
     }
 
@@ -203,18 +196,14 @@ impl ConfigMigrator {
     fn load_legacy_config(&self, content: &str, format: ConfigFormat) -> ConfigResult<LegacyRatchetConfig> {
         match format {
             ConfigFormat::LegacyYaml => {
-                serde_yaml::from_str(content).map_err(|e| ConfigError::ParseError {
-                    message: format!("Failed to parse legacy YAML config: {}", e),
-                })
+                serde_yaml::from_str(content).map_err(ConfigError::ParseError)
             }
             ConfigFormat::LegacyJson => {
-                serde_json::from_str(content).map_err(|e| ConfigError::ParseError {
-                    message: format!("Failed to parse legacy JSON config: {}", e),
-                })
+                serde_json::from_str(content).map_err(ConfigError::JsonError)
             }
-            _ => Err(ConfigError::ParseError {
-                message: "Invalid format for legacy config".to_string(),
-            }),
+            _ => Err(ConfigError::ValidationError(
+                "Invalid format for legacy config".to_string(),
+            )),
         }
     }
 
@@ -229,10 +218,10 @@ impl ConfigMigrator {
                 modern_server.bind_address = server.bind_address;
                 modern_server.port = server.port;
                 
-                // Migrate database settings to new domain structure
-                modern_config.database.url = server.database.url;
-                modern_config.database.max_connections = server.database.max_connections;
-                modern_config.database.connection_timeout = server.database.connection_timeout;
+                // Migrate database settings to server's database config
+                modern_server.database.url = server.database.url;
+                modern_server.database.max_connections = server.database.max_connections;
+                modern_server.database.connection_timeout = server.database.connection_timeout;
             }
         }
 
@@ -242,23 +231,31 @@ impl ConfigMigrator {
         modern_config.execution.validate_schemas = legacy.execution.validate_schemas;
         
         // Map legacy fields to new execution domain
-        modern_config.execution.max_concurrent = legacy.execution.max_concurrent_tasks;
-        modern_config.execution.shutdown_timeout = 
+        modern_config.execution.max_concurrent_tasks = legacy.execution.max_concurrent_tasks;
+        modern_config.execution.timeout_grace_period = 
             std::time::Duration::from_secs(legacy.execution.timeout_grace_period);
 
         // Migrate HTTP settings (preserve all user settings)
         modern_config.http.timeout = legacy.http.timeout;
         modern_config.http.user_agent = legacy.http.user_agent;
         modern_config.http.verify_ssl = legacy.http.verify_ssl;
-        modern_config.http.max_redirects = legacy.http.max_redirects;
+        modern_config.http.max_redirects = legacy.http.max_redirects as u32;
 
         // Migrate logging settings to new structured format
-        modern_config.logging.level = legacy.logging.level;
-        modern_config.logging.format = legacy.logging.format;
+        modern_config.logging.level = legacy.logging.level.parse().unwrap_or_default();
+        modern_config.logging.format = legacy.logging.format.parse().unwrap_or_default();
         
         // Convert legacy flat output to new structured output destinations
-        modern_config.logging.console.enabled = legacy.logging.output == "console";
-        modern_config.logging.file.enabled = legacy.logging.output == "file";
+        modern_config.logging.targets = match legacy.logging.output.as_str() {
+            "console" => vec![LogTarget::Console { level: None }],
+            "file" => vec![LogTarget::File { 
+                path: "ratchet.log".to_string(), 
+                level: None,
+                max_size_bytes: 10 * 1024 * 1024, // 10MB default
+                max_files: 5,
+            }],
+            _ => vec![LogTarget::Console { level: None }], // default fallback
+        };
 
         // Migrate MCP settings if present
         if let Some(mcp) = legacy.mcp {
@@ -282,24 +279,16 @@ impl ConfigMigrator {
             format!("{}.backup", config_path.extension().unwrap_or_default().to_string_lossy())
         );
 
-        fs::copy(config_path, &backup_path).map_err(|e| ConfigError::FileIo {
-            path: backup_path,
-            error: e,
-        })?;
+        fs::copy(config_path, &backup_path).map_err(ConfigError::FileReadError)?;
 
         Ok(())
     }
 
     /// Save modern configuration to file
     async fn save_modern_config(&self, config_path: &Path, config: &ModernConfig) -> ConfigResult<()> {
-        let content = serde_yaml::to_string(config).map_err(|e| ConfigError::ParseError {
-            message: format!("Failed to serialize modern config: {}", e),
-        })?;
+        let content = serde_yaml::to_string(config).map_err(ConfigError::ParseError)?;
 
-        fs::write(config_path, content).map_err(|e| ConfigError::FileIo {
-            path: config_path.to_path_buf(),
-            error: e,
-        })?;
+        fs::write(config_path, content).map_err(ConfigError::FileReadError)?;
 
         Ok(())
     }
@@ -455,10 +444,7 @@ impl ConfigCompatibilityService {
     pub fn needs_migration<P: AsRef<Path>>(config_path: P) -> ConfigResult<bool> {
         let config_path = config_path.as_ref();
         let content = fs::read_to_string(config_path)
-            .map_err(|e| ConfigError::FileIo {
-                path: config_path.to_path_buf(),
-                error: e,
-            })?;
+            .map_err(ConfigError::FileReadError)?;
 
         let migrator = ConfigMigrator::new();
         let format = migrator.detect_config_format(&content, config_path)?;
@@ -519,19 +505,19 @@ logging:
         // Verify settings were preserved
         assert_eq!(modern_config.server.as_ref().unwrap().bind_address, "127.0.0.1");
         assert_eq!(modern_config.server.as_ref().unwrap().port, 3000);
-        assert_eq!(modern_config.database.url, "sqlite://test.db");
-        assert_eq!(modern_config.database.max_connections, 5);
+        assert_eq!(modern_config.server.as_ref().unwrap().database.url, "sqlite://test.db");
+        assert_eq!(modern_config.server.as_ref().unwrap().database.max_connections, 5);
         assert_eq!(modern_config.execution.max_execution_duration, std::time::Duration::from_secs(600));
         assert!(modern_config.execution.validate_schemas);
-        assert_eq!(modern_config.execution.max_concurrent, 8);
+        assert_eq!(modern_config.execution.max_concurrent_tasks, 8);
         assert_eq!(modern_config.http.timeout, std::time::Duration::from_secs(45));
         assert_eq!(modern_config.http.user_agent, "TestAgent/1.0");
         assert!(!modern_config.http.verify_ssl);
         assert_eq!(modern_config.http.max_redirects, 5);
-        assert_eq!(modern_config.logging.level, "debug");
-        assert_eq!(modern_config.logging.format, "json");
-        assert!(modern_config.logging.console.enabled);
-        assert!(!modern_config.logging.file.enabled);
+        assert_eq!(modern_config.logging.level, LogLevel::Debug);
+        assert_eq!(modern_config.logging.format, LogFormat::Json);
+        // Check that console target is configured
+        assert!(modern_config.logging.targets.iter().any(|t| matches!(t, LogTarget::Console { .. })));
     }
 
     #[test]
