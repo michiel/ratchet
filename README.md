@@ -66,9 +66,16 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 
 The easiest way to install Ratchet is using our install script:
 
+**Linux/macOS:**
 ```bash
 # Install latest release directly from GitHub
 curl -fsSL https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+# Install latest release directly from GitHub
+irm https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.ps1 | iex
 ```
 
 This script will:
