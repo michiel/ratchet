@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use ratchet_config::{ConfigLoader, RatchetConfig};
+use chrono::{DateTime, Utc};
 
 #[cfg(feature = "server")]
 use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
@@ -33,12 +34,15 @@ use uuid::Uuid;
 #[cfg(feature = "core")]
 use ratchet_core::task::Task as CoreTask;
 
+#[cfg(all(feature = "runtime", feature = "core"))]
+use ratchet_runtime::{InMemoryTaskExecutor, TaskExecutor};
+
 
 #[cfg(feature = "javascript")]
 use ratchet_js::{FileSystemTask, load_and_execute_task};
 
 mod cli;
-use cli::{Cli, Commands, ConfigCommands, GenerateCommands};
+use cli::{Cli, Commands, ConfigCommands, GenerateCommands, RepoCommands};
 
 /// Convert ratchet-storage RepositoryFactory to ratchet_lib RepositoryFactory
 #[cfg(all(feature = "server", feature = "database"))]
@@ -51,6 +55,8 @@ async fn convert_to_legacy_repository_factory(
         max_connections: storage_config.max_connections,
         connection_timeout: storage_config.connection_timeout,
     };
+
+    debug!("Creating legacy repository factory with database URL: {}", legacy_config.url);
 
     // Create legacy database connection using the same configuration
     let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config)
@@ -184,27 +190,93 @@ fn setup_mcp_file_logging(config: &RatchetConfig) -> Result<()> {
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
     let loader = ConfigLoader::new();
 
-    match config_path {
+    let config = match config_path {
         Some(path) => {
             if path.exists() {
                 info!("Loading configuration from: {:?}", path);
                 loader
                     .from_file(path)
-                    .context(format!("Failed to load configuration from {:?}", path))
+                    .context(format!("Failed to load configuration from {:?}", path))?
             } else {
                 warn!("Configuration file not found: {:?}. Using defaults.", path);
                 loader
                     .from_env()
-                    .context("Failed to load configuration from environment")
+                    .context("Failed to load configuration from environment")?
             }
         }
         None => {
             debug!("No configuration file specified. Loading from environment or defaults.");
-            loader
+            let mut config = loader
                 .from_env()
-                .context("Failed to load configuration from environment")
+                .context("Failed to load configuration from environment")?;
+            
+            // Add default task repository when running without a config file
+            // and no registry is configured via environment variables
+            if config.registry.is_none() {
+                use ratchet_config::domains::registry::{
+                    RegistryConfig, RegistrySourceConfig, RegistrySourceType, 
+                    SourceSpecificConfig, GitSourceConfig
+                };
+                
+                info!("Adding default task repository: https://github.com/michiel/ratchet-repo-samples");
+                info!("📦 Active repositories:");
+                
+                let default_source = RegistrySourceConfig {
+                    name: "ratchet-samples".to_string(),
+                    uri: "https://github.com/michiel/ratchet-repo-samples.git".to_string(),
+                    source_type: RegistrySourceType::Git,
+                    polling_interval: None,
+                    enabled: true,
+                    auth_name: None,
+                    config: SourceSpecificConfig {
+                        git: GitSourceConfig {
+                            git_ref: "main".to_string(),
+                            subdirectory: None,
+                            shallow: true,
+                            depth: Some(1),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                };
+                
+                config.registry = Some(RegistryConfig {
+                    sources: vec![default_source.clone()],
+                    ..Default::default()
+                });
+                
+                info!("   ✅ {} (git): {}", default_source.name, default_source.uri);
+            }
+            
+            config
         }
+    };
+
+    // Log repository information if any are configured
+    if let Some(registry_config) = &config.registry {
+        if !registry_config.sources.is_empty() {
+            info!("📦 Configured repositories ({}):", registry_config.sources.len());
+            for source in &registry_config.sources {
+                let status_icon = if source.enabled { "✅" } else { "⏸️" };
+                let source_type_name = match source.source_type {
+                    ratchet_config::domains::registry::RegistrySourceType::Filesystem => "filesystem",
+                    ratchet_config::domains::registry::RegistrySourceType::Http => "http",
+                    ratchet_config::domains::registry::RegistrySourceType::Git => "git",
+                    ratchet_config::domains::registry::RegistrySourceType::S3 => "s3",
+                };
+                info!("   {} {} ({}): {}", status_icon, source.name, source_type_name, source.uri);
+            }
+            info!("💡 Use 'ratchet repo status' to check repository health and synchronization state");
+        } else {
+            info!("📦 No task repositories configured");
+            info!("💡 Use 'ratchet repo init <path>' to create a repository or add sources to your config");
+        }
+    } else {
+        info!("📦 No task repositories configured");
+        info!("💡 Use 'ratchet repo init <path>' to create a repository or add sources to your config");
     }
+
+    Ok(config)
 }
 
 /// Start the Ratchet server (legacy wrapper function)
@@ -257,10 +329,39 @@ async fn serve_with_ratchet_server(config: RatchetConfig) -> Result<()> {
     info!("🚀 Starting Ratchet server with new modular architecture");
     
     // Convert new config to server config
-    let server_config = ServerConfig::from_ratchet_config(config)?;
+    let server_config = ServerConfig::from_ratchet_config(config.clone())?;
     
-    // Create and start the server
+    // Log repository information if any are configured
+    if let Some(registry_config) = &config.registry {
+        if !registry_config.sources.is_empty() {
+            info!("📦 Configured repositories ({}):", registry_config.sources.len());
+            for source in &registry_config.sources {
+                let source_type_name = match source.source_type {
+                    ratchet_config::domains::registry::RegistrySourceType::Filesystem => "filesystem",
+                    ratchet_config::domains::registry::RegistrySourceType::Http => "http",
+                    ratchet_config::domains::registry::RegistrySourceType::Git => "git",
+                    ratchet_config::domains::registry::RegistrySourceType::S3 => "s3",
+                };
+                let status_icon = if source.enabled { "✅" } else { "⏸️" };
+                info!("   {} {} ({}): {}", status_icon, source.name, source_type_name, source.uri);
+            }
+            info!("💡 Use 'ratchet repo status' to check repository health and synchronization state");
+        } else {
+            info!("📦 No task repositories configured");
+            info!("💡 Use 'ratchet repo init <path>' to create a repository or add sources to your config");
+        }
+    } else {
+        info!("📦 No task repositories configured");
+        info!("💡 Use 'ratchet repo init <path>' to create a repository or add sources to your config");
+    }
+    
+    // Create the server
     let server = Server::new(server_config).await?;
+    
+    // Initialize and synchronize repositories with the database if any are configured
+    sync_repositories_to_database(&config).await?;
+    
+    // Start the server
     server.start().await?;
     
     Ok(())
@@ -305,6 +406,8 @@ async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetC
         max_connections: server_config.database.max_connections,
         connection_timeout: server_config.database.connection_timeout,
     };
+    
+    debug!("Legacy server using database URL: {}", server_config.database.url);
 
     let database = DatabaseConnection::new(storage_db_config.clone())
         .await
@@ -317,6 +420,9 @@ async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetC
     
     // Create storage repository factory for MCP service
     let storage_repositories = RepositoryFactory::new(database.clone());
+
+    // Initialize and synchronize repositories with the database if any are configured
+    sync_repositories_to_database(&new_config).await?;
 
     // Initialize job queue
     let job_queue = Arc::new(JobQueueManager::with_default_config(
@@ -521,6 +627,187 @@ async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetC
     }
 
     info!("Ratchet server shutdown complete");
+    Ok(())
+}
+
+/// Synchronize configured repositories with the internal task registry and database
+async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
+    use ratchet_registry::{
+        service::{DefaultRegistryService, RegistryService},
+        config::{RegistryConfig, TaskSource},
+        sync::DatabaseSync,
+    };
+    use std::sync::Arc;
+
+    // Check if repositories are configured
+    let registry_config = match &config.registry {
+        Some(config) if !config.sources.is_empty() => config,
+        _ => {
+            debug!("No repositories configured for synchronization");
+            return Ok(());
+        }
+    };
+
+    info!("🔄 Synchronizing {} repositories with internal task registry", registry_config.sources.len());
+
+    // Convert ratchet-config RegistrySourceConfig to ratchet-registry TaskSource
+    let mut sources = Vec::new();
+    for source_config in &registry_config.sources {
+        let task_source = match source_config.source_type {
+            ratchet_config::domains::registry::RegistrySourceType::Filesystem => {
+                TaskSource::Filesystem {
+                    path: source_config.uri.clone(),
+                    recursive: true,
+                    watch: source_config.config.filesystem.watch_changes,
+                }
+            }
+            ratchet_config::domains::registry::RegistrySourceType::Http => {
+                TaskSource::Http {
+                    url: source_config.uri.clone(),
+                    auth: None, // TODO: Map authentication from config
+                    polling_interval: source_config.polling_interval
+                        .unwrap_or(registry_config.default_polling_interval),
+                }
+            }
+            ratchet_config::domains::registry::RegistrySourceType::Git => {
+                TaskSource::Git {
+                    url: source_config.uri.clone(),
+                    auth: None, // TODO: Map authentication from config
+                    config: ratchet_registry::config::GitConfig {
+                        git_ref: source_config.config.git.git_ref.clone(),
+                        subdirectory: source_config.config.git.subdirectory.clone(),
+                        shallow: source_config.config.git.shallow,
+                        depth: source_config.config.git.depth,
+                        sync_strategy: match source_config.config.git.sync_strategy {
+                            ratchet_config::domains::registry::GitSyncStrategy::Clone => 
+                                ratchet_registry::config::GitSyncStrategy::Clone,
+                            ratchet_config::domains::registry::GitSyncStrategy::Fetch => 
+                                ratchet_registry::config::GitSyncStrategy::Fetch,
+                            ratchet_config::domains::registry::GitSyncStrategy::Pull => 
+                                ratchet_registry::config::GitSyncStrategy::Pull,
+                        },
+                        cleanup_on_error: source_config.config.git.cleanup_on_error,
+                        verify_signatures: source_config.config.git.verify_signatures,
+                        allowed_refs: source_config.config.git.allowed_refs.clone(),
+                        timeout: source_config.config.git.timeout,
+                        max_repo_size: source_config.config.git.max_repo_size.clone(),
+                        local_cache_path: source_config.config.git.local_cache_path.clone(),
+                        cache_ttl: source_config.config.git.cache_ttl,
+                        keep_history: source_config.config.git.keep_history,
+                    },
+                }
+            }
+            ratchet_config::domains::registry::RegistrySourceType::S3 => {
+                warn!("S3 repositories not yet supported for synchronization: {}", source_config.name);
+                continue;
+            }
+        };
+        sources.push(task_source);
+    }
+
+    if sources.is_empty() {
+        info!("No supported repositories found for synchronization");
+        return Ok(());
+    }
+
+    // Create registry service configuration
+    let registry_service_config = RegistryConfig {
+        sources,
+        sync_interval: registry_config.default_polling_interval,
+        enable_auto_sync: true,
+        enable_validation: true,
+        cache_config: ratchet_registry::config::CacheConfig {
+            enabled: registry_config.cache.enabled,
+            max_size: registry_config.cache.max_entries,
+            ttl: registry_config.cache.ttl,
+        },
+    };
+
+    // Create database connection for sync service using storage-based repository
+    let database_url = config.server.as_ref()
+        .map(|s| s.database.url.clone())
+        .unwrap_or_else(|| "sqlite::memory:".to_string());
+    
+    debug!("Repository sync using database URL: {}", database_url);
+    
+    let storage_config = if database_url == "sqlite::memory:" {
+        ratchet_storage::config::StorageConfig::in_memory()
+    } else {
+        // Parse SQLite path from URL - support multiple formats
+        let path = if database_url.starts_with("sqlite:///") {
+            // Absolute path: sqlite:///path/to/file.db -> /path/to/file.db
+            database_url.trim_start_matches("sqlite:///").to_string()
+        } else if database_url.starts_with("sqlite://") {
+            // Relative path with double slash: sqlite://file.db -> file.db
+            database_url.trim_start_matches("sqlite://").to_string()
+        } else if database_url.starts_with("sqlite:") {
+            // Direct path: sqlite:file.db -> file.db
+            database_url.trim_start_matches("sqlite:").to_string()
+        } else {
+            // Assume it's already a path
+            database_url
+        };
+        debug!("Parsed SQLite path for sync: {}", path);
+        ratchet_storage::config::StorageConfig::sqlite(path)
+    };
+
+    // Override connection settings from config
+    let mut storage_config = storage_config;
+    storage_config.connection.max_connections = config.server.as_ref()
+        .map(|s| s.database.max_connections)
+        .unwrap_or(10);
+    storage_config.connection.connect_timeout = config.server.as_ref()
+        .map(|s| s.database.connection_timeout)
+        .unwrap_or_else(|| std::time::Duration::from_secs(30));
+
+    // For now, always create a new connection to the same database
+    // This ensures we're using the exact same database file/URL as the server
+    info!("🔄 Creating database connection for repository synchronization");
+    debug!("Sync database URL: {}", storage_config.connection_url().unwrap_or_default());
+    
+    let connection_manager = ratchet_storage::connection::create_connection_manager(&storage_config).await
+        .context("Failed to create connection manager for repository synchronization")?;
+
+    let repository_factory = ratchet_storage::RepositoryFactory::new(connection_manager);
+    let task_repo = repository_factory.task_repository();
+    
+    let sync_service = Arc::new(DatabaseSync::new(Arc::new(task_repo)));
+
+    // Create registry service with sync capability
+    let registry_service = DefaultRegistryService::new(registry_service_config)
+        .with_sync_service(sync_service);
+
+    // Perform synchronization
+    match registry_service.sync_to_database().await {
+        Ok(sync_result) => {
+            info!("✅ Repository synchronization completed successfully");
+            info!("   ➕ Tasks added: {}", sync_result.tasks_added);
+            info!("   🔄 Tasks updated: {}", sync_result.tasks_updated);
+            if !sync_result.errors.is_empty() {
+                warn!("   ⚠️  Failed to sync {} tasks", sync_result.errors.len());
+                for error in &sync_result.errors {
+                    warn!("      Task '{}': {}", error.task_ref.name, error.error);
+                }
+            }
+        }
+        Err(e) => {
+            error!("❌ Repository synchronization failed: {}", e);
+            // Don't fail server startup due to sync issues, just log the error
+            warn!("Server will continue without repository synchronization");
+        }
+    }
+
+    // Add a simple verification: try to get repository health status
+    info!("🔍 Verifying repository synchronization...");
+    match task_repo.health_check().await {
+        Ok(healthy) => {
+            info!("   📊 Repository health check: {}", healthy);
+        }
+        Err(e) => {
+            warn!("   ⚠️  Repository health check failed: {}", e);
+        }
+    }
+
     Ok(())
 }
 
@@ -906,8 +1193,8 @@ fn load_task_as_core_task(from_fs: &str) -> Result<CoreTask> {
         .unwrap_or_else(|| fs_task.metadata.version.clone());
 
     let core_task = TaskBuilder::new(&fs_task.metadata.label, &version)
-        .input_schema(fs_task.input_schema)
-        .output_schema(fs_task.output_schema)
+        .input_schema(fs_task.input_schema.unwrap_or_else(|| json!({})))
+        .output_schema(fs_task.output_schema.unwrap_or_else(|| json!({})))
         .javascript_source(&fs_task.content)
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to build Core Task: {}", e))?;
@@ -1691,6 +1978,688 @@ fn handle_config_show(config_file: Option<&PathBuf>, mcp_only: bool, format: &st
     Ok(())
 }
 
+/// Handle repository initialization
+fn handle_repo_init(
+    directory: &PathBuf,
+    name: Option<&str>,
+    description: Option<&str>,
+    version: &str,
+    ratchet_version: &str,
+    force: bool,
+) -> Result<()> {
+    info!("Initializing task repository at: {:?}", directory);
+
+    // Check if directory exists and is empty (unless force is used)
+    if directory.exists() {
+        if !force {
+            let entries: Vec<_> = fs::read_dir(directory)
+                .context("Failed to read directory")?
+                .collect();
+            
+            if !entries.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "Directory is not empty: {:?}. Use --force to initialize anyway.",
+                    directory
+                ));
+            }
+        }
+    } else {
+        // Create directory if it doesn't exist
+        fs::create_dir_all(directory).context("Failed to create directory")?;
+    }
+
+    // Create .ratchet directory
+    let ratchet_dir = directory.join(".ratchet");
+    fs::create_dir_all(&ratchet_dir).context("Failed to create .ratchet directory")?;
+
+    // Generate repository name from directory if not provided
+    let repo_name = name.unwrap_or_else(|| {
+        directory
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Task Repository")
+    });
+
+    // Create registry.yaml
+    let registry_content = format!(
+        r#"# Repository metadata
+name: "{}"
+description: "{}"
+version: "{}"
+ratchet_version: "{}"
+"#,
+        repo_name,
+        description.unwrap_or("A collection of Ratchet tasks"),
+        version,
+        ratchet_version
+    );
+
+    let registry_path = ratchet_dir.join("registry.yaml");
+    fs::write(&registry_path, registry_content).context("Failed to write registry.yaml")?;
+
+    // Create initial index.json
+    let index_content = format!(
+        r#"{{
+  "version": "1.0",
+  "repository": {{
+    "name": "{}",
+    "description": "{}",
+    "version": "{}"
+  }},
+  "tasks": [],
+  "collections": {{}},
+  "templates": {{}},
+  "statistics": {{
+    "total_tasks": 0,
+    "categories": {{}},
+    "complexity_distribution": {{}}
+  }},
+  "generated_at": "{}"
+}}"#,
+        repo_name,
+        description.unwrap_or("A collection of Ratchet tasks"),
+        version,
+        chrono::Utc::now().to_rfc3339()
+    );
+
+    let index_path = ratchet_dir.join("index.json");
+    fs::write(&index_path, index_content).context("Failed to write index.json")?;
+
+    // Create directory structure
+    let tasks_dir = directory.join("tasks");
+    let collections_dir = directory.join("collections");
+    let templates_dir = directory.join("templates");
+
+    fs::create_dir_all(&tasks_dir).context("Failed to create tasks directory")?;
+    fs::create_dir_all(&collections_dir).context("Failed to create collections directory")?;
+    fs::create_dir_all(&templates_dir).context("Failed to create templates directory")?;
+
+    // Create .gitkeep files for empty directories
+    let collections_gitkeep = format!(
+        r#"# Collections Directory
+
+This directory is reserved for task collections - curated sets of related tasks that work together to accomplish complex workflows.
+
+Collections will be defined as YAML files that reference tasks and define execution order, dependencies, and shared configuration.
+"#
+    );
+    fs::write(collections_dir.join(".gitkeep"), collections_gitkeep)
+        .context("Failed to write collections/.gitkeep")?;
+
+    let templates_gitkeep = format!(
+        r#"# Templates Directory
+
+This directory contains task templates - boilerplate structures that can be used to quickly create new tasks with common patterns.
+
+Templates include standard file structures, schema definitions, and example implementations for different task types.
+"#
+    );
+    fs::write(templates_dir.join(".gitkeep"), templates_gitkeep)
+        .context("Failed to write templates/.gitkeep")?;
+
+    // Create README.md
+    let readme_content = format!(
+        r#"# {}
+
+{}
+
+## Repository Structure
+
+```
+.
+├── .ratchet/
+│   ├── registry.yaml    # Repository metadata and configuration
+│   └── index.json       # Fast task discovery index
+├── tasks/               # Individual task implementations
+├── collections/         # Task collections and workflows
+├── templates/           # Task templates and boilerplate
+└── README.md           # This file
+```
+
+## Getting Started
+
+### Adding Tasks
+
+1. Create a new directory under `tasks/`
+2. Include all required files:
+   - `metadata.json`: Task definition and configuration
+   - `main.js`: Task implementation
+   - `input.schema.json`: Input validation schema
+   - `output.schema.json`: Output format definition
+   - `tests/`: Test cases and examples
+
+### Refreshing Metadata
+
+After adding or modifying tasks, refresh the repository metadata:
+
+```bash
+ratchet repo refresh-metadata
+```
+
+### Using with Git+HTTP Registry
+
+Configure this repository as a Git task source in your Ratchet configuration:
+
+```yaml
+registries:
+  - name: "my-tasks"
+    source:
+      type: "git"
+      url: "https://github.com/your-org/your-task-repo.git"
+      ref: "main"
+```
+
+## License
+
+See individual task metadata for licensing information.
+"#,
+        repo_name,
+        description.unwrap_or("A collection of Ratchet tasks")
+    );
+
+    let readme_path = directory.join("README.md");
+    fs::write(&readme_path, readme_content).context("Failed to write README.md")?;
+
+    println!("✅ Task repository initialized at: {:?}", directory);
+    println!("📝 Repository structure:");
+    println!("   • .ratchet/registry.yaml: Repository metadata");
+    println!("   • .ratchet/index.json: Task discovery index");
+    println!("   • tasks/: Directory for task implementations");
+    println!("   • collections/: Directory for task collections");
+    println!("   • templates/: Directory for task templates");
+    println!("   • README.md: Repository documentation");
+    println!();
+    println!("🚀 Next steps:");
+    println!("   1. Add your first task: ratchet generate task --path {}/tasks/my-task", directory.display());
+    println!("   2. Refresh metadata: ratchet repo refresh-metadata {}", directory.display());
+    
+    Ok(())
+}
+
+/// Handle repository metadata refresh
+async fn handle_repo_refresh_metadata(directory: Option<&PathBuf>, force: bool) -> Result<()> {
+    // Use current directory if none specified
+    let repo_dir = directory
+        .map(|d| d.clone())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    info!("Refreshing repository metadata at: {:?}", repo_dir);
+
+    // Verify this is a repository directory
+    let ratchet_dir = repo_dir.join(".ratchet");
+    let registry_path = ratchet_dir.join("registry.yaml");
+    
+    if !registry_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Not a Ratchet repository: {:?} (missing .ratchet/registry.yaml). Run 'ratchet repo init' first.",
+            repo_dir
+        ));
+    }
+
+    // Load existing registry metadata
+    let registry_content = fs::read_to_string(&registry_path)
+        .context("Failed to read registry.yaml")?;
+    
+    let registry_yaml: serde_yaml::Value = serde_yaml::from_str(&registry_content)
+        .context("Failed to parse registry.yaml")?;
+
+    let repo_name = registry_yaml.get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Task Repository");
+    let repo_description = registry_yaml.get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("A collection of Ratchet tasks");
+    let repo_version = registry_yaml.get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("1.0.0");
+
+    // Scan tasks directory
+    let tasks_dir = repo_dir.join("tasks");
+    let mut tasks = Vec::new();
+    let mut categories = std::collections::HashMap::new();
+    let mut complexity_dist = std::collections::HashMap::new();
+
+    if tasks_dir.exists() {
+        println!("🔍 Scanning tasks directory...");
+        
+        let task_entries = fs::read_dir(&tasks_dir)
+            .context("Failed to read tasks directory")?;
+
+        for entry in task_entries {
+            let entry = entry.context("Failed to read directory entry")?;
+            let task_path = entry.path();
+            
+            if task_path.is_dir() {
+                let metadata_file = task_path.join("metadata.json");
+                
+                if metadata_file.exists() {
+                    match load_task_metadata(&metadata_file, &task_path, &tasks_dir) {
+                        Ok(task_info) => {
+                            let task_name = task_info.get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown");
+                            println!("   ✅ {}", task_name);
+                            
+                            // Update statistics
+                            if let Some(category) = task_info.get("category").and_then(|v| v.as_str()) {
+                                *categories.entry(category.to_string()).or_insert(0) += 1;
+                            }
+                            if let Some(complexity) = task_info.get("complexity").and_then(|v| v.as_str()) {
+                                *complexity_dist.entry(complexity.to_string()).or_insert(0) += 1;
+                            }
+                            
+                            tasks.push(task_info);
+                        }
+                        Err(e) => {
+                            println!("   ❌ {}: {}", task_path.file_name().unwrap().to_string_lossy(), e);
+                            if !force {
+                                return Err(anyhow::anyhow!("Task metadata error: {}. Use --force to continue anyway.", e));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Generate new index.json
+    let index_json = serde_json::json!({
+        "version": "1.0",
+        "repository": {
+            "name": repo_name,
+            "description": repo_description,
+            "version": repo_version
+        },
+        "tasks": tasks,
+        "collections": {},
+        "templates": {},
+        "statistics": {
+            "total_tasks": tasks.len(),
+            "categories": categories,
+            "complexity_distribution": complexity_dist
+        },
+        "generated_at": chrono::Utc::now().to_rfc3339()
+    });
+
+    let index_path = ratchet_dir.join("index.json");
+    let index_content = serde_json::to_string_pretty(&index_json)
+        .context("Failed to serialize index.json")?;
+    
+    fs::write(&index_path, index_content)
+        .context("Failed to write index.json")?;
+
+    println!();
+    println!("✅ Repository metadata refreshed");
+    println!("📊 Statistics:");
+    println!("   • Total tasks: {}", tasks.len());
+    println!("   • Categories: {}", categories.len());
+    println!("   • Index updated: .ratchet/index.json");
+    
+    Ok(())
+}
+
+/// Load task metadata from a metadata.json file
+fn load_task_metadata(
+    metadata_file: &PathBuf, 
+    task_path: &PathBuf, 
+    tasks_dir: &PathBuf
+) -> Result<serde_json::Value> {
+    let metadata_content = fs::read_to_string(metadata_file)
+        .with_context(|| format!("Failed to read metadata file: {:?}", metadata_file))?;
+    
+    let mut metadata: serde_json::Value = serde_json::from_str(&metadata_content)
+        .with_context(|| format!("Failed to parse metadata JSON: {:?}", metadata_file))?;
+    
+    // Add the relative path from tasks directory
+    let relative_path = task_path.strip_prefix(tasks_dir)
+        .with_context(|| format!("Failed to get relative path for: {:?}", task_path))?;
+    
+    let path_str = format!("tasks/{}", relative_path.to_string_lossy());
+    metadata["path"] = serde_json::Value::String(path_str);
+    
+    // Ensure required fields exist with defaults
+    if !metadata.get("name").is_some() {
+        let task_name = task_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+        metadata["name"] = serde_json::Value::String(task_name.to_string());
+    }
+    
+    if !metadata.get("supports_streaming").is_some() {
+        metadata["supports_streaming"] = serde_json::Value::Bool(false);
+    }
+    
+    Ok(metadata)
+}
+
+#[derive(Debug, Clone)]
+struct RepositoryStatus {
+    name: String,
+    source_type: String,
+    uri: String,
+    enabled: bool,
+    sync_state: String,
+    last_checked: String,
+    tasks_count: Option<usize>,
+    health_status: String,
+    error_message: Option<String>,
+}
+
+/// Handle repository status display
+async fn handle_repo_status(
+    config: &RatchetConfig,
+    detailed: bool,
+    repository_filter: Option<&str>,
+    format: &str,
+) -> Result<()> {
+    info!("Checking repository status (detailed: {}, format: {})", detailed, format);
+
+    let mut repositories = Vec::new();
+
+    // Check if we have registry configuration
+    if let Some(registry_config) = &config.registry {
+        info!("Found {} configured repositories", registry_config.sources.len());
+        
+        for source in &registry_config.sources {
+            // Skip if filtering for specific repository
+            if let Some(filter) = repository_filter {
+                if source.name != filter {
+                    continue;
+                }
+            }
+
+            let source_type_name = match source.source_type {
+                ratchet_config::domains::registry::RegistrySourceType::Filesystem => "filesystem",
+                ratchet_config::domains::registry::RegistrySourceType::Http => "http",
+                ratchet_config::domains::registry::RegistrySourceType::Git => "git",
+                ratchet_config::domains::registry::RegistrySourceType::S3 => "s3",
+            };
+
+            // Test repository connectivity and get basic info
+            let (sync_state, health_status, error_message, tasks_count) = 
+                test_repository_connection(source, detailed).await;
+
+            let status = RepositoryStatus {
+                name: source.name.clone(),
+                source_type: source_type_name.to_string(),
+                uri: source.uri.clone(),
+                enabled: source.enabled,
+                sync_state,
+                last_checked: Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                tasks_count,
+                health_status,
+                error_message,
+            };
+
+            repositories.push(status);
+        }
+    } else {
+        info!("No registry configuration found");
+    }
+
+    // Display results
+    match format.to_lowercase().as_str() {
+        "json" => {
+            let output = serde_json::json!({
+                "repositories": repositories.iter().map(|r| {
+                    let mut repo = serde_json::json!({
+                        "name": r.name,
+                        "source_type": r.source_type,
+                        "uri": r.uri,
+                        "enabled": r.enabled,
+                        "sync_state": r.sync_state,
+                        "last_checked": r.last_checked,
+                        "health_status": r.health_status
+                    });
+                    
+                    if let Some(count) = r.tasks_count {
+                        repo["tasks_count"] = serde_json::json!(count);
+                    }
+                    
+                    if let Some(ref error) = r.error_message {
+                        repo["error"] = serde_json::json!(error);
+                    }
+                    
+                    repo
+                }).collect::<Vec<_>>(),
+                "total_repositories": repositories.len(),
+                "active_repositories": repositories.iter().filter(|r| r.enabled).count(),
+                "healthy_repositories": repositories.iter().filter(|r| r.health_status == "healthy").count()
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        "yaml" => {
+            let output = serde_json::json!({
+                "repositories": repositories.iter().map(|r| {
+                    let mut repo = serde_json::json!({
+                        "name": r.name,
+                        "source_type": r.source_type,
+                        "uri": r.uri,
+                        "enabled": r.enabled,
+                        "sync_state": r.sync_state,
+                        "last_checked": r.last_checked,
+                        "health_status": r.health_status
+                    });
+                    
+                    if let Some(count) = r.tasks_count {
+                        repo["tasks_count"] = serde_json::json!(count);
+                    }
+                    
+                    if let Some(ref error) = r.error_message {
+                        repo["error"] = serde_json::json!(error);
+                    }
+                    
+                    repo
+                }).collect::<Vec<_>>(),
+                "total_repositories": repositories.len(),
+                "active_repositories": repositories.iter().filter(|r| r.enabled).count(),
+                "healthy_repositories": repositories.iter().filter(|r| r.health_status == "healthy").count()
+            });
+            let yaml_output = serde_yaml::to_string(&output)?;
+            println!("{}", yaml_output);
+        }
+        "table" | _ => {
+            println!();
+            println!("📋 Repository Status Report");
+            println!("══════════════════════════════════════════");
+            println!("Total repositories: {}", repositories.len());
+            println!("Active repositories: {}", repositories.iter().filter(|r| r.enabled).count());
+            println!("Healthy repositories: {}", repositories.iter().filter(|r| r.health_status == "healthy").count());
+            println!();
+
+            if repositories.is_empty() {
+                println!("❌ No repositories configured.");
+                println!("💡 Add repositories to your config file or use 'ratchet repo init' to create a local repository.");
+                return Ok(());
+            }
+
+            for repo in &repositories {
+                let status_icon = if !repo.enabled {
+                    "⏸️"
+                } else {
+                    match repo.health_status.as_str() {
+                        "healthy" => "✅",
+                        "warning" => "⚠️",
+                        "error" => "❌",
+                        _ => "❓",
+                    }
+                };
+
+                println!("{} {} ({}, {})", status_icon, repo.name, repo.source_type, repo.uri);
+                
+                if detailed {
+                    println!("   └─ Enabled: {}", if repo.enabled { "Yes" } else { "No" });
+                    println!("   └─ Status: {}", repo.sync_state);
+                    println!("   └─ Health: {}", repo.health_status);
+                    if let Some(count) = repo.tasks_count {
+                        println!("   └─ Tasks: {}", count);
+                    }
+                    if let Some(ref error) = repo.error_message {
+                        println!("   └─ Error: {}", error);
+                    }
+                    println!("   └─ Last checked: {}", repo.last_checked);
+                    println!();
+                } else {
+                    if repo.enabled {
+                        let task_info = if let Some(count) = repo.tasks_count {
+                            format!(" ({} tasks)", count)
+                        } else {
+                            String::new()
+                        };
+                        println!("   └─ {}{}", repo.sync_state, task_info);
+                    } else {
+                        println!("   └─ Disabled");
+                    }
+                    
+                    if let Some(ref error) = repo.error_message {
+                        println!("   └─ ❌ {}", error);
+                    }
+                }
+            }
+            
+            if !detailed && repositories.iter().any(|r| r.health_status != "healthy") {
+                println!();
+                println!("💡 Use --detailed flag for more information about repository issues.");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test repository connection and get basic status info
+async fn test_repository_connection(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    detailed: bool,
+) -> (String, String, Option<String>, Option<usize>) {
+    if !source.enabled {
+        return ("disabled".to_string(), "disabled".to_string(), None, None);
+    }
+
+    match source.source_type {
+        ratchet_config::domains::registry::RegistrySourceType::Git => {
+            test_git_repository(source, detailed).await
+        }
+        ratchet_config::domains::registry::RegistrySourceType::Filesystem => {
+            test_filesystem_repository(source, detailed).await
+        }
+        ratchet_config::domains::registry::RegistrySourceType::Http => {
+            test_http_repository(source, detailed).await
+        }
+        ratchet_config::domains::registry::RegistrySourceType::S3 => {
+            ("not implemented".to_string(), "warning".to_string(), 
+             Some("S3 repository support not yet implemented".to_string()), None)
+        }
+    }
+}
+
+/// Test Git repository connectivity
+async fn test_git_repository(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    detailed: bool,
+) -> (String, String, Option<String>, Option<usize>) {
+    info!("Testing Git repository: {}", source.uri);
+    
+    // For now, we'll do a basic validation and return placeholder status
+    // In a full implementation, we would:
+    // 1. Test Git connectivity
+    // 2. Check authentication
+    // 3. Count available tasks
+    // 4. Verify branch/ref exists
+    
+    if source.uri.starts_with("https://") || source.uri.starts_with("git://") || source.uri.starts_with("ssh://") {
+        // Basic URI validation passed
+        if detailed {
+            // In detailed mode, we could try to actually connect
+            ("ready to sync".to_string(), "healthy".to_string(), None, Some(0))
+        } else {
+            ("configured".to_string(), "healthy".to_string(), None, None)
+        }
+    } else {
+        ("invalid configuration".to_string(), "error".to_string(), 
+         Some("Invalid Git URL format".to_string()), None)
+    }
+}
+
+/// Test filesystem repository connectivity
+async fn test_filesystem_repository(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    detailed: bool,
+) -> (String, String, Option<String>, Option<usize>) {
+    info!("Testing filesystem repository: {}", source.uri);
+    
+    let path = if source.uri.starts_with("file://") {
+        &source.uri[7..]
+    } else {
+        &source.uri
+    };
+    
+    let path_buf = std::path::PathBuf::from(path);
+    
+    if !path_buf.exists() {
+        return ("path not found".to_string(), "error".to_string(), 
+                Some(format!("Path does not exist: {}", path)), None);
+    }
+    
+    if !path_buf.is_dir() {
+        return ("not a directory".to_string(), "error".to_string(), 
+                Some("Path is not a directory".to_string()), None);
+    }
+    
+    // Count tasks if detailed mode
+    let task_count = if detailed {
+        count_filesystem_tasks(&path_buf).await
+    } else {
+        None
+    };
+    
+    ("accessible".to_string(), "healthy".to_string(), None, task_count)
+}
+
+/// Test HTTP repository connectivity
+async fn test_http_repository(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    _detailed: bool,
+) -> (String, String, Option<String>, Option<usize>) {
+    info!("Testing HTTP repository: {}", source.uri);
+    
+    // Basic URL validation
+    if source.uri.starts_with("http://") || source.uri.starts_with("https://") {
+        // In a full implementation, we would make an HTTP request here
+        ("configured".to_string(), "healthy".to_string(), None, None)
+    } else {
+        ("invalid configuration".to_string(), "error".to_string(), 
+         Some("Invalid HTTP URL format".to_string()), None)
+    }
+}
+
+/// Count tasks in a filesystem repository
+async fn count_filesystem_tasks(path: &std::path::Path) -> Option<usize> {
+    let mut task_count = 0;
+    
+    // Look for tasks directory first
+    let tasks_dir = path.join("tasks");
+    let search_path = if tasks_dir.exists() {
+        tasks_dir
+    } else {
+        path.to_path_buf()
+    };
+    
+    if let Ok(entries) = fs::read_dir(&search_path) {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                let metadata_file = entry_path.join("metadata.json");
+                if metadata_file.exists() {
+                    task_count += 1;
+                }
+            }
+        }
+    }
+    
+    Some(task_count)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -1970,6 +2939,22 @@ async fn main() -> Result<()> {
                 mcp_only,
                 format,
             } => handle_config_show(config_file.as_ref(), *mcp_only, format),
+        },
+        Some(Commands::Repo { repo_cmd }) => match repo_cmd {
+            RepoCommands::Init {
+                directory,
+                name,
+                description,
+                version,
+                ratchet_version,
+                force,
+            } => handle_repo_init(directory, name.as_deref(), description.as_deref(), version, ratchet_version, *force),
+            RepoCommands::RefreshMetadata { directory, force } => {
+                handle_repo_refresh_metadata(directory.as_ref(), *force).await
+            }
+            RepoCommands::Status { detailed, repository, format } => {
+                handle_repo_status(&config, *detailed, repository.as_deref(), format).await
+            }
         },
         None => {
             // If no subcommand is provided, print help

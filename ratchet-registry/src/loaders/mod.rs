@@ -1,5 +1,6 @@
 pub mod filesystem;
 pub mod http;
+pub mod git;
 pub mod validation;
 
 use async_trait::async_trait;

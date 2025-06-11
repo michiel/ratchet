@@ -105,6 +105,12 @@ pub enum Commands {
         #[command(subcommand)]
         config_cmd: ConfigCommands,
     },
+
+    /// Repository management commands
+    Repo {
+        #[command(subcommand)]
+        repo_cmd: RepoCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -165,6 +171,62 @@ pub enum ConfigCommands {
 
         /// Output format: yaml, json
         #[arg(long, value_name = "FORMAT", default_value = "yaml")]
+        format: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum RepoCommands {
+    /// Initialize a new task repository
+    Init {
+        /// Directory path where to initialize the repository
+        #[arg(value_name = "DIR")]
+        directory: PathBuf,
+
+        /// Repository name
+        #[arg(long, value_name = "STRING")]
+        name: Option<String>,
+
+        /// Repository description
+        #[arg(long, value_name = "STRING")]
+        description: Option<String>,
+
+        /// Repository version
+        #[arg(long, value_name = "STRING", default_value = "1.0.0")]
+        version: String,
+
+        /// Minimum required ratchet version
+        #[arg(long, value_name = "STRING", default_value = ">=0.6.0")]
+        ratchet_version: String,
+
+        /// Force initialization even if directory is not empty
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Refresh repository metadata and index
+    RefreshMetadata {
+        /// Directory path of the repository (defaults to current directory)
+        #[arg(value_name = "DIR")]
+        directory: Option<PathBuf>,
+
+        /// Force regeneration of all metadata
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Show status of configured task repositories
+    Status {
+        /// Show detailed status for all repositories
+        #[arg(long)]
+        detailed: bool,
+
+        /// Show status for specific repository by name
+        #[arg(long, value_name = "NAME")]
+        repository: Option<String>,
+
+        /// Output format: table, json, yaml
+        #[arg(long, value_name = "FORMAT", default_value = "table")]
         format: String,
     },
 }

@@ -41,6 +41,12 @@ pub enum TaskSource {
         auth: Option<HttpAuth>,
         polling_interval: Duration,
     },
+    #[serde(rename = "git")]
+    Git {
+        url: String,
+        auth: Option<GitAuth>,
+        config: GitConfig,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +64,142 @@ pub enum HttpAuthType {
     Basic { username: String, password: String },
     #[serde(rename = "api_key")]
     ApiKey { header_name: String, api_key: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitAuth {
+    #[serde(flatten)]
+    pub auth_type: GitAuthType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum GitAuthType {
+    #[serde(rename = "git_token")]
+    Token { token: String },
+    #[serde(rename = "ssh_key")]
+    SshKey { 
+        private_key_path: String,
+        passphrase: Option<String>,
+    },
+    #[serde(rename = "basic")]
+    Basic { username: String, password: String },
+    #[serde(rename = "github_app")]
+    GitHubApp {
+        app_id: String,
+        private_key_path: String,
+        installation_id: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitConfig {
+    /// Git reference (branch, tag, or commit hash)
+    #[serde(default = "default_git_ref")]
+    pub git_ref: String,
+    
+    /// Subdirectory within repository
+    pub subdirectory: Option<String>,
+    
+    /// Use shallow clone for performance
+    #[serde(default = "default_shallow")]
+    pub shallow: bool,
+    
+    /// Clone depth for shallow clones
+    #[serde(default = "default_depth")]
+    pub depth: Option<u32>,
+    
+    /// Sync strategy
+    #[serde(default)]
+    pub sync_strategy: GitSyncStrategy,
+    
+    /// Cleanup on error
+    #[serde(default = "default_cleanup_on_error")]
+    pub cleanup_on_error: bool,
+    
+    /// Verify Git commit signatures
+    #[serde(default)]
+    pub verify_signatures: bool,
+    
+    /// Allowed Git refs (for security)
+    pub allowed_refs: Option<Vec<String>>,
+    
+    /// Git operation timeout
+    #[serde(default = "default_git_timeout")]
+    pub timeout: Duration,
+    
+    /// Maximum repository size
+    pub max_repo_size: Option<String>,
+    
+    /// Local cache path
+    pub local_cache_path: Option<String>,
+    
+    /// Cache TTL
+    #[serde(default = "default_cache_ttl")]
+    pub cache_ttl: Duration,
+    
+    /// Keep Git history
+    #[serde(default)]
+    pub keep_history: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GitSyncStrategy {
+    Clone,
+    Fetch,
+    Pull,
+}
+
+impl Default for GitSyncStrategy {
+    fn default() -> Self {
+        Self::Fetch
+    }
+}
+
+impl Default for GitConfig {
+    fn default() -> Self {
+        Self {
+            git_ref: default_git_ref(),
+            subdirectory: None,
+            shallow: default_shallow(),
+            depth: default_depth(),
+            sync_strategy: GitSyncStrategy::default(),
+            cleanup_on_error: default_cleanup_on_error(),
+            verify_signatures: false,
+            allowed_refs: None,
+            timeout: default_git_timeout(),
+            max_repo_size: None,
+            local_cache_path: None,
+            cache_ttl: default_cache_ttl(),
+            keep_history: false,
+        }
+    }
+}
+
+// Default value functions for Git config
+fn default_git_ref() -> String {
+    "main".to_string()
+}
+
+fn default_shallow() -> bool {
+    true
+}
+
+fn default_depth() -> Option<u32> {
+    Some(1)
+}
+
+fn default_cleanup_on_error() -> bool {
+    true
+}
+
+fn default_git_timeout() -> Duration {
+    Duration::from_secs(300) // 5 minutes
+}
+
+fn default_cache_ttl() -> Duration {
+    Duration::from_secs(3600) // 1 hour
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,10 +257,25 @@ impl TaskSource {
                 watch: false,
             })
         } else if uri.starts_with("http://") || uri.starts_with("https://") {
-            Ok(TaskSource::Http {
+            // Check if this is a Git repository URL
+            if uri.ends_with(".git") || uri.contains("github.com") || uri.contains("gitlab.com") || uri.contains("bitbucket.org") {
+                Ok(TaskSource::Git {
+                    url: uri.to_string(),
+                    auth: None,
+                    config: GitConfig::default(),
+                })
+            } else {
+                Ok(TaskSource::Http {
+                    url: uri.to_string(),
+                    auth: None,
+                    polling_interval: Duration::from_secs(300),
+                })
+            }
+        } else if uri.starts_with("git://") || uri.starts_with("ssh://") {
+            Ok(TaskSource::Git {
                 url: uri.to_string(),
                 auth: None,
-                polling_interval: Duration::from_secs(300),
+                config: GitConfig::default(),
             })
         } else {
             Err(RegistryError::Configuration(format!(
@@ -141,6 +298,31 @@ impl TaskSource {
                 url.parse()
                     .map_err(|e| RegistryError::Configuration(format!("Invalid URL: {}", e)))
             ),
+            TaskSource::Git { url, .. } => Some(
+                url.parse()
+                    .map_err(|e| RegistryError::Configuration(format!("Invalid Git URL: {}", e)))
+            ),
+            _ => None,
+        }
+    }
+
+    pub fn git_url(&self) -> Option<&str> {
+        match self {
+            TaskSource::Git { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    pub fn git_config(&self) -> Option<&GitConfig> {
+        match self {
+            TaskSource::Git { config, .. } => Some(config),
+            _ => None,
+        }
+    }
+
+    pub fn git_auth(&self) -> Option<&GitAuth> {
+        match self {
+            TaskSource::Git { auth, .. } => auth.as_ref(),
             _ => None,
         }
     }

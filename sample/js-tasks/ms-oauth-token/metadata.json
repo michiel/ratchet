@@ -1,6 +1,0 @@
-{
-  "uuid": "be6c7f98-4896-44cc-8c82-30328c3aefda",
-  "version": "0.0.1",
-  "label": "Retrieve OAuth Token from Microsoft",
-  "description": "This function retrieves an OAuth token from Microsoft using the provided client ID, client secret, and tenant ID."
-}

@@ -1,0 +1,31 @@
+# Test Configuration to Debug Database Connection Issues
+
+server:
+  bind_address: "127.0.0.1"
+  port: 8080
+  database:
+    url: "sqlite:./debug-test.db"
+    max_connections: 10
+    connection_timeout: 30
+
+execution:
+  max_execution_duration: 180
+  validate_schemas: true
+
+logging:
+  level: debug
+  format: text
+  targets:
+    - type: console
+      level: debug
+
+registry:
+  sources:
+    - name: "local-tasks"
+      uri: "file://./sample/js-tasks/tasks"
+      config:
+        watch_for_changes: false
+        auto_reload: false
+
+mcp:
+  enabled: false
