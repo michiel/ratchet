@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use ratchet_config::{ConfigLoader, RatchetConfig};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 #[cfg(feature = "server")]
 use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
@@ -637,6 +637,7 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
         config::{RegistryConfig, TaskSource},
         sync::DatabaseSync,
     };
+    use ratchet_storage::repositories::Repository;
     use std::sync::Arc;
 
     // Check if repositories are configured
@@ -769,9 +770,10 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
         .context("Failed to create connection manager for repository synchronization")?;
 
     let repository_factory = ratchet_storage::RepositoryFactory::new(connection_manager);
-    let task_repo = repository_factory.task_repository();
+    let task_repo_for_sync = repository_factory.task_repository();
+    let task_repo_for_health = repository_factory.task_repository();
     
-    let sync_service = Arc::new(DatabaseSync::new(Arc::new(task_repo)));
+    let sync_service = Arc::new(DatabaseSync::new(Arc::new(task_repo_for_sync)));
 
     // Create registry service with sync capability
     let registry_service = DefaultRegistryService::new(registry_service_config)
@@ -799,7 +801,7 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
 
     // Add a simple verification: try to get repository health status
     info!("🔍 Verifying repository synchronization...");
-    match task_repo.health_check().await {
+    match task_repo_for_health.health_check().await {
         Ok(healthy) => {
             info!("   📊 Repository health check: {}", healthy);
         }
