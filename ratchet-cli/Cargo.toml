@@ -43,6 +43,7 @@ ratchet-runtime = { path = "../ratchet-runtime", optional = true }
 ratchet-js = { path = "../ratchet-js", optional = true }
 ratchet-http = { path = "../ratchet-http", optional = true }
 ratchet-server = { path = "../ratchet-server", optional = true }
+ratchet-registry = { path = "../ratchet-registry", optional = true }
 
 # Binary-specific dependencies (commented out for now due to network issues)
 # dialoguer = "0.11"
@@ -56,7 +57,7 @@ default = ["server", "database", "mcp-server", "plugins", "javascript", "output"
 core = []
 
 # Server components
-server = ["rest-api", "graphql-api", "dep:ratchet_lib", "dep:ratchet-execution", "dep:ratchet-server"]
+server = ["rest-api", "graphql-api", "dep:ratchet_lib", "dep:ratchet-execution", "dep:ratchet-server", "dep:ratchet-registry"]
 rest-api = ["ratchet_lib/server"]
 graphql-api = ["ratchet_lib/server"]
 

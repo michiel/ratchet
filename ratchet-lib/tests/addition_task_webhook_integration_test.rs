@@ -105,7 +105,7 @@ async fn test_addition_task_with_webhook() {
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
 
     // Load the addition task directly
-    let addition_task_path = sample_tasks_path.join("addition");
+    let addition_task_path = sample_tasks_path.join("tasks").join("addition");
     let addition_task =
         load_from_directory(&addition_task_path).expect("Failed to load addition task");
 
@@ -273,7 +273,7 @@ async fn test_addition_task_with_webhook_via_graphql_api() {
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
 
     // Load the addition task directly and create it in the database
-    let addition_task_path = sample_tasks_path.join("addition");
+    let addition_task_path = sample_tasks_path.join("tasks").join("addition");
     let addition_task =
         load_from_directory(&addition_task_path).expect("Failed to load addition task");
 
@@ -498,7 +498,7 @@ async fn test_addition_task_with_webhook_via_rest_api() {
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
 
     // Load the addition task directly and create it in the database
-    let addition_task_path = sample_tasks_path.join("addition");
+    let addition_task_path = sample_tasks_path.join("tasks").join("addition");
     let addition_task =
         load_from_directory(&addition_task_path).expect("Failed to load addition task");
 

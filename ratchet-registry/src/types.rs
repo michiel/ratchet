@@ -129,3 +129,95 @@ impl Default for SyncResult {
         Self::new()
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepositoryStatus {
+    pub name: String,
+    pub source_type: String,
+    pub uri: String,
+    pub enabled: bool,
+    pub sync_state: SyncState,
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub last_sync_result: Option<SyncResult>,
+    pub tasks_discovered: usize,
+    pub tasks_loaded: usize,
+    pub error_count: usize,
+    pub health_status: HealthStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SyncState {
+    Idle,
+    Syncing,
+    Synced,
+    Error(String),
+    Disabled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HealthStatus {
+    Healthy,
+    Warning(String),
+    Error(String),
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryStatusReport {
+    pub total_repositories: usize,
+    pub active_repositories: usize,
+    pub total_tasks: usize,
+    pub healthy_repositories: usize,
+    pub repositories: Vec<RepositoryStatus>,
+    pub last_updated: DateTime<Utc>,
+}
+
+impl RepositoryStatus {
+    pub fn new(name: String, source_type: String, uri: String, enabled: bool) -> Self {
+        Self {
+            name,
+            source_type,
+            uri,
+            enabled,
+            sync_state: if enabled { SyncState::Idle } else { SyncState::Disabled },
+            last_sync_at: None,
+            last_sync_result: None,
+            tasks_discovered: 0,
+            tasks_loaded: 0,
+            error_count: 0,
+            health_status: HealthStatus::Unknown,
+        }
+    }
+
+    pub fn update_sync_result(&mut self, result: SyncResult) {
+        self.last_sync_at = Some(Utc::now());
+        self.error_count = result.errors.len();
+        self.tasks_loaded = result.tasks_added + result.tasks_updated;
+        
+        if result.errors.is_empty() {
+            self.sync_state = SyncState::Synced;
+            self.health_status = HealthStatus::Healthy;
+        } else {
+            let error_msg = format!("{} sync errors", result.errors.len());
+            self.sync_state = SyncState::Error(error_msg.clone());
+            self.health_status = HealthStatus::Error(error_msg);
+        }
+        
+        self.last_sync_result = Some(result);
+    }
+
+    pub fn set_sync_error(&mut self, error: String) {
+        self.sync_state = SyncState::Error(error.clone());
+        self.health_status = HealthStatus::Error(error);
+        self.error_count += 1;
+        self.last_sync_at = Some(Utc::now());
+    }
+
+    pub fn set_syncing(&mut self) {
+        self.sync_state = SyncState::Syncing;
+    }
+
+    pub fn update_task_discovery(&mut self, count: usize) {
+        self.tasks_discovered = count;
+    }
+}

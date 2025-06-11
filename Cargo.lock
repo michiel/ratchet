@@ -3823,6 +3823,7 @@ dependencies = [
  "ratchet-js",
  "ratchet-mcp",
  "ratchet-plugins",
+ "ratchet-registry",
  "ratchet-resilience",
  "ratchet-runtime",
  "ratchet-server",
