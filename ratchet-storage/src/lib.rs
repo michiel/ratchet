@@ -21,6 +21,10 @@ pub mod seaorm;
 #[cfg(feature = "seaorm")]
 pub mod database;
 
+// Testing utilities (feature-gated for testing)
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
+
 // Re-export core types for convenience
 pub use config::StorageConfig;
 pub use connection::{Connection, ConnectionManager};
