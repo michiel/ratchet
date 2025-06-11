@@ -34,13 +34,20 @@ jsonschema = { workspace = true, optional = true }                   # Schema va
 regex = "1.10"                                                        # Pattern matching
 url = { workspace = true }                                            # URL handling
 
+# Git support dependencies
+git2 = { version = "0.18", optional = true }                         # Git operations
+dirs = { version = "5.0", optional = true }                          # Cross-platform directories
+md5 = { version = "0.7", optional = true }                           # URL hashing for cache paths
+
 [features]
-default = ["filesystem", "http", "watcher"]
+default = ["filesystem", "http", "git", "watcher"]
 filesystem = ["dep:walkdir", "dep:zip"]
 http = []
+git = ["dep:git2", "dep:dirs", "dep:md5"]
 watcher = ["dep:notify"]
 validation = ["dep:jsonschema"]
 
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.8"
+git2 = "0.18"  # For creating test repositories

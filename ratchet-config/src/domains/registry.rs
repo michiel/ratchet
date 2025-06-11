@@ -145,9 +145,9 @@ pub struct HttpSourceConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GitSourceConfig {
-    /// Git branch to track
+    /// Git reference (branch, tag, or commit hash)
     #[serde(default = "default_git_branch")]
-    pub branch: String,
+    pub git_ref: String,
 
     /// Subdirectory within repository
     pub subdirectory: Option<String>,
@@ -156,12 +156,62 @@ pub struct GitSourceConfig {
     #[serde(default = "crate::domains::utils::default_true")]
     pub shallow: bool,
 
-    /// Git clone timeout
+    /// Clone depth for shallow clones
+    pub depth: Option<u32>,
+
+    /// Sync strategy
+    #[serde(default)]
+    pub sync_strategy: GitSyncStrategy,
+
+    /// Cleanup on error
+    #[serde(default = "crate::domains::utils::default_true")]
+    pub cleanup_on_error: bool,
+
+    /// Verify Git commit signatures
+    #[serde(default = "crate::domains::utils::default_false")]
+    pub verify_signatures: bool,
+
+    /// Allowed Git refs (for security)
+    pub allowed_refs: Option<Vec<String>>,
+
+    /// Git operation timeout
     #[serde(
         with = "crate::domains::utils::serde_duration",
         default = "default_git_timeout"
     )]
     pub timeout: Duration,
+
+    /// Maximum repository size
+    pub max_repo_size: Option<String>,
+
+    /// Local cache path
+    pub local_cache_path: Option<String>,
+
+    /// Cache TTL
+    #[serde(
+        with = "crate::domains::utils::serde_duration",
+        default = "default_cache_ttl"
+    )]
+    pub cache_ttl: Duration,
+
+    /// Keep Git history
+    #[serde(default = "crate::domains::utils::default_false")]
+    pub keep_history: bool,
+}
+
+/// Git sync strategy
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GitSyncStrategy {
+    Clone,
+    Fetch,
+    Pull,
+}
+
+impl Default for GitSyncStrategy {
+    fn default() -> Self {
+        Self::Fetch
+    }
 }
 
 /// S3 source configuration
@@ -213,10 +263,24 @@ pub enum RegistryAuthConfig {
     Bearer { token: String },
     /// API key authentication
     ApiKey { header: String, value: String },
+    /// Git token authentication (for HTTPS Git)
+    GitToken { token: String },
     /// Git SSH key authentication
     SshKey {
         private_key_path: String,
         passphrase: Option<String>,
+    },
+    /// GitHub App authentication
+    GitHubApp {
+        app_id: String,
+        private_key_path: String,
+        installation_id: String,
+    },
+    /// Client certificate authentication
+    ClientCertificate {
+        cert_path: String,
+        key_path: String,
+        ca_cert_path: Option<String>,
     },
     /// AWS credentials for S3
     AwsCredentials {
@@ -262,10 +326,19 @@ impl Default for HttpSourceConfig {
 impl Default for GitSourceConfig {
     fn default() -> Self {
         Self {
-            branch: default_git_branch(),
+            git_ref: default_git_branch(),
             subdirectory: None,
             shallow: true,
+            depth: Some(1),
+            sync_strategy: GitSyncStrategy::default(),
+            cleanup_on_error: true,
+            verify_signatures: false,
+            allowed_refs: None,
             timeout: default_git_timeout(),
+            max_repo_size: None,
+            local_cache_path: None,
+            cache_ttl: default_cache_ttl(),
+            keep_history: false,
         }
     }
 }
@@ -407,6 +480,9 @@ impl RegistryAuthConfig {
                 validate_required_string(header, "header", "registry")?;
                 validate_required_string(value, "value", "registry")?;
             }
+            Self::GitToken { token } => {
+                validate_required_string(token, "token", "registry")?;
+            }
             Self::SshKey {
                 private_key_path, ..
             } => {
@@ -421,6 +497,67 @@ impl RegistryAuthConfig {
                             context, private_key_path
                         ),
                     });
+                }
+            }
+            Self::GitHubApp {
+                app_id,
+                private_key_path,
+                installation_id,
+            } => {
+                validate_required_string(app_id, "app_id", "registry")?;
+                validate_required_string(private_key_path, "private_key_path", "registry")?;
+                validate_required_string(installation_id, "installation_id", "registry")?;
+
+                // Check if private key file exists
+                if !std::path::Path::new(private_key_path).exists() {
+                    return Err(crate::error::ConfigError::DomainError {
+                        domain: "registry".to_string(),
+                        message: format!(
+                            "{}: GitHub App private key file not found: {}",
+                            context, private_key_path
+                        ),
+                    });
+                }
+            }
+            Self::ClientCertificate {
+                cert_path,
+                key_path,
+                ca_cert_path,
+            } => {
+                validate_required_string(cert_path, "cert_path", "registry")?;
+                validate_required_string(key_path, "key_path", "registry")?;
+
+                // Check if certificate files exist
+                if !std::path::Path::new(cert_path).exists() {
+                    return Err(crate::error::ConfigError::DomainError {
+                        domain: "registry".to_string(),
+                        message: format!(
+                            "{}: client certificate file not found: {}",
+                            context, cert_path
+                        ),
+                    });
+                }
+
+                if !std::path::Path::new(key_path).exists() {
+                    return Err(crate::error::ConfigError::DomainError {
+                        domain: "registry".to_string(),
+                        message: format!(
+                            "{}: client key file not found: {}",
+                            context, key_path
+                        ),
+                    });
+                }
+
+                if let Some(ca_path) = ca_cert_path {
+                    if !std::path::Path::new(ca_path).exists() {
+                        return Err(crate::error::ConfigError::DomainError {
+                            domain: "registry".to_string(),
+                            message: format!(
+                                "{}: CA certificate file not found: {}",
+                                context, ca_path
+                            ),
+                        });
+                    }
                 }
             }
             Self::AwsCredentials {

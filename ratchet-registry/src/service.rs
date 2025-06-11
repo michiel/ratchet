@@ -5,7 +5,7 @@ use tracing::{error, info};
 
 use crate::config::{RegistryConfig, TaskSource};
 use crate::error::{RegistryError, Result};
-use crate::loaders::{filesystem::FilesystemLoader, http::HttpLoader, TaskLoader};
+use crate::loaders::{filesystem::FilesystemLoader, http::HttpLoader, git::GitLoader, TaskLoader};
 use crate::registry::DefaultTaskRegistry;
 use crate::sync::DatabaseSync;
 use crate::types::{DiscoveredTask, SyncResult, TaskDefinition, TaskReference};
@@ -25,6 +25,7 @@ pub struct DefaultRegistryService {
     registry: Arc<DefaultTaskRegistry>,
     filesystem_loader: FilesystemLoader,
     http_loader: HttpLoader,
+    git_loader: GitLoader,
     sync_service: Option<Arc<DatabaseSync>>,
     watcher: Option<Arc<RwLock<RegistryWatcher>>>,
     config: RegistryConfig,
@@ -37,6 +38,7 @@ impl DefaultRegistryService {
             registry: Arc::new(DefaultTaskRegistry::with_sources(sources)),
             filesystem_loader: FilesystemLoader::new(),
             http_loader: HttpLoader::new(),
+            git_loader: GitLoader::new(),
             sync_service: None,
             watcher: None,
             config,
@@ -57,6 +59,9 @@ impl DefaultRegistryService {
             }
             TaskSource::Http { .. } => {
                 self.http_loader.discover_tasks(source).await?
+            }
+            TaskSource::Git { .. } => {
+                self.git_loader.discover_tasks(source).await?
             }
         };
 
@@ -114,6 +119,8 @@ impl RegistryService for DefaultRegistryService {
             self.filesystem_loader.load_task(task_ref).await
         } else if task_ref.source.starts_with("http://") || task_ref.source.starts_with("https://") {
             self.http_loader.load_task(task_ref).await
+        } else if task_ref.source.starts_with("git://") {
+            self.git_loader.load_task(task_ref).await
         } else {
             Err(RegistryError::Configuration(format!(
                 "Unsupported task source: {}",
