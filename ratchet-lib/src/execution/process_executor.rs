@@ -352,7 +352,7 @@ impl ProcessTaskExecutor {
     /// Create a test instance with minimal configuration
     #[cfg(test)]
     pub fn new_test() -> Self {
-        use ratchet_storage::Connection;
+        use ratchet_storage::{Connection, seaorm::connection::DatabaseConnection};
 
         // Create minimal repositories with in-memory database
         let db_config = crate::config::DatabaseConfig {
@@ -616,7 +616,7 @@ impl ProcessTaskExecutor {
 mod tests {
     use super::*;
     use crate::config::DatabaseConfig;
-    use ratchet_storage::Connection;
+    use ratchet_storage::{Connection, seaorm::connection::DatabaseConnection};
     use ratchet_storage::Job as JobEntity;
     use serde_json::json;
     use std::fs;
@@ -707,17 +707,22 @@ mod tests {
             version: "1.0.0".to_string(),
             path: task_path_str.clone(),
             metadata,
-            input_schema,
-            output_schema,
+            input_schema: input_schema.unwrap_or_else(|| serde_json::json!({})),
+            output_schema: output_schema.unwrap_or_else(|| serde_json::json!({})),
             enabled: true,
+            status: ratchet_storage::TaskStatus::Active,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
-            validated_at: None,
+            validated_at: Some(chrono::Utc::now()),
+            registry_source: None,
+            tags: Vec::new(),
+            deprecated: false,
+            deprecation_message: None,
         };
 
         let created_task = repositories
             .task_repository()
-            .create(task_entity)
+            .create(&task_entity)
             .await
             .expect("Failed to create task in database");
 
@@ -844,12 +849,11 @@ mod tests {
         let job_entity = JobEntity::new(
             task_id,
             input_data.clone(),
-            ratchet_storage::JobPriority::Normal,
         );
 
         let created_job = repositories
-            .job_repo
-            .create(job_entity)
+            .job_repository()
+            .create(&job_entity)
             .await
             .expect("Failed to create job in database");
 
@@ -872,7 +876,7 @@ mod tests {
             .expect("Execution record should exist");
 
         let job = repositories
-            .job_repo
+            .job_repository()
             .find_by_id(created_job.id)
             .await
             .expect("Database query should succeed")

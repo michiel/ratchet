@@ -36,7 +36,7 @@ async fn main() -> ConfigResult<()> {
 
 async fn demo_legacy_yaml_migration(temp_dir: &TempDir) -> ConfigResult<()> {
     println!("📋 Demo 1: Legacy YAML Configuration Migration");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     // Create a legacy configuration file
     let legacy_config_path = temp_dir.path().join("legacy_config.yaml");
@@ -76,10 +76,7 @@ mcp:
   port: 3001
 "#;
 
-    fs::write(&legacy_config_path, legacy_config_content).map_err(|e| ConfigError::FileIo {
-        path: legacy_config_path.clone(),
-        error: e,
-    })?;
+    fs::write(&legacy_config_path, legacy_config_content).map_err(ConfigError::FileReadError)?;
 
     println!("📁 Created legacy config: {}", legacy_config_path.display());
 
@@ -95,8 +92,16 @@ mcp:
     println!("\n🔍 Verification - Settings Preserved:");
     println!("   Server address: {}", modern_config.server.as_ref().unwrap().bind_address);
     println!("   Server port: {}", modern_config.server.as_ref().unwrap().port);
-    println!("   Database URL: {}", modern_config.database.url);
-    println!("   Database connections: {}", modern_config.database.max_connections);
+    if let Some(server_config) = &modern_config.server {
+        if let Some(database_config) = &server_config.database {
+            println!("   Database URL: {}", database_config.url);
+        }
+    }
+    if let Some(server_config) = &modern_config.server {
+        if let Some(database_config) = &server_config.database {
+            println!("   Database connections: {}", database_config.max_connections);
+        }
+    }
     println!("   Execution duration: {}s", modern_config.execution.max_execution_duration.as_secs());
     println!("   Schema validation: {}", modern_config.execution.validate_schemas);
     println!("   Max concurrent: {}", modern_config.execution.max_concurrent);
@@ -125,7 +130,7 @@ mcp:
 
 async fn demo_compatibility_service(temp_dir: &TempDir) -> ConfigResult<()> {
     println!("📋 Demo 2: Compatibility Service Auto-Detection");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     // Create a legacy JSON configuration
     let legacy_json_path = temp_dir.path().join("legacy_config.json");
@@ -188,7 +193,7 @@ async fn demo_compatibility_service(temp_dir: &TempDir) -> ConfigResult<()> {
 
 async fn demo_modern_config_loading(temp_dir: &TempDir) -> ConfigResult<()> {
     println!("📋 Demo 3: Modern Configuration (No Migration Needed)");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     // Create a modern configuration file
     let modern_config_path = temp_dir.path().join("modern_config.yaml");
@@ -299,7 +304,11 @@ mcp:
     // Show modern features that weren't available in legacy
     println!("\n🆕 Modern Features Available:");
     println!("   Server graceful shutdown: enabled");
-    println!("   Database migrations: {}", modern_config.database.enable_migrations);
+    if let Some(server_config) = &modern_config.server {
+        if let Some(database_config) = &server_config.database {
+            println!("   Database migrations: {}", database_config.enable_migrations);
+        }
+    }
     println!("   Execution recording: {}", modern_config.execution.enable_recording);
     println!("   HTTP compression: {}", modern_config.http.enable_compression);
     println!("   Structured logging: {}", modern_config.logging.structured.enabled);
@@ -318,7 +327,7 @@ mcp:
 /// Helper function to demonstrate format detection
 fn demonstrate_format_detection() {
     println!("📋 Format Detection Examples:");
-    println!("=".repeat(30));
+    println!("{}", "=".repeat(30));
 
     let legacy_indicators = [
         "max_execution_duration field present",

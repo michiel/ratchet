@@ -3,7 +3,7 @@
 //! This module provides testing infrastructure for isolated database testing
 //! with automatic cleanup and seeding capabilities.
 
-use sea_orm::{Database, DatabaseConnection, DbErr};
+use sea_orm::{Database, DatabaseConnection, DbErr, Statement, ExecResult, ConnectionTrait};
 use tempfile::TempDir;
 use std::sync::Arc;
 
