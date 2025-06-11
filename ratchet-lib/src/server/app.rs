@@ -106,7 +106,7 @@ pub fn create_app(
 mod tests {
     use super::*;
     use crate::config::{DatabaseConfig, RatchetConfig, ServerConfig};
-    use crate::database::DatabaseConnection;
+    use ratchet_storage::seaorm::connection::DatabaseConnection;
     use axum_test::TestServer;
     use std::time::Duration;
 

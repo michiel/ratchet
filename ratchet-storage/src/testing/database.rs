@@ -4,6 +4,7 @@
 //! with automatic cleanup and seeding capabilities.
 
 use sea_orm::{Database, DatabaseConnection, DbErr, Statement, ExecResult, ConnectionTrait};
+use sea_orm_migration::MigratorTrait;
 use tempfile::TempDir;
 use std::sync::Arc;
 

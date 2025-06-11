@@ -355,10 +355,12 @@ impl ProcessTaskExecutor {
         use ratchet_storage::{Connection, seaorm::connection::DatabaseConnection};
 
         // Create minimal repositories with in-memory database
-        let db_config = crate::config::DatabaseConfig {
+        let db_config = ratchet_storage::seaorm::config::DatabaseConfig {
             url: "sqlite::memory:".to_string(),
             max_connections: 1,
             connection_timeout: std::time::Duration::from_secs(5),
+            enable_migrations: true,
+            pool_timeout: std::time::Duration::from_secs(10),
         };
 
         let db_connection = futures::executor::block_on(async {
@@ -624,10 +626,12 @@ mod tests {
     use tempfile::tempdir;
 
     async fn create_test_database() -> DatabaseConnection {
-        let config = DatabaseConfig {
+        let config = ratchet_storage::seaorm::config::DatabaseConfig {
             url: "sqlite::memory:".to_string(),
             max_connections: 5,
             connection_timeout: Duration::from_secs(10),
+            enable_migrations: true,
+            pool_timeout: Duration::from_secs(10),
         };
         let db = DatabaseConnection::new(config)
             .await
@@ -707,8 +711,8 @@ mod tests {
             version: "1.0.0".to_string(),
             path: task_path_str.clone(),
             metadata,
-            input_schema: input_schema.unwrap_or_else(|| serde_json::json!({})),
-            output_schema: output_schema.unwrap_or_else(|| serde_json::json!({})),
+            input_schema: input_schema,
+            output_schema: output_schema,
             enabled: true,
             status: ratchet_storage::TaskStatus::Active,
             created_at: chrono::Utc::now(),

@@ -10,10 +10,6 @@ use std::sync::{Arc, Mutex};
 
 use crate::{
     seaorm::{
-        repositories::{
-            TaskRepository, ExecutionRepository, JobRepository, 
-            ScheduleRepository
-        },
         entities::{
             tasks::Model as Task,
             executions::Model as Execution,
@@ -25,6 +21,9 @@ use crate::{
     },
     repositories::{Repository, BaseRepository, DeliveryResultRepository},
     StorageResult, StorageError,
+};
+use ratchet_interfaces::database::{
+    TaskRepository, ExecutionRepository, JobRepository, ScheduleRepository
 };
 
 // Mock repository implementations using mockall
