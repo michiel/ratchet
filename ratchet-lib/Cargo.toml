@@ -19,6 +19,7 @@ ratchet-http = { path = "../ratchet-http" }
 ratchet-logging = { path = "../ratchet-logging" }
 ratchet-output = { path = "../ratchet-output" }
 ratchet-registry = { path = "../ratchet-registry" }
+ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

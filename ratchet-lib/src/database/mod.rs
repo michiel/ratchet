@@ -22,6 +22,11 @@ pub mod migrations;
 pub mod repositories;
 #[deprecated(since = "0.1.0", note = "Use ratchet-storage crate instead")]
 pub mod safe_errors;
+
+// Legacy compatibility adapter (transitional - will be removed in 0.5.0)
+pub mod legacy_adapter;
+pub mod legacy_adapter_impl;
+
 // pub mod base_repository;
 
 #[deprecated(since = "0.1.0", note = "Use ratchet_storage::seaorm::connection instead")]
@@ -32,6 +37,14 @@ pub use filters::{validation, SafeFilterBuilder};
 pub use repositories::{ExecutionRepository, JobRepository, ScheduleRepository, TaskRepository};
 #[deprecated(since = "0.1.0", note = "Use ratchet_storage::seaorm::safe_errors instead")]
 pub use safe_errors::{ErrorCode, SafeDatabaseError, SafeDatabaseResult, ToSafeResult};
+
+// Re-export legacy adapter for backward compatibility
+pub use legacy_adapter::{
+    LegacyDatabaseAdapter, LegacyRepositoryFactory,
+    LegacyTaskRepository, LegacyExecutionRepository, LegacyJobRepository, LegacyScheduleRepository,
+    LegacyTask, LegacyExecution, LegacyJob, LegacySchedule
+};
+
 // pub use base_repository::{BaseRepository, TransactionManager};
 
 // Re-export commonly used Sea-ORM types

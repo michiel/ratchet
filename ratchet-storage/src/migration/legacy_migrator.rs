@@ -71,10 +71,12 @@ impl LegacyMigrator {
                 _ => unreachable!(),
             };
 
+            // Stop on first failure if not configured to continue
+            let should_stop = !self.config.continue_on_error && report.failed_count > 0;
+            
             summary.reports.push(report);
             
-            // Stop on first failure if not configured to continue
-            if !self.config.continue_on_error && report.failed_count > 0 {
+            if should_stop {
                 summary.complete(false);
                 return Ok(summary);
             }

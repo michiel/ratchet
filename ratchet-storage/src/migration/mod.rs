@@ -7,6 +7,7 @@ pub mod legacy_migrator;
 pub mod schema_version;
 pub mod validation;
 
+#[cfg(feature = "testing")]
 pub mod cli;
 
 // Re-export commonly used types

@@ -29,6 +29,10 @@ pub mod testing;
 #[cfg(feature = "seaorm")]
 pub mod migration;
 
+// Repository adapters for interface unification
+#[cfg(feature = "seaorm")]
+pub mod adapters;
+
 // Re-export core types for convenience
 pub use config::StorageConfig;
 pub use connection::{Connection, ConnectionManager};
