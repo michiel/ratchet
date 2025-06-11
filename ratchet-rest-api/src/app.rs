@@ -119,6 +119,15 @@ fn create_api_router() -> Router<TasksContext> {
         )
         .route("/tasks/:id/enable", post(handlers::enable_task))
         .route("/tasks/:id/disable", post(handlers::disable_task))
+        // MCP task development endpoints
+        .route("/mcp/tasks", post(handlers::mcp_create_task))
+        .route("/mcp/tasks/:name", 
+            get(handlers::mcp_edit_task)  // For getting current task config before editing
+            .patch(handlers::mcp_edit_task)
+            .delete(handlers::mcp_delete_task))
+        .route("/mcp/tasks/:name/test", post(handlers::mcp_test_task))
+        .route("/mcp/results", post(handlers::mcp_store_result))
+        .route("/mcp/results/:name", get(handlers::mcp_get_results))
         // Placeholder endpoints
         .route("/executions", get(placeholder_handler))
         .route("/executions/:id", get(placeholder_handler))

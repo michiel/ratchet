@@ -62,9 +62,30 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 
 ### Installation
 
+#### One-Line Install (Recommended)
+
+The easiest way to install Ratchet is using our install script:
+
+```bash
+# Install latest release directly from GitHub
+curl -fsSL https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh | bash
+```
+
+This script will:
+- ✅ Detect your platform and architecture automatically
+- ✅ Download the latest release from GitHub
+- ✅ Install to `~/.local/bin` (no sudo required)
+- ✅ Check if the install directory is in your PATH
+- ✅ Provide instructions to add it to PATH if needed
+
+#### Manual Installation Options
+
+<details>
+<summary>Build from Source</summary>
+
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/ratchet.git
+git clone https://github.com/michiel/ratchet.git
 cd ratchet
 
 # Build the project
@@ -72,6 +93,29 @@ cargo build --release
 
 # The executable will be at target/release/ratchet
 ```
+</details>
+
+<details>
+<summary>Download Pre-built Binary</summary>
+
+1. Go to [GitHub Releases](https://github.com/michiel/ratchet/releases)
+2. Download the appropriate archive for your platform
+3. Extract and place the `ratchet` binary in your PATH
+</details>
+
+<details>
+<summary>Custom Install Script Options</summary>
+
+```bash
+# Install to custom directory
+RATCHET_INSTALL_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh | bash
+
+# Download and run locally for inspection
+curl -O https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh
+chmod +x install.sh
+./install.sh --help
+```
+</details>
 
 ### Start the Server
 

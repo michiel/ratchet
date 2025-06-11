@@ -18,29 +18,8 @@ pub use jobs::*;
 pub use schedules::*;
 pub use workers::*;
 
-/// Pagination metadata for GraphQL responses
-#[derive(SimpleObject)]
-pub struct PaginationMetaGraphQL {
-    pub page: i32,
-    pub limit: i32,
-    pub total: i64,
-    pub total_pages: i32,
-    pub has_next: bool,
-    pub has_previous: bool,
-}
-
-impl From<PaginationMeta> for PaginationMetaGraphQL {
-    fn from(meta: PaginationMeta) -> Self {
-        Self {
-            page: meta.page as i32,
-            limit: meta.limit as i32,
-            total: meta.total as i64,
-            total_pages: meta.total_pages as i32,
-            has_next: meta.has_next,
-            has_previous: meta.has_previous,
-        }
-    }
-}
+/// Pagination metadata for GraphQL responses - using unified PaginationMeta directly
+pub type PaginationMetaGraphQL = PaginationMeta;
 
 /// Paginated task response
 #[derive(SimpleObject)]

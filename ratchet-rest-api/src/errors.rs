@@ -7,7 +7,7 @@ use axum::{
 };
 use ratchet_api_types::errors::ApiError;
 use ratchet_interfaces::DatabaseError;
-use ratchet_web::{WebError, WebResult};
+use ratchet_web::WebError;
 use serde_json::json;
 use thiserror::Error;
 

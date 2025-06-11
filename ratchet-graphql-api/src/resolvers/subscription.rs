@@ -16,7 +16,7 @@ impl Subscription {
     async fn task_executions(
         &self,
         ctx: &Context<'_>,
-        task_id: Option<GraphQLApiId>,
+        _task_id: Option<GraphQLApiId>,
     ) -> Result<impl Stream<Item = Result<Execution>>> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -28,7 +28,7 @@ impl Subscription {
     async fn job_status(
         &self,
         ctx: &Context<'_>,
-        job_id: Option<GraphQLApiId>,
+        _job_id: Option<GraphQLApiId>,
     ) -> Result<impl Stream<Item = Result<Job>>> {
         let _context = ctx.data::<GraphQLContext>()?;
         
@@ -40,7 +40,7 @@ impl Subscription {
     async fn worker_status(
         &self,
         ctx: &Context<'_>,
-        worker_id: Option<String>,
+        _worker_id: Option<String>,
     ) -> Result<impl Stream<Item = Result<Worker>>> {
         let _context = ctx.data::<GraphQLContext>()?;
         

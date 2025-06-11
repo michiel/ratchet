@@ -369,7 +369,7 @@ impl McpService {
     /// TODO: Re-enable in Phase 3 when configuration is unified
     #[allow(dead_code)]
     async fn from_ratchet_config_disabled(
-        mcp_config: &std::marker::PhantomData<()>, // &ratchet_lib::config::McpServerConfig,
+        _mcp_config: &std::marker::PhantomData<()>, // Placeholder for future MCP config
         task_executor: Arc<ProcessTaskExecutor>,
         task_repository: Arc<TaskRepository>,
         execution_repository: Arc<ExecutionRepository>,
@@ -408,89 +408,3 @@ impl McpService {
     }
 }
 
-// TODO: Re-enable tests in Phase 3 when legacy config support is restored
-#[cfg(test)]
-#[allow(dead_code)]
-mod tests_disabled {
-    /*
-    use super::*;
-    use tempfile::tempdir;
-    use ratchet_lib::config::RatchetConfig;
-    use ratchet_lib::database::{DatabaseConnection, repositories::RepositoryFactory};
-
-    async fn create_test_dependencies() -> (Arc<ProcessTaskExecutor>, Arc<TaskRepository>, Arc<ExecutionRepository>) {
-        // Create storage-based repositories
-        let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
-            url: "sqlite::memory:".to_string(),
-            max_connections: 5,
-            connection_timeout: std::time::Duration::from_secs(10),
-        };
-        let storage_db = ratchet_storage::seaorm::connection::DatabaseConnection::new(storage_db_config)
-            .await.unwrap();
-        storage_db.migrate().await.unwrap();
-        let storage_repos = ratchet_storage::seaorm::repositories::RepositoryFactory::new(storage_db);
-        
-        // Create ProcessTaskExecutor using the new API from ratchet-execution
-        use ratchet_execution::ProcessExecutorConfig;
-        let executor_config = ProcessExecutorConfig {
-            worker_count: 2,
-            task_timeout_seconds: 60,
-            restart_on_crash: true,
-            max_restart_attempts: 3,
-        };
-        let executor = Arc::new(ProcessTaskExecutor::new(executor_config));
-        
-        (
-            executor,
-            Arc::new(storage_repos.task_repository()),
-            Arc::new(storage_repos.execution_repository()),
-        )
-    }
-
-    #[tokio::test]
-    async fn test_mcp_service_creation() {
-        let (executor, task_repo, exec_repo) = create_test_dependencies().await;
-        
-        let service = McpService::new(
-            McpServiceConfig::default(),
-            executor,
-            task_repo,
-            exec_repo,
-        ).await;
-        
-        assert!(service.is_ok());
-        let service = service.unwrap();
-        assert_eq!(service.name(), "mcp-server");
-    }
-
-    #[tokio::test]
-    async fn test_mcp_service_health_check() {
-        let (executor, task_repo, exec_repo) = create_test_dependencies().await;
-        
-        let service = McpService::new(
-            McpServiceConfig::default(),
-            executor,
-            task_repo,
-            exec_repo,
-        ).await.unwrap();
-        
-        let health = service.health_check().await.unwrap();
-        // Service is not started, so it should be unhealthy
-        assert!(matches!(health.status, HealthStatus::Unhealthy { .. }));
-    }
-
-    #[tokio::test]
-    async fn test_mcp_service_builder() {
-        let (executor, task_repo, exec_repo) = create_test_dependencies().await;
-        
-        let service = McpServiceBuilder::new()
-            .with_task_executor(executor)
-            .with_task_repository(task_repo)
-            .with_execution_repository(exec_repo)
-            .build()
-            .await;
-            
-        assert!(service.is_ok());
-    }
-    */
-}

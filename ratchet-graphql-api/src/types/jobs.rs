@@ -1,110 +1,22 @@
 //! GraphQL types for jobs
 
-use async_graphql::{SimpleObject, InputObject, Enum};
+use async_graphql::{SimpleObject, InputObject};
 use ratchet_api_types::{UnifiedJob, JobStatus, JobPriority};
 use super::scalars::GraphQLApiId;
 use chrono::{DateTime, Utc};
 
-/// GraphQL Job type
-#[derive(SimpleObject, Clone)]
-pub struct Job {
-    pub id: GraphQLApiId,
-    pub task_id: GraphQLApiId,
-    pub priority: JobPriorityGraphQL,
-    pub status: JobStatusGraphQL,
-    pub retry_count: i32,
-    pub max_retries: i32,
-    pub queued_at: DateTime<Utc>,
-    pub scheduled_for: Option<DateTime<Utc>>,
-    pub error_message: Option<String>,
-}
+/// GraphQL Job type - using UnifiedJob directly for API consistency
+pub type Job = UnifiedJob;
 
-/// GraphQL enum for job status
-#[derive(Enum, Clone, Copy, PartialEq, Eq)]
-pub enum JobStatusGraphQL {
-    Queued,
-    Processing,
-    Completed,
-    Failed,
-    Cancelled,
-    Retrying,
-}
+/// GraphQL JobStatus - using unified JobStatus directly
+pub type JobStatusGraphQL = JobStatus;
 
-impl From<JobStatus> for JobStatusGraphQL {
-    fn from(status: JobStatus) -> Self {
-        match status {
-            JobStatus::Queued => JobStatusGraphQL::Queued,
-            JobStatus::Processing => JobStatusGraphQL::Processing,
-            JobStatus::Completed => JobStatusGraphQL::Completed,
-            JobStatus::Failed => JobStatusGraphQL::Failed,
-            JobStatus::Cancelled => JobStatusGraphQL::Cancelled,
-            JobStatus::Retrying => JobStatusGraphQL::Retrying,
-        }
-    }
-}
-
-impl From<JobStatusGraphQL> for JobStatus {
-    fn from(status: JobStatusGraphQL) -> Self {
-        match status {
-            JobStatusGraphQL::Queued => JobStatus::Queued,
-            JobStatusGraphQL::Processing => JobStatus::Processing,
-            JobStatusGraphQL::Completed => JobStatus::Completed,
-            JobStatusGraphQL::Failed => JobStatus::Failed,
-            JobStatusGraphQL::Cancelled => JobStatus::Cancelled,
-            JobStatusGraphQL::Retrying => JobStatus::Retrying,
-        }
-    }
-}
-
-/// GraphQL enum for job priority
-#[derive(Enum, Clone, Copy, PartialEq, Eq)]
-pub enum JobPriorityGraphQL {
-    Low,
-    Normal,
-    High,
-    Critical,
-}
-
-impl From<JobPriority> for JobPriorityGraphQL {
-    fn from(priority: JobPriority) -> Self {
-        match priority {
-            JobPriority::Low => JobPriorityGraphQL::Low,
-            JobPriority::Normal => JobPriorityGraphQL::Normal,
-            JobPriority::High => JobPriorityGraphQL::High,
-            JobPriority::Critical => JobPriorityGraphQL::Critical,
-        }
-    }
-}
-
-impl From<JobPriorityGraphQL> for JobPriority {
-    fn from(priority: JobPriorityGraphQL) -> Self {
-        match priority {
-            JobPriorityGraphQL::Low => JobPriority::Low,
-            JobPriorityGraphQL::Normal => JobPriority::Normal,
-            JobPriorityGraphQL::High => JobPriority::High,
-            JobPriorityGraphQL::Critical => JobPriority::Critical,
-        }
-    }
-}
-
-impl From<UnifiedJob> for Job {
-    fn from(job: UnifiedJob) -> Self {
-        Self {
-            id: job.id.into(),
-            task_id: job.task_id.into(),
-            priority: job.priority.into(),
-            status: job.status.into(),
-            retry_count: job.retry_count,
-            max_retries: job.max_retries,
-            queued_at: job.queued_at,
-            scheduled_for: job.scheduled_for,
-            error_message: job.error_message,
-        }
-    }
-}
+/// GraphQL JobPriority - using unified JobPriority directly
+pub type JobPriorityGraphQL = JobPriority;
 
 /// Input type for creating jobs
 #[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct CreateJobInput {
     pub task_id: GraphQLApiId,
     pub priority: Option<JobPriorityGraphQL>,
@@ -114,6 +26,7 @@ pub struct CreateJobInput {
 
 /// Input type for job filtering
 #[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct JobFiltersInput {
     pub task_id: Option<GraphQLApiId>,
     pub status: Option<JobStatusGraphQL>,
@@ -124,6 +37,7 @@ pub struct JobFiltersInput {
 
 /// Job statistics
 #[derive(SimpleObject)]
+#[graphql(rename_fields = "camelCase")]
 pub struct JobStats {
     pub total_jobs: i64,
     pub pending_jobs: i64,

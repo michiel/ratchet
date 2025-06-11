@@ -1,7 +1,7 @@
 //! Job-related request and response models
 
 use serde::{Deserialize, Serialize};
-use ratchet_api_types::{UnifiedJob, ApiId, JobPriority, JobStatus};
+use ratchet_api_types::{ApiId, JobPriority, JobStatus};
 
 /// Request to create a new job
 #[derive(Debug, Clone, Serialize, Deserialize)]

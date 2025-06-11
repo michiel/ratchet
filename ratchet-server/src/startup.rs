@@ -20,8 +20,8 @@ use ratchet_web::middleware::{cors_layer, request_id_layer, error_handler_layer}
 
 #[cfg(feature = "mcp")]
 use ratchet_mcp::{
-    server::{McpServer, tools::RatchetToolRegistry, adapter::RatchetMcpAdapter},
-    security::{McpAuth, McpAuthManager, AuditLogger},
+    server::{McpServer, tools::{RatchetToolRegistry, ToolRegistry}, adapter::RatchetMcpAdapter},
+    security::{McpAuth, McpAuthManager, AuditLogger, SecurityContext, SecurityConfig, ClientContext, ClientPermissions},
     server::config::McpServerConfig,
 };
 
@@ -118,16 +118,10 @@ impl Server {
             #[cfg(feature = "mcp")]
             {
                 // Create MCP server configuration
-                let mcp_server_config = McpServerConfig {
-                    host: self.config.mcp_api.host.clone(),
-                    port: self.config.mcp_api.port,
-                    transport: "sse".to_string(),
-                    enabled: true,
-                    max_concurrent_requests: 50,
-                    request_timeout_secs: 30,
-                    enable_cors: true,
-                    cors_allow_origins: vec!["*".to_string()],
-                };
+                let mcp_server_config = McpServerConfig::sse_with_host(
+                    self.config.mcp_api.port,
+                    &self.config.mcp_api.host
+                );
                 
                 // Create MCP adapter (placeholder - would need actual task executor)
                 // For now, create a minimal MCP server with basic tools
@@ -183,6 +177,38 @@ impl Server {
         Ok(())
     }
 
+    /// Get list of available MCP tools
+    #[cfg(feature = "mcp")]
+    fn get_mcp_tools_list(&self) -> Vec<String> {
+        // For startup logging, return a static list of known tools to avoid runtime issues
+        // The actual tool registry initialization happens during MCP server setup
+        vec![
+            // Core execution tools
+            "ratchet.execute_task".to_string(),
+            "ratchet.get_execution_status".to_string(),
+            "ratchet.get_execution_logs".to_string(),
+            "ratchet.get_execution_trace".to_string(),
+            "ratchet.list_available_tasks".to_string(),
+            "ratchet.analyze_execution_error".to_string(),
+            "ratchet.batch_execute".to_string(),
+            
+            // Task development tools
+            "ratchet.create_task".to_string(),
+            "ratchet.validate_task".to_string(),
+            "ratchet.debug_task_execution".to_string(),
+            "ratchet.run_task_tests".to_string(),
+            "ratchet.create_task_version".to_string(),
+            "ratchet.edit_task".to_string(),
+            "ratchet.delete_task".to_string(),
+            "ratchet.import_tasks".to_string(),
+            "ratchet.export_tasks".to_string(),
+            "ratchet.generate_from_template".to_string(),
+            "ratchet.list_templates".to_string(),
+            "ratchet.store_result".to_string(),
+            "ratchet.get_results".to_string(),
+        ]
+    }
+
     /// Log configuration summary
     fn log_config_summary(&self) {
         tracing::info!("🚀 === Ratchet Server Configuration ===");
@@ -212,21 +238,77 @@ impl Server {
         // Endpoints
         tracing::info!("📋 Available endpoints:");
         tracing::info!("   🏠 Root: http://{}/", self.config.server.bind_address);
-        tracing::info!("   ❤️  Health: http://{}/health", self.config.server.bind_address);
+        
+        // Health endpoints
+        tracing::info!("   ❤️  Health Endpoints:");
+        tracing::info!("      • Basic Health:     http://{}/health", self.config.server.bind_address);
+        tracing::info!("      • Detailed Health:  http://{}/health/detailed", self.config.server.bind_address);
+        tracing::info!("      • Readiness:        http://{}/ready", self.config.server.bind_address);
+        tracing::info!("      • Liveness:         http://{}/live", self.config.server.bind_address);
         
         if self.config.rest_api.enabled {
-            tracing::info!("   🔗 REST API: http://{}{}/", self.config.server.bind_address, self.config.rest_api.prefix);
+            let base_url = format!("http://{}", self.config.server.bind_address);
+            let api_prefix = &self.config.rest_api.prefix;
+            tracing::info!("   🔗 REST API Base: {}{}/", base_url, api_prefix);
+            tracing::info!("      📝 Task Management:");
+            tracing::info!("      • List Tasks:       GET    {}{}/tasks", base_url, api_prefix);
+            tracing::info!("      • Create Task:      POST   {}{}/tasks", base_url, api_prefix);
+            tracing::info!("      • Get Task:         GET    {}{}/tasks/:id", base_url, api_prefix);
+            tracing::info!("      • Update Task:      PATCH  {}{}/tasks/:id", base_url, api_prefix);
+            tracing::info!("      • Delete Task:      DELETE {}{}/tasks/:id", base_url, api_prefix);
+            tracing::info!("      • Enable Task:      POST   {}{}/tasks/:id/enable", base_url, api_prefix);
+            tracing::info!("      • Disable Task:     POST   {}{}/tasks/:id/disable", base_url, api_prefix);
+            tracing::info!("      • Task Stats:       GET    {}{}/tasks/stats", base_url, api_prefix);
+            tracing::info!("      • Sync Tasks:       POST   {}{}/tasks/sync", base_url, api_prefix);
+            tracing::info!("      🔄 Execution Management:");
+            tracing::info!("      • List Executions:  GET    {}{}/executions", base_url, api_prefix);
+            tracing::info!("      • Get Execution:    GET    {}{}/executions/:id", base_url, api_prefix);
+            tracing::info!("      ⚙️  Job Management:");
+            tracing::info!("      • List Jobs:        GET    {}{}/jobs", base_url, api_prefix);
+            tracing::info!("      • Get Job:          GET    {}{}/jobs/:id", base_url, api_prefix);
+            tracing::info!("      📅 Schedule Management:");
+            tracing::info!("      • List Schedules:   GET    {}{}/schedules", base_url, api_prefix);
+            tracing::info!("      • Get Schedule:     GET    {}{}/schedules/:id", base_url, api_prefix);
+            tracing::info!("      👷 Worker Management:");
+            tracing::info!("      • List Workers:     GET    {}{}/workers", base_url, api_prefix);
+            tracing::info!("      • Worker Stats:     GET    {}{}/workers/stats", base_url, api_prefix);
         }
         
         if self.config.graphql_api.enabled {
-            tracing::info!("   🔍 GraphQL: http://{}{}", self.config.server.bind_address, self.config.graphql_api.endpoint);
+            tracing::info!("   🔍 GraphQL API:");
+            tracing::info!("      • Endpoint:         http://{}{}", self.config.server.bind_address, self.config.graphql_api.endpoint);
+            tracing::info!("      • Queries:          tasks, executions, jobs, schedules, workers");
+            tracing::info!("      • Mutations:        createTask, updateTask, deleteTask, etc.");
             if self.config.graphql_api.enable_playground {
-                tracing::info!("   🎮 Playground: http://{}/playground", self.config.server.bind_address);
+                tracing::info!("      • Playground:       http://{}/playground", self.config.server.bind_address);
+            }
+            if self.config.graphql_api.enable_introspection {
+                tracing::info!("      • Introspection:    ✅ Enabled");
             }
         }
         
         if self.config.mcp_api.enabled {
-            tracing::info!("   🤖 MCP SSE: http://{}:{}{}", self.config.mcp_api.host, self.config.mcp_api.port, self.config.mcp_api.endpoint);
+            tracing::info!("   🤖 MCP Server-Sent Events API:");
+            tracing::info!("      • Base Endpoint:    http://{}:{}{}", self.config.mcp_api.host, self.config.mcp_api.port, self.config.mcp_api.endpoint);
+            
+            // Dynamically list available MCP tools
+            #[cfg(feature = "mcp")]
+            {
+                let tools = self.get_mcp_tools_list();
+                if !tools.is_empty() {
+                    tracing::info!("      • Tools Available:  {}", tools.join(", "));
+                } else {
+                    tracing::info!("      • Tools Available:  None");
+                }
+            }
+            
+            #[cfg(not(feature = "mcp"))]
+            {
+                tracing::info!("      • Tools Available:  MCP feature not compiled");
+            }
+            
+            tracing::info!("      • Protocol:         Model Context Protocol v2024-11-05");
+            tracing::info!("      • Transport:        Server-Sent Events (SSE)");
         }
         
         tracing::info!("✅ =====================================");
