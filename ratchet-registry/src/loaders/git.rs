@@ -410,7 +410,7 @@ impl GitClient {
 
         let local_path_str = local_path.to_string_lossy().to_string();
         let url = url.to_string();
-        let git_ref = config.git_ref.clone();
+        let git_ref = config.branch.clone();
         let shallow = config.shallow;
         let depth = config.depth;
         let auth_info = auth.map(|a| a.auth_type.clone());
@@ -466,7 +466,7 @@ impl GitClient {
         use git2::{Repository, FetchOptions, RemoteCallbacks, ErrorCode};
 
         let repo_path_str = repo_path.to_string_lossy().to_string();
-        let git_ref = config.git_ref.clone();
+        let git_ref = config.branch.clone();
         let auth_info = auth.map(|a| a.auth_type.clone());
 
         let result = tokio::task::spawn_blocking(move || {

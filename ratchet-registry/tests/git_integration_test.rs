@@ -106,7 +106,7 @@ discovery:
             .expect("Failed to create test Git repository");
 
         let git_config = GitConfig {
-            git_ref: "main".to_string(),
+            branch: "main".to_string(),
             subdirectory: None,
             shallow: true,
             depth: Some(1),
@@ -143,7 +143,7 @@ discovery:
             .expect("Failed to create test Git repository");
 
         let git_config = GitConfig {
-            git_ref: "main".to_string(),
+            branch: "main".to_string(),
             subdirectory: None,
             shallow: true,
             depth: Some(1),
@@ -260,7 +260,7 @@ discovery:
         ).expect("Failed to commit");
 
         let git_config = GitConfig {
-            git_ref: "main".to_string(),
+            branch: "main".to_string(),
             subdirectory: Some("production".to_string()),
             shallow: true,
             depth: Some(1),

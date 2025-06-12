@@ -264,7 +264,7 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
                     url: source_config.uri.clone(),
                     auth: None, // TODO: Map authentication from config
                     config: ratchet_registry::config::GitConfig {
-                        git_ref: source_config.config.git.branch.clone(),
+                        branch: source_config.config.git.branch.clone(),
                         subdirectory: source_config.config.git.subdirectory.clone(),
                         shallow: source_config.config.git.shallow,
                         depth: source_config.config.git.depth,
@@ -2151,7 +2151,7 @@ async fn handle_repo_verify(
                 }
             }
 
-            let verification = verify_repository(source, list_tasks, offline).await;
+            let verification = verify_repository(source, true, offline).await;
             verifications.push(verification);
         }
     } else {
@@ -2204,23 +2204,55 @@ async fn handle_repo_verify(
                 println!("   ⚙️  Configured: {}", if verification.correctly_configured { "✅ Yes" } else { "❌ No" });
                 println!("   🚀 Usable: {}", if verification.usable { "✅ Yes" } else { "❌ No" });
                 
+                // Show metadata details
+                println!("   🕒 Verified: {}", verification.verification_time);
+                if verification.enabled {
+                    println!("   ⚡ Status: Enabled");
+                } else {
+                    println!("   ⏸️  Status: Disabled");
+                }
+                
+                // Show repository-specific configuration details
+                if verification.source_type == "git" {
+                    // For Git repositories, show branch information
+                    println!("   🌿 Configuration: Git repository");
+                    if detailed {
+                        println!("      • Repository type: Git");
+                        println!("      • Protocol: HTTPS");
+                    }
+                } else if verification.source_type == "filesystem" {
+                    println!("   📁 Configuration: Local filesystem");
+                    if detailed {
+                        println!("      • Repository type: Filesystem");
+                        println!("      • Access: Direct file access");
+                    }
+                } else {
+                    println!("   ⚙️  Configuration: {} repository", verification.source_type);
+                }
+                
+                // Always show task information when available
                 if let Some(ref tasks) = verification.tasks {
                     println!("   📦 Tasks: {} found", tasks.len());
                     
-                    if list_tasks && !tasks.is_empty() {
+                    if !tasks.is_empty() {
                         println!("   └─ Available tasks:");
                         for task in tasks.iter().take(if detailed { tasks.len() } else { 10 }) {
                             let version_info = task.version.as_deref().unwrap_or("unknown");
                             let desc_info = task.description.as_deref().unwrap_or("No description");
                             println!("      • {} (v{}) - {}", task.name, version_info, desc_info);
                             if !task.tags.is_empty() {
-                                println!("        Tags: {}", task.tags.join(", "));
+                                println!("        📋 Tags: {}", task.tags.join(", "));
+                            }
+                            if detailed {
+                                println!("        📂 Path: {}", task.path);
                             }
                         }
                         if !detailed && tasks.len() > 10 {
                             println!("      ... and {} more tasks (use --detailed to see all)", tasks.len() - 10);
                         }
                     }
+                } else {
+                    println!("   📦 Tasks: Discovery not available for this repository type");
                 }
                 
                 if !verification.warnings.is_empty() {

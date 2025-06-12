@@ -94,9 +94,10 @@ pub enum GitAuthType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitConfig {
-    /// Git reference (branch, tag, or commit hash)
-    #[serde(default = "default_git_ref")]
-    pub git_ref: String,
+    /// Git branch name (e.g., "main", "master", "develop")
+    /// Also accepts tags or commit hashes
+    #[serde(alias = "git_ref", default = "default_git_branch")]
+    pub branch: String,
     
     /// Subdirectory within repository
     pub subdirectory: Option<String>,
@@ -160,7 +161,7 @@ impl Default for GitSyncStrategy {
 impl Default for GitConfig {
     fn default() -> Self {
         Self {
-            git_ref: default_git_ref(),
+            branch: default_git_branch(),
             subdirectory: None,
             shallow: default_shallow(),
             depth: default_depth(),
@@ -178,7 +179,7 @@ impl Default for GitConfig {
 }
 
 // Default value functions for Git config
-fn default_git_ref() -> String {
+fn default_git_branch() -> String {
     "main".to_string()
 }
 
