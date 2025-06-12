@@ -35,7 +35,7 @@ regex = "1.10"                                                        # Pattern 
 url = { workspace = true }                                            # URL handling
 
 # Git support dependencies  
-git2 = { version = "0.18", optional = true, default-features = false, features = ["https"] } # Git operations with HTTPS support (OpenSSL for Git only)
+git2 = { version = "0.18", optional = true, default-features = false, features = ["https", "vendored-openssl"] } # Git operations with vendored HTTPS support (self-contained OpenSSL)
 dirs = { version = "5.0", optional = true }                          # Cross-platform directories
 md5 = { version = "0.7", optional = true }                           # URL hashing for cache paths
 
@@ -43,12 +43,12 @@ md5 = { version = "0.7", optional = true }                           # URL hashi
 default = ["filesystem", "http", "git", "watcher"]
 filesystem = ["dep:walkdir", "dep:zip"]
 http = []
-git = ["dep:git2", "dep:dirs", "dep:md5"]
-git-vendored = ["git", "git2/vendored-openssl"]  # Enable vendored OpenSSL for Git (requires perl with FindBin)
+git = ["dep:git2", "dep:dirs", "dep:md5"]  # Default: vendored OpenSSL (self-contained, cross-platform)
+git-system = ["git", "git2/https"]  # Use system OpenSSL instead of vendored (faster builds, requires system deps)
 watcher = ["dep:notify"]
 validation = ["dep:jsonschema"]
 
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.8"
-git2 = { version = "0.18", default-features = false, features = ["https"] }  # For creating test repositories with HTTPS
+git2 = { version = "0.18", default-features = false, features = ["https", "vendored-openssl"] }  # For creating test repositories with vendored HTTPS
