@@ -44,6 +44,7 @@ default = ["filesystem", "http", "git", "watcher"]
 filesystem = ["dep:walkdir", "dep:zip"]
 http = []
 git = ["dep:git2", "dep:dirs", "dep:md5"]
+git-vendored = ["git", "git2/vendored-openssl"]  # Enable vendored OpenSSL for Git (requires perl with FindBin)
 watcher = ["dep:notify"]
 validation = ["dep:jsonschema"]
 

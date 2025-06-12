@@ -276,9 +276,10 @@ The recommendation allows us to restore full Git repository functionality immedi
 
 ### Changes Made
 - **ratchet-registry/Cargo.toml**: Added `features = ["https"]` to git2 dependency
+- **Optional Vendoring**: Added `git-vendored` feature flag for vendored OpenSSL builds
 - **Hybrid TLS Architecture**: Maintained rustls for HTTP client, OpenSSL limited to git2
 - **Test Coverage**: Added comprehensive HTTPS Git cloning tests
-- **Documentation**: Updated CLAUDE.md to reflect hybrid TLS approach
+- **Documentation**: Updated CLAUDE.md and created BUILD_OPTIONS.md for TLS configuration
 
 ### Verification
 - ✅ HTTPS Git repositories can be cloned (tested with github.com/octocat/Hello-World.git)
@@ -286,10 +287,18 @@ The recommendation allows us to restore full Git repository functionality immedi
 - ✅ Workspace builds successfully with zero compilation errors
 - ✅ All existing tests continue to pass
 - ✅ Sample configurations will now work as documented
+- ✅ Optional vendored OpenSSL available via `git-vendored` feature flag
+- ✅ Comprehensive build documentation created (BUILD_OPTIONS.md)
 
 ### Security Model Confirmed
 - **Git operations**: OpenSSL for HTTPS Git repository access (isolated scope)
 - **HTTP client tasks**: rustls for pure Rust security in application HTTP requests
 - **Clear separation**: Different TLS stacks serve different purposes optimally
+- **Flexible deployment**: System OpenSSL (default) or vendored OpenSSL (git-vendored feature)
 
-The implementation successfully restores full HTTPS Git repository functionality while maintaining the security benefits of rustls for application HTTP operations.
+### Build Options Available
+- **Default**: `--features git` (system OpenSSL, fast builds)
+- **Vendored**: `--features git-vendored` (bundled OpenSSL, requires perl with FindBin)
+- **No Git**: `--no-default-features --features filesystem,http` (pure rustls only)
+
+The implementation successfully restores full HTTPS Git repository functionality while maintaining the security benefits of rustls for application HTTP operations, with flexible build options for different deployment scenarios.
