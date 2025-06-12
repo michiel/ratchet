@@ -35,7 +35,7 @@ regex = "1.10"                                                        # Pattern 
 url = { workspace = true }                                            # URL handling
 
 # Git support dependencies  
-git2 = { version = "0.18", optional = true, default-features = false } # Git operations without TLS/SSH
+git2 = { version = "0.18", optional = true, default-features = false, features = ["https"] } # Git operations with HTTPS support (OpenSSL for Git only)
 dirs = { version = "5.0", optional = true }                          # Cross-platform directories
 md5 = { version = "0.7", optional = true }                           # URL hashing for cache paths
 
@@ -50,4 +50,4 @@ validation = ["dep:jsonschema"]
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.8"
-git2 = { version = "0.18", default-features = false }  # For creating test repositories
+git2 = { version = "0.18", default-features = false, features = ["https"] }  # For creating test repositories with HTTPS
