@@ -2,7 +2,7 @@
 
 **Production-Ready JavaScript Task Execution Platform**
 
-Ratchet is a high-performance, scalable task execution platform that runs JavaScript code with enterprise-grade reliability. Built with Rust for performance and safety, it provides comprehensive APIs, persistent storage, and advanced execution capabilities.
+Ratchet is a high-performance, scalable task execution platform that runs JavaScript code with enterprise-grade reliability. Built with Rust for performance and safety, it provides comprehensive APIs, persistent storage, and advanced execution capabilities including real HTTP fetching, Model Context Protocol (MCP) server for LLM integration, and complete TLS support with rustls.
 
 [![Tests](https://img.shields.io/badge/tests-486%20passing-brightgreen)](.) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Status](https://img.shields.io/badge/status-production--ready-green)]()
 
@@ -10,7 +10,7 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 
 Ratchet is a comprehensive JavaScript task execution platform built with Rust for performance and reliability. At its core, it provides secure, isolated JavaScript execution with schema validation, process separation for thread safety, and configurable resource management. The platform includes both GraphQL and REST APIs with OpenAPI documentation, making it ideal for web applications and microservices architectures.
 
-The system features a robust job queue with priority handling, retry logic with exponential backoff, worker pools that scale with your hardware, and comprehensive monitoring capabilities. For development, Ratchet offers CLI tools, automatic task discovery, file watching for live reloading, recording and replay for debugging, and a complete test framework. Enterprise features include SQLite persistence with migrations, rate limiting, structured logging, health checks, and a Model Context Protocol (MCP) server for seamless LLM integration.
+The system features a robust job queue with priority handling, retry logic with exponential backoff, worker pools that scale with your hardware, and comprehensive monitoring capabilities. For development, Ratchet offers CLI tools, automatic task discovery, file watching for live reloading, recording and replay for debugging, and a complete test framework. Enterprise features include SQLite persistence with migrations, rate limiting, structured logging, health checks, a Model Context Protocol (MCP) server for seamless LLM integration, and real HTTP networking with fetch API support for external data retrieval.
 
 ## 🚀 Quick Start
 
@@ -101,6 +101,10 @@ ratchet serve --config=sample/configs/example-config.yaml
 ratchet run-once --from-fs sample/js-tasks/addition \
   --input-json='{"num1": 5, "num2": 10}'
 
+# Run HTTP fetch task (demonstrates real network requests)
+ratchet run-once --from-fs sample/js-tasks/tasks/test-fetch \
+  --input-json='{"endpoint": "/json"}'
+
 # Run with recording for debugging
 ratchet run-once --from-fs sample/js-tasks/weather-api \
   --input-json='{"city": "Berlin"}' \
@@ -118,10 +122,13 @@ ratchet/
 ├── ratchet-mcp/            # Model Context Protocol server for LLM integration
 ├── ratchet-rest-api/       # REST API endpoints and handlers
 ├── ratchet-graphql-api/    # GraphQL schema and resolvers
+├── ratchet-interfaces/     # Core interfaces - repository and service trait definitions
+├── ratchet-api-types/      # Unified API types for REST and GraphQL
+├── ratchet-web/            # Reusable web middleware and utilities
 ├── ratchet-storage/        # Database layer with Sea-ORM repositories
 ├── ratchet-execution/      # Process execution and worker management
-├── ratchet-js/             # JavaScript runtime with Boa engine
-├── ratchet-http/           # HTTP client with recording and mocking
+├── ratchet-js/             # JavaScript runtime with Boa engine and fetch API
+├── ratchet-http/           # HTTP client with recording and mocking (rustls TLS)
 ├── ratchet-config/         # Configuration management and validation
 ├── ratchet-logging/        # Structured logging system
 ├── ratchet-core/           # Core domain types and business logic
@@ -150,7 +157,7 @@ my-task/
 
 ### Example Task
 
-**main.js**:
+**main.js** (Basic arithmetic):
 ```javascript
 function(input) {
   const { num1, num2 } = input;
@@ -162,6 +169,41 @@ function(input) {
   return {
     sum: num1 + num2,
     product: num1 * num2
+  };
+}
+```
+
+**main.js** (HTTP fetch example):
+```javascript
+function(input) {
+  const { endpoint, include_headers } = input;
+  const url = `https://httpbin.org${endpoint}`;
+  
+  let headers = {};
+  if (include_headers) {
+    headers = {
+      'User-Agent': 'Ratchet-Test-Fetch/1.0',
+      'X-Test-Header': 'Ratchet-Sample-Task'
+    };
+  }
+  
+  const response = fetch(url, {
+    method: 'GET',
+    headers: headers
+  });
+  
+  return {
+    success: true,
+    status: 200,
+    url: url,
+    data: {
+      response_body: response,
+      request_info: {
+        method: 'GET',
+        url: url,
+        headers_included: !!include_headers
+      }
+    }
   };
 }
 ```
@@ -397,6 +439,9 @@ http:
 - Rate limiting and basic security
 - Comprehensive error handling
 - Health monitoring endpoints
+- Real HTTP networking with fetch API
+- Pure Rust TLS implementation (rustls)
+- Model Context Protocol server for LLM integration
 
 ⚠️ **Requires Configuration**:
 - **Authentication**: Currently no auth - all endpoints are public (see [roadmap](TODO.md))
@@ -421,6 +466,7 @@ http:
    - Adjust worker count based on CPU cores
    - Configure connection pool size
    - Set appropriate execution timeouts
+   - Enable fetch API for tasks requiring HTTP requests
 
 4. **Monitoring Setup**
    - Health checks: `GET /health` and `GET /api/v1/health`
