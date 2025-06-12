@@ -53,7 +53,9 @@ jobs:
         run: |
           # Install Strawberry Perl for vendored OpenSSL builds
           choco install strawberryperl -y
-          refreshenv
+          # Add Strawberry Perl to PATH for this job
+          echo "C:\strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\strawberry\c\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Set up dependencies (macOS only)
         if: startsWith(matrix.platform.runs-on, 'macOS-')
         run: |
