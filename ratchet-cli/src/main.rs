@@ -3,8 +3,7 @@ use clap::Parser;
 use ratchet_config::{ConfigLoader, RatchetConfig};
 use chrono::Utc;
 
-#[cfg(feature = "server")]
-use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
+// LibRatchetConfig removed - using RatchetConfig directly
 
 #[cfg(feature = "server")]
 use ratchet_execution::{
@@ -13,12 +12,10 @@ use ratchet_execution::{
     ExecutionBridge,
 };
 
-use ratchet_lib::task::Task;
+// Use modern alternatives - Task loading handled by ratchet-js and ratchet-cli-tools
 
 #[cfg(feature = "http")]
-
-// Keep using ratchet_lib's HttpManager for compatibility with execute_task
-use ratchet_lib::http::HttpManager;
+use ratchet_http::HttpManager;
 
 #[cfg(feature = "database")]
 use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
@@ -594,7 +591,7 @@ async fn mcp_serve_command_with_config(
 /// Initialize logging from configuration with fallback to simple tracing
 #[cfg(feature = "server")]
 fn init_logging_with_config(
-    _config: &LibRatchetConfig,
+    _config: &RatchetConfig,
     log_level: Option<&String>,
     record_dir: Option<&PathBuf>,
 ) -> Result<()> {
@@ -835,28 +832,15 @@ async fn run_task_modular(from_fs: &str, input: &JsonValue) -> Result<JsonValue>
     Ok(result)
 }
 
-/// Run a task from a file system path using legacy executor
+/// Run a task from a file system path using modern CLI tools
 #[cfg(feature = "javascript")]
 async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
-    info!("Loading task from: {} (using legacy executor)", from_fs);
+    info!("Loading task from: {} (using modern CLI tools)", from_fs);
 
-    // Load the task
-    let mut task =
-        Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
-
-    // Validate the task
-    task.validate().context("Task validation failed")?;
-
-    // Execute the task
-    info!("Executing task: {}", task.metadata.label);
-
-    // Create HTTP manager for the task execution
-    let http_manager = HttpManager::new();
-
-    // Execute the task using CLI tools
+    // Execute the task using modern CLI tools with automatic validation
     let result = ratchet_cli_tools::execute_task_with_lib_compatibility(
         from_fs,
-        ratchet_cli_tools::TaskInput::legacy(input.clone())
+        ratchet_cli_tools::TaskInput::new(input.clone()) // Use modern execution by default
     )
     .await
     .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
@@ -1003,15 +987,11 @@ async fn run_single_test_modular(task: &FileSystemTask, test_file: &std::path::P
 fn validate_task(from_fs: &str) -> Result<()> {
     info!("Validating task from: {}", from_fs);
 
-    // Load the task
-    let mut task =
-        Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
-
-    // Validate the task
-    match task.validate() {
-        Ok(_) => {
+    // Use modular validation through ratchet-js
+    match ratchet_js::FileSystemTask::from_fs(from_fs) {
+        Ok(_task) => {
             println!("✅ Task validation passed");
-            info!("Task '{}' is valid", task.metadata.label);
+            info!("Task is valid");
             Ok(())
         }
         Err(e) => {
@@ -1028,12 +1008,9 @@ fn validate_task(from_fs: &str) -> Result<()> {
 async fn test_task(from_fs: &str) -> Result<()> {
     info!("Testing task from: {}", from_fs);
 
-    // Load the task
-    let mut task =
-        Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
-
-    // Validate the task first
-    task.validate().context("Task validation failed")?;
+    // Validate the task first using modern components
+    ratchet_js::FileSystemTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Task validation failed: {}", e))?;
 
     // Get test directory
     let task_path = std::path::Path::new(from_fs);
@@ -1041,7 +1018,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
 
     if !test_dir.exists() {
         println!("No tests directory found at: {}", test_dir.display());
-        info!("No tests to run for task '{}'", task.metadata.label);
+        info!("No tests to run for task");
         return Ok(());
     }
 
@@ -1061,7 +1038,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
 
     if test_files.is_empty() {
         println!("No test files found in: {}", test_dir.display());
-        info!("No test files found for task '{}'", task.metadata.label);
+        info!("No test files found for task");
         return Ok(());
     }
 
@@ -1072,7 +1049,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
         let test_name = test_file.file_stem().unwrap().to_str().unwrap();
         print!("Running test '{}' ... ", test_name);
 
-        match run_single_test(&mut task.clone(), &test_file).await {
+        match run_single_test_simple(from_fs, &test_file).await {
             Ok(_) => {
                 println!("✅ PASSED");
                 passed += 1;
@@ -1099,8 +1076,8 @@ async fn test_task(from_fs: &str) -> Result<()> {
 /// Legacy run single test function (deprecated - use run_single_test_modular instead)
 #[cfg(feature = "javascript")]
 #[allow(dead_code)]
-async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result<()> {
-    let task_dir = task.path.parent().unwrap();
+async fn run_single_test(task_path: &str, test_file: &std::path::Path) -> Result<()> {
+    let task_dir = std::path::Path::new(task_path).parent().unwrap();
     use serde_json::Value;
 
     // Load test data
@@ -1132,6 +1109,41 @@ async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result
             "Output mismatch.\nExpected: {}\nActual: {}",
             to_string_pretty(expected)?,
             to_string_pretty(&actual)?
+        ))
+    }
+}
+
+/// Run a single test case using CLI tools (simple version)
+#[cfg(feature = "javascript")]
+async fn run_single_test_simple(task_path: &str, test_file: &std::path::Path) -> Result<()> {
+    use serde_json::Value;
+
+    // Load test data
+    let test_content = fs::read_to_string(test_file).context("Failed to read test file")?;
+    let test_data: Value = from_str(&test_content).context("Failed to parse test JSON")?;
+
+    // Extract input and expected output
+    let input = test_data.get("input").unwrap_or(&json!({})).clone();
+    let expected = test_data
+        .get("expected_output")
+        .ok_or_else(|| anyhow::anyhow!("Test file missing 'expected_output' field"))?;
+
+    // Execute the task using CLI tools
+    let actual = ratchet_cli_tools::execute_task_with_lib_compatibility(
+        task_path,
+        ratchet_cli_tools::TaskInput::new(input)
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
+
+    // Compare results
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "Test failed: expected {:?}, got {:?}",
+            expected,
+            actual
         ))
     }
 }
@@ -1264,13 +1276,8 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
 
             let started_at = Utc::now();
 
-            // Load and execute the task
-            let result = match Task::from_fs(&task_path) {
-                Ok(mut task) => {
-                    // Create HTTP manager for the task execution
-                    let http_manager = HttpManager::new();
-
-                    match ratchet_cli_tools::execute_task_with_lib_compatibility(
+            // Execute the task using modern CLI tools
+            let result = match ratchet_cli_tools::execute_task_with_lib_compatibility(
                         &task_path,
                         ratchet_cli_tools::TaskInput::legacy(input_data)
                     ).await {
@@ -1304,23 +1311,6 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
                                 duration_ms,
                             }
                         }
-                    }
-                }
-                Err(e) => {
-                    let completed_at = Utc::now();
-                    let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
-
-                    error!("Worker failed to load task: {}", e);
-                    TaskExecutionResult {
-                        success: false,
-                        output: None,
-                        error_message: Some(format!("Failed to load task: {}", e)),
-                        error_details: None,
-                        started_at,
-                        completed_at,
-                        duration_ms,
-                    }
-                }
             };
 
             CoordinatorMessage::TaskResult {
@@ -1335,30 +1325,20 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
         } => {
             info!("Worker validating task: {}", task_path);
 
-            let result = match Task::from_fs(&task_path) {
-                Ok(mut task) => match task.validate() {
-                    Ok(_) => {
-                        info!("Worker task validation passed: {}", task_path);
-                        TaskValidationResult {
-                            valid: true,
-                            error_message: None,
-                            error_details: None,
-                        }
+            let result = match ratchet_js::FileSystemTask::from_fs(&task_path) {
+                Ok(_task) => {
+                    info!("Worker task validation passed: {}", task_path);
+                    TaskValidationResult {
+                        valid: true,
+                        error_message: None,
+                        error_details: None,
                     }
-                    Err(e) => {
-                        error!("Worker task validation failed: {}", e);
-                        TaskValidationResult {
-                            valid: false,
-                            error_message: Some(e.to_string()),
-                            error_details: None,
-                        }
-                    }
-                },
+                }
                 Err(e) => {
-                    error!("Worker failed to load task for validation: {}", e);
+                    error!("Worker task validation failed: {}", e);
                     TaskValidationResult {
                         valid: false,
-                        error_message: Some(format!("Failed to load task: {}", e)),
+                        error_message: Some(e.to_string()),
                         error_details: None,
                     }
                 }
@@ -2291,10 +2271,9 @@ async fn main() -> Result<()> {
         // Initialize logging from config
         #[cfg(feature = "server")]
         {
-            // Convert to legacy config for logging compatibility
-            let legacy_config = LibRatchetConfig::default(); // Use default config for logging
+            // Use modern config directly
             init_logging_with_config(
-                &legacy_config,
+                &config,
                 cli.log_level.as_ref(),
                 cli.command.as_ref().and_then(|cmd| match cmd {
                     Commands::RunOnce { record, .. } => record.as_ref(),

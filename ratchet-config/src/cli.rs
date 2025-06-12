@@ -188,14 +188,9 @@ impl ConfigCliRunner {
         let legacy_config = ConfigCompatibilityService::to_legacy_format(&modern_config);
 
         // Save legacy format
-        let content = serde_yaml::to_string(&legacy_config).map_err(|e| crate::ConfigError::ParseError {
-            message: format!("Failed to serialize legacy config: {}", e),
-        })?;
+        let content = serde_yaml::to_string(&legacy_config).map_err(crate::ConfigError::ParseError)?;
 
-        std::fs::write(&output_path, content).map_err(|e| crate::ConfigError::FileIo {
-            path: output_path.clone(),
-            error: e,
-        })?;
+        std::fs::write(&output_path, content).map_err(crate::ConfigError::FileReadError)?;
 
         println!("✅ Conversion completed successfully!");
 
@@ -207,44 +202,44 @@ impl ConfigCliRunner {
         
         if let Some(server) = &config.server {
             println!("   🖥️  Server: {}:{}", server.bind_address, server.port);
+            println!("   💾 Database: {}", server.database.url);
         }
 
-        println!("   💾 Database: {}", config.database.url);
         println!("   ⚡ Execution: max duration {}s, {} concurrent tasks",
             config.execution.max_execution_duration.as_secs(),
-            config.execution.max_concurrent
+            config.execution.max_concurrent_tasks
         );
         println!("   🌐 HTTP: timeout {}s, verify SSL: {}",
             config.http.timeout.as_secs(),
             config.http.verify_ssl
         );
-        println!("   📝 Logging: level {}, format {}",
+        println!("   📝 Logging: level {:?}, format {:?}",
             config.logging.level,
             config.logging.format
         );
 
         if let Some(mcp) = &config.mcp {
-            println!("   🔗 MCP: enabled {}, transport {}",
+            println!("   🔗 MCP: enabled {}, transport {:?}",
                 mcp.enabled,
                 mcp.transport
             );
         }
 
         if config.cache.enabled {
-            println!("   💽 Cache: enabled, {} entries max",
-                config.cache.max_entries
+            println!("   💽 Cache: enabled, task cache size {}",
+                config.cache.task_cache.task_content_cache_size
             );
         }
 
-        if config.registry.enabled {
+        if let Some(registry) = &config.registry {
             println!("   📚 Registry: {} sources configured",
-                config.registry.sources.len()
+                registry.sources.len()
             );
         }
 
-        if !config.output.destinations.is_empty() {
+        if !config.output.global_destinations.is_empty() {
             println!("   📤 Output: {} destinations configured",
-                config.output.destinations.len()
+                config.output.global_destinations.len()
             );
         }
     }

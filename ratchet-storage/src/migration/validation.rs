@@ -533,8 +533,8 @@ impl MigrationValidator {
             ("tasks", "metadata"),
             ("tasks", "input_schema"),
             ("tasks", "output_schema"),
-            ("executions", "input_data"),
-            ("executions", "output_data"),
+            ("executions", "input"),
+            ("executions", "output"),
             ("jobs", "input_data"),
             ("schedules", "input_data"),
         ];
@@ -604,7 +604,7 @@ struct RecordComparison {
     mismatched_fields: Vec<String>,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "testing"))]
 mod tests {
     use super::*;
     use crate::testing::TestDatabase;

@@ -28,7 +28,7 @@ use ratchet_api_types::{
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
     ExecutionStatus, JobStatus, JobPriority
 };
-use ratchet_lib;
+// ratchet_lib removed - using modern modular components
 
 /// Bridge factory that wraps the ratchet-storage RepositoryFactory
 pub struct BridgeRepositoryFactory {

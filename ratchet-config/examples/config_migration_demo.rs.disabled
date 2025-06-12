@@ -4,7 +4,7 @@
 //! to detect legacy config formats and automatically upgrade them to modern format.
 
 use ratchet_config::{
-    ConfigMigrator, ConfigCompatibilityService, ConfigFormat, MigrationReport,
+    ConfigMigrator, ConfigCompatibilityService,
     ConfigError, ConfigResult
 };
 use std::fs;
@@ -15,9 +15,9 @@ async fn main() -> ConfigResult<()> {
     println!("🚀 Ratchet Configuration Migration Demo\n");
 
     // Create temporary directory for demo files
-    let temp_dir = TempDir::new().map_err(|e| ConfigError::ParseError {
-        message: format!("Failed to create temp directory: {}", e),
-    })?;
+    let temp_dir = TempDir::new().map_err(|e| ConfigError::ValidationError(
+        format!("Failed to create temp directory: {}", e)
+    ))?;
 
     // Demo 1: Detect and migrate legacy YAML configuration
     demo_legacy_yaml_migration(&temp_dir).await?;

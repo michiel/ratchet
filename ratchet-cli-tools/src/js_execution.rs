@@ -98,31 +98,12 @@ async fn execute_task_modern(task_path: &str, input: &JsonValue) -> Result<JsonV
 /// Execute task using legacy ratchet_lib engine
 #[cfg(feature = "javascript")]
 async fn execute_task_legacy(task_path: &str, input: &JsonValue) -> Result<JsonValue> {
-    debug!("Loading and executing task with ratchet_lib: {}", task_path);
+    debug!("Legacy ratchet_lib execution no longer available: {}", task_path);
     
-    // Load task using legacy API
-    let mut task = ratchet_lib::task::Task::from_fs(&std::path::PathBuf::from(task_path))
-        .context("Failed to load task from filesystem")?;
-
-    #[cfg(feature = "http")]
-    {
-        // Create HTTP manager for compatibility
-        let http_manager = HttpManager::new();
-        
-        // Execute using legacy API
-        let result = ratchet_lib::js_executor::execute_task(&mut task, input.clone(), &http_manager)
-            .await
-            .map_err(|e| anyhow::anyhow!("Legacy task execution failed: {}", e))?;
-        
-        Ok(result)
-    }
-    
-    #[cfg(not(feature = "http"))]
-    {
-        Err(anyhow::anyhow!(
-            "Legacy task execution requires HTTP support. Build with --features=http"
-        ))
-    }
+    // Legacy execution is no longer available - ratchet_lib has been removed
+    Err(anyhow::anyhow!(
+        "Legacy ratchet_lib execution is no longer available. Use modern execution instead."
+    ))
 }
 
 /// Default execution function using modern engine

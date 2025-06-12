@@ -17,7 +17,7 @@ uuid = { workspace = true }
 tracing = { workspace = true }
 
 # Optional dependencies for JS execution and HTTP recording
-ratchet_lib = { path = "../ratchet-lib", optional = true }
+# ratchet_lib = { path = "../ratchet-lib", optional = true } # REMOVED - migrated to modular crates
 ratchet-js = { path = "../ratchet-js", optional = true }
 ratchet-http = { path = "../ratchet-http", optional = true }
 
@@ -34,8 +34,8 @@ javascript = ["ratchet-js"]
 # HTTP recording support
 recording = ["ratchet-http/recording"]
 
-# Legacy ratchet_lib compatibility
-legacy = ["ratchet_lib"]
+# Legacy ratchet_lib compatibility (removed)
+# legacy = ["ratchet_lib"] # REMOVED - no longer available
 
 # HTTP client functionality
 http = ["ratchet-http"]

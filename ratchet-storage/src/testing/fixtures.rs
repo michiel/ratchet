@@ -3,17 +3,25 @@
 //! This module provides utilities for creating temporary files, directories,
 //! and task structures for testing purposes.
 
+#[cfg(feature = "testing")]
 use std::collections::HashMap;
+#[cfg(feature = "testing")]
 use std::path::PathBuf;
-use tempfile::{TempDir, NamedTempFile};
+#[cfg(feature = "testing")]
+use tempfile::TempDir;
+#[cfg(feature = "testing")]
 use std::io::Write;
+#[cfg(feature = "testing")]
+use serde_yaml;
 
 /// Test fixtures for file-based testing
+#[cfg(feature = "testing")]
 pub struct TestFixtures {
     temp_dir: TempDir,
     files: HashMap<String, PathBuf>,
 }
 
+#[cfg(feature = "testing")]
 impl TestFixtures {
     pub fn new() -> Result<Self, std::io::Error> {
         let temp_dir = TempDir::new()?;
@@ -243,6 +251,7 @@ function main(input) {
     }
 
     /// Create a configuration file
+    #[cfg(feature = "testing")]
     pub fn create_config_file(&mut self, config_name: &str, config: &serde_json::Value) -> Result<PathBuf, std::io::Error> {
         let config_path = self.temp_dir.path().join(format!("{}.yaml", config_name));
         let yaml_string = serde_yaml::to_string(config)
@@ -294,6 +303,7 @@ function main(input) {{
     }
 
     /// Create a database configuration file for testing
+    #[cfg(feature = "testing")]
     pub fn create_database_config(&mut self, config_name: &str, db_type: &str) -> Result<PathBuf, std::io::Error> {
         let db_config = match db_type {
             "sqlite" => serde_json::json!({
@@ -323,6 +333,7 @@ function main(input) {{
     }
 
     /// Create a server configuration file for testing
+    #[cfg(feature = "testing")]
     pub fn create_server_config(&mut self, config_name: &str, port: u16) -> Result<PathBuf, std::io::Error> {
         let server_config = serde_json::json!({
             "server": {
@@ -344,10 +355,12 @@ function main(input) {{
 }
 
 /// Convenient fixture builder for common test scenarios
+#[cfg(feature = "testing")]
 pub struct FixtureBuilder {
     fixtures: TestFixtures,
 }
 
+#[cfg(feature = "testing")]
 impl FixtureBuilder {
     pub fn new() -> Result<Self, std::io::Error> {
         Ok(Self {
@@ -421,6 +434,7 @@ function main(input) {
     }
 }
 
+#[cfg(feature = "testing")]
 impl Default for FixtureBuilder {
     fn default() -> Self {
         Self::new().expect("Failed to create fixture builder")

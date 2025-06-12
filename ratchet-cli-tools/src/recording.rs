@@ -24,16 +24,9 @@ pub fn set_recording_dir(session_dir: PathBuf) -> Result<()> {
         debug!("Set recording directory using ratchet-http");
     }
     
-    // Also set legacy recording if available
-    #[cfg(feature = "legacy")]
+    #[cfg(not(feature = "recording"))]
     {
-        ratchet_lib::recording::set_recording_dir(session_dir)?;
-        debug!("Set recording directory using ratchet_lib (legacy)");
-    }
-    
-    #[cfg(not(any(feature = "recording", feature = "legacy")))]
-    {
-        debug!("Recording not available - no recording features enabled");
+        debug!("Recording not available - recording feature not enabled");
     }
     
     Ok(())

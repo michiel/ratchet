@@ -308,7 +308,7 @@ impl SchemaVersionDetector {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "testing"))]
 mod tests {
     use super::*;
     use crate::testing::TestDatabase;

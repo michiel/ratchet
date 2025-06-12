@@ -255,6 +255,7 @@ mod tests {
         assert!(db.ping().await.is_ok());
     }
 
+    #[cfg(feature = "testing")]
     #[tokio::test]
     async fn test_file_database_directory_creation() {
         use tempfile::tempdir;
@@ -280,6 +281,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    #[cfg(feature = "testing")]
     #[test]
     fn test_ensure_sqlite_file_exists_file_path() {
         use tempfile::tempdir;
