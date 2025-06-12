@@ -1,5 +1,19 @@
 # Changes
 
+## Version 0.4.1 (2025-06-12)
+
+### Bug Fixes
+- **HTTPS Git Repository Support**: Restored HTTPS Git repository functionality that was broken during OpenSSL to rustls migration
+- **Hybrid TLS Architecture**: Implemented optimal balance using rustls for HTTP client operations and OpenSSL for Git operations
+- **Vendored OpenSSL by Default**: Made vendored OpenSSL the default for git2 builds to ensure cross-platform compatibility
+- **GitHub Actions Enhancements**: Added perl5 installation across all target platforms (Ubuntu, Windows, macOS) for vendored OpenSSL builds
+- **CLI Feature Integration**: Added git features to ratchet CLI package for proper GitHub Actions compatibility
+- **Windows Build Fixes**: Resolved Windows perl PATH issues in GitHub Actions by replacing problematic refreshenv with explicit PATH updates
+
+This release addresses critical Git repository functionality that was inadvertently broken during the security-focused OpenSSL to rustls migration, ensuring that sample configurations and documented Git repository features work as expected while maintaining the security benefits of the hybrid TLS approach.
+
+---
+
 ## Version 0.4.0 (2025-01-06)
 
 ### Major Changes
