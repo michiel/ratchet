@@ -285,7 +285,6 @@ impl LogContext {
     pub fn to_json(self) -> JsonValue {
         JsonValue::Object(
             self.fields.into_iter()
-                .map(|(k, v)| (k, v))
                 .collect()
         )
     }

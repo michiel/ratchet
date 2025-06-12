@@ -11,7 +11,7 @@ use serde_yaml;
 
 use crate::{
     ConfigError, ConfigResult,
-    domains::{RatchetConfig as ModernConfig, logging::{LogTarget, LogLevel, LogFormat}},
+    domains::{RatchetConfig as ModernConfig, logging::LogTarget},
     compat::{LegacyRatchetConfig, to_legacy_config}
 };
 
