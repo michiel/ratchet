@@ -1,8 +1,9 @@
-- ratchet-lib is a legacy package that we are migrating away from to modularized components
-- docs/ARCHITECTURE.md contains the architecture, TODO.md contains the roadmap and priorities, docs/mcp-transports.md contains the mcp transport protocol descriptions, docs/LLM_TASK_DEVELOPMENT.md contains the instructions and description for an LLM to interactive with the ratchet binary. refer to and update these documents as necessary
-- This project build one binary (ratchet), that contains all functionality and exposes this through commands and subcommands
+- docs/ARCHITECTURE.md contains the architecture, TODO.md contains the roadmap and priorities
+- This projects build one binary (ratchet), that contains all functionality and exposes this through commands and subcommands
 - After all changes, ensure that the code compiles without errors and that all tests pass
 - There are cargo tools available for analysis, testing, coverage reporting, dependency review, etc. use them as required and request installation of tools if they are not available
 - The target platforms are Linux, macOS, and Windows. Ensure that the code is cross-platform compatible. Uses hybrid TLS: rustls for HTTP client operations, OpenSSL limited to git2 for HTTPS Git repository access
 - When writing documentation, follow the guidelines in docs/writing-guide.md
+- All items in a configuration file (example: config.yaml) are optional and must have a default value. This includes nested properties
+- When a task encounters an error it should throw a typed error with a descriptive message
 

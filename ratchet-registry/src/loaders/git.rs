@@ -463,7 +463,7 @@ impl GitClient {
         config: &GitConfig,
         auth: Option<&GitAuth>,
     ) -> Result<()> {
-        use git2::{Repository, FetchOptions, RemoteCallbacks};
+        use git2::{Repository, FetchOptions, RemoteCallbacks, ErrorCode};
 
         let repo_path_str = repo_path.to_string_lossy().to_string();
         let git_ref = config.git_ref.clone();
@@ -488,18 +488,120 @@ impl GitClient {
             let mut remote = repo.find_remote("origin")?;
             remote.fetch(&[&git_ref], Some(&mut fetch_options), None)?;
 
-            // Check out the requested ref
-            let refname = format!("refs/remotes/origin/{}", git_ref);
-            let oid = repo.revparse_single(&refname)?.id();
-            repo.set_head_detached(oid)?;
-            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
-
-            info!("Successfully synced repository at {}", repo_path_str);
-            Ok::<(), git2::Error>(())
+            // Check out the requested ref - try multiple strategies
+            let checkout_result = Self::checkout_ref(&repo, &git_ref);
+            match checkout_result {
+                Ok(_) => {
+                    info!("Successfully synced repository at {} (branch: {})", repo_path_str, git_ref);
+                    Ok::<(), git2::Error>(())
+                }
+                Err(e) => {
+                    // Provide detailed error message for missing branches
+                    if e.code() == ErrorCode::NotFound {
+                        let available_branches = Self::list_available_branches(&repo);
+                        let branch_list = available_branches.join(", ");
+                        let error_msg = if available_branches.is_empty() {
+                            format!("Branch '{}' not found in repository. No remote branches are available.", git_ref)
+                        } else {
+                            format!("Branch '{}' not found in repository. Available branches: {}", git_ref, branch_list)
+                        };
+                        return Err(git2::Error::from_str(&error_msg));
+                    }
+                    Err(e)
+                }
+            }
         })
         .await?;
 
         result.map_err(|e| RegistryError::GitError(format!("Sync failed: {}", e)))
+    }
+
+    /// Try to check out the specified ref, with fallback strategies
+    fn checkout_ref(repo: &git2::Repository, git_ref: &str) -> std::result::Result<(), git2::Error> {
+        use git2::ErrorCode;
+
+        // Strategy 1: Try refs/remotes/origin/{git_ref}
+        let remote_refname = format!("refs/remotes/origin/{}", git_ref);
+        match repo.revparse_single(&remote_refname) {
+            Ok(obj) => {
+                let oid = obj.id();
+                repo.set_head_detached(oid)?;
+                repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+                return Ok(());
+            }
+            Err(e) if e.code() == ErrorCode::NotFound => {
+                // Continue to next strategy
+            }
+            Err(e) => return Err(e),
+        }
+
+        // Strategy 2: Try refs/heads/{git_ref} (local branch)
+        let local_refname = format!("refs/heads/{}", git_ref);
+        match repo.revparse_single(&local_refname) {
+            Ok(obj) => {
+                let oid = obj.id();
+                repo.set_head_detached(oid)?;
+                repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+                return Ok(());
+            }
+            Err(e) if e.code() == ErrorCode::NotFound => {
+                // Continue to next strategy
+            }
+            Err(e) => return Err(e),
+        }
+
+        // Strategy 3: Try as tag refs/tags/{git_ref}
+        let tag_refname = format!("refs/tags/{}", git_ref);
+        match repo.revparse_single(&tag_refname) {
+            Ok(obj) => {
+                let oid = obj.id();
+                repo.set_head_detached(oid)?;
+                repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+                return Ok(());
+            }
+            Err(e) if e.code() == ErrorCode::NotFound => {
+                // Continue to failure
+            }
+            Err(e) => return Err(e),
+        }
+
+        // All strategies failed - return NotFound error
+        Err(git2::Error::from_str(&format!("Reference '{}' not found", git_ref)))
+    }
+
+    /// List available remote branches for error reporting
+    fn list_available_branches(repo: &git2::Repository) -> Vec<String> {
+        let mut branches = Vec::new();
+        
+        // Get remote branches
+        if let Ok(branch_iter) = repo.branches(Some(git2::BranchType::Remote)) {
+            for branch_result in branch_iter {
+                if let Ok((branch, _branch_type)) = branch_result {
+                    if let Some(name) = branch.name().unwrap_or(None) {
+                        // Remove the "origin/" prefix for cleaner display
+                        if let Some(clean_name) = name.strip_prefix("origin/") {
+                            branches.push(clean_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Get local branches too
+        if let Ok(branch_iter) = repo.branches(Some(git2::BranchType::Local)) {
+            for branch_result in branch_iter {
+                if let Ok((branch, _branch_type)) = branch_result {
+                    if let Some(name) = branch.name().unwrap_or(None) {
+                        branches.push(name.to_string());
+                    }
+                }
+            }
+        }
+        
+        // Remove duplicates and sort
+        branches.sort();
+        branches.dedup();
+        branches
     }
 
     fn setup_auth_callbacks(

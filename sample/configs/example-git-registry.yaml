@@ -23,7 +23,7 @@ registry:
       polling_interval: 900
       config:
         git:
-          git_ref: "main"
+          branch: "master"
           shallow: true
           depth: 1
           sync_strategy: "fetch"
@@ -39,7 +39,7 @@ registry:
       polling_interval: 600
       config:
         git:
-          git_ref: "production"
+          branch: "production"
           subdirectory: "approved-tasks"
           shallow: true
           verify_signatures: false
@@ -59,7 +59,7 @@ registry:
       polling_interval: 600
       config:
         git:
-          git_ref: "stable" 
+          branch: "stable" 
           subdirectory: "production"
           sync_strategy: "pull"
           cleanup_on_error: true

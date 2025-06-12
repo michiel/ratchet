@@ -128,8 +128,9 @@ registry:
       polling_interval: "10m"
       config:
         git:
-          # Git reference (branch, tag, or commit)
-          ref: "main"                    # or "v1.2.0" or "abc123def"
+          # Git branch (e.g., "main", "master", "develop")
+          # Also accepts tags or commit hashes  
+          branch: "main"                    # or "v1.2.0" or "abc123def"
           
           # Subdirectory within repository (optional)
           subdirectory: "production-tasks"
@@ -187,7 +188,7 @@ registry:
       source_type: "git"
       config:
         git:
-          ref: "main"
+          branch: "main"
           shallow: true
           depth: 1
           
@@ -197,7 +198,7 @@ registry:
       auth_name: "github_pat"
       config:
         git:
-          ref: "production"
+          branch: "production"
           subdirectory: "approved-tasks"
           verify_signatures: true
 
@@ -217,7 +218,7 @@ registry:
       auth_name: "gitlab_deploy_key"
       config:
         git:
-          ref: "stable"
+          branch: "stable"
           sync_strategy: "fetch"
           
   auth:
@@ -252,7 +253,7 @@ registry:
       auth_name: "internal_cert"
       config:
         git:
-          ref: "production"
+          branch: "production"
           verify_ssl_certs: false  # For self-signed certificates
           
   auth:
@@ -591,7 +592,7 @@ registry:
       enabled: true
       config:
         git:
-          ref: "main"
+          branch: "main"
           shallow: true
           depth: 1
           timeout: "60s"
@@ -609,7 +610,7 @@ registry:
       polling_interval: "15m"
       config:
         git:
-          ref: "production"
+          branch: "production"
           subdirectory: "approved-tasks"
           shallow: true
           verify_signatures: true
@@ -637,7 +638,7 @@ registry:
       enabled: true
       config:
         git:
-          ref: "stable"
+          branch: "stable"
           
     # Corporate tasks from GitLab
     - name: "gitlab-corporate"
@@ -647,7 +648,7 @@ registry:
       auth_name: "gitlab_deploy_key"
       config:
         git:
-          ref: "main"
+          branch: "main"
           subdirectory: "production"
           
     # Local development tasks
@@ -685,7 +686,7 @@ registry:
       polling_interval: "5m"
       config:
         git:
-          ref: "v2.1.0"                    # Pin to specific version
+          branch: "v2.1.0"                    # Pin to specific version
           shallow: true
           verify_signatures: true
           max_repo_size: "50MB"
@@ -699,7 +700,7 @@ registry:
       auth_name: "internal_cert"
       config:
         git:
-          ref: "stable"
+          branch: "stable"
           sync_strategy: "fetch"
 
   auth:
@@ -804,7 +805,7 @@ registry:
       enabled: true
       config:
         git:
-          ref: "main"
+          branch: "main"
           # Override local tasks with same names
           priority: 100
 ```

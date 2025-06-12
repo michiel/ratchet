@@ -229,4 +229,27 @@ pub enum RepoCommands {
         #[arg(long, value_name = "FORMAT", default_value = "table")]
         format: String,
     },
+
+    /// Verify configured repositories accessibility and list available tasks
+    Verify {
+        /// Verify specific repository by name
+        #[arg(long, value_name = "NAME")]
+        repository: Option<String>,
+
+        /// Output format: table, json, yaml
+        #[arg(long, value_name = "FORMAT", default_value = "table")]
+        format: String,
+
+        /// Show detailed verification information
+        #[arg(long)]
+        detailed: bool,
+
+        /// List all available tasks in each repository
+        #[arg(long)]
+        list_tasks: bool,
+
+        /// Skip connectivity tests (only validate configuration)
+        #[arg(long)]
+        offline: bool,
+    },
 }
