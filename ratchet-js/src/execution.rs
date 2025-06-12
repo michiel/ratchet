@@ -41,9 +41,19 @@ async fn call_js_function_with_code(
         // Check if main function exists and is callable
         if main_fn.is_callable() {
             debug!("Using named main function");
-            // Check for HTTP fetch calls
+            // Call the main function first to allow it to set fetch variables
+            let initial_result = main_fn
+                .as_callable()
+                .ok_or_else(|| JsExecutionError::RuntimeError("main is not a function".to_string()))?
+                .call(&boa_engine::JsValue::undefined(), &[input_arg.clone()], context)
+                .map_err(|e| {
+                    let parsed_error = parse_js_error(&e.to_string());
+                    JsExecutionError::TypedJsError(parsed_error)
+                })?;
+
+            // After function execution, check for HTTP fetch calls
             if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
-                debug!("Detected HTTP fetch call to: {}", url);
+                debug!("Detected HTTP fetch call to: {} after function execution", url);
                 let js_result = crate::http_integration::handle_fetch_processing(
                     context,
                     &main_fn,
@@ -56,33 +66,149 @@ async fn call_js_function_with_code(
                 .await?;
                 convert_js_result_to_json(context, js_result)?
             } else {
-                // Call the main function normally
-                let result = main_fn
-                    .as_callable()
-                    .ok_or_else(|| JsExecutionError::RuntimeError("main is not a function".to_string()))?
-                    .call(&boa_engine::JsValue::undefined(), &[input_arg], context)
-                    .map_err(|e| {
-                        let parsed_error = parse_js_error(&e.to_string());
-                        JsExecutionError::TypedJsError(parsed_error)
-                    })?;
-
-                convert_js_result_to_json(context, result)?
+                // No fetch calls detected, use the initial result
+                debug!("No fetch calls detected, using initial result");
+                convert_js_result_to_json(context, initial_result)?
             }
         } else {
             // main exists but is not callable, fall through to anonymous function handling
             debug!("main exists but is not callable, trying anonymous function handling");
-            handle_anonymous_function(context, script_result, input_arg, js_code)?
+            handle_anonymous_function_with_http(context, script_result, input_arg, js_code, http_manager).await?
         }
     } else {
         // Failed to get main function or main doesn't exist, try anonymous function handling
         debug!("Failed to get main function or main doesn't exist, trying anonymous function handling");
-        handle_anonymous_function(context, script_result, input_arg, js_code)?
+        handle_anonymous_function_with_http(context, script_result, input_arg, js_code, http_manager).await?
     };
 
     Ok(result)
 }
 
-/// Handle anonymous function execution when no main function is found
+/// Handle anonymous function execution with HTTP support
+async fn handle_anonymous_function_with_http(
+    context: &mut BoaContext,
+    script_result: boa_engine::JsValue,
+    input_arg: boa_engine::JsValue,
+    js_code: Option<&str>,
+    http_manager: &impl ratchet_http::HttpClient,
+) -> Result<JsonValue, JsExecutionError> {
+    debug!("Handling anonymous function with HTTP support. Script result type: {:?}, is_callable: {}, is_undefined: {}", 
+           script_result.type_of(), script_result.is_callable(), script_result.is_undefined());
+    
+    if script_result.is_callable() {
+        debug!("Using anonymous function result");
+        // Call the function first to allow it to set fetch variables
+        let initial_result = script_result
+            .as_callable()
+            .ok_or_else(|| JsExecutionError::RuntimeError("Script result is not callable".to_string()))?
+            .call(&boa_engine::JsValue::undefined(), &[input_arg.clone()], context)
+            .map_err(|e| {
+                let parsed_error = parse_js_error(&e.to_string());
+                JsExecutionError::TypedJsError(parsed_error)
+            })?;
+
+        // After function execution, check for HTTP fetch calls
+        if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
+            debug!("Detected HTTP fetch call to: {} after anonymous function execution", url);
+            let js_result = crate::http_integration::handle_fetch_processing(
+                context,
+                &script_result,
+                &input_arg,
+                http_manager,
+                url,
+                params,
+                body,
+            )
+            .await?;
+            convert_js_result_to_json(context, js_result)
+        } else {
+            // No fetch calls detected, use the initial result
+            debug!("No fetch calls detected in anonymous function, using initial result");
+            convert_js_result_to_json(context, initial_result)
+        }
+    } else if !script_result.is_undefined() && !script_result.is_null() {
+        debug!("Using script result directly as value");
+        convert_js_result_to_json(context, script_result)
+    } else {
+        // The script didn't return a function or value, try function expression handling
+        handle_function_expression_with_http(context, input_arg, js_code, http_manager).await
+    }
+}
+
+/// Handle function expression execution with HTTP support
+async fn handle_function_expression_with_http(
+    context: &mut BoaContext,
+    input_arg: boa_engine::JsValue,
+    js_code: Option<&str>,
+    http_manager: &impl ratchet_http::HttpClient,
+) -> Result<JsonValue, JsExecutionError> {
+    debug!("Handling function expression with HTTP support");
+    
+    if let Some(code) = js_code {
+        let wrapped_code = format!("({})", code.trim());
+        
+        // Try to parse and execute the wrapped code
+        let wrapped_source = Source::from_bytes(&wrapped_code);
+        match Script::parse(wrapped_source, None, context) {
+            Ok(wrapped_script) => {
+                let wrapped_result = wrapped_script.evaluate(context).map_err(|e| {
+                    let parsed_error = parse_js_error(&e.to_string());
+                    JsExecutionError::TypedJsError(parsed_error)
+                })?;
+                
+                if wrapped_result.is_callable() {
+                    debug!("Successfully extracted function from expression");
+                    // Call the function first to allow it to set fetch variables
+                    let initial_result = wrapped_result
+                        .as_callable()
+                        .ok_or_else(|| JsExecutionError::RuntimeError("Wrapped result is not callable".to_string()))?
+                        .call(&boa_engine::JsValue::undefined(), &[input_arg.clone()], context)
+                        .map_err(|e| {
+                            let parsed_error = parse_js_error(&e.to_string());
+                            JsExecutionError::TypedJsError(parsed_error)
+                        })?;
+
+                    // After function execution, check for HTTP fetch calls
+                    if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
+                        debug!("Detected HTTP fetch call to: {} after function expression execution", url);
+                        let js_result = crate::http_integration::handle_fetch_processing(
+                            context,
+                            &wrapped_result,
+                            &input_arg,
+                            http_manager,
+                            url,
+                            params,
+                            body,
+                        )
+                        .await?;
+                        convert_js_result_to_json(context, js_result)
+                    } else {
+                        // No fetch calls detected, use the initial result
+                        debug!("No fetch calls detected in function expression, using initial result");
+                        convert_js_result_to_json(context, initial_result)
+                    }
+                } else {
+                    debug!("Wrapped result is not callable");
+                    convert_js_result_to_json(context, wrapped_result)
+                }
+            }
+            Err(e) => {
+                debug!("Failed to parse wrapped function expression: {}", e);
+                Err(JsExecutionError::ExecutionError(format!(
+                    "Failed to parse function expression: {}",
+                    e
+                )))
+            }
+        }
+    } else {
+        debug!("No JavaScript code available for function expression handling");
+        Err(JsExecutionError::ExecutionError(
+            "Script returned undefined and no code available for re-parsing".to_string(),
+        ))
+    }
+}
+
+/// Handle anonymous function execution when no main function is found (legacy sync version)
 fn handle_anonymous_function(
     context: &mut BoaContext,
     script_result: boa_engine::JsValue,

@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Whether the HTTP request was successful"
+    },
+    "status": {
+      "type": "number",
+      "description": "HTTP status code"
+    },
+    "url": {
+      "type": "string",
+      "description": "The URL that was fetched"
+    },
+    "data": {
+      "type": "object",
+      "description": "Response data and metadata",
+      "properties": {
+        "response_body": {
+          "description": "The actual response from the HTTP endpoint"
+        },
+        "request_info": {
+          "type": "object",
+          "description": "Information about the request that was made"
+        },
+        "fetch_metadata": {
+          "type": "object",
+          "description": "Metadata about the fetch operation"
+        }
+      }
+    }
+  },
+  "required": ["success", "status", "url", "data"]
+}
