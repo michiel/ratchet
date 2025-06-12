@@ -11,6 +11,8 @@ description = "Storage abstraction and repository pattern for Ratchet"
 [dependencies]
 ratchet-core = { path = "../ratchet-core" }
 ratchet-caching = { path = "../ratchet-caching" }
+ratchet-interfaces = { path = "../ratchet-interfaces" }
+ratchet-api-types = { path = "../ratchet-api-types" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,13 +34,19 @@ sea-orm-migration = { version = "1.1", optional = true }
 sea-query = { version = "0.32", optional = true }
 sqlx = { workspace = true, optional = true }
 
+# Testing dependencies (optional)
+tempfile = { version = "3.8", optional = true }
+mockall = { version = "0.12", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+clap = { version = "4.4", optional = true, features = ["derive"] }
+
 [features]
 default = ["database"]
 database = ["sea-orm", "sea-orm-migration", "sea-query", "sqlx"]
 seaorm = ["database"]  # Feature flag for SeaORM integration
 postgres = ["database"]
 mysql = ["database"]
+testing = ["seaorm", "tempfile", "mockall", "serde_yaml", "clap"]  # Feature flag for testing utilities
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
-tempfile = "3.8"

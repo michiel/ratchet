@@ -4,3 +4,5 @@
 - After all changes, ensure that the code compiles without errors and that all tests pass
 - There are cargo tools available for analysis, testing, coverage reporting, dependency review, etc. use them as required and request installation of tools if they are not available
 - The target platforms are Linux, macOS, and Windows. Ensure that the code is cross-platform compatible
+- When writing documentation, follow the guidelines in docs/writing-guide.md
+

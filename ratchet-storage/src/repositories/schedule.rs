@@ -11,6 +11,7 @@ use crate::{
     StorageResult,
 };
 
+#[derive(Clone)]
 pub struct ScheduleRepository {
     base: BaseRepositoryImpl<Schedule>,
 }

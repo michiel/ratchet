@@ -30,7 +30,7 @@ uuid.workspace = true
 axum.workspace = true
 
 # Local dependencies
-ratchet_lib = { path = "../ratchet-lib", optional = true }
+# ratchet_lib = { path = "../ratchet-lib", optional = true } # REMOVED - migrated to modular crates
 ratchet-execution = { path = "../ratchet-execution", optional = true }
 ratchet-mcp = { path = "../ratchet-mcp", optional = true }
 ratchet-config = { path = "../ratchet-config" }
@@ -42,8 +42,10 @@ ratchet-plugins = { path = "../ratchet-plugins", optional = true }
 ratchet-runtime = { path = "../ratchet-runtime", optional = true }
 ratchet-js = { path = "../ratchet-js", optional = true }
 ratchet-http = { path = "../ratchet-http", optional = true }
+ratchet-output = { path = "../ratchet-output", optional = true }
 ratchet-server = { path = "../ratchet-server", optional = true }
 ratchet-registry = { path = "../ratchet-registry", optional = true }
+ratchet-cli-tools = { path = "../ratchet-cli-tools", features = ["javascript", "recording", "http"] }
 
 # Binary-specific dependencies (commented out for now due to network issues)
 # dialoguer = "0.11"
@@ -57,15 +59,15 @@ default = ["server", "database", "mcp-server", "plugins", "javascript", "output"
 core = []
 
 # Server components
-server = ["rest-api", "graphql-api", "dep:ratchet_lib", "dep:ratchet-execution", "dep:ratchet-server", "dep:ratchet-registry"]
-rest-api = ["ratchet_lib/server"]
-graphql-api = ["ratchet_lib/server"]
+server = ["rest-api", "graphql-api", "dep:ratchet-execution", "dep:ratchet-server", "dep:ratchet-registry"]
+rest-api = []
+graphql-api = []
 
 # Database backends
 database = ["sqlite", "dep:ratchet-storage"]
-sqlite = ["ratchet-storage/database", "ratchet-storage/seaorm", "ratchet_lib/database"]
-postgres = ["ratchet-storage/postgres", "ratchet_lib/database"]
-mysql = ["ratchet-storage/mysql", "ratchet_lib/database"]
+sqlite = ["ratchet-storage/database", "ratchet-storage/seaorm"]
+postgres = ["ratchet-storage/postgres"]
+mysql = ["ratchet-storage/mysql"]
 
 # MCP Server implementation
 mcp-server = ["mcp-stdio", "mcp-sse", "dep:ratchet-mcp", "dep:ratchet-execution"]
@@ -78,10 +80,10 @@ static-plugins = []
 dynamic-plugins = ["ratchet-plugins/dynamic"]
 
 # JavaScript execution
-javascript = ["ratchet_lib/javascript", "dep:ratchet-js"]
+javascript = ["dep:ratchet-js"]
 
 # Output destinations
-output = ["ratchet_lib/output"]
+output = ["dep:ratchet-output"]
 
 # Caching backends
 caching = ["dep:ratchet-caching"]

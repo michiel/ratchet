@@ -16,7 +16,7 @@ pub struct SafeDatabaseError {
     pub debug_info: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum ErrorCode {
     #[serde(rename = "NOT_FOUND")]
     NotFound,

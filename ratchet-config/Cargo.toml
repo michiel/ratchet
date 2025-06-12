@@ -25,6 +25,14 @@ envy = "0.4"
 # For default macro
 derivative = "2.2"
 
+# For CLI (optional)
+clap = { version = "4.4", features = ["derive"], optional = true }
+
+[features]
+default = []
+cli = ["clap"]
+
 [dev-dependencies]
 tokio = { version = "1.42", features = ["full"] }
 temp-env = "0.3"
+tempfile = "3.8"

@@ -1,10 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use ratchet_config::{ConfigLoader, RatchetConfig};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
-#[cfg(feature = "server")]
-use ratchet_lib::config::RatchetConfig as LibRatchetConfig;
+// LibRatchetConfig removed - using RatchetConfig directly
 
 #[cfg(feature = "server")]
 use ratchet_execution::{
@@ -13,13 +12,10 @@ use ratchet_execution::{
     ExecutionBridge,
 };
 
-use ratchet_lib::{js_executor::execute_task, recording, task::Task};
+// Use modern alternatives - Task loading handled by ratchet-js and ratchet-cli-tools
 
 #[cfg(feature = "http")]
-use ratchet_http::HttpConfig;
-
-// Keep using ratchet_lib's HttpManager for compatibility with execute_task
-use ratchet_lib::http::HttpManager;
+use ratchet_http::HttpManager;
 
 #[cfg(feature = "database")]
 use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
@@ -45,146 +41,11 @@ mod cli;
 use cli::{Cli, Commands, ConfigCommands, GenerateCommands, RepoCommands};
 
 /// Convert ratchet-storage RepositoryFactory to ratchet_lib RepositoryFactory
-#[cfg(all(feature = "server", feature = "database"))]
-async fn convert_to_legacy_repository_factory(
-    storage_config: ratchet_storage::seaorm::config::DatabaseConfig,
-) -> Result<ratchet_lib::database::repositories::RepositoryFactory> {
-    // Convert storage config to legacy config
-    let legacy_config = ratchet_lib::config::DatabaseConfig {
-        url: storage_config.url.clone(),
-        max_connections: storage_config.max_connections,
-        connection_timeout: storage_config.connection_timeout,
-    };
+// Legacy repository factory function removed in 0.5.0 - use ratchet-storage directly
 
-    debug!("Creating legacy repository factory with database URL: {}", legacy_config.url);
+// Legacy config conversion function removed in 0.5.0 - use RatchetConfig directly
 
-    // Create legacy database connection using the same configuration
-    let legacy_db = ratchet_lib::database::DatabaseConnection::new(legacy_config)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create legacy database connection: {}", e))?;
-
-    // Create legacy repository factory
-    let legacy_repos = ratchet_lib::database::repositories::RepositoryFactory::new(legacy_db);
-
-    Ok(legacy_repos)
-}
-
-/// Convert config format to legacy format for backward compatibility when server features are enabled
-#[cfg(feature = "server")]
-fn convert_to_legacy_config(new_config: RatchetConfig) -> Result<LibRatchetConfig> {
-    use ratchet_lib::config::*;
-
-    // Convert database config from server.database
-    let database_config = if let Some(server_config) = &new_config.server {
-        DatabaseConfig {
-            url: server_config.database.url.clone(),
-            max_connections: server_config.database.max_connections,
-            connection_timeout: server_config.database.connection_timeout,
-        }
-    } else {
-        DatabaseConfig {
-            url: "sqlite::memory:".to_string(),
-            max_connections: 10,
-            connection_timeout: std::time::Duration::from_secs(30),
-        }
-    };
-
-    // Convert server config
-    let server_config = ServerConfig {
-        bind_address: new_config
-            .server
-            .as_ref()
-            .map(|s| s.bind_address.clone())
-            .unwrap_or_else(|| "0.0.0.0".to_string()),
-        port: new_config.server.as_ref().map(|s| s.port).unwrap_or(8080),
-        database: database_config,
-    };
-
-    // Convert execution config
-    let execution_config = ExecutionConfig {
-        max_execution_duration: new_config.execution.max_execution_duration.as_secs(),
-        validate_schemas: new_config.execution.validate_schemas,
-        max_concurrent_tasks: new_config.execution.max_concurrent_tasks,
-        timeout_grace_period: new_config.execution.timeout_grace_period.as_secs(),
-    };
-
-    // Convert HTTP config
-    #[cfg(feature = "http")]
-    let http_config = HttpConfig::from(new_config.http.clone());
-    
-    #[cfg(not(feature = "http"))]
-    let http_config = ratchet_lib::config::HttpConfig {
-        timeout: new_config.http.timeout,
-        user_agent: new_config.http.user_agent,
-        verify_ssl: new_config.http.verify_ssl,
-        max_redirects: new_config.http.max_redirects,
-    };
-
-    // Convert logging config - use lib's format
-    let logging_config = ratchet_lib::logging::LoggingConfig::default();
-
-    // Convert MCP config
-    let mcp_config = new_config.mcp.as_ref().map(|mcp| McpServerConfig {
-        enabled: mcp.enabled,
-        transport: mcp.transport.clone(),
-        host: mcp.host.clone(),
-        port: mcp.port,
-    });
-
-    Ok(LibRatchetConfig {
-        server: Some(server_config),
-        execution: execution_config,
-        http: http_config,
-        logging: logging_config,
-        mcp: mcp_config,
-        cache: ratchet_lib::config::CacheConfig::default(),
-        output: ratchet_lib::config::OutputConfig::default(),
-        registry: None,
-    })
-}
-
-/// Setup file-only logging for MCP serve command (legacy function)
-#[cfg(feature = "mcp-server")]
-#[allow(dead_code)]
-fn setup_mcp_file_logging(config: &RatchetConfig) -> Result<()> {
-    use ratchet_config::domains::logging::{LoggingConfig, LogTarget, LogLevel};
-    
-    // Default to ratchet.log if no file logging configured
-    let log_file_path = config.logging
-        .targets.iter().find_map(|target| {
-            if let LogTarget::File { path, .. } = target {
-                Some(path.clone())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "ratchet.log".to_string());
-
-    // Create file-only logging config
-    let file_logging = LoggingConfig {
-        level: LogLevel::Info,
-        format: ratchet_config::domains::logging::LogFormat::Text,
-        targets: vec![LogTarget::File {
-            path: log_file_path,
-            level: Some(LogLevel::Info),
-            max_size_bytes: 10 * 1024 * 1024, // 10MB
-            max_files: 5,
-        }],
-        include_location: false,
-        structured: true,
-    };
-    
-    // Convert to legacy config and initialize
-    let legacy_config = convert_to_legacy_config(RatchetConfig {
-        logging: file_logging,
-        ..config.clone()
-    })?;
-    
-    // Initialize the logging system
-    init_logging_with_config(&legacy_config, Some(&"info".to_string()), None)?;
-        
-    Ok(())
-}
+// Legacy MCP file logging function removed in 0.5.0 - use ratchet-logging directly
 
 /// Load configuration from file or use defaults
 fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
@@ -295,8 +156,7 @@ async fn serve_command(config_path: Option<&PathBuf>) -> Result<()> {
         }
     }
     
-    let lib_config = convert_to_legacy_config(config.clone())?;
-    serve_command_with_config(lib_config, config).await
+    serve_command_with_config(config).await
 }
 
 #[cfg(not(feature = "server"))]
@@ -307,19 +167,9 @@ async fn serve_command(_config_path: Option<&PathBuf>) -> Result<()> {
 }
 
 #[cfg(feature = "server")]
-async fn serve_command_with_config(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
-    // Prioritize new ratchet-server architecture 
-    info!("Starting with new ratchet-server architecture");
-    match serve_with_ratchet_server(new_config.clone()).await {
-        Ok(()) => {
-            info!("Ratchet server completed successfully");
-            Ok(())
-        }
-        Err(e) => {
-            warn!("New server implementation failed: {}, falling back to legacy", e);
-            serve_with_legacy_server(config, new_config).await
-        }
-    }
+async fn serve_command_with_config(config: RatchetConfig) -> Result<()> {
+    info!("Starting Ratchet server with modern architecture");
+    serve_with_ratchet_server(config).await
 }
 
 #[cfg(feature = "server")]
@@ -367,268 +217,7 @@ async fn serve_with_ratchet_server(config: RatchetConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "server")]
-async fn serve_with_legacy_server(config: LibRatchetConfig, new_config: RatchetConfig) -> Result<()> {
-    use ratchet_lib::{
-        execution::JobQueueManager,
-        server::create_app,
-    };
-    use std::sync::Arc;
-    use tokio::signal;
-
-    info!("🔧 Starting Ratchet server");
-
-    // Get server configuration (guaranteed to exist from load_config)
-    let server_config = config.server.as_ref().unwrap();
-
-    info!("📋 Configuration Summary:");
-    info!("   • Server Address: {}:{}", server_config.bind_address, server_config.port);
-    info!("   • Database URL: {}", server_config.database.url);
-    info!("   • Max DB Connections: {}", server_config.database.max_connections);
-    
-    // Log MCP configuration
-    if let Some(mcp_config) = &config.mcp {
-        if mcp_config.enabled {
-            info!("   • MCP Service: Enabled ({})", mcp_config.transport);
-        } else {
-            info!("   • MCP Service: Disabled");
-        }
-    } else {
-        info!("   • MCP Service: Not configured");
-    }
-
-    // Initialize database
-    info!("💾 Initializing database connection...");
-
-    // Convert lib database config to storage database config
-    let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
-        url: server_config.database.url.clone(),
-        max_connections: server_config.database.max_connections,
-        connection_timeout: server_config.database.connection_timeout,
-    };
-    
-    debug!("Legacy server using database URL: {}", server_config.database.url);
-
-    let database = DatabaseConnection::new(storage_db_config.clone())
-        .await
-        .context("Failed to connect to database and run migrations")?;
-    info!("✅ Database initialized successfully");
-
-    // Initialize repositories using legacy factory for backward compatibility
-    let storage_config = storage_db_config;
-    let legacy_repositories = convert_to_legacy_repository_factory(storage_config.clone()).await?;
-    
-    // Create storage repository factory for MCP service
-    let storage_repositories = RepositoryFactory::new(database.clone());
-
-    // Initialize and synchronize repositories with the database if any are configured
-    sync_repositories_to_database(&new_config).await?;
-
-    // Initialize job queue
-    let job_queue = Arc::new(JobQueueManager::with_default_config(
-        legacy_repositories.clone(),
-    ));
-
-    // Initialize process task executor and bridge
-    info!("⚙️  Initializing task executor...");
-    
-    // Create executor config from the legacy config
-    let executor_config = ProcessExecutorConfig {
-        worker_count: config.execution.max_concurrent_tasks,
-        task_timeout_seconds: config.execution.max_execution_duration,
-        restart_on_crash: true,
-        max_restart_attempts: 3,
-    };
-    
-    // Create both ProcessTaskExecutor (for backward compatibility) and ExecutionBridge (for new features)
-    let process_executor = Arc::new(ProcessTaskExecutor::new(executor_config.clone()));
-    let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
-
-    // Start worker processes on the process executor
-    info!("👷 Starting worker processes...");
-    process_executor
-        .start()
-        .await
-        .context("Failed to start worker processes")?;
-    info!("✅ Worker processes started successfully");
-
-    // Note: MCP service is now integrated as routes rather than a separate service
-
-    // Check if MCP is enabled for logging
-    let mcp_enabled = new_config.mcp.as_ref().map_or(false, |mcp| mcp.enabled);
-    
-    // Create MCP routes if MCP service is enabled
-    let mcp_routes = if let Some(mcp_config) = &new_config.mcp {
-        if mcp_config.enabled {
-            #[cfg(feature = "mcp-server")]
-            {
-                use ratchet_mcp::server::adapter::RatchetMcpAdapter;
-                use ratchet_mcp::server::McpServer;
-                use ratchet_mcp::server::tools::RatchetToolRegistry;
-                use ratchet_mcp::security::{McpAuth, McpAuthManager, AuditLogger};
-                use ratchet_mcp::server::config::McpServerConfig;
-                
-                info!("🤖 Initializing MCP integration for unified server...");
-                
-                // Create MCP adapter using the new ExecutionBridge
-                let mcp_task_repo = Arc::new(storage_repositories.task_repository());
-                let mcp_execution_repo = Arc::new(storage_repositories.execution_repository());
-                
-                let adapter = RatchetMcpAdapter::with_bridge_executor(
-                    execution_bridge.clone(), // Use the new ExecutionBridge
-                    mcp_task_repo,
-                    mcp_execution_repo,
-                );
-                
-                // Create tool registry with the adapter
-                let mut tool_registry = RatchetToolRegistry::new();
-                tool_registry = tool_registry.with_task_executor(Arc::new(adapter));
-                
-                // Create security components
-                let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
-                let audit_logger = Arc::new(AuditLogger::new(false));
-                
-                // Create MCP server configuration for SSE
-                let mcp_server_config = McpServerConfig::from_ratchet_config(mcp_config);
-                
-                // Create MCP server
-                let mcp_server = McpServer::new(
-                    mcp_server_config,
-                    Arc::new(tool_registry),
-                    auth_manager,
-                    audit_logger,
-                );
-                
-                // Create SSE routes for the unified server
-                let routes = mcp_server.create_sse_routes();
-                info!("✅ MCP SSE routes created successfully for unified server");
-                Some(routes)
-            }
-            
-            #[cfg(not(feature = "mcp-server"))]
-            {
-                warn!("⚠️  MCP service enabled in config but mcp-server feature not available at compile time");
-                None
-            }
-        } else {
-            info!("   • MCP Service: Disabled (not configured)");
-            None
-        }
-    } else {
-        info!("   • MCP Service: Disabled (no configuration)");
-        None
-    };
-
-    // Check if MCP routes were created for logging before moving the value
-    let has_mcp_routes = mcp_routes.is_some();
-
-    // Create the application
-    // TODO: Update create_app to use new ProcessTaskExecutor
-    // For now, create a placeholder legacy executor for compatibility
-    let placeholder_executor = {
-        let placeholder_config = ratchet_lib::config::RatchetConfig::default();
-        Arc::new(ratchet_lib::execution::ProcessTaskExecutor::new(
-            legacy_repositories.clone(), 
-            placeholder_config
-        ).await.expect("Failed to create placeholder executor"))
-    };
-    
-    let app = create_app(
-        legacy_repositories,
-        job_queue,
-        placeholder_executor,
-        None,
-        None,
-        mcp_routes,
-    );
-
-    // Bind to address
-    let addr_str = format!("{}:{}", server_config.bind_address, server_config.port);
-    let addr: std::net::SocketAddr = addr_str
-        .parse()
-        .context(format!("Invalid bind address: {}", addr_str))?;
-    
-    // Log server startup information
-    info!("🚀 Ratchet server starting on: http://{}", addr);
-    info!("📋 Active services and routes:");
-    info!("   🏠 Root:              http://{}/", addr);
-    info!("   ❤️  Health Check:      http://{}/health", addr);
-    info!("   📊 Version Info:       http://{}/version", addr);
-    info!("   📚 API Documentation: http://{}/api-docs", addr);
-    info!("   📖 Static Docs:       http://{}/docs/", addr);
-    
-    // Always enabled services (based on default features)
-    info!("   🔗 REST API:          http://{}/api/v1/", addr);
-    info!("      • Tasks:           http://{}/api/v1/tasks", addr);
-    info!("      • Executions:      http://{}/api/v1/executions", addr);
-    info!("      • Jobs:            http://{}/api/v1/jobs", addr);
-    info!("      • Schedules:       http://{}/api/v1/schedules", addr);
-    info!("      • Workers:         http://{}/api/v1/workers", addr);
-    
-    info!("   🔍 GraphQL API:       http://{}/graphql", addr);
-    info!("   🎮 GraphQL Playground: http://{}/playground", addr);
-    
-    // Log MCP routes if enabled
-    if mcp_enabled && has_mcp_routes {
-        info!("   🤖 MCP SSE Service:   ✅ Enabled - http://{}/mcp/", addr);
-        info!("      • Direct SSE:      http://{}/mcp/ (for simple clients)", addr);
-        info!("      • Simple Messages: http://{}/mcp/message", addr);
-        info!("      • Advanced SSE:    http://{}/mcp/sse/{{session_id}}", addr);
-        info!("      • Health Check:    http://{}/mcp/health", addr);
-    } else if mcp_enabled {
-        info!("   🤖 MCP SSE Service:   ⚠️  Enabled in config but routes not created");
-    } else {
-        info!("   🤖 MCP SSE Service:   ❌ Disabled");
-    }
-
-    // Graceful shutdown signal with better responsiveness
-    let shutdown_signal = async {
-        signal::ctrl_c()
-            .await
-            .expect("Failed to install Ctrl+C handler");
-        
-        info!("🛑 Shutdown signal received, initiating graceful shutdown...");
-    };
-
-    // Start the server with graceful shutdown (axum 0.6 style)
-    let server = axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal);
-
-    info!("✅ Server ready and accepting connections");
-
-    // Run server and handle shutdown
-    match server.await {
-        Ok(_) => {
-            info!("Server stopped gracefully");
-        }
-        Err(e) => {
-            error!("Server error: {}", e);
-            return Err(e.into());
-        }
-    }
-
-    // Note: MCP service is now integrated as routes and will stop with the main server
-
-    // Stop worker processes with timeout
-    info!("Stopping worker processes...");
-    let shutdown_timeout = tokio::time::Duration::from_secs(10);
-    
-    match tokio::time::timeout(shutdown_timeout, process_executor.stop()).await {
-        Ok(Ok(())) => {
-            info!("✅ Worker processes stopped successfully");
-        }
-        Ok(Err(e)) => {
-            warn!("⚠️  Error stopping worker processes: {}", e);
-        }
-        Err(_) => {
-            warn!("⚠️  Worker shutdown timed out after {}s, forcing termination", shutdown_timeout.as_secs());
-        }
-    }
-
-    info!("Ratchet server shutdown complete");
-    Ok(())
-}
+// Legacy server function removed in 0.5.0 - use ratchet-server crate instead
 
 /// Synchronize configured repositories with the internal task registry and database
 async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
@@ -637,6 +226,7 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
         config::{RegistryConfig, TaskSource},
         sync::DatabaseSync,
     };
+    use ratchet_storage::repositories::Repository;
     use std::sync::Arc;
 
     // Check if repositories are configured
@@ -769,9 +359,10 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
         .context("Failed to create connection manager for repository synchronization")?;
 
     let repository_factory = ratchet_storage::RepositoryFactory::new(connection_manager);
-    let task_repo = repository_factory.task_repository();
+    let task_repo_for_sync = repository_factory.task_repository();
+    let task_repo_for_health = repository_factory.task_repository();
     
-    let sync_service = Arc::new(DatabaseSync::new(Arc::new(task_repo)));
+    let sync_service = Arc::new(DatabaseSync::new(Arc::new(task_repo_for_sync)));
 
     // Create registry service with sync capability
     let registry_service = DefaultRegistryService::new(registry_service_config)
@@ -799,7 +390,7 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
 
     // Add a simple verification: try to get repository health status
     info!("🔍 Verifying repository synchronization...");
-    match task_repo.health_check().await {
+    match task_repo_for_health.health_check().await {
         Ok(healthy) => {
             info!("   📊 Repository health check: {}", healthy);
         }
@@ -869,16 +460,13 @@ async fn mcp_serve_command_with_config(
     // Log to file only - stdio must remain clean for JSON-RPC
     info!("🤖 Starting Ratchet MCP server in stdio mode");
     
-    // Convert to lib config (reuse the same conversion logic as serve)
-    let lib_config = convert_to_legacy_config(ratchet_config.clone())?;
-
-    // Initialize the exact same infrastructure as serve command
-    let server_config = lib_config.server.as_ref().unwrap();
+    // Use modern config directly
+    let server_config = ratchet_config.server.as_ref().unwrap();
     
     info!("📋 MCP Configuration:");
     info!("   • Transport: stdio (JSON-RPC over stdin/stdout)");
     info!("   • Database: {}", server_config.database.url);
-    info!("   • Max Workers: {}", lib_config.execution.max_concurrent_tasks);
+    info!("   • Max Workers: {}", ratchet_config.execution.max_concurrent_tasks);
     info!("   • Logging: file-only (ratchet.log)");
 
     // Initialize database (same as serve)
@@ -901,14 +489,12 @@ async fn mcp_serve_command_with_config(
     info!("✅ Database initialized successfully");
 
     // Initialize repositories and executor (same as serve)
-    let storage_config = storage_db_config;
-    let _legacy_repositories = convert_to_legacy_repository_factory(storage_config.clone()).await?;
     let storage_repositories = RepositoryFactory::new(database.clone());
 
     info!("⚙️  Initializing task executor...");
     let executor_config = ProcessExecutorConfig {
-        worker_count: lib_config.execution.max_concurrent_tasks,
-        task_timeout_seconds: lib_config.execution.max_execution_duration,
+        worker_count: ratchet_config.execution.max_concurrent_tasks,
+        task_timeout_seconds: ratchet_config.execution.max_execution_duration.as_secs(),
         restart_on_crash: true,
         max_restart_attempts: 3,
     };
@@ -1005,7 +591,7 @@ async fn mcp_serve_command_with_config(
 /// Initialize logging from configuration with fallback to simple tracing
 #[cfg(feature = "server")]
 fn init_logging_with_config(
-    _config: &LibRatchetConfig,
+    _config: &RatchetConfig,
     log_level: Option<&String>,
     record_dir: Option<&PathBuf>,
 ) -> Result<()> {
@@ -1023,7 +609,7 @@ fn init_logging_with_config(
         fs::create_dir_all(&session_dir).context("Failed to create recording directory")?;
 
         // Store the session directory for use by other components
-        ratchet_lib::recording::set_recording_dir(session_dir.clone())?;
+        ratchet_cli_tools::set_recording_dir(session_dir.clone())?;
 
         // Use simple tracing with file output for recording
         init_simple_tracing_with_file(log_level, &session_dir.join("ratchet.log"))?;
@@ -1246,28 +832,18 @@ async fn run_task_modular(from_fs: &str, input: &JsonValue) -> Result<JsonValue>
     Ok(result)
 }
 
-/// Run a task from a file system path using legacy executor
+/// Run a task from a file system path using modern CLI tools
 #[cfg(feature = "javascript")]
 async fn run_task(from_fs: &str, input: &JsonValue) -> Result<JsonValue> {
-    info!("Loading task from: {} (using legacy executor)", from_fs);
+    info!("Loading task from: {} (using modern CLI tools)", from_fs);
 
-    // Load the task
-    let mut task =
-        Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
-
-    // Validate the task
-    task.validate().context("Task validation failed")?;
-
-    // Execute the task
-    info!("Executing task: {}", task.metadata.label);
-
-    // Create HTTP manager for the task execution
-    let http_manager = HttpManager::new();
-
-    // Execute the task
-    let result = execute_task(&mut task, input.clone(), &http_manager)
-        .await
-        .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
+    // Execute the task using modern CLI tools with automatic validation
+    let result = ratchet_cli_tools::execute_task_with_lib_compatibility(
+        from_fs,
+        ratchet_cli_tools::TaskInput::new(input.clone()) // Use modern execution by default
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
 
     Ok(result)
 }
@@ -1411,15 +987,11 @@ async fn run_single_test_modular(task: &FileSystemTask, test_file: &std::path::P
 fn validate_task(from_fs: &str) -> Result<()> {
     info!("Validating task from: {}", from_fs);
 
-    // Load the task
-    let mut task =
-        Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
-
-    // Validate the task
-    match task.validate() {
-        Ok(_) => {
+    // Use modular validation through ratchet-js
+    match ratchet_js::FileSystemTask::from_fs(from_fs) {
+        Ok(_task) => {
             println!("✅ Task validation passed");
-            info!("Task '{}' is valid", task.metadata.label);
+            info!("Task is valid");
             Ok(())
         }
         Err(e) => {
@@ -1436,12 +1008,9 @@ fn validate_task(from_fs: &str) -> Result<()> {
 async fn test_task(from_fs: &str) -> Result<()> {
     info!("Testing task from: {}", from_fs);
 
-    // Load the task
-    let mut task =
-        Task::from_fs(from_fs).map_err(|e| anyhow::anyhow!("Failed to load task: {}", e))?;
-
-    // Validate the task first
-    task.validate().context("Task validation failed")?;
+    // Validate the task first using modern components
+    ratchet_js::FileSystemTask::from_fs(from_fs)
+        .map_err(|e| anyhow::anyhow!("Task validation failed: {}", e))?;
 
     // Get test directory
     let task_path = std::path::Path::new(from_fs);
@@ -1449,7 +1018,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
 
     if !test_dir.exists() {
         println!("No tests directory found at: {}", test_dir.display());
-        info!("No tests to run for task '{}'", task.metadata.label);
+        info!("No tests to run for task");
         return Ok(());
     }
 
@@ -1469,7 +1038,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
 
     if test_files.is_empty() {
         println!("No test files found in: {}", test_dir.display());
-        info!("No test files found for task '{}'", task.metadata.label);
+        info!("No test files found for task");
         return Ok(());
     }
 
@@ -1480,7 +1049,7 @@ async fn test_task(from_fs: &str) -> Result<()> {
         let test_name = test_file.file_stem().unwrap().to_str().unwrap();
         print!("Running test '{}' ... ", test_name);
 
-        match run_single_test(&mut task.clone(), &test_file).await {
+        match run_single_test_simple(from_fs, &test_file).await {
             Ok(_) => {
                 println!("✅ PASSED");
                 passed += 1;
@@ -1507,7 +1076,8 @@ async fn test_task(from_fs: &str) -> Result<()> {
 /// Legacy run single test function (deprecated - use run_single_test_modular instead)
 #[cfg(feature = "javascript")]
 #[allow(dead_code)]
-async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result<()> {
+async fn run_single_test(task_path: &str, test_file: &std::path::Path) -> Result<()> {
+    let task_dir = std::path::Path::new(task_path).parent().unwrap();
     use serde_json::Value;
 
     // Load test data
@@ -1523,10 +1093,13 @@ async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result
     // Create HTTP manager for the task execution
     let http_manager = HttpManager::new();
 
-    // Execute the task
-    let actual = execute_task(task, input, &http_manager)
-        .await
-        .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
+    // Execute the task using CLI tools
+    let actual = ratchet_cli_tools::execute_task_with_lib_compatibility(
+        &task_dir.to_string_lossy(),
+        ratchet_cli_tools::TaskInput::legacy(input.clone())
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
 
     // Compare results
     if &actual == expected {
@@ -1536,6 +1109,41 @@ async fn run_single_test(task: &mut Task, test_file: &std::path::Path) -> Result
             "Output mismatch.\nExpected: {}\nActual: {}",
             to_string_pretty(expected)?,
             to_string_pretty(&actual)?
+        ))
+    }
+}
+
+/// Run a single test case using CLI tools (simple version)
+#[cfg(feature = "javascript")]
+async fn run_single_test_simple(task_path: &str, test_file: &std::path::Path) -> Result<()> {
+    use serde_json::Value;
+
+    // Load test data
+    let test_content = fs::read_to_string(test_file).context("Failed to read test file")?;
+    let test_data: Value = from_str(&test_content).context("Failed to parse test JSON")?;
+
+    // Extract input and expected output
+    let input = test_data.get("input").unwrap_or(&json!({})).clone();
+    let expected = test_data
+        .get("expected_output")
+        .ok_or_else(|| anyhow::anyhow!("Test file missing 'expected_output' field"))?;
+
+    // Execute the task using CLI tools
+    let actual = ratchet_cli_tools::execute_task_with_lib_compatibility(
+        task_path,
+        ratchet_cli_tools::TaskInput::new(input)
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Task execution failed during test: {}", e))?;
+
+    // Compare results
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "Test failed: expected {:?}, got {:?}",
+            expected,
+            actual
         ))
     }
 }
@@ -1568,7 +1176,7 @@ async fn replay_task(from_fs: &str, recording: &Option<PathBuf>) -> Result<JsonV
     info!("Using recorded input: {}", to_string_pretty(&input)?);
 
     // Set up recording replay context
-    recording::set_recording_dir(recording_path.clone())?;
+    ratchet_cli_tools::set_recording_dir(recording_path.clone())?;
 
     // Run the task with recorded input
     let result = run_task(from_fs, &input).await?;
@@ -1668,13 +1276,11 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
 
             let started_at = Utc::now();
 
-            // Load and execute the task
-            let result = match Task::from_fs(&task_path) {
-                Ok(mut task) => {
-                    // Create HTTP manager for the task execution
-                    let http_manager = HttpManager::new();
-
-                    match execute_task(&mut task, input_data, &http_manager).await {
+            // Execute the task using modern CLI tools
+            let result = match ratchet_cli_tools::execute_task_with_lib_compatibility(
+                        &task_path,
+                        ratchet_cli_tools::TaskInput::legacy(input_data)
+                    ).await {
                         Ok(output) => {
                             let completed_at = Utc::now();
                             let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
@@ -1705,23 +1311,6 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
                                 duration_ms,
                             }
                         }
-                    }
-                }
-                Err(e) => {
-                    let completed_at = Utc::now();
-                    let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
-
-                    error!("Worker failed to load task: {}", e);
-                    TaskExecutionResult {
-                        success: false,
-                        output: None,
-                        error_message: Some(format!("Failed to load task: {}", e)),
-                        error_details: None,
-                        started_at,
-                        completed_at,
-                        duration_ms,
-                    }
-                }
             };
 
             CoordinatorMessage::TaskResult {
@@ -1736,30 +1325,20 @@ async fn process_worker_message(msg: WorkerMessage) -> CoordinatorMessage {
         } => {
             info!("Worker validating task: {}", task_path);
 
-            let result = match Task::from_fs(&task_path) {
-                Ok(mut task) => match task.validate() {
-                    Ok(_) => {
-                        info!("Worker task validation passed: {}", task_path);
-                        TaskValidationResult {
-                            valid: true,
-                            error_message: None,
-                            error_details: None,
-                        }
+            let result = match ratchet_js::FileSystemTask::from_fs(&task_path) {
+                Ok(_task) => {
+                    info!("Worker task validation passed: {}", task_path);
+                    TaskValidationResult {
+                        valid: true,
+                        error_message: None,
+                        error_details: None,
                     }
-                    Err(e) => {
-                        error!("Worker task validation failed: {}", e);
-                        TaskValidationResult {
-                            valid: false,
-                            error_message: Some(e.to_string()),
-                            error_details: None,
-                        }
-                    }
-                },
+                }
                 Err(e) => {
-                    error!("Worker failed to load task for validation: {}", e);
+                    error!("Worker task validation failed: {}", e);
                     TaskValidationResult {
                         valid: false,
-                        error_message: Some(format!("Failed to load task: {}", e)),
+                        error_message: Some(e.to_string()),
                         error_details: None,
                     }
                 }
@@ -1808,15 +1387,8 @@ async fn handle_generate_task(
 ) -> Result<()> {
     info!("Generating task template at: {:?}", path);
 
-    // Create directory if it doesn't exist
-    if path.exists() {
-        return Err(anyhow::anyhow!("Directory already exists: {:?}", path));
-    }
-
-    fs::create_dir_all(path).context("Failed to create task directory")?;
-
-    // Generate task files
-    let config = ratchet_lib::generate::TaskGenerationConfig::new(path.clone())
+    // Generate task files (the generator will create the directory and check for conflicts)
+    let config = ratchet_cli_tools::TaskGenerationConfig::new(path.clone())
         .with_label(label.as_deref().unwrap_or("My Task"))
         .with_description(
             description
@@ -1826,7 +1398,7 @@ async fn handle_generate_task(
         .with_version(version.as_deref().unwrap_or("1.0.0"));
 
     let _result =
-        ratchet_lib::generate::generate_task(config).context("Failed to generate task template")?;
+        ratchet_cli_tools::generate_task(config).context("Failed to generate task template")?;
 
     println!("✅ Task template generated at: {:?}", path);
     println!("📝 Edit the files to customize your task:");
@@ -2699,9 +2271,9 @@ async fn main() -> Result<()> {
         // Initialize logging from config
         #[cfg(feature = "server")]
         {
-            let legacy_config = convert_to_legacy_config(config.clone())?;
+            // Use modern config directly
             init_logging_with_config(
-                &legacy_config,
+                &config,
                 cli.log_level.as_ref(),
                 cli.command.as_ref().and_then(|cmd| match cmd {
                     Commands::RunOnce { record, .. } => record.as_ref(),
@@ -2711,11 +2283,8 @@ async fn main() -> Result<()> {
         }
         #[cfg(not(feature = "server"))]
         {
-            init_logging_with_config(
-                &config,
-                cli.log_level.as_ref(),
-                None,
-            )?;
+            // Use simple tracing for non-server builds
+            init_simple_tracing(cli.log_level.as_ref())?;
         }
     }
 
@@ -2819,8 +2388,7 @@ async fn main() -> Result<()> {
                     }
                 }
                 
-                let lib_config = convert_to_legacy_config(server_config.clone())?;
-                serve_command_with_config(lib_config, server_config).await
+                serve_command_with_config(server_config).await
             }
             #[cfg(not(feature = "server"))]
             {

@@ -1,0 +1,41 @@
+[package]
+name = "ratchet-cli-tools"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line tools and utilities for Ratchet task management"
+
+[dependencies]
+# Core utilities
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+
+# Optional dependencies for JS execution and HTTP recording
+# ratchet_lib = { path = "../ratchet-lib", optional = true } # REMOVED - migrated to modular crates
+ratchet-js = { path = "../ratchet-js", optional = true }
+ratchet-http = { path = "../ratchet-http", optional = true }
+
+[dev-dependencies]
+tempfile = "3.8"
+tokio = { workspace = true, features = ["test-util"] }
+
+[features]
+default = []
+
+# JavaScript execution support
+javascript = ["ratchet-js"]
+
+# HTTP recording support
+recording = ["ratchet-http/recording"]
+
+# Legacy ratchet_lib compatibility (removed)
+# legacy = ["ratchet_lib"] # REMOVED - no longer available
+
+# HTTP client functionality
+http = ["ratchet-http"]

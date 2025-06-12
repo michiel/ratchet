@@ -4,9 +4,11 @@ use serde::{Deserialize, Serialize};
 
 /// Error severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ErrorSeverity {
     Info,
     Low,
+    #[default]
     Medium,
     High,
     Critical,
@@ -22,8 +24,3 @@ impl ErrorSeverity {
     }
 }
 
-impl Default for ErrorSeverity {
-    fn default() -> Self {
-        ErrorSeverity::Medium
-    }
-}

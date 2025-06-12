@@ -109,3 +109,28 @@ pub fn validate_port_range(port: u16, field_name: &str, domain: &str) -> ConfigR
 
     Ok(())
 }
+
+/// Validate a complete configuration object
+pub fn validate_config(config: &crate::domains::RatchetConfig) -> ConfigResult<()> {
+    // Validate all domains that implement the Validatable trait
+    config.execution.validate()?;
+    config.http.validate()?;
+    config.logging.validate()?;
+    config.cache.validate()?;
+    config.output.validate()?;
+    
+    // Validate optional domains
+    if let Some(server) = &config.server {
+        server.validate()?;
+    }
+    
+    if let Some(registry) = &config.registry {
+        registry.validate()?;
+    }
+    
+    if let Some(mcp) = &config.mcp {
+        mcp.validate()?;
+    }
+    
+    Ok(())
+}
