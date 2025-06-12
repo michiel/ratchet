@@ -1,6 +1,30 @@
 # Changes
 
-## Recent Development Progress
+## Version 0.4.0 (2025-01-06)
+
+### Major Changes
+- **Complete legacy deprecation**: Removed monolithic `ratchet-lib` crate in favor of modular architecture
+- **Modular architecture**: Migrated to 20+ specialized crates (storage, execution, APIs, MCP, etc.)
+- **Unified API interfaces**: Consistent REST and GraphQL endpoints with unified field naming and error handling
+
+### Features
+- **Enhanced CLI startup logging**: Comprehensive endpoint information organized by service type
+- **MCP transport improvements**: Updated MCP integration with better protocol support
+- **Cross-platform compatibility**: Improved support for Linux, macOS, and Windows
+
+### Developer Experience
+- **Better route visibility**: Server displays detailed HTTP methods and URLs at startup
+- **Cleaner builds**: Removed unused imports and fixed compilation warnings
+- **Testing improvements**: Resolved test compilation issues and dependency conflicts
+
+### Bug Fixes
+- Fixed critical test compilation issues across workspace
+- Resolved build compilation errors in core modules
+- Fixed testing module feature dependency issues in ratchet-storage
+
+---
+
+## Previous Development Progress
 
 Ratchet has undergone significant architectural improvements focused on modernizing the codebase and enhancing developer experience. The project has successfully migrated from the legacy monolithic `ratchet-lib` crate to a modular architecture with specialized crates for different functionalities (storage, execution, APIs, MCP integration). This migration included implementing unified API interfaces across REST and GraphQL endpoints with consistent field naming and error handling, while cleaning up deprecated code paths and reducing build warnings.
 
