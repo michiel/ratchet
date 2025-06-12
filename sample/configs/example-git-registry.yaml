@@ -20,15 +20,15 @@ registry:
       uri: "https://github.com/michiel/ratchet-repo-samples"
       source_type: "git"
       enabled: true
-      polling_interval: "15m"
+      polling_interval: 900
       config:
         git:
           git_ref: "main"
           shallow: true
           depth: 1
           sync_strategy: "fetch"
-          timeout: "120s"
-          cache_ttl: "1h"
+          timeout: 120
+          cache_ttl: 3600
           
     # Private repository with token authentication
     - name: "corporate-tasks"
@@ -36,7 +36,7 @@ registry:
       source_type: "git"
       enabled: true
       auth_name: "github_token"
-      polling_interval: "10m"
+      polling_interval: 600
       config:
         git:
           git_ref: "production"
@@ -46,9 +46,9 @@ registry:
           allowed_refs:
             - "production"
             - "release/*"
-          timeout: "300s"
+          timeout: 300
           max_repo_size: "50MB"
-          cache_ttl: "30m"
+          cache_ttl: 1800
           
     # GitLab repository with SSH key
     - name: "gitlab-tasks"
@@ -56,6 +56,7 @@ registry:
       source_type: "git"
       enabled: true
       auth_name: "gitlab_ssh"
+      polling_interval: 600
       config:
         git:
           git_ref: "stable" 
@@ -68,6 +69,7 @@ registry:
       uri: "file://./sample/js-tasks"
       source_type: "filesystem"
       enabled: true
+      polling_interval: 60
       config:
         filesystem:
           watch_changes: true
@@ -76,12 +78,12 @@ registry:
             - "**/*.json"
 
   # Default polling interval for all sources
-  default_polling_interval: "5m"
+  default_polling_interval: 300
   
   # Cache configuration
   cache:
     enabled: true
-    ttl: "1h"
+    ttl: 3600
     max_entries: 1000
 
   # Authentication configurations
@@ -120,6 +122,9 @@ http:
 logging:
   level: "info"
   format: "json"
+  targets:
+    - type: "console"
+      enabled: true
   
 # Optional MCP server for LLM integration
 mcp_api:
