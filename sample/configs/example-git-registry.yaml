@@ -17,7 +17,7 @@ registry:
   sources:
     # Public GitHub repository (no authentication required)
     - name: "community-tasks"
-      uri: "https://github.com/ratchet-org/community-tasks.git"
+      uri: "https://github.com/michiel/ratchet-repo-samples"
       source_type: "git"
       enabled: true
       polling_interval: "15m"
