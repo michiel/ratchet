@@ -46,7 +46,7 @@ database = ["sea-orm", "sea-orm-migration", "sea-query", "sqlx"]
 seaorm = ["database"]  # Feature flag for SeaORM integration
 postgres = ["database"]
 mysql = ["database"]
-testing = ["database", "tempfile", "mockall", "serde_yaml", "clap"]  # Feature flag for testing utilities
+testing = ["seaorm", "tempfile", "mockall", "serde_yaml", "clap"]  # Feature flag for testing utilities
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

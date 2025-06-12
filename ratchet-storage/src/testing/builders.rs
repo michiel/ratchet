@@ -7,20 +7,24 @@ use chrono::Utc;
 use serde_json::json;
 use uuid::Uuid;
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 use crate::seaorm::entities::{
     tasks::{Model as Task, ActiveModel as TaskActiveModel},
-    executions::{Model as Execution, ActiveModel as ExecutionActiveModel},
-    jobs::{Model as Job, ActiveModel as JobActiveModel},
+    executions::{Model as Execution, ActiveModel as ExecutionActiveModel, ExecutionStatus},
+    jobs::{Model as Job, ActiveModel as JobActiveModel, JobStatus, JobPriority},
     schedules::{Model as Schedule, ActiveModel as ScheduleActiveModel},
     delivery_results::{Model as DeliveryResult, ActiveModel as DeliveryResultActiveModel},
 };
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 use sea_orm::Set;
 
 /// Builder pattern for creating test tasks
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub struct TaskBuilder {
     task: Task,
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl TaskBuilder {
     pub fn new() -> Self {
         Self {
@@ -28,12 +32,16 @@ impl TaskBuilder {
                 id: 1,
                 uuid: Uuid::new_v4(),
                 name: "test-task".to_string(),
+                description: Some("A test task".to_string()),
                 version: "1.0.0".to_string(),
-                source: "test".to_string(),
+                path: "test/path".to_string(),
+                metadata: json!({}),
                 input_schema: json!({"type": "object"}),
                 output_schema: json!({"type": "object"}),
+                enabled: true,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
+                validated_at: Some(Utc::now()),
             }
         }
     }
@@ -58,8 +66,18 @@ impl TaskBuilder {
         self
     }
 
-    pub fn with_source(mut self, source: impl Into<String>) -> Self {
-        self.task.source = source.into();
+    pub fn with_path(mut self, path: impl Into<String>) -> Self {
+        self.task.path = path.into();
+        self
+    }
+
+    pub fn with_description(mut self, description: Option<String>) -> Self {
+        self.task.description = description;
+        self
+    }
+
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.task.enabled = enabled;
         self
     }
 
@@ -83,16 +101,21 @@ impl TaskBuilder {
             id: Set(task.id),
             uuid: Set(task.uuid),
             name: Set(task.name),
+            description: Set(task.description),
             version: Set(task.version),
-            source: Set(task.source),
+            path: Set(task.path),
+            metadata: Set(task.metadata),
             input_schema: Set(task.input_schema),
             output_schema: Set(task.output_schema),
+            enabled: Set(task.enabled),
             created_at: Set(task.created_at),
             updated_at: Set(task.updated_at),
+            validated_at: Set(task.validated_at),
         }
     }
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl Default for TaskBuilder {
     fn default() -> Self {
         Self::new()
@@ -100,10 +123,12 @@ impl Default for TaskBuilder {
 }
 
 /// Builder pattern for creating test executions
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub struct ExecutionBuilder {
     execution: Execution,
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl ExecutionBuilder {
     pub fn new() -> Self {
         Self {
@@ -111,18 +136,17 @@ impl ExecutionBuilder {
                 id: 1,
                 uuid: Uuid::new_v4(),
                 task_id: 1,
-                job_id: None,
-                status: "pending".to_string(),
-                input_data: None,
-                output_data: None,
+                input: json!({}),
+                output: None,
+                status: ExecutionStatus::Pending,
                 error_message: None,
                 error_details: None,
                 queued_at: Utc::now(),
                 started_at: None,
                 completed_at: None,
                 duration_ms: None,
-                created_at: Utc::now(),
-                updated_at: Utc::now(),
+                http_requests: None,
+                recording_path: None,
             }
         }
     }
@@ -142,29 +166,27 @@ impl ExecutionBuilder {
         self
     }
 
-    pub fn with_job_id(mut self, job_id: i32) -> Self {
-        self.execution.job_id = Some(job_id);
-        self
-    }
+    // Note: job_id is not a field in the Execution entity
+    // Jobs reference executions, not the other way around
 
-    pub fn with_status(mut self, status: impl Into<String>) -> Self {
-        self.execution.status = status.into();
+    pub fn with_status(mut self, status: ExecutionStatus) -> Self {
+        self.execution.status = status;
         self
     }
 
     pub fn pending(self) -> Self {
-        self.with_status("pending")
+        self.with_status(ExecutionStatus::Pending)
     }
 
     pub fn running(mut self) -> Self {
-        self.execution.status = "running".to_string();
+        self.execution.status = ExecutionStatus::Running;
         self.execution.started_at = Some(Utc::now());
         self
     }
 
     pub fn completed(mut self) -> Self {
         let now = Utc::now();
-        self.execution.status = "completed".to_string();
+        self.execution.status = ExecutionStatus::Completed;
         self.execution.started_at = Some(now - chrono::Duration::seconds(5));
         self.execution.completed_at = Some(now);
         self.execution.duration_ms = Some(5000);
@@ -173,7 +195,7 @@ impl ExecutionBuilder {
 
     pub fn failed(mut self, error_message: impl Into<String>) -> Self {
         let now = Utc::now();
-        self.execution.status = "failed".to_string();
+        self.execution.status = ExecutionStatus::Failed;
         self.execution.started_at = Some(now - chrono::Duration::seconds(2));
         self.execution.completed_at = Some(now);
         self.execution.duration_ms = Some(2000);
@@ -181,13 +203,13 @@ impl ExecutionBuilder {
         self
     }
 
-    pub fn with_input_data(mut self, data: serde_json::Value) -> Self {
-        self.execution.input_data = Some(data);
+    pub fn with_input(mut self, data: serde_json::Value) -> Self {
+        self.execution.input = data;
         self
     }
 
-    pub fn with_output_data(mut self, data: serde_json::Value) -> Self {
-        self.execution.output_data = Some(data);
+    pub fn with_output(mut self, data: serde_json::Value) -> Self {
+        self.execution.output = Some(data);
         self
     }
 
@@ -206,22 +228,22 @@ impl ExecutionBuilder {
             id: Set(execution.id),
             uuid: Set(execution.uuid),
             task_id: Set(execution.task_id),
-            job_id: Set(execution.job_id),
+            input: Set(execution.input),
+            output: Set(execution.output),
             status: Set(execution.status),
-            input_data: Set(execution.input_data),
-            output_data: Set(execution.output_data),
             error_message: Set(execution.error_message),
             error_details: Set(execution.error_details),
             queued_at: Set(execution.queued_at),
             started_at: Set(execution.started_at),
             completed_at: Set(execution.completed_at),
             duration_ms: Set(execution.duration_ms),
-            created_at: Set(execution.created_at),
-            updated_at: Set(execution.updated_at),
+            http_requests: Set(execution.http_requests),
+            recording_path: Set(execution.recording_path),
         }
     }
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl Default for ExecutionBuilder {
     fn default() -> Self {
         Self::new()
@@ -229,10 +251,12 @@ impl Default for ExecutionBuilder {
 }
 
 /// Builder pattern for creating test jobs
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub struct JobBuilder {
     job: Job,
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl JobBuilder {
     pub fn new() -> Self {
         Self {
@@ -240,13 +264,22 @@ impl JobBuilder {
                 id: 1,
                 uuid: Uuid::new_v4(),
                 task_id: 1,
-                status: "pending".to_string(),
-                priority: 5,
-                input_data: None,
-                description: None,
-                scheduled_for: Utc::now(),
-                created_at: Utc::now(),
-                updated_at: Utc::now(),
+                execution_id: None,
+                schedule_id: None,
+                priority: JobPriority::Normal,
+                status: JobStatus::Queued,
+                input_data: json!({}),
+                retry_count: 0,
+                max_retries: 3,
+                retry_delay_seconds: 60,
+                error_message: None,
+                error_details: None,
+                queued_at: Utc::now(),
+                process_at: None,
+                started_at: None,
+                completed_at: None,
+                metadata: None,
+                output_destinations: None,
             }
         }
     }
@@ -266,45 +299,50 @@ impl JobBuilder {
         self
     }
 
-    pub fn with_status(mut self, status: impl Into<String>) -> Self {
-        self.job.status = status.into();
+    pub fn with_status(mut self, status: JobStatus) -> Self {
+        self.job.status = status;
         self
     }
 
-    pub fn with_priority(mut self, priority: i32) -> Self {
+    pub fn with_priority(mut self, priority: JobPriority) -> Self {
         self.job.priority = priority;
         self
     }
 
     pub fn high_priority(self) -> Self {
-        self.with_priority(1)
+        self.with_priority(JobPriority::High)
     }
 
     pub fn low_priority(self) -> Self {
-        self.with_priority(10)
+        self.with_priority(JobPriority::Low)
     }
 
     pub fn with_input_data(mut self, data: serde_json::Value) -> Self {
-        self.job.input_data = Some(data);
+        self.job.input_data = data;
         self
     }
 
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
-        self.job.description = Some(description.into());
+    pub fn with_execution_id(mut self, execution_id: i32) -> Self {
+        self.job.execution_id = Some(execution_id);
         self
     }
 
-    pub fn scheduled_for(mut self, scheduled_for: chrono::DateTime<Utc>) -> Self {
-        self.job.scheduled_for = scheduled_for;
+    pub fn with_schedule_id(mut self, schedule_id: i32) -> Self {
+        self.job.schedule_id = Some(schedule_id);
+        self
+    }
+
+    pub fn process_at(mut self, process_at: chrono::DateTime<Utc>) -> Self {
+        self.job.process_at = Some(process_at);
         self
     }
 
     pub fn immediate(self) -> Self {
-        self.scheduled_for(Utc::now())
+        self.process_at(Utc::now())
     }
 
     pub fn delayed(self, delay: chrono::Duration) -> Self {
-        self.scheduled_for(Utc::now() + delay)
+        self.process_at(Utc::now() + delay)
     }
 
     pub fn build(self) -> Job {
@@ -317,17 +355,27 @@ impl JobBuilder {
             id: Set(job.id),
             uuid: Set(job.uuid),
             task_id: Set(job.task_id),
-            status: Set(job.status),
+            execution_id: Set(job.execution_id),
+            schedule_id: Set(job.schedule_id),
             priority: Set(job.priority),
+            status: Set(job.status),
             input_data: Set(job.input_data),
-            description: Set(job.description),
-            scheduled_for: Set(job.scheduled_for),
-            created_at: Set(job.created_at),
-            updated_at: Set(job.updated_at),
+            retry_count: Set(job.retry_count),
+            max_retries: Set(job.max_retries),
+            retry_delay_seconds: Set(job.retry_delay_seconds),
+            error_message: Set(job.error_message),
+            error_details: Set(job.error_details),
+            queued_at: Set(job.queued_at),
+            process_at: Set(job.process_at),
+            started_at: Set(job.started_at),
+            completed_at: Set(job.completed_at),
+            metadata: Set(job.metadata),
+            output_destinations: Set(job.output_destinations),
         }
     }
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl Default for JobBuilder {
     fn default() -> Self {
         Self::new()
@@ -335,10 +383,12 @@ impl Default for JobBuilder {
 }
 
 /// Builder pattern for creating test schedules
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub struct ScheduleBuilder {
     schedule: Schedule,
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl ScheduleBuilder {
     pub fn new() -> Self {
         Self {
@@ -347,12 +397,15 @@ impl ScheduleBuilder {
                 uuid: Uuid::new_v4(),
                 task_id: 1,
                 name: "test-schedule".to_string(),
-                description: None,
                 cron_expression: "0 0 * * *".to_string(),
-                input_data: None,
+                input_data: json!({}),
                 enabled: true,
-                next_run: Utc::now() + chrono::Duration::hours(24),
-                last_run: None,
+                next_run_at: Some(Utc::now() + chrono::Duration::hours(24)),
+                last_run_at: None,
+                execution_count: 0,
+                max_executions: None,
+                metadata: None,
+                output_destinations: None,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }
@@ -379,8 +432,13 @@ impl ScheduleBuilder {
         self
     }
 
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
-        self.schedule.description = Some(description.into());
+    pub fn with_execution_count(mut self, count: i32) -> Self {
+        self.schedule.execution_count = count;
+        self
+    }
+
+    pub fn with_max_executions(mut self, max: Option<i32>) -> Self {
+        self.schedule.max_executions = max;
         self
     }
 
@@ -402,7 +460,7 @@ impl ScheduleBuilder {
     }
 
     pub fn with_input_data(mut self, data: serde_json::Value) -> Self {
-        self.schedule.input_data = Some(data);
+        self.schedule.input_data = data;
         self
     }
 
@@ -415,13 +473,13 @@ impl ScheduleBuilder {
         self.enabled(false)
     }
 
-    pub fn with_next_run(mut self, next_run: chrono::DateTime<Utc>) -> Self {
-        self.schedule.next_run = next_run;
+    pub fn with_next_run_at(mut self, next_run: chrono::DateTime<Utc>) -> Self {
+        self.schedule.next_run_at = Some(next_run);
         self
     }
 
-    pub fn with_last_run(mut self, last_run: chrono::DateTime<Utc>) -> Self {
-        self.schedule.last_run = Some(last_run);
+    pub fn with_last_run_at(mut self, last_run: chrono::DateTime<Utc>) -> Self {
+        self.schedule.last_run_at = Some(last_run);
         self
     }
 
@@ -436,18 +494,22 @@ impl ScheduleBuilder {
             uuid: Set(schedule.uuid),
             task_id: Set(schedule.task_id),
             name: Set(schedule.name),
-            description: Set(schedule.description),
             cron_expression: Set(schedule.cron_expression),
             input_data: Set(schedule.input_data),
             enabled: Set(schedule.enabled),
-            next_run: Set(schedule.next_run),
-            last_run: Set(schedule.last_run),
+            next_run_at: Set(schedule.next_run_at),
+            last_run_at: Set(schedule.last_run_at),
+            execution_count: Set(schedule.execution_count),
+            max_executions: Set(schedule.max_executions),
+            metadata: Set(schedule.metadata),
+            output_destinations: Set(schedule.output_destinations),
             created_at: Set(schedule.created_at),
             updated_at: Set(schedule.updated_at),
         }
     }
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl Default for ScheduleBuilder {
     fn default() -> Self {
         Self::new()
@@ -455,10 +517,12 @@ impl Default for ScheduleBuilder {
 }
 
 /// Builder pattern for creating test delivery results
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub struct DeliveryResultBuilder {
     delivery_result: DeliveryResult,
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl DeliveryResultBuilder {
     pub fn new() -> Self {
         Self {
@@ -563,6 +627,7 @@ impl DeliveryResultBuilder {
     }
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl Default for DeliveryResultBuilder {
     fn default() -> Self {
         Self::new()
@@ -570,6 +635,7 @@ impl Default for DeliveryResultBuilder {
 }
 
 /// Convenient factory functions for common test scenarios
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub mod factories {
     use super::*;
 
@@ -577,7 +643,7 @@ pub mod factories {
     pub fn simple_task() -> Task {
         TaskBuilder::new()
             .with_name("simple-task")
-            .with_source("test-source")
+            .with_path("test-path")
             .build()
     }
 
@@ -608,7 +674,7 @@ pub mod factories {
     pub fn completed_execution() -> Execution {
         ExecutionBuilder::new()
             .completed()
-            .with_output_data(json!({"result": "success"}))
+            .with_output(json!({"result": "success"}))
             .build()
     }
 
@@ -624,7 +690,6 @@ pub mod factories {
         JobBuilder::new()
             .high_priority()
             .immediate()
-            .with_description("Urgent job")
             .build()
     }
 
@@ -632,7 +697,6 @@ pub mod factories {
     pub fn scheduled_job() -> Job {
         JobBuilder::new()
             .delayed(chrono::Duration::hours(1))
-            .with_description("Scheduled job")
             .build()
     }
 
@@ -641,7 +705,6 @@ pub mod factories {
         ScheduleBuilder::new()
             .with_name("daily-backup")
             .daily()
-            .with_description("Daily backup schedule")
             .build()
     }
 
@@ -672,7 +735,7 @@ pub mod factories {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "testing", feature = "seaorm"))]
 mod tests {
     use super::*;
 
@@ -681,12 +744,12 @@ mod tests {
         let task = TaskBuilder::new()
             .with_name("test-task")
             .with_version("2.0.0")
-            .with_source("test-source")
+            .with_path("test-path")
             .build();
 
         assert_eq!(task.name, "test-task");
         assert_eq!(task.version, "2.0.0");
-        assert_eq!(task.source, "test-source");
+        assert_eq!(task.path, "test-path");
     }
 
     #[test]
@@ -694,15 +757,15 @@ mod tests {
         let execution = ExecutionBuilder::new()
             .with_task_id(123)
             .completed()
-            .with_output_data(json!({"success": true}))
+            .with_output(json!({"success": true}))
             .build();
 
         assert_eq!(execution.task_id, 123);
-        assert_eq!(execution.status, "completed");
+        assert_eq!(execution.status, ExecutionStatus::Completed);
         assert!(execution.started_at.is_some());
         assert!(execution.completed_at.is_some());
         assert!(execution.duration_ms.is_some());
-        assert_eq!(execution.output_data, Some(json!({"success": true})));
+        assert_eq!(execution.output, Some(json!({"success": true})));
     }
 
     #[test]
@@ -711,12 +774,10 @@ mod tests {
             .with_task_id(456)
             .high_priority()
             .immediate()
-            .with_description("Test job")
             .build();
 
         assert_eq!(job.task_id, 456);
-        assert_eq!(job.priority, 1);
-        assert_eq!(job.description, Some("Test job".to_string()));
+        assert_eq!(job.priority, JobPriority::High);
     }
 
     #[test]
@@ -753,10 +814,10 @@ mod tests {
         assert_eq!(task.name, "simple-task");
 
         let execution = factories::completed_execution();
-        assert_eq!(execution.status, "completed");
+        assert_eq!(execution.status, ExecutionStatus::Completed);
 
         let job = factories::urgent_job();
-        assert_eq!(job.priority, 1);
+        assert_eq!(job.priority, JobPriority::High);
 
         let schedule = factories::daily_schedule();
         assert_eq!(schedule.cron_expression, "0 0 * * *");

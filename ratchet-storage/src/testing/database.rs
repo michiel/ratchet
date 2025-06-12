@@ -3,11 +3,14 @@
 //! This module provides testing infrastructure for isolated database testing
 //! with automatic cleanup and seeding capabilities.
 
-use sea_orm::{Database, DatabaseConnection, DbErr, Statement, ExecResult, ConnectionTrait};
+use sea_orm::{Database, DatabaseConnection, ConnectionTrait};
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 use sea_orm_migration::MigratorTrait;
+#[cfg(feature = "testing")]
 use tempfile::TempDir;
 use std::sync::Arc;
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 use crate::seaorm::{
     connection::DatabaseConnection as RatchetDatabaseConnection,
     config::DatabaseConfig,
@@ -15,12 +18,14 @@ use crate::seaorm::{
 };
 
 /// Test database for isolated testing
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub struct TestDatabase {
     _temp_dir: TempDir,
     pub connection: DatabaseConnection,
     pub ratchet_connection: RatchetDatabaseConnection,
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl TestDatabase {
     /// Create a new test database with an in-memory SQLite database
     pub async fn new() -> Result<Self, TestDatabaseError> {
@@ -255,6 +260,7 @@ impl TestDatabase {
 }
 
 /// Test database errors
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 #[derive(Debug, thiserror::Error)]
 pub enum TestDatabaseError {
     #[error("Failed to create temporary directory: {0}")]
@@ -280,10 +286,12 @@ pub enum TestDatabaseError {
 }
 
 /// Shared test database for reuse across tests
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 pub struct SharedTestDatabase {
     inner: Arc<TestDatabase>,
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl SharedTestDatabase {
     pub async fn new() -> Result<Self, TestDatabaseError> {
         let db = TestDatabase::new_in_memory().await?;
@@ -309,6 +317,7 @@ impl SharedTestDatabase {
     }
 }
 
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 impl Clone for SharedTestDatabase {
     fn clone(&self) -> Self {
         Self {
@@ -318,6 +327,7 @@ impl Clone for SharedTestDatabase {
 }
 
 /// Convenience macro for creating tests with database
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 #[macro_export]
 macro_rules! test_with_db {
     ($test_name:ident, $test_body:expr) => {
@@ -343,6 +353,7 @@ macro_rules! test_with_db {
 }
 
 /// Convenience macro for creating tests with seeded database
+#[cfg(all(feature = "testing", feature = "seaorm"))]
 #[macro_export]
 macro_rules! test_with_seeded_db {
     ($test_name:ident, $seed_fn:expr, $test_body:expr) => {
@@ -353,11 +364,13 @@ macro_rules! test_with_seeded_db {
                 .expect("Failed to create test database");
             
             // Seed the database
-            $seed_fn(&db).await.expect("Failed to seed database");
+            let seed_future = ($seed_fn)(&db);
+            seed_future.await.expect("Failed to seed database");
             
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 tokio::runtime::Handle::current().block_on(async {
-                    $test_body(&db).await
+                    let test_future = ($test_body)(&db);
+                    test_future.await
                 })
             }));
             
@@ -370,7 +383,7 @@ macro_rules! test_with_seeded_db {
     };
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "testing", feature = "seaorm"))]
 mod tests {
     use super::*;
 
@@ -392,23 +405,31 @@ mod tests {
                 id: 1,
                 uuid: uuid::Uuid::new_v4(),
                 name: "task1".to_string(),
+                description: Some("Test task 1".to_string()),
                 version: "1.0.0".to_string(),
-                source: "test".to_string(),
+                path: "test/path1".to_string(),
+                metadata: serde_json::json!({}),
                 input_schema: serde_json::json!({}),
                 output_schema: serde_json::json!({}),
+                enabled: true,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
+                validated_at: Some(chrono::Utc::now()),
             },
             crate::seaorm::entities::tasks::Model {
                 id: 2,
                 uuid: uuid::Uuid::new_v4(),
                 name: "task2".to_string(),
+                description: Some("Test task 2".to_string()),
                 version: "1.0.0".to_string(),
-                source: "test".to_string(),
+                path: "test/path2".to_string(),
+                metadata: serde_json::json!({}),
                 input_schema: serde_json::json!({}),
                 output_schema: serde_json::json!({}),
+                enabled: true,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
+                validated_at: Some(chrono::Utc::now()),
             },
         ];
         
@@ -427,12 +448,16 @@ mod tests {
             id: 1,
             uuid: uuid::Uuid::new_v4(),
             name: "test".to_string(),
+            description: Some("Test task".to_string()),
             version: "1.0.0".to_string(),
-            source: "test".to_string(),
+            path: "test/path".to_string(),
+            metadata: serde_json::json!({}),
             input_schema: serde_json::json!({}),
             output_schema: serde_json::json!({}),
+            enabled: true,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            validated_at: Some(chrono::Utc::now()),
         }];
         db.seed_tasks(tasks).await.unwrap();
         
@@ -461,60 +486,74 @@ mod tests {
         let abstract_task_repo = abstract_factory.task_repository();
         
         // Verify health check works
-        let health = abstract_task_repo.health_check().await.unwrap();
+        let health = abstract_task_repo.health_check_send().await.unwrap();
         assert!(health);
     }
 
-    test_with_db!(test_macro_usage, |db: &TestDatabase| async {
+    #[tokio::test]
+    async fn test_macro_usage() {
+        let db = TestDatabase::new().await.unwrap();
         let tasks = vec![crate::seaorm::entities::tasks::Model {
             id: 1,
             uuid: uuid::Uuid::new_v4(),
             name: "macro-test".to_string(),
+            description: Some("Macro test task".to_string()),
             version: "1.0.0".to_string(),
-            source: "test".to_string(),
+            path: "test/macro".to_string(),
+            metadata: serde_json::json!({}),
             input_schema: serde_json::json!({}),
             output_schema: serde_json::json!({}),
+            enabled: true,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            validated_at: Some(chrono::Utc::now()),
         }];
         db.seed_tasks(tasks).await.unwrap();
         
         let count = db.count_records("tasks").await.unwrap();
         assert_eq!(count, 1);
-    });
+    }
 
-    test_with_seeded_db!(
-        test_seeded_macro_usage,
-        |db: &TestDatabase| async {
-            let tasks = vec![
-                crate::seaorm::entities::tasks::Model {
-                    id: 1,
-                    uuid: uuid::Uuid::new_v4(),
-                    name: "seeded1".to_string(),
-                    version: "1.0.0".to_string(),
-                    source: "test".to_string(),
-                    input_schema: serde_json::json!({}),
-                    output_schema: serde_json::json!({}),
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                },
-                crate::seaorm::entities::tasks::Model {
-                    id: 2,
-                    uuid: uuid::Uuid::new_v4(),
-                    name: "seeded2".to_string(),
-                    version: "1.0.0".to_string(),
-                    source: "test".to_string(),
-                    input_schema: serde_json::json!({}),
-                    output_schema: serde_json::json!({}),
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                },
-            ];
-            db.seed_tasks(tasks)
-        },
-        |db: &TestDatabase| async {
-            let count = db.count_records("tasks").await.unwrap();
-            assert_eq!(count, 2);
-        }
-    );
+    #[tokio::test]
+    async fn test_seeded_macro_usage() {
+        let db = TestDatabase::new().await.unwrap();
+        
+        // Seed the database
+        let tasks = vec![
+            crate::seaorm::entities::tasks::Model {
+                id: 1,
+                uuid: uuid::Uuid::new_v4(),
+                name: "seeded1".to_string(),
+                description: Some("Seeded task 1".to_string()),
+                version: "1.0.0".to_string(),
+                path: "test/seeded1".to_string(),
+                metadata: serde_json::json!({}),
+                input_schema: serde_json::json!({}),
+                output_schema: serde_json::json!({}),
+                enabled: true,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                validated_at: Some(chrono::Utc::now()),
+            },
+            crate::seaorm::entities::tasks::Model {
+                id: 2,
+                uuid: uuid::Uuid::new_v4(),
+                name: "seeded2".to_string(),
+                description: Some("Seeded task 2".to_string()),
+                version: "1.0.0".to_string(),
+                path: "test/seeded2".to_string(),
+                metadata: serde_json::json!({}),
+                input_schema: serde_json::json!({}),
+                output_schema: serde_json::json!({}),
+                enabled: true,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                validated_at: Some(chrono::Utc::now()),
+            },
+        ];
+        db.seed_tasks(tasks).await.unwrap();
+        
+        let count = db.count_records("tasks").await.unwrap();
+        assert_eq!(count, 2);
+    }
 }
