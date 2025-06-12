@@ -10,6 +10,11 @@ on:
         options:
           - debug
           - release
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'master'
+        type: string
 
 jobs:
   release:
@@ -42,11 +47,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
       - name: Set up dependencies (Ubuntu only)
-        if: matrix.platform.runs-on == 'ubuntu-22.04'
+        if: startsWith(matrix.platform.runs-on, 'ubuntu-')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config musl-dev
+          sudo apt-get install -y libssl-dev pkg-config musl-dev perl perl-modules-5.* libfindbin-libs-perl
+      - name: Set up dependencies (Windows only)
+        if: startsWith(matrix.platform.runs-on, 'windows-')
+        run: |
+          # Install Strawberry Perl for vendored OpenSSL builds
+          choco install strawberryperl -y
+          # Add Strawberry Perl to PATH for this job
+          echo "C:\strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\strawberry\c\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Set up dependencies (macOS only)
+        if: startsWith(matrix.platform.runs-on, 'macOS-')
+        run: |
+          # Verify perl is available (usually pre-installed)
+          perl -e "use FindBin;" && echo "Perl with FindBin ready for vendored builds"
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         env:
@@ -54,6 +74,6 @@ jobs:
         with:
           command: build
           target: ${{ matrix.platform.target }}
-          args: "--locked --release -p ratchet"
+          args: "--locked --${{ github.event.inputs.profile }} -p ratchet --features git"
           strip: true
 

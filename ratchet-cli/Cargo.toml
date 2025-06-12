@@ -53,7 +53,7 @@ ratchet-cli-tools = { path = "../ratchet-cli-tools", features = ["javascript", "
 
 # Feature flags for optional functionality
 [features]
-default = ["server", "database", "mcp-server", "plugins", "javascript", "output", "runtime", "http"]
+default = ["server", "database", "mcp-server", "plugins", "javascript", "output", "runtime", "http", "git"]
 
 # Core functionality (minimal build)
 core = []
@@ -62,6 +62,10 @@ core = []
 server = ["rest-api", "graphql-api", "dep:ratchet-execution", "dep:ratchet-server", "dep:ratchet-registry"]
 rest-api = []
 graphql-api = []
+
+# Git repository support
+git = ["dep:ratchet-registry", "ratchet-registry/git"]
+git-system = ["git", "ratchet-registry/git-system"]
 
 # Database backends
 database = ["sqlite", "dep:ratchet-storage"]

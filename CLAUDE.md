@@ -3,6 +3,6 @@
 - This project build one binary (ratchet), that contains all functionality and exposes this through commands and subcommands
 - After all changes, ensure that the code compiles without errors and that all tests pass
 - There are cargo tools available for analysis, testing, coverage reporting, dependency review, etc. use them as required and request installation of tools if they are not available
-- The target platforms are Linux, macOS, and Windows. Ensure that the code is cross-platform compatible. This includes using rustls over openssl
+- The target platforms are Linux, macOS, and Windows. Ensure that the code is cross-platform compatible. Uses hybrid TLS: rustls for HTTP client operations, OpenSSL limited to git2 for HTTPS Git repository access
 - When writing documentation, follow the guidelines in docs/writing-guide.md
 
