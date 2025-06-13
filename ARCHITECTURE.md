@@ -27,33 +27,43 @@ This document outlines the architecture, design principles, and conventions used
 ### 🔧 **Technical Improvements**
 - **Zero Compilation Errors**: All 486 tests passing across entire workspace
 - **Fetch API Timing Fix**: Resolved JavaScript execution flow to enable real HTTP requests
-- **Bridge Adapters**: Seamless compatibility between legacy and modular implementations
+- **Bridge Adapters**: Seamless integration between specialized modular crates
 - **Cross-Platform TLS**: Rustls provides consistent TLS behavior across Linux, macOS, Windows
 - **Enhanced Documentation**: Updated LLM task development guide with 54 MCP tools
 
+### 🎯 **Console & UX Enhancements**
+- **Interactive Console**: Full REPL interface with command history and tab completion
+- **Administrative Commands**: Comprehensive set of commands for repository, task, job, and server management
+- **Variable System**: Set, manage, and expand variables within console sessions
+- **Script Support**: Execute console commands from `.ratchet` script files
+- **Rich Output Formatting**: Structured output with tables, JSON, and colored text
+- **Mock Integration**: Complete mock implementation ready for MCP client integration
+
 ## Overview
 
-Ratchet is a JavaScript task execution framework written in Rust, designed with modularity, type safety, and maintainability as core principles. The architecture is **transitioning** to a fully modular approach with clear separation of concerns across **15+ specialized crates**.
-
-**🚧 MIGRATION IN PROGRESS**: Ratchet is actively migrating from a monolithic `ratchet_lib` architecture to a fully modular crate system. **Phase 1 (infrastructure extraction) is complete**, while Phase 2 (server component extraction) and Phase 3 (business logic decomposition) are in progress. The system maintains backward compatibility during this transition.
+Ratchet is a JavaScript task execution framework written in Rust, designed with modularity, type safety, and maintainability as core principles. The architecture features a fully modular approach with clear separation of concerns across **24+ specialized crates**.
 
 ### Core Components
 
-- **Task Management**: Loading, validation, and execution of JavaScript tasks (`ratchet-core`, `ratchet_lib`)
-- **JavaScript Engine**: Secure JavaScript execution environment using Boa (`ratchet_lib`, `ratchet-runtime`)
-- **HTTP Client**: Type-safe HTTP request handling with mock support (`ratchet_lib`)
+- **Task Management**: Loading, validation, and execution of JavaScript tasks (`ratchet-core`, `ratchet-js`)
+- **JavaScript Engine**: Secure JavaScript execution environment using Boa (`ratchet-js`, `ratchet-runtime`)
+- **HTTP Client**: Type-safe HTTP request handling with real networking (`ratchet-http`)
 - **Validation**: JSON schema validation for inputs and outputs (`ratchet-core`)
-- **Recording**: Session recording and replay functionality (`ratchet_lib`)
-- **CLI Interface**: Command-line interface with dual execution paths (`ratchet-cli`)
+- **Recording**: Session recording and replay functionality (`ratchet-cli-tools`)
+- **CLI Interface**: Command-line interface with interactive console (`ratchet-cli`)
+- **Interactive Console**: REPL interface with tab completion and variable expansion (`ratchet-cli`)
 - **Configuration Management**: Domain-specific configuration with validation (`ratchet-config`)
 - **Storage Layer**: Repository pattern with unified entity types (`ratchet-storage`)
 - **Caching System**: Multiple store backends with HTTP request caching (`ratchet-caching`)
-- **Runtime Execution**: Modern task execution infrastructure (`ratchet-runtime`)
+- **Runtime Execution**: Modern task execution infrastructure (`ratchet-runtime`, `ratchet-execution`)
 - **MCP Server**: Model Context Protocol server for LLM integration (`ratchet-mcp`)
+- **Web APIs**: REST and GraphQL APIs for external integration (`ratchet-rest-api`, `ratchet-graphql-api`)
 - **Plugin System**: Dynamic and static plugin architecture (`ratchet-plugin`, `ratchet-plugins`)
 - **Resilience Patterns**: Circuit breakers, retry policies, graceful shutdown (`ratchet-resilience`)
 - **IPC Communication**: Inter-process communication abstractions (`ratchet-ipc`)
-- **Logging System**: Advanced structured logging with LLM-powered error analysis
+- **Registry System**: Task repository management with Git and filesystem support (`ratchet-registry`)
+- **Output Management**: Flexible output destinations and formatting (`ratchet-output`)
+- **Logging System**: Advanced structured logging with LLM-powered error analysis (`ratchet-logging`)
 - **Error Pattern Recognition**: Built-in patterns for common errors with AI suggestions
 
 ## System Overview Architecture
@@ -218,8 +228,8 @@ minimal = ["core"]
 
 # Server components  
 server = ["rest-api", "graphql-api"]
-rest-api = ["ratchet_lib/server"]
-graphql-api = ["ratchet_lib/server"]
+rest-api = ["dep:ratchet-rest-api"]
+graphql-api = ["dep:ratchet-graphql-api"]
 
 # Database backends
 database = ["sqlite"]
@@ -232,14 +242,14 @@ mcp-stdio = ["ratchet-mcp/transport-stdio"]
 mcp-sse = ["ratchet-mcp/transport-sse"]
 
 # Execution engines
-javascript = ["ratchet_lib/javascript"]      # Legacy JavaScript executor
+javascript = ["dep:ratchet-js"]              # JavaScript task execution
 runtime = ["dep:ratchet-runtime"]            # Modern runtime executor
 
 # Additional features
 plugins = ["static-plugins"]
 caching = ["dep:ratchet-caching"]
 resilience = ["dep:ratchet-resilience"]
-output = ["ratchet_lib/output"]
+output = ["dep:ratchet-output"]
 
 # Complete profiles
 full = ["server", "database", "mcp-server", "plugins", "javascript", "output", "caching", "resilience", "runtime"]
@@ -257,7 +267,7 @@ Ratchet now supports **dual execution paths** for maximum flexibility:
 - **Advantages**: Modular, type-safe, easy to test
 - **Usage**: CLI task execution, testing, development
 
-#### 2. Legacy JavaScript Executor (`ratchet_lib`)
+#### 2. JavaScript Task Executor (`ratchet-js`)
 - **Feature Flag**: `javascript`
 - **Implementation**: `ProcessTaskExecutor` with Boa JavaScript engine
 - **Advantages**: Full production feature set, process isolation
@@ -273,7 +283,7 @@ Ratchet now supports **dual execution paths** for maximum flexibility:
 }
 #[cfg(all(feature = "javascript", not(all(feature = "runtime", feature = "core"))))]
 {
-    // Fallback to legacy executor
+    // Fallback to JavaScript executor
     run_task(from_fs, &input).await
 }
 ```
@@ -2329,7 +2339,8 @@ fn test_invalid_method_error() {
 /// # Example
 /// 
 /// ```rust
-/// use ratchet_lib::{Task, HttpManager, execute_task};
+/// use ratchet_core::{Task, execute_task};
+/// use ratchet_http::HttpManager;
 /// use serde_json::json;
 /// 
 /// let mut task = Task::from_fs("path/to/task")?;

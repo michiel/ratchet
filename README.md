@@ -1,8 +1,8 @@
 # Ratchet 🚀
 
-**Production-Ready JavaScript Task Execution Platform**
+**Production-Ready JavaScript Task Execution Platform with Interactive Administration**
 
-Ratchet is a high-performance, scalable task execution platform that runs JavaScript code with enterprise-grade reliability. Built with Rust for performance and safety, it provides comprehensive APIs, persistent storage, and advanced execution capabilities including real HTTP fetching, Model Context Protocol (MCP) server for LLM integration, and complete TLS support with rustls.
+Ratchet is a high-performance, scalable task execution platform that runs JavaScript code with enterprise-grade reliability. Built with Rust for performance and safety, it provides comprehensive APIs, persistent storage, advanced execution capabilities, and a powerful interactive console for administration. Features include real HTTP fetching, Model Context Protocol (MCP) server for LLM integration, complete TLS support with rustls, and an intuitive command-line interface with tab completion and variable expansion.
 
 [![Tests](https://img.shields.io/badge/tests-486%20passing-brightgreen)](.) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Status](https://img.shields.io/badge/status-production--ready-green)]()
 
@@ -10,7 +10,9 @@ Ratchet is a high-performance, scalable task execution platform that runs JavaSc
 
 Ratchet is a comprehensive JavaScript task execution platform built with Rust for performance and reliability. At its core, it provides secure, isolated JavaScript execution with schema validation, process separation for thread safety, and configurable resource management. The platform includes both GraphQL and REST APIs with OpenAPI documentation, making it ideal for web applications and microservices architectures.
 
-The system features a robust job queue with priority handling, retry logic with exponential backoff, worker pools that scale with your hardware, and comprehensive monitoring capabilities. For development, Ratchet offers CLI tools, automatic task discovery, file watching for live reloading, recording and replay for debugging, and a complete test framework. Enterprise features include SQLite persistence with migrations, rate limiting, structured logging, health checks, a Model Context Protocol (MCP) server for seamless LLM integration, and real HTTP networking with fetch API support for external data retrieval.
+The system features a robust job queue with priority handling, retry logic with exponential backoff, worker pools that scale with your hardware, and comprehensive monitoring capabilities. For development and operations, Ratchet offers a powerful interactive console with tab completion, variable expansion, script execution, and real-time server administration. Additional tools include CLI commands, automatic task discovery, file watching for live reloading, recording and replay for debugging, and a complete test framework. Enterprise features include SQLite persistence with migrations, rate limiting, structured logging, health checks, a Model Context Protocol (MCP) server for seamless LLM integration, and real HTTP networking with fetch API support for external data retrieval.
+
+**🎯 Interactive Console**: Modern REPL interface with intelligent tab completion, variable expansion (including environment variables and default values), script execution, command history, and comprehensive server administration capabilities. Perfect for development, debugging, and production operations.
 
 ## 🚀 Quick Start
 
@@ -94,6 +96,22 @@ ratchet serve --config=sample/configs/example-config.yaml
 # - Health Check: http://localhost:8080/health
 ```
 
+### Start the Interactive Console
+
+```bash
+# Start console with default MCP connection
+ratchet console
+
+# Connect to remote Ratchet server
+ratchet console --connect=http://remote-server:8090
+
+# Use custom configuration and history
+ratchet console --config=config.yaml --history-file=~/.ratchet_history
+
+# Execute startup script
+ratchet console --script=startup.rsh
+```
+
 ### Execute a Task
 
 ```bash
@@ -111,15 +129,39 @@ ratchet run-once --from-fs sample/js-tasks/weather-api \
   --record ./recordings
 ```
 
+### Quick Console Workflow
+
+```bash
+# Start console and connect to server
+ratchet console
+
+# In the console - intelligent tab completion available
+ratchet> repo list                    # List task repositories
+ratchet> task list                    # Browse available tasks
+ratchet> task execute task-uuid       # Execute a task interactively
+ratchet> server status                # Check server health
+ratchet> set CITY = Berlin            # Set variables for reuse
+ratchet> task execute weather --input '{"city": "$CITY"}'
+ratchet> help                         # Show all available commands
+```
+
 ## 📁 Project Structure
 
 Ratchet uses a modular architecture with specialized crates for different responsibilities:
 
 ```
 ratchet/
-├── ratchet-cli/            # Command-line interface and main binary
+├── ratchet-cli/            # Command-line interface with interactive console and main binary
+│   ├── commands/           # CLI command implementations
+│   │   ├── console/        # Interactive REPL console with tab completion
+│   │   │   ├── commands/   # Console command categories (repo, task, server, etc.)
+│   │   │   ├── repl.rs     # Main REPL implementation with variable expansion
+│   │   │   ├── parser.rs   # Command parsing and validation
+│   │   │   ├── executor.rs # Command execution and MCP client
+│   │   │   └── formatter.rs # Output formatting and display
+│   │   └── ...             # Other CLI commands (serve, run-once, etc.)
 ├── ratchet-server/         # HTTP server with REST/GraphQL/MCP APIs
-├── ratchet-mcp/            # Model Context Protocol server for LLM integration
+├── ratchet-mcp/            # Model Context Protocol server for LLM integration and console
 ├── ratchet-rest-api/       # REST API endpoints and handlers
 ├── ratchet-graphql-api/    # GraphQL schema and resolvers
 ├── ratchet-interfaces/     # Core interfaces - repository and service trait definitions
@@ -138,6 +180,8 @@ ratchet/
 ├── ratchet-output/         # Result delivery to various destinations
 ├── scripts/                # Installation scripts (install.sh, install.ps1)
 ├── sample/                 # Example tasks and configurations
+│   ├── configs/            # Configuration examples including console setups
+│   └── js-tasks/           # Sample JavaScript tasks for testing
 └── docs/                   # Documentation and API specifications
 ```
 
@@ -279,6 +323,187 @@ curl -X POST http://localhost:8080/api/v1/jobs \
 
 # List workers
 curl http://localhost:8080/api/v1/workers
+```
+
+## 🖥️ Interactive Console
+
+The Ratchet console provides a powerful, interactive command-line interface for real-time server administration, task management, and development workflows. Built with modern REPL features including intelligent tab completion, variable expansion, command history, and script execution.
+
+### Console Features
+
+**🚀 Smart Tab Completion**
+- Command categories: `repo`, `task`, `execution`, `job`, `server`, `db`, `monitor`
+- Command actions: `list`, `show`, `execute`, `status`, `enable`, `disable`
+- File path completion for script commands
+- Context-aware suggestions based on current input
+
+**🔧 Variable Management**
+- Local variables: `set TASK_ID = abc123`
+- Environment variables: `${ENV:PATH}` or `env PATH`
+- Default values: `${VAR:-default_value}`
+- Conditional expansion: `${VAR:+value_if_set}`
+- Variable listing and inspection: `vars`
+
+**📜 Command History & Scripts**
+- Persistent command history across sessions
+- Script execution: `source startup.rsh`
+- History navigation with up/down arrows
+- Search through command history
+
+**🌐 Connection Management**
+- Connect to local or remote Ratchet servers
+- Support for stdio, SSE, and WebSocket transports
+- Authentication token support
+- Real-time connection status indication
+
+### Console Command Categories
+
+#### Repository Management
+```bash
+repo list                     # List all configured repositories
+repo add my-repo file://./tasks  # Add new repository source
+repo refresh                  # Refresh repository metadata
+repo status                   # Show repository health
+repo verify                   # Verify repository accessibility
+```
+
+#### Task Operations
+```bash
+task list                     # Browse available tasks
+task show task-uuid           # Display task details and schema
+task execute task-uuid        # Interactive task execution
+task enable task-uuid         # Enable a disabled task
+task disable task-uuid        # Disable a task
+```
+
+#### Execution Monitoring
+```bash
+execution list                # Show recent executions
+execution show exec-id        # Display execution details
+job list                      # View job queue status
+job clear                     # Clear completed jobs
+job pause                     # Pause job processing
+job resume                    # Resume job processing
+```
+
+#### Server Administration
+```bash
+server status                 # Show server health and metrics
+server workers                # Display worker pool status
+server metrics                # Show performance metrics
+health                        # Quick health check
+stats                         # System statistics
+monitor                       # Real-time monitoring dashboard
+```
+
+#### Database Operations
+```bash
+db status                     # Database connection status
+db migrate                    # Run pending migrations
+db stats                      # Database performance metrics
+```
+
+### Variable Expansion Examples
+
+```bash
+# Set local variables
+set API_URL = https://api.example.com
+set TASK_ID = weather-forecast
+
+# Use variables in commands
+task execute $TASK_ID --input '{"url": "$API_URL"}'
+
+# Environment variable access
+env HOME                      # Show specific env var
+env                          # Show all environment variables
+
+# Advanced variable features
+set BASE_URL = ${ENV:API_BASE_URL:-http://localhost:8080}
+task execute ${TASK_ID:-default-task} --input '{"debug": "${DEBUG:+true}"}'
+```
+
+### Console Configuration
+
+Configure console behavior in your config file:
+
+```yaml
+# Console-specific settings (when running console locally)
+console:
+  # Default connection settings
+  default_connection:
+    transport: "sse"
+    host: "127.0.0.1"
+    port: 8090
+    timeout: 30
+  
+  # History and interface settings
+  history:
+    file: "~/.ratchet_history"
+    max_entries: 1000
+  
+  # Variable settings
+  variables:
+    auto_export_env: true     # Auto-export local vars to env
+    case_sensitive: true      # Variable name case sensitivity
+  
+  # Script execution settings
+  scripts:
+    search_paths: ["./scripts", "~/.ratchet/scripts"]
+    auto_source: ["~/.ratchet/startup.rsh"]
+
+# MCP server configuration (for console to connect to)
+mcp:
+  enabled: true
+  server:
+    transport: "sse"
+    host: "127.0.0.1"
+    port: 8090
+```
+
+### Console Usage Patterns
+
+**Development Workflow:**
+```bash
+# Start console with development config
+ratchet console --config=dev-config.yaml
+
+# Set up development environment
+set ENV = development
+set DEBUG = true
+set LOG_LEVEL = debug
+
+# Work with tasks interactively
+repo refresh
+task list
+task execute my-task --input '{"env": "$ENV", "debug": "$DEBUG"}'
+```
+
+**Production Operations:**
+```bash
+# Connect to production server
+ratchet console --connect=https://prod-server:8090 --auth-token=$PROD_TOKEN
+
+# Monitor system health
+server status
+health
+stats
+monitor
+
+# Review recent executions
+execution list --limit=10
+job list --status=failed
+```
+
+**Automation Scripts:**
+```bash
+# Create reusable script: ~/.ratchet/daily-health.rsh
+echo "set DATE = $(date +%Y-%m-%d)"
+echo "server status"
+echo "db status" 
+echo "execution list --since=$DATE"
+
+# Execute from console
+source ~/.ratchet/daily-health.rsh
 ```
 
 ## 🤖 MCP (Model Context Protocol) Server
@@ -427,12 +652,118 @@ http:
   verify_ssl: true
 ```
 
+### Console Configuration Examples
+
+Configure the interactive console and MCP server for optimal administration experience:
+
+**Development Console Configuration:**
+```yaml
+# MCP server for console connections
+mcp:
+  enabled: true
+  server:
+    transport: "sse"
+    host: "127.0.0.1" 
+    port: 8090
+  authentication:
+    method: "none"  # No auth for development
+  tools:
+    enable_execution: true
+    enable_logging: true
+    enable_monitoring: true
+    enable_debugging: true
+
+# Enhanced logging for development
+logging:
+  level: debug
+  format: pretty
+  structured: false
+  context:
+    enabled: true
+    include_file_location: true
+```
+
+**Production Console Configuration:**
+```yaml
+# Secure MCP server configuration
+mcp:
+  enabled: true
+  server:
+    transport: "sse"
+    host: "127.0.0.1"
+    port: 8090
+    enable_cors: false
+  
+  # Production authentication
+  authentication:
+    method: "token"
+    token_file: "/etc/ratchet/auth.token"
+    session:
+      timeout_seconds: 3600  # 1 hour sessions
+      max_sessions_per_client: 5
+  
+  # Production security
+  security:
+    rate_limiting:
+      global_per_minute: 1000
+      execute_task_per_minute: 100
+    request_limits:
+      max_request_size_bytes: 10485760  # 10MB
+      max_concurrent_executions_per_client: 10
+    ip_filtering:
+      enabled: true
+      default_policy: "deny"
+      allowed_ranges: ["10.0.0.0/8", "192.168.0.0/16"]
+
+# Structured logging for production
+logging:
+  level: info
+  format: json
+  structured: true
+  destination: file
+  file_config:
+    path: "/var/log/ratchet/console.log"
+    rotation:
+      max_size_mb: 100
+      max_files: 10
+```
+
+**Console Client Configuration (for connecting to remote servers):**
+```yaml
+# Local console settings when connecting to remote Ratchet servers
+console:
+  default_connection:
+    transport: "sse"
+    host: "ratchet-server.example.com"
+    port: 8090
+    timeout: 30
+    auth_token_file: "~/.ratchet/token"
+  
+  history:
+    file: "~/.ratchet_history"
+    max_entries: 1000
+    save_on_exit: true
+  
+  variables:
+    auto_export_env: false
+    case_sensitive: true
+    predefined:
+      PROD_HOST: "ratchet-server.example.com"
+      DEV_HOST: "localhost"
+  
+  scripts:
+    search_paths: ["./scripts", "~/.ratchet/scripts"]
+    auto_source: ["~/.ratchet/startup.rsh"]
+    allow_system_commands: false  # Security: disable for production
+```
+
 ## 🚦 Production Deployment
 
 ### Current Production-Ready Features
 
 ✅ **Ready Now**:
 - Complete REST and GraphQL APIs
+- Interactive console with tab completion and variable expansion
 - Persistent database with migrations
 - Job queue with scheduling and retry logic
 - Worker process management
@@ -441,7 +772,7 @@ http:
 - Health monitoring endpoints
 - Real HTTP networking with fetch API
 - Pure Rust TLS implementation (rustls)
-- Model Context Protocol server for LLM integration
+- Model Context Protocol server for LLM integration and console administration
 
 ⚠️ **Requires Configuration**:
 - **Authentication**: Currently no auth - all endpoints are public (see [roadmap](TODO.md))
@@ -482,9 +813,29 @@ http:
   ratchet serve [--config=<path>]
   ```
 
+- **`console`** - Start interactive administration console
+  ```bash
+  # Local console with MCP connection
+  ratchet console [--config=<path>]
+  
+  # Connect to remote server
+  ratchet console --connect=<url> [--auth-token=<token>]
+  
+  # Custom transport and connection
+  ratchet console --transport=sse --host=<host> --port=<port>
+  
+  # Execute startup script
+  ratchet console --script=<script.rsh> --history-file=<path>
+  ```
+
 - **`run-once`** - Execute a single task
   ```bash
   ratchet run-once --from-fs <path> --input-json='<json>'
+  ```
+
+- **`mcp-serve`** - Start standalone MCP server
+  ```bash
+  ratchet mcp-serve [--config=<path>] [--transport=stdio|sse]
   ```
 
 - **`test`** - Run task test suite
@@ -502,11 +853,48 @@ http:
   ratchet replay --from-fs <path> --recording=<dir>
   ```
 
+### Management Commands
+
+- **`generate`** - Generate code templates
+  ```bash
+  # Generate new task template
+  ratchet generate task --path=./my-task --label="My Task"
+  ```
+
+- **`config`** - Configuration management
+  ```bash
+  # Validate configuration
+  ratchet config validate --config-file=<path>
+  
+  # Generate sample configurations
+  ratchet config generate --config-type=dev --output=config.yaml
+  
+  # Show current configuration
+  ratchet config show [--mcp-only] [--format=yaml|json]
+  ```
+
+- **`repo`** - Repository management
+  ```bash
+  # Initialize new repository
+  ratchet repo init ./my-repo --name="My Repository"
+  
+  # Refresh repository metadata
+  ratchet repo refresh-metadata [./repo-path]
+  
+  # Show repository status
+  ratchet repo status [--detailed] [--format=table|json|yaml]
+  
+  # Verify repository accessibility
+  ratchet repo verify [--repository=<name>] [--list-tasks]
+  ```
+
 ### Common Options
 
 - `--log-level <level>` - Set log verbosity (trace, debug, info, warn, error)
 - `--record <dir>` - Record execution with HAR and logs
 - `--config <path>` - Specify configuration file
+- `--worker` - Run as worker process (internal use)
+- `--worker-id <id>` - Worker ID for process management
 
 ## 📊 Performance & Scalability
 
