@@ -85,12 +85,22 @@ use utoipa::OpenApi;
         handlers::tasks::update_task,
         handlers::tasks::get_task_stats,
         
+        // Execution management endpoints
+        handlers::executions::list_executions,
+        handlers::executions::get_execution,
+        handlers::executions::create_execution,
+        handlers::executions::update_execution,
+        handlers::executions::cancel_execution,
+        handlers::executions::retry_execution,
+        handlers::executions::get_execution_logs,
+        handlers::executions::get_execution_stats,
+        
         // Health check
         handlers::health::health_check,
     ),
     components(
         schemas(
-            // Request/Response models
+            // Task request/response models
             models::tasks::CreateTaskRequest,
             models::tasks::UpdateTaskRequest,
             models::tasks::ValidateTaskRequest,
@@ -100,6 +110,12 @@ use utoipa::OpenApi;
             models::tasks::SyncTasksResponse,
             models::tasks::TaskSyncError,
             models::tasks::TaskStats,
+            
+            // Execution request/response models
+            models::executions::CreateExecutionRequest,
+            models::executions::UpdateExecutionRequest,
+            models::executions::RetryExecutionRequest,
+            models::executions::ExecutionStats,
         )
     ),
     tags(

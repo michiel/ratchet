@@ -170,6 +170,17 @@ fn create_api_router() -> Router<TasksContext> {
         )
         .route("/tasks/:id/enable", post(handlers::tasks::enable_task))
         .route("/tasks/:id/disable", post(handlers::tasks::disable_task))
+        // Execution endpoints
+        .route("/executions", get(handlers::executions::list_executions).post(handlers::executions::create_execution))
+        .route("/executions/stats", get(handlers::executions::get_execution_stats))
+        .route(
+            "/executions/:id",
+            get(handlers::executions::get_execution)
+                .patch(handlers::executions::update_execution),
+        )
+        .route("/executions/:id/cancel", post(handlers::executions::cancel_execution))
+        .route("/executions/:id/retry", post(handlers::executions::retry_execution))
+        .route("/executions/:id/logs", get(handlers::executions::get_execution_logs))
         // MCP task development endpoints
         .route("/mcp/tasks", post(handlers::mcp_create_task))
         .route("/mcp/tasks/:name", 
