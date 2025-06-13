@@ -1,6 +1,15 @@
 # Changes
 
-## Version 0.4.1 (2025-06-12)
+## Version 0.4.2 (2025-06-13)
+
+### Features
+- **Enhanced Interactive Console**: Significantly improved ratchet console with advanced interactive features
+  - **Tab Completion**: Comprehensive tab completion for commands, actions, and filenames using rustyline
+  - **Variable Expansion**: Advanced variable substitution supporting `$VAR`, `${VAR}`, `${ENV:VAR}`, `${VAR:-default}`, `${VAR:+value}` formats
+  - **Intelligent Defaults**: Smart default actions for commands (e.g., `repo` → `repo list`, `health` → `health check`)
+  - **Environment Variable Management**: New `env` command for viewing and managing environment variables
+  - **Improved Error Messages**: Enhanced error handling with helpful command suggestions for better discoverability
+  - **Single-Word Commands**: Better handling of single-word commands like `health`, `stats`, and `monitor`
 
 ### Bug Fixes
 - **HTTPS Git Repository Support**: Restored HTTPS Git repository functionality that was broken during OpenSSL to rustls migration
@@ -10,7 +19,11 @@
 - **CLI Feature Integration**: Added git features to ratchet CLI package for proper GitHub Actions compatibility
 - **Windows Build Fixes**: Resolved Windows perl PATH issues in GitHub Actions by replacing problematic refreshenv with explicit PATH updates
 
-This release addresses critical Git repository functionality that was inadvertently broken during the security-focused OpenSSL to rustls migration, ensuring that sample configurations and documented Git repository features work as expected while maintaining the security benefits of the hybrid TLS approach.
+### Developer Experience
+- **Console UX Improvements**: The interactive console now provides a significantly enhanced developer experience with context-aware completion, intelligent command defaults, and powerful variable substitution capabilities
+- **Better Command Discoverability**: Enhanced error messages guide users to available commands and correct usage patterns
+
+This release addresses critical Git repository functionality that was inadvertently broken during the security-focused OpenSSL to rustls migration, while also delivering major improvements to the interactive console experience. The console now offers advanced features comparable to modern CLI tools, making Ratchet administration and development workflows much more efficient and user-friendly.
 
 ---
 
