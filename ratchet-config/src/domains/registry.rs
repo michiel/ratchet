@@ -145,9 +145,10 @@ pub struct HttpSourceConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GitSourceConfig {
-    /// Git reference (branch, tag, or commit hash)
-    #[serde(default = "default_git_branch")]
-    pub git_ref: String,
+    /// Git branch name (e.g., "main", "master", "develop")
+    /// Also accepts tags or commit hashes
+    #[serde(alias = "git_ref", default = "default_git_branch")]
+    pub branch: String,
 
     /// Subdirectory within repository
     pub subdirectory: Option<String>,
@@ -326,7 +327,7 @@ impl Default for HttpSourceConfig {
 impl Default for GitSourceConfig {
     fn default() -> Self {
         Self {
-            git_ref: default_git_branch(),
+            branch: default_git_branch(),
             subdirectory: None,
             shallow: true,
             depth: Some(1),

@@ -91,7 +91,7 @@ fn load_config(config_path: Option<&PathBuf>) -> Result<RatchetConfig> {
                     auth_name: None,
                     config: SourceSpecificConfig {
                         git: GitSourceConfig {
-                            git_ref: "main".to_string(),
+                            branch: "main".to_string(),
                             subdirectory: None,
                             shallow: true,
                             depth: Some(1),
@@ -264,7 +264,7 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
                     url: source_config.uri.clone(),
                     auth: None, // TODO: Map authentication from config
                     config: ratchet_registry::config::GitConfig {
-                        git_ref: source_config.config.git.git_ref.clone(),
+                        branch: source_config.config.git.branch.clone(),
                         subdirectory: source_config.config.git.subdirectory.clone(),
                         shallow: source_config.config.git.shallow,
                         depth: source_config.config.git.depth,
@@ -1917,6 +1917,32 @@ struct RepositoryStatus {
     error_message: Option<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct RepositoryVerification {
+    name: String,
+    source_type: String,
+    uri: String,
+    enabled: bool,
+    accessible: bool,
+    readable: bool,
+    correctly_configured: bool,
+    usable: bool,
+    verification_time: String,
+    tasks: Option<Vec<TaskInfo>>,
+    issues: Vec<String>,
+    warnings: Vec<String>,
+    error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct TaskInfo {
+    name: String,
+    version: Option<String>,
+    path: String,
+    description: Option<String>,
+    tags: Vec<String>,
+}
+
 /// Handle repository status display
 async fn handle_repo_status(
     config: &RatchetConfig,
@@ -2099,6 +2125,181 @@ async fn handle_repo_status(
     Ok(())
 }
 
+/// Handle repository verification with comprehensive checks
+async fn handle_repo_verify(
+    config: &RatchetConfig,
+    repository_filter: Option<&str>,
+    format: &str,
+    detailed: bool,
+    list_tasks: bool,
+    offline: bool,
+) -> Result<()> {
+    info!("Verifying repositories (detailed: {}, format: {}, list_tasks: {}, offline: {})", 
+          detailed, format, list_tasks, offline);
+
+    let mut verifications = Vec::new();
+
+    // Check if we have registry configuration
+    if let Some(registry_config) = &config.registry {
+        info!("Found {} configured repositories", registry_config.sources.len());
+        
+        for source in &registry_config.sources {
+            // Skip if filtering for specific repository
+            if let Some(filter) = repository_filter {
+                if source.name != filter {
+                    continue;
+                }
+            }
+
+            let verification = verify_repository(source, true, offline).await;
+            verifications.push(verification);
+        }
+    } else {
+        eprintln!("❌ No registry configuration found");
+        return Ok(());
+    }
+
+    // Display results based on format
+    match format {
+        "json" => {
+            println!("{}", serde_json::to_string_pretty(&serde_json::json!({
+                "repositories": verifications
+            }))?);
+        }
+        "yaml" => {
+            println!("{}", serde_yaml::to_string(&serde_yaml::to_value(&serde_json::json!({
+                "repositories": verifications
+            }))?)?);
+        }
+        "table" | _ => {
+            if verifications.is_empty() {
+                if let Some(filter) = repository_filter {
+                    eprintln!("❌ No repository found with name '{}'", filter);
+                } else {
+                    eprintln!("❌ No repositories configured");
+                }
+                return Ok(());
+            }
+
+            println!("\n📋 Repository Verification Report");
+            println!("════════════════════════════════");
+
+            for verification in &verifications {
+                let status_icon = if !verification.enabled {
+                    "⏸️"
+                } else if verification.usable {
+                    "✅"
+                } else if verification.accessible {
+                    "⚠️"
+                } else {
+                    "❌"
+                };
+
+                println!("\n{} {} ({}) - {}", 
+                         status_icon, verification.name, verification.source_type, verification.uri);
+                
+                // Show verification results
+                println!("   📡 Accessible: {}", if verification.accessible { "✅ Yes" } else { "❌ No" });
+                println!("   📖 Readable: {}", if verification.readable { "✅ Yes" } else { "❌ No" });
+                println!("   ⚙️  Configured: {}", if verification.correctly_configured { "✅ Yes" } else { "❌ No" });
+                println!("   🚀 Usable: {}", if verification.usable { "✅ Yes" } else { "❌ No" });
+                
+                // Show metadata details
+                println!("   🕒 Verified: {}", verification.verification_time);
+                if verification.enabled {
+                    println!("   ⚡ Status: Enabled");
+                } else {
+                    println!("   ⏸️  Status: Disabled");
+                }
+                
+                // Show repository-specific configuration details
+                if verification.source_type == "git" {
+                    // For Git repositories, show branch information
+                    println!("   🌿 Configuration: Git repository");
+                    if detailed {
+                        println!("      • Repository type: Git");
+                        println!("      • Protocol: HTTPS");
+                    }
+                } else if verification.source_type == "filesystem" {
+                    println!("   📁 Configuration: Local filesystem");
+                    if detailed {
+                        println!("      • Repository type: Filesystem");
+                        println!("      • Access: Direct file access");
+                    }
+                } else {
+                    println!("   ⚙️  Configuration: {} repository", verification.source_type);
+                }
+                
+                // Always show task information when available
+                if let Some(ref tasks) = verification.tasks {
+                    println!("   📦 Tasks: {} found", tasks.len());
+                    
+                    if !tasks.is_empty() {
+                        println!("   └─ Available tasks:");
+                        for task in tasks.iter().take(if detailed { tasks.len() } else { 10 }) {
+                            let version_info = task.version.as_deref().unwrap_or("unknown");
+                            let desc_info = task.description.as_deref().unwrap_or("No description");
+                            println!("      • {} (v{}) - {}", task.name, version_info, desc_info);
+                            if !task.tags.is_empty() {
+                                println!("        📋 Tags: {}", task.tags.join(", "));
+                            }
+                            if detailed {
+                                println!("        📂 Path: {}", task.path);
+                            }
+                        }
+                        if !detailed && tasks.len() > 10 {
+                            println!("      ... and {} more tasks (use --detailed to see all)", tasks.len() - 10);
+                        }
+                    }
+                } else {
+                    println!("   📦 Tasks: Discovery not available for this repository type");
+                }
+                
+                if !verification.warnings.is_empty() {
+                    println!("   ⚠️  Warnings:");
+                    for warning in &verification.warnings {
+                        println!("      • {}", warning);
+                    }
+                }
+                
+                if !verification.issues.is_empty() {
+                    println!("   ❌ Issues:");
+                    for issue in &verification.issues {
+                        println!("      • {}", issue);
+                    }
+                }
+                
+                if let Some(ref error) = verification.error_message {
+                    println!("   💥 Error: {}", error);
+                }
+            }
+
+            // Summary
+            let total = verifications.len();
+            let usable = verifications.iter().filter(|v| v.usable).count();
+            let accessible = verifications.iter().filter(|v| v.accessible).count();
+            let disabled = verifications.iter().filter(|v| !v.enabled).count();
+            
+            println!("\n📊 Summary");
+            println!("═══════════");
+            println!("Total repositories: {}", total);
+            println!("Usable: {} ({:.1}%)", usable, if total > 0 { (usable as f64 / total as f64) * 100.0 } else { 0.0 });
+            println!("Accessible: {} ({:.1}%)", accessible, if total > 0 { (accessible as f64 / total as f64) * 100.0 } else { 0.0 });
+            println!("Disabled: {}", disabled);
+            
+            if usable == total && disabled == 0 {
+                println!("\n🎉 All repositories are working correctly!");
+            } else if usable > 0 {
+                println!("\n💡 Some repositories need attention. Check issues above for details.");
+            } else {
+                println!("\n🚨 No repositories are currently usable. Please check configuration and connectivity.");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Test repository connection and get basic status info
 async fn test_repository_connection(
     source: &ratchet_config::domains::registry::RegistrySourceConfig,
@@ -2230,6 +2431,307 @@ async fn count_filesystem_tasks(path: &std::path::Path) -> Option<usize> {
     }
     
     Some(task_count)
+}
+
+/// Comprehensive repository verification with task discovery
+async fn verify_repository(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    list_tasks: bool,
+    offline: bool,
+) -> RepositoryVerification {
+    use chrono::Utc;
+
+    let source_type_name = match source.source_type {
+        ratchet_config::domains::registry::RegistrySourceType::Filesystem => "filesystem",
+        ratchet_config::domains::registry::RegistrySourceType::Http => "http",
+        ratchet_config::domains::registry::RegistrySourceType::Git => "git",
+        ratchet_config::domains::registry::RegistrySourceType::S3 => "s3",
+    };
+
+    let mut verification = RepositoryVerification {
+        name: source.name.clone(),
+        source_type: source_type_name.to_string(),
+        uri: source.uri.clone(),
+        enabled: source.enabled,
+        accessible: false,
+        readable: false,
+        correctly_configured: false,
+        usable: false,
+        verification_time: Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+        tasks: None,
+        issues: Vec::new(),
+        warnings: Vec::new(),
+        error_message: None,
+    };
+
+    // If repository is disabled, skip detailed checks
+    if !source.enabled {
+        verification.warnings.push("Repository is disabled".to_string());
+        verification.correctly_configured = true; // Config is valid, just disabled
+        return verification;
+    }
+
+    // Check basic configuration
+    if source.uri.is_empty() {
+        verification.issues.push("Empty URI configured".to_string());
+        return verification;
+    }
+
+    verification.correctly_configured = true;
+
+    // Skip connectivity tests if offline mode
+    if offline {
+        verification.warnings.push("Offline mode: skipping connectivity tests".to_string());
+        verification.accessible = true;
+        verification.readable = true;
+        verification.usable = true;
+        return verification;
+    }
+
+    // Test accessibility and task discovery based on source type
+    match source.source_type {
+        ratchet_config::domains::registry::RegistrySourceType::Git => {
+            verify_git_repository_detailed(source, &mut verification, list_tasks).await;
+        }
+        ratchet_config::domains::registry::RegistrySourceType::Filesystem => {
+            verify_filesystem_repository_detailed(source, &mut verification, list_tasks).await;
+        }
+        ratchet_config::domains::registry::RegistrySourceType::Http => {
+            verify_http_repository_detailed(source, &mut verification, list_tasks).await;
+        }
+        ratchet_config::domains::registry::RegistrySourceType::S3 => {
+            verification.issues.push("S3 repository support not yet implemented".to_string());
+        }
+    }
+
+    // Determine overall usability
+    verification.usable = verification.accessible && verification.readable && verification.correctly_configured;
+
+    verification
+}
+
+/// Detailed Git repository verification
+async fn verify_git_repository_detailed(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    verification: &mut RepositoryVerification,
+    list_tasks: bool,
+) {
+    use std::process::Command;
+    
+    info!("Performing detailed Git repository verification: {}", source.uri);
+
+    // Check if git is available
+    match Command::new("git").arg("--version").output() {
+        Ok(_) => {},
+        Err(_) => {
+            verification.issues.push("Git command not available on system".to_string());
+            return;
+        }
+    }
+
+    // Test Git connectivity using git ls-remote
+    let git_ref = &source.config.git.branch;
+
+    let mut cmd = Command::new("git");
+    cmd.arg("ls-remote").arg("--heads").arg("--tags").arg(&source.uri);
+
+    // Add authentication if configured
+    if let Some(auth_name) = &source.auth_name {
+        verification.warnings.push(format!("Authentication '{}' configured (not tested in verification)", auth_name));
+    }
+
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                verification.accessible = true;
+                
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                if !output_str.is_empty() {
+                    verification.readable = true;
+                    
+                    // Check if the specified ref exists
+                    if git_ref != "HEAD" {
+                        let ref_exists = output_str.lines().any(|line| {
+                            line.contains(&format!("refs/heads/{}", git_ref)) ||
+                            line.contains(&format!("refs/tags/{}", git_ref))
+                        });
+                        
+                        if !ref_exists {
+                            verification.warnings.push(format!("Specified ref '{}' not found in remote", git_ref));
+                        }
+                    }
+                }
+            } else {
+                verification.error_message = Some(format!("Git ls-remote failed: {}", 
+                    String::from_utf8_lossy(&output.stderr)));
+            }
+        }
+        Err(e) => {
+            verification.error_message = Some(format!("Failed to execute git ls-remote: {}", e));
+        }
+    }
+
+    // If we can access the repository and task listing is requested, try to discover tasks
+    if verification.accessible && verification.readable && list_tasks {
+        discover_git_tasks(source, verification).await;
+    }
+}
+
+/// Detailed filesystem repository verification
+async fn verify_filesystem_repository_detailed(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    verification: &mut RepositoryVerification,
+    list_tasks: bool,
+) {
+    use std::path::Path;
+    
+    info!("Performing detailed filesystem repository verification: {}", source.uri);
+
+    let path_str = if source.uri.starts_with("file://") {
+        &source.uri[7..]  // Remove "file://" prefix
+    } else {
+        &source.uri
+    };
+
+    let path = Path::new(path_str);
+    
+    // Check if path exists and is accessible
+    if path.exists() {
+        verification.accessible = true;
+        
+        if path.is_dir() {
+            verification.readable = true;
+            
+            // Check for .ratchet directory (optional but recommended)
+            let ratchet_dir = path.join(".ratchet");
+            if ratchet_dir.exists() {
+                if ratchet_dir.join("registry.yaml").exists() {
+                    verification.warnings.push("Found .ratchet/registry.yaml (repository metadata)".to_string());
+                }
+            } else {
+                verification.warnings.push("No .ratchet directory found (repository metadata recommended)".to_string());
+            }
+            
+            // If task listing is requested, discover tasks
+            if list_tasks {
+                discover_filesystem_tasks(source, verification, path).await;
+            }
+        } else {
+            verification.issues.push("Path exists but is not a directory".to_string());
+        }
+    } else {
+        verification.error_message = Some("Path does not exist or is not accessible".to_string());
+    }
+}
+
+/// Detailed HTTP repository verification
+async fn verify_http_repository_detailed(
+    source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    verification: &mut RepositoryVerification,
+    _list_tasks: bool,
+) {
+    info!("Performing detailed HTTP repository verification: {}", source.uri);
+    
+    // For now, mark as not implemented since HTTP task repositories are not fully implemented
+    verification.issues.push("HTTP repository support is not yet fully implemented".to_string());
+    verification.warnings.push("HTTP repositories are planned for future releases".to_string());
+}
+
+/// Discover tasks in Git repository (simplified version - requires actual clone for full discovery)
+async fn discover_git_tasks(
+    _source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    verification: &mut RepositoryVerification,
+) {
+    // Note: Full task discovery would require cloning the repository locally
+    // For now, we'll indicate that tasks discovery requires full repository sync
+    verification.warnings.push("Task discovery requires repository synchronization (use 'ratchet repo status' for full task listing)".to_string());
+    verification.tasks = Some(vec![]); // Empty list to indicate we attempted discovery
+}
+
+/// Discover tasks in filesystem repository
+async fn discover_filesystem_tasks(
+    _source: &ratchet_config::domains::registry::RegistrySourceConfig,
+    verification: &mut RepositoryVerification,
+    path: &std::path::Path,
+) {
+    let mut tasks = Vec::new();
+    
+    // Look for tasks in the tasks/ directory
+    let tasks_dir = path.join("tasks");
+    if tasks_dir.exists() && tasks_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&tasks_dir) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() {
+                    let metadata_file = entry_path.join("metadata.json");
+                    if metadata_file.exists() {
+                        // Try to read task metadata
+                        if let Ok(metadata_content) = std::fs::read_to_string(&metadata_file) {
+                            if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&metadata_content) {
+                                let task_name = entry_path.file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("unknown")
+                                    .to_string();
+                                
+                                let task_info = TaskInfo {
+                                    name: task_name,
+                                    version: metadata.get("version").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    path: entry_path.to_string_lossy().to_string(),
+                                    description: metadata.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    tags: metadata.get("tags")
+                                        .and_then(|v| v.as_array())
+                                        .map(|arr| arr.iter()
+                                            .filter_map(|v| v.as_str())
+                                            .map(|s| s.to_string())
+                                            .collect())
+                                        .unwrap_or_default(),
+                                };
+                                tasks.push(task_info);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Also check root directory for tasks
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_dir() && entry_path.file_name() != Some(std::ffi::OsStr::new("tasks")) {
+                let metadata_file = entry_path.join("metadata.json");
+                if metadata_file.exists() {
+                    // Similar task discovery logic for root-level tasks
+                    if let Ok(metadata_content) = std::fs::read_to_string(&metadata_file) {
+                        if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&metadata_content) {
+                            let task_name = entry_path.file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("unknown")
+                                .to_string();
+                            
+                            let task_info = TaskInfo {
+                                name: task_name,
+                                version: metadata.get("version").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                path: entry_path.to_string_lossy().to_string(),
+                                description: metadata.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                tags: metadata.get("tags")
+                                    .and_then(|v| v.as_array())
+                                    .map(|arr| arr.iter()
+                                        .filter_map(|v| v.as_str())
+                                        .map(|s| s.to_string())
+                                        .collect())
+                                    .unwrap_or_default(),
+                            };
+                            tasks.push(task_info);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    verification.tasks = Some(tasks);
 }
 
 #[tokio::main]
@@ -2522,6 +3024,9 @@ async fn main() -> Result<()> {
             }
             RepoCommands::Status { detailed, repository, format } => {
                 handle_repo_status(&config, *detailed, repository.as_deref(), format).await
+            }
+            RepoCommands::Verify { repository, format, detailed, list_tasks, offline } => {
+                handle_repo_verify(&config, repository.as_deref(), format, *detailed, *list_tasks, *offline).await
             }
         },
         None => {

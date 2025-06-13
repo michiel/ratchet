@@ -11,7 +11,7 @@ mod https_git_tests {
         let clone_path = temp_dir.path().join("test_clone");
         
         // Use a small, reliable public repository for testing
-        let test_repo_url = "https://github.com/octocat/Hello-World.git";
+        let test_repo_url = "https://github.com/michiel/ratchet-repo-samples";
         
         // Attempt to clone with git2 directly
         let result = git2::Repository::clone(test_repo_url, &clone_path);

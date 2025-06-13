@@ -2,7 +2,7 @@ use super::config::DatabaseConfig;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection as SeaConnection, DbErr};
 use std::time::Duration;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 /// Database connection wrapper with configuration
 #[derive(Clone)]
@@ -48,7 +48,11 @@ impl DatabaseConnection {
             .sqlx_logging(true) // Enable SQLx query logging
             .sqlx_logging_level(log::LevelFilter::Debug); // Set SQLx logging to DEBUG level instead of INFO
 
-        let connection = Database::connect(opts).await?;
+        debug!("Attempting to connect to database with URL: {}", config.url);
+        let connection = Database::connect(opts).await.map_err(|e| {
+            error!("Failed to connect to database '{}': {}", config.url, e);
+            e
+        })?;
 
         debug!(
             "Database connection established with {} max connections",
@@ -70,29 +74,31 @@ impl DatabaseConnection {
         if database_url.starts_with("sqlite:") && !database_url.contains(":memory:") {
             // Extract the file path from the URL, handling various SQLite URL formats
             let file_path = if database_url.starts_with("sqlite:///") {
-                // Absolute path: sqlite:///path/to/file.db -> /path/to/file.db
-                database_url.strip_prefix("sqlite:///").ok_or_else(|| {
+                // Absolute path with three slashes: sqlite:///path/to/file.db -> /path/to/file.db
+                database_url.strip_prefix("sqlite:///").map(|p| format!("/{}", p)).ok_or_else(|| {
                     DatabaseError::ConfigError(format!(
                         "Invalid SQLite URL format: {}",
                         database_url
                     ))
                 })?
             } else if database_url.starts_with("sqlite://") {
-                // Relative path: sqlite://file.db -> file.db
+                // Relative path or hostname format: sqlite://file.db -> file.db
                 database_url.strip_prefix("sqlite://").ok_or_else(|| {
                     DatabaseError::ConfigError(format!(
                         "Invalid SQLite URL format: {}",
                         database_url
                     ))
                 })?
+                .to_string()
             } else if database_url.starts_with("sqlite:") {
-                // Direct path: sqlite:file.db -> file.db
+                // Direct path: sqlite:file.db -> file.db or sqlite:/path -> /path
                 database_url.strip_prefix("sqlite:").ok_or_else(|| {
                     DatabaseError::ConfigError(format!(
                         "Invalid SQLite URL format: {}",
                         database_url
                     ))
                 })?
+                .to_string()
             } else {
                 return Err(DatabaseError::ConfigError(format!(
                     "Invalid SQLite URL format: {}",
@@ -101,7 +107,7 @@ impl DatabaseConnection {
             };
 
             debug!("Parsed SQLite file path: '{}'", file_path);
-            let path = std::path::Path::new(file_path);
+            let path = std::path::Path::new(&file_path);
 
             // Create parent directory if it doesn't exist
             if let Some(parent_dir) = path.parent() {
@@ -116,9 +122,16 @@ impl DatabaseConnection {
                 }
             }
 
-            // SQLite will create the file if it doesn't exist, we just need to ensure the directory exists
+            // Create the SQLite file if it doesn't exist
             if !path.exists() {
-                info!("Database file will be created by SQLite: {:?}", path);
+                info!("Creating SQLite database file: {:?}", path);
+                std::fs::File::create(path).map_err(|e| {
+                    DatabaseError::ConfigError(format!(
+                        "Failed to create database file {:?}: {}",
+                        path, e
+                    ))
+                })?;
+                info!("SQLite database file created successfully: {:?}", path);
             } else {
                 debug!("Using existing database file: {:?}", path);
             }

@@ -20,6 +20,7 @@ use ratchet_rest_api::context::TasksContext;
 use ratchet_graphql_api::context::GraphQLContext;
 
 use crate::config::ServerConfig;
+use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
 
 /// Service container holding all application services
 #[derive(Clone)]
@@ -38,7 +39,7 @@ impl ServiceContainer {
         
         // This is a bridge implementation during the migration
         let repositories = create_repository_factory(config).await?;
-        let registry = create_task_registry(config).await?;
+        let registry = create_task_registry(config, repositories.clone()).await?;
         let registry_manager = create_registry_manager(config).await?;
         let validator = create_task_validator(config).await?;
 
@@ -96,21 +97,28 @@ async fn create_repository_factory(config: &ServerConfig) -> Result<Arc<dyn Repo
 }
 
 /// Create task registry from configuration
-async fn create_task_registry(_config: &ServerConfig) -> Result<Arc<dyn TaskRegistry>> {
-    // Create a stub task registry for now
-    Ok(Arc::new(StubTaskRegistry::new()))
+async fn create_task_registry(config: &ServerConfig, repositories: Arc<dyn RepositoryFactory>) -> Result<Arc<dyn TaskRegistry>> {
+    // Create functional task registry using ratchet-registry
+    let mut bridge_registry = BridgeTaskRegistry::new(config).await?;
+    bridge_registry.set_repositories(repositories);
+    
+    // Sync discovered tasks to database
+    bridge_registry.sync_tasks_to_database().await?;
+    
+    Ok(Arc::new(bridge_registry))
 }
 
 /// Create registry manager from configuration
-async fn create_registry_manager(_config: &ServerConfig) -> Result<Arc<dyn RegistryManager>> {
-    // Create a stub registry manager for now
-    Ok(Arc::new(StubRegistryManager::new()))
+async fn create_registry_manager(config: &ServerConfig) -> Result<Arc<dyn RegistryManager>> {
+    // Create functional registry manager using ratchet-registry
+    let bridge_manager = BridgeRegistryManager::new(config).await?;
+    Ok(Arc::new(bridge_manager))
 }
 
 /// Create task validator from configuration
 async fn create_task_validator(_config: &ServerConfig) -> Result<Arc<dyn TaskValidator>> {
-    // Create a stub task validator for now
-    Ok(Arc::new(StubTaskValidator::new()))
+    // Create functional task validator using ratchet-registry
+    Ok(Arc::new(BridgeTaskValidator::new()))
 }
 
 /// Initialize logging system
