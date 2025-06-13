@@ -233,9 +233,9 @@ function Install-RatchetBinary {
         $searchNames = @("ratchet.exe", "ratchet", "ratchet-windows-*.exe")
         
         foreach ($name in $searchNames) {
-            $found = Get-ChildItem -Path $tempDir -Name $name -Recurse -File | Select-Object -First 1
+            $found = Get-ChildItem -Path $tempDir -Filter $name -Recurse -File | Select-Object -First 1
             if ($found) {
-                $binaryPath = Get-ChildItem -Path $tempDir -Name $found -Recurse -File | Select-Object -First 1 -ExpandProperty FullName
+                $binaryPath = $found.FullName
                 break
             }
         }
