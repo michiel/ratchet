@@ -181,6 +181,28 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/executions/:id/cancel", post(handlers::executions::cancel_execution))
         .route("/executions/:id/retry", post(handlers::executions::retry_execution))
         .route("/executions/:id/logs", get(handlers::executions::get_execution_logs))
+        // Job endpoints
+        .route("/jobs", get(handlers::jobs::list_jobs).post(handlers::jobs::create_job))
+        .route("/jobs/stats", get(handlers::jobs::get_job_stats))
+        .route(
+            "/jobs/:id",
+            get(handlers::jobs::get_job)
+                .patch(handlers::jobs::update_job),
+        )
+        .route("/jobs/:id/cancel", post(handlers::jobs::cancel_job))
+        .route("/jobs/:id/retry", post(handlers::jobs::retry_job))
+        // Schedule endpoints
+        .route("/schedules", get(handlers::schedules::list_schedules).post(handlers::schedules::create_schedule))
+        .route("/schedules/stats", get(handlers::schedules::get_schedule_stats))
+        .route(
+            "/schedules/:id",
+            get(handlers::schedules::get_schedule)
+                .patch(handlers::schedules::update_schedule)
+                .delete(handlers::schedules::delete_schedule),
+        )
+        .route("/schedules/:id/enable", post(handlers::schedules::enable_schedule))
+        .route("/schedules/:id/disable", post(handlers::schedules::disable_schedule))
+        .route("/schedules/:id/trigger", post(handlers::schedules::trigger_schedule))
         // MCP task development endpoints
         .route("/mcp/tasks", post(handlers::mcp_create_task))
         .route("/mcp/tasks/:name", 
@@ -191,12 +213,6 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/mcp/results", post(handlers::mcp_store_result))
         .route("/mcp/results/:name", get(handlers::mcp_get_results))
         // Placeholder endpoints
-        .route("/executions", get(placeholder_handler))
-        .route("/executions/:id", get(placeholder_handler))
-        .route("/jobs", get(placeholder_handler))
-        .route("/jobs/:id", get(placeholder_handler))
-        .route("/schedules", get(placeholder_handler))
-        .route("/schedules/:id", get(placeholder_handler))
         .route("/workers", get(placeholder_handler))
         .route("/workers/stats", get(placeholder_handler))
 }

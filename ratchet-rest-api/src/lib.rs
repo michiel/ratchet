@@ -95,6 +95,26 @@ use utoipa::OpenApi;
         handlers::executions::get_execution_logs,
         handlers::executions::get_execution_stats,
         
+        // Job management endpoints
+        handlers::jobs::list_jobs,
+        handlers::jobs::get_job,
+        handlers::jobs::create_job,
+        handlers::jobs::update_job,
+        handlers::jobs::cancel_job,
+        handlers::jobs::retry_job,
+        handlers::jobs::get_job_stats,
+        
+        // Schedule management endpoints
+        handlers::schedules::list_schedules,
+        handlers::schedules::get_schedule,
+        handlers::schedules::create_schedule,
+        handlers::schedules::update_schedule,
+        handlers::schedules::delete_schedule,
+        handlers::schedules::enable_schedule,
+        handlers::schedules::disable_schedule,
+        handlers::schedules::trigger_schedule,
+        handlers::schedules::get_schedule_stats,
+        
         // Health check
         handlers::health::health_check,
     ),
@@ -116,6 +136,16 @@ use utoipa::OpenApi;
             models::executions::UpdateExecutionRequest,
             models::executions::RetryExecutionRequest,
             models::executions::ExecutionStats,
+            
+            // Job request/response models
+            models::jobs::CreateJobRequest,
+            models::jobs::UpdateJobRequest,
+            models::jobs::JobStats,
+            
+            // Schedule request/response models
+            models::schedules::CreateScheduleRequest,
+            models::schedules::UpdateScheduleRequest,
+            models::schedules::ScheduleStats,
         )
     ),
     tags(
