@@ -38,6 +38,10 @@ ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-web = { path = "../ratchet-web" }
 ratchet-core = { path = "../ratchet-core" }
 
+# OpenAPI documentation
+utoipa = { version = "4.0", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "4.0", features = ["axum"] }
+
 [dev-dependencies]
 axum-test = "13.0"
 tokio-test = "0.4"
