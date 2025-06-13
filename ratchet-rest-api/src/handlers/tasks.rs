@@ -8,7 +8,8 @@ use axum::{
 use ratchet_api_types::ApiId;
 use ratchet_interfaces::TaskFilters;
 use ratchet_web::{QueryParams, ApiResponse};
-use tracing::info;
+use ratchet_core::validation::{InputValidator, ErrorSanitizer};
+use tracing::{info, warn};
 
 use crate::{
     context::TasksContext,
@@ -50,13 +51,26 @@ pub async fn get_task(
 ) -> RestResult<impl IntoResponse> {
     info!("Getting task with ID: {}", task_id);
     
+    // Validate task ID input
+    let validator = InputValidator::new();
+    if let Err(validation_err) = validator.validate_string(&task_id, "task_id") {
+        warn!("Invalid task ID provided: {}", validation_err);
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
     let api_id = ApiId::from_string(task_id.clone());
     let task_repo = ctx.repositories.task_repository();
     
     let task = task_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
         .await
-        .map_err(RestError::Database)?
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
         .ok_or_else(|| RestError::not_found("Task", &task_id))?;
     
     Ok(Json(ApiResponse::new(task)))
@@ -69,12 +83,61 @@ pub async fn create_task(
 ) -> RestResult<impl IntoResponse> {
     info!("Creating task: {}", request.name);
     
+    // Validate the request input
+    let validator = InputValidator::new();
+    let sanitizer = ErrorSanitizer::default();
+    
+    // Validate task name
+    if let Err(validation_err) = validator.validate_task_name(&request.name) {
+        warn!("Invalid task name provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    // Validate description if provided
+    if let Some(ref description) = request.description {
+        if let Err(validation_err) = validator.validate_string(description, "description") {
+            warn!("Invalid task description provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    // Validate version
+    if let Err(validation_err) = validator.validate_semver(&request.version) {
+        warn!("Invalid task version provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    // Note: Path validation would be done here if the request had a path field
+    
+    // Validate JSON schemas if provided
+    if let Some(ref input_schema) = request.input_schema {
+        let input_str = serde_json::to_string(input_schema)
+            .map_err(|e| RestError::BadRequest(format!("Invalid input schema JSON: {}", e)))?;
+        if let Err(validation_err) = validator.validate_json(&input_str) {
+            warn!("Invalid input schema provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    if let Some(ref output_schema) = request.output_schema {
+        let output_str = serde_json::to_string(output_schema)
+            .map_err(|e| RestError::BadRequest(format!("Invalid output schema JSON: {}", e)))?;
+        if let Err(validation_err) = validator.validate_json(&output_str) {
+            warn!("Invalid output schema provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
     // For now, return a placeholder response
     // In a full implementation, this would:
-    // 1. Validate the request
-    // 2. Create task in registry or database
-    // 3. Sync with other systems
-    // 4. Return the created task
+    // 1. Create task in registry or database
+    // 2. Sync with other systems  
+    // 3. Return the created task
     
     Err(RestError::InternalError(
         "Task creation not yet implemented".to_string(),
@@ -206,17 +269,72 @@ pub async fn get_task_stats(
 /// MCP task development - create a new task with full JavaScript code and testing
 pub async fn mcp_create_task(
     State(_ctx): State<TasksContext>,
-    Json(_request): Json<serde_json::Value>,
+    Json(request): Json<serde_json::Value>,
 ) -> RestResult<impl IntoResponse> {
     info!("MCP: Creating task with development features");
     
+    // Validate the incoming JSON request
+    let validator = InputValidator::new();
+    let sanitizer = ErrorSanitizer::default();
+    
+    // First validate the JSON structure itself
+    let validated_input = match validator.validate_task_input(&request) {
+        Ok(input) => input,
+        Err(validation_err) => {
+            warn!("Invalid MCP task creation request: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    };
+    
+    // Extract and validate specific fields
+    if let Some(name) = validated_input.get("name").and_then(|v| v.as_str()) {
+        if let Err(validation_err) = validator.validate_task_name(name) {
+            warn!("Invalid task name in MCP request: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    } else {
+        return Err(RestError::BadRequest("Missing required field: name".to_string()));
+    }
+    
+    if let Some(version) = validated_input.get("version").and_then(|v| v.as_str()) {
+        if let Err(validation_err) = validator.validate_semver(version) {
+            warn!("Invalid version in MCP request: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    // Validate JavaScript code if provided
+    if let Some(code) = validated_input.get("code").and_then(|v| v.as_str()) {
+        if let Err(validation_err) = validator.validate_string(code, "javascript_code") {
+            warn!("Invalid JavaScript code in MCP request: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+        
+        // Additional checks for JavaScript-specific concerns
+        if code.contains("eval(") || code.contains("Function(") {
+            warn!("Potentially dangerous JavaScript code detected");
+            return Err(RestError::BadRequest("JavaScript code contains potentially dangerous constructs".to_string()));
+        }
+    }
+    
+    // Validate test cases if provided
+    if let Some(test_cases) = validated_input.get("testCases") {
+        if let Err(validation_err) = validator.validate_task_input(test_cases) {
+            warn!("Invalid test cases in MCP request: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
     // For now, return a placeholder response
     // In a full implementation, this would:
-    // 1. Validate the JavaScript code
-    // 2. Validate input/output schemas  
-    // 3. Create task in database with full metadata
-    // 4. Run test cases if provided
-    // 5. Return the created task with validation results
+    // 1. Create task in database with full metadata
+    // 2. Run test cases if provided
+    // 3. Return the created task with validation results
     
     Err(RestError::InternalError(
         "MCP task creation requires MCP service integration".to_string(),
