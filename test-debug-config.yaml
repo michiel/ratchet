@@ -2,7 +2,7 @@
 
 server:
   bind_address: "127.0.0.1"
-  port: 8080
+  port: 8090
   database:
     url: "sqlite::memory:"
     max_connections: 10

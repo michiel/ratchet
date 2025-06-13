@@ -111,6 +111,41 @@ pub enum Commands {
         #[command(subcommand)]
         repo_cmd: RepoCommands,
     },
+
+    /// Start an interactive console for Ratchet administration
+    Console {
+        /// Path to configuration file
+        #[arg(long, value_name = "PATH")]
+        config: Option<PathBuf>,
+
+        /// Connect to remote Ratchet MCP server
+        #[arg(long, value_name = "URL")]
+        connect: Option<String>,
+
+        /// Transport type: stdio, sse, websocket
+        #[arg(long, value_name = "TYPE", default_value = "sse")]
+        transport: String,
+
+        /// Host to connect to
+        #[arg(long, value_name = "HOST", default_value = "127.0.0.1")]
+        host: String,
+
+        /// Port to connect to
+        #[arg(long, value_name = "PORT", default_value = "8090")]
+        port: u16,
+
+        /// Authentication token for remote connections
+        #[arg(long, value_name = "TOKEN")]
+        auth_token: Option<String>,
+
+        /// Custom history file location
+        #[arg(long, value_name = "PATH")]
+        history_file: Option<PathBuf>,
+
+        /// Execute script file on startup
+        #[arg(long, value_name = "PATH")]
+        script: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]

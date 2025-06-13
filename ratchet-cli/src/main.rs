@@ -38,6 +38,7 @@ use ratchet_runtime::{InMemoryTaskExecutor, TaskExecutor};
 use ratchet_js::{FileSystemTask, load_and_execute_task};
 
 mod cli;
+mod commands;
 use cli::{Cli, Commands, ConfigCommands, GenerateCommands, RepoCommands};
 
 /// Convert ratchet-storage RepositoryFactory to ratchet_lib RepositoryFactory
@@ -3028,6 +3029,31 @@ async fn main() -> Result<()> {
             RepoCommands::Verify { repository, format, detailed, list_tasks, offline } => {
                 handle_repo_verify(&config, repository.as_deref(), format, *detailed, *list_tasks, *offline).await
             }
+        },
+        Some(Commands::Console {
+            config: console_config,
+            connect,
+            transport,
+            host,
+            port,
+            auth_token,
+            history_file,
+            script,
+        }) => {
+            use crate::commands::console::{ConsoleConfig, run_console};
+            
+            let console_config = ConsoleConfig {
+                config_file: console_config.clone(),
+                connect_url: connect.clone(),
+                transport: transport.clone(),
+                host: host.clone(),
+                port: *port,
+                auth_token: auth_token.clone(),
+                history_file: history_file.clone(),
+                script_file: script.clone(),
+            };
+            
+            run_console(console_config).await
         },
         None => {
             // If no subcommand is provided, print help
