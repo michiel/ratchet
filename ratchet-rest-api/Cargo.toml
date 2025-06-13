@@ -36,6 +36,7 @@ http.workspace = true
 ratchet-api-types = { path = "../ratchet-api-types" }
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-web = { path = "../ratchet-web" }
+ratchet-core = { path = "../ratchet-core" }
 
 [dev-dependencies]
 axum-test = "13.0"

@@ -21,6 +21,8 @@ jsonschema = "0.18"
 humantime-serde = "1.1"
 envy = "0.4"
 log = { workspace = true }
+regex = "1.10"
+url = "2.5"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

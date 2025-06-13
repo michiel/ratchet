@@ -1,7 +1,19 @@
-//! JSON schema validation utilities
+//! Input validation and error sanitization utilities
 //!
-//! This module provides utilities for validating JSON data against JSON schemas,
-//! primarily used for task input/output validation.
+//! This module provides comprehensive input validation and error sanitization
+//! to prevent security vulnerabilities and information leakage.
+
+pub mod input;
+pub mod error_sanitization;
+
+// Re-export commonly used types
+pub use input::{InputValidator, ValidationError as InputValidationError};
+pub use error_sanitization::{ErrorSanitizer, SanitizedError, ErrorSanitizationConfig};
+
+// JSON schema validation utilities
+//
+// This module provides utilities for validating JSON data against JSON schemas,
+// primarily used for task input/output validation.
 
 use crate::error::{RatchetError, ValidationError};
 use jsonschema::{Draft, JSONSchema};

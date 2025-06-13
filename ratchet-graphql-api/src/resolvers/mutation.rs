@@ -6,7 +6,9 @@ use crate::{
     types::*,
 };
 use ratchet_api_types::ApiError;
+use ratchet_core::validation::{InputValidator, ErrorSanitizer};
 use serde_json::Value as JsonValue;
+use tracing::warn;
 
 /// Root mutation resolver
 pub struct Mutation;
@@ -17,9 +19,33 @@ impl Mutation {
     async fn create_task(
         &self,
         ctx: &Context<'_>,
-        _input: CreateTaskInput,
+        input: CreateTaskInput,
     ) -> Result<Task> {
         let _context = ctx.data::<GraphQLContext>()?;
+        
+        // Validate input
+        let validator = InputValidator::new();
+        let sanitizer = ErrorSanitizer::default();
+        
+        // Validate task name
+        if let Err(validation_err) = validator.validate_task_name(&input.name) {
+            warn!("Invalid task name in GraphQL create_task: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(ApiError::bad_request(&sanitized_error.message).into());
+        }
+        
+        // Note: Version validation would be done here if the input had a version field
+        
+        // Validate description if provided
+        if let Some(ref description) = input.description {
+            if let Err(validation_err) = validator.validate_string(description, "description") {
+                warn!("Invalid description in GraphQL create_task: {}", validation_err);
+                let sanitized_error = sanitizer.sanitize_error(&validation_err);
+                return Err(ApiError::bad_request(&sanitized_error.message).into());
+            }
+        }
+        
+        // Note: Path validation would be done here if the input had a path field
         
         // For now, return an error as this is not yet implemented
         Err(ApiError::internal_error("Task creation not yet implemented").into())
