@@ -22,7 +22,9 @@ members = [
     # "ratchet-lib",      # REMOVED - migrated to modular components
     "ratchet-cli-tools", # CLI tools and utilities (extracted from ratchet-lib)
     "ratchet-cli", "ratchet-config", "ratchet-plugin", "ratchet-registry",
+    "tests", # Integration tests
 ]
+
 resolver = "2"
 
 # Workspace-level dependencies shared by all crates

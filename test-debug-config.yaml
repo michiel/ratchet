@@ -4,7 +4,7 @@ server:
   bind_address: "127.0.0.1"
   port: 8080
   database:
-    url: "sqlite:./debug-test.db"
+    url: "sqlite::memory:"
     max_connections: 10
     connection_timeout: 30
 
@@ -23,6 +23,7 @@ registry:
   sources:
     - name: "local-tasks"
       uri: "file://./sample/js-tasks/tasks"
+      polling_interval: 60
       config:
         watch_for_changes: false
         auto_reload: false

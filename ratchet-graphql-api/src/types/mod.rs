@@ -55,3 +55,10 @@ pub struct WorkerList {
     pub items: Vec<Worker>,
     pub meta: PaginationMetaGraphQL,
 }
+
+/// System health status
+#[derive(SimpleObject)]
+pub struct HealthStatus {
+    pub database: bool,
+    pub message: String,
+}

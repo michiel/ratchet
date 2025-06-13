@@ -506,8 +506,8 @@ logging:
         assert_eq!(modern_config.http.user_agent, "TestAgent/1.0");
         assert!(!modern_config.http.verify_ssl);
         assert_eq!(modern_config.http.max_redirects, 5);
-        assert_eq!(modern_config.logging.level, LogLevel::Debug);
-        assert_eq!(modern_config.logging.format, LogFormat::Json);
+        assert_eq!(modern_config.logging.level, crate::domains::logging::LogLevel::Debug);
+        assert_eq!(modern_config.logging.format, crate::domains::logging::LogFormat::Json);
     }
 
     #[test]

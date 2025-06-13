@@ -258,4 +258,15 @@ impl Query {
             total_memory_usage_mb: None,
         })
     }
+
+    /// Get system health status
+    async fn health(&self, ctx: &Context<'_>) -> Result<HealthStatus> {
+        let _context = ctx.data::<GraphQLContext>()?;
+        
+        // Basic health check - could be enhanced with actual database connectivity checks
+        Ok(HealthStatus {
+            database: true,
+            message: "System is operational".to_string(),
+        })
+    }
 }

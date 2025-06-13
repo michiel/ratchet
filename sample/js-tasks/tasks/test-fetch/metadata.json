@@ -1,5 +1,6 @@
 {
-  "uuid": "test-fetch-001",
+  "name": "test-fetch",
+  "uuid": "550e8400-e29b-41d4-a716-446655440001",
   "version": "1.0.0",
   "label": "HTTP Fetch Test Task",
   "description": "Demonstrates fetching data from the internet using the fetch API",

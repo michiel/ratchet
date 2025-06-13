@@ -16,6 +16,7 @@ ratchet-graphql-api = { path = "../ratchet-graphql-api" }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-logging = { path = "../ratchet-logging" }
+ratchet-registry = { path = "../ratchet-registry" }
 
 # Workspace dependencies - legacy during migration
 # ratchet_lib = { path = "../ratchet-lib" } # REMOVED - using modern modular components
