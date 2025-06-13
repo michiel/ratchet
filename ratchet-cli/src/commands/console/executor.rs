@@ -1,6 +1,6 @@
 //! Command executor for console commands
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use serde_json::Value;
 
 use super::{ConsoleConfig, parser::ConsoleCommand, mcp_client::ConsoleMcpClient};
@@ -173,7 +173,7 @@ impl CommandExecutor {
                 })
             }
             _ => Ok(CommandResult::Error {
-                message: format!("Unknown repo command: {}", command.action),
+                message: format!("Unknown repo command: '{}'. Available commands: list, add, remove, refresh, status, verify", command.action),
             }),
         }
     }
@@ -310,7 +310,7 @@ impl CommandExecutor {
                 }
             }
             _ => Ok(CommandResult::Error {
-                message: format!("Unknown task command: {}", command.action),
+                message: format!("Unknown task command: '{}'. Available commands: list, show, enable, disable, execute", command.action),
             }),
         }
     }
@@ -350,7 +350,7 @@ impl CommandExecutor {
                 })
             }
             _ => Ok(CommandResult::Error {
-                message: format!("Unknown execution command: {}", command.action),
+                message: format!("Unknown execution command: '{}'. Available commands: list, show", command.action),
             }),
         }
     }
@@ -387,7 +387,7 @@ impl CommandExecutor {
                 })
             }
             _ => Ok(CommandResult::Error {
-                message: format!("Unknown job command: {}", command.action),
+                message: format!("Unknown job command: '{}'. Available commands: list, clear, pause, resume", command.action),
             }),
         }
     }
@@ -442,7 +442,7 @@ impl CommandExecutor {
                 })
             }
             _ => Ok(CommandResult::Error {
-                message: format!("Unknown server command: {}", command.action),
+                message: format!("Unknown server command: '{}'. Available commands: status, workers, metrics", command.action),
             }),
         }
     }
@@ -491,13 +491,19 @@ impl CommandExecutor {
                 })
             }
             _ => Ok(CommandResult::Error {
-                message: format!("Unknown db command: {}", command.action),
+                message: format!("Unknown db command: '{}'. Available commands: status, migrate, stats", command.action),
             }),
         }
     }
 
     /// Execute health check command
-    async fn execute_health_command(&self, _command: ConsoleCommand) -> Result<CommandResult> {
+    async fn execute_health_command(&self, command: ConsoleCommand) -> Result<CommandResult> {
+        // For single-word commands like "health", treat empty action as the default
+        if !command.action.is_empty() && command.action != "check" {
+            return Ok(CommandResult::Error {
+                message: format!("Unknown health command: {}. Try 'health' or 'health check'", command.action),
+            });
+        }
         Ok(CommandResult::Json {
             data: serde_json::json!({
                 "status": "healthy",
@@ -510,7 +516,13 @@ impl CommandExecutor {
     }
 
     /// Execute stats command
-    async fn execute_stats_command(&self, _command: ConsoleCommand) -> Result<CommandResult> {
+    async fn execute_stats_command(&self, command: ConsoleCommand) -> Result<CommandResult> {
+        // For single-word commands like "stats", treat empty action as the default
+        if !command.action.is_empty() && command.action != "show" {
+            return Ok(CommandResult::Error {
+                message: format!("Unknown stats command: {}. Try 'stats' or 'stats show'", command.action),
+            });
+        }
         match self.mcp_client.get_server_stats().await {
             Ok(response) => {
                 if let Some(errors) = response.get("errors") {
@@ -573,7 +585,13 @@ impl CommandExecutor {
     }
 
     /// Execute monitor command
-    async fn execute_monitor_command(&self, _command: ConsoleCommand) -> Result<CommandResult> {
+    async fn execute_monitor_command(&self, command: ConsoleCommand) -> Result<CommandResult> {
+        // For single-word commands like "monitor", treat empty action as the default
+        if !command.action.is_empty() && command.action != "start" {
+            return Ok(CommandResult::Error {
+                message: format!("Unknown monitor command: {}. Try 'monitor' or 'monitor start'", command.action),
+            });
+        }
         Ok(CommandResult::Text {
             content: "Monitoring started. Press Ctrl+C to stop.\n\n[12:30:45] Tasks: 28, Executions: 3 running, Jobs: 7 queued\n[12:30:50] Tasks: 28, Executions: 2 running, Jobs: 6 queued\n[12:30:55] Tasks: 28, Executions: 3 running, Jobs: 8 queued".to_string(),
         })

@@ -4020,6 +4020,7 @@ dependencies = [
  "ratchet-runtime",
  "ratchet-server",
  "ratchet-storage",
+ "regex",
  "reqwest 0.11.27",
  "rustyline",
  "serde",

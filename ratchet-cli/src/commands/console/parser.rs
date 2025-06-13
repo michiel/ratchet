@@ -35,7 +35,12 @@ impl CommandParser {
         let action = if let Some(action) = args_iter.next() {
             action.clone()
         } else {
-            "help".to_string() // Default action
+            // No action specified - determine default based on category
+            match category.as_str() {
+                "repo" | "task" | "execution" | "job" | "server" | "db" => "list".to_string(),
+                "health" | "stats" | "monitor" => "".to_string(), // No action needed
+                _ => "help".to_string(),
+            }
         };
 
         let mut arguments = Vec::new();
