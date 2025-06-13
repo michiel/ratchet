@@ -51,6 +51,14 @@ ratchet-cli-tools = { path = "../ratchet-cli-tools", features = ["javascript", "
 # dialoguer = "0.11"
 # indicatif = "0.17"
 
+# Console-specific dependencies
+rustyline = "14.0"
+clap_complete = "4.5"
+colored = "2.1"
+futures = "0.3"
+tokio-stream = "0.1"
+dirs = "5.0"
+
 # Feature flags for optional functionality
 [features]
 default = ["server", "database", "mcp-server", "plugins", "javascript", "output", "runtime", "http", "git"]

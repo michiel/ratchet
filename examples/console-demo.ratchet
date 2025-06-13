@@ -1,0 +1,42 @@
+# Ratchet Console Demo Script
+# This script demonstrates basic console functionality
+
+# Show help
+help
+
+# List repositories
+repo list
+
+# List tasks  
+task list
+
+# Show server status
+server status
+
+# Check health
+health
+
+# Show system statistics
+stats
+
+# Set some variables
+set task_id = "my-task-001"
+set input_data = '{"num1": 42, "num2": 58}'
+
+# Show variables
+vars
+
+# Execute a task (will show mock response)
+task execute $task_id $input_data
+
+# Show job queue
+job list
+
+# Show executions
+execution list
+
+# Database status
+db status
+
+# End of demo
+echo "Console demo completed!"
