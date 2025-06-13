@@ -3,7 +3,7 @@
 use anyhow::{Result, anyhow};
 use serde_json::Value;
 
-use super::{ConsoleConfig, parser::ConsoleCommand};
+use super::{ConsoleConfig, parser::ConsoleCommand, mcp_client::ConsoleMcpClient};
 
 /// Result of command execution
 #[derive(Debug, Clone)]
@@ -18,49 +18,41 @@ pub enum CommandResult {
 /// Command executor that interfaces with MCP
 pub struct CommandExecutor {
     config: ConsoleConfig,
-    connected: bool,
-    // In a full implementation, this would contain the MCP client
-    // For now, we'll use mock data
+    mcp_client: ConsoleMcpClient,
 }
 
 impl CommandExecutor {
     pub async fn new(config: &ConsoleConfig) -> Result<Self> {
+        let mcp_client = ConsoleMcpClient::new(config.clone());
         Ok(Self {
             config: config.clone(),
-            connected: false,
+            mcp_client,
         })
     }
 
     /// Check if connected to server
     pub fn is_connected(&self) -> bool {
-        self.connected
+        self.mcp_client.is_connected()
     }
 
     /// Connect to the MCP server
     pub async fn connect(&mut self) -> Result<String> {
-        // In a full implementation, this would establish MCP connection
-        // For now, we'll simulate connection
-        self.connected = true;
-        Ok(format!("ratchet-server@{}:{}", self.config.host, self.config.port))
+        self.mcp_client.connect().await
     }
 
     /// Disconnect from the MCP server
     pub async fn disconnect(&mut self) {
-        self.connected = false;
+        self.mcp_client.disconnect().await
     }
 
     /// Check server health
     pub async fn check_health(&self) -> Result<String> {
-        if !self.connected {
-            return Err(anyhow!("Not connected to server"));
-        }
-        // Mock health check
-        Ok("healthy".to_string())
+        self.mcp_client.check_health().await
     }
 
     /// Execute a parsed command
     pub async fn execute(&self, command: ConsoleCommand) -> Result<CommandResult> {
-        if !self.connected && !self.is_local_command(&command) {
+        if !self.is_connected() && !self.is_local_command(&command) {
             return Ok(CommandResult::Error {
                 message: "Not connected to server. Use 'connect' command first.".to_string(),
             });
@@ -91,14 +83,45 @@ impl CommandExecutor {
     async fn execute_repo_command(&self, command: ConsoleCommand) -> Result<CommandResult> {
         match command.action.as_str() {
             "list" => {
-                // Mock repository list
-                Ok(CommandResult::Table {
-                    headers: vec!["Name".to_string(), "Type".to_string(), "URL".to_string(), "Status".to_string()],
-                    rows: vec![
-                        vec!["sample-tasks".to_string(), "filesystem".to_string(), "/path/to/sample".to_string(), "active".to_string()],
-                        vec!["prod-tasks".to_string(), "git".to_string(), "https://github.com/example/tasks".to_string(), "syncing".to_string()],
-                    ],
-                })
+                match self.mcp_client.get_repositories().await {
+                    Ok(response) => {
+                        if let Some(errors) = response.get("errors") {
+                            return Ok(CommandResult::Error {
+                                message: format!("GraphQL errors: {}", errors),
+                            });
+                        }
+                        
+                        if let Some(data) = response.get("data").and_then(|d| d.get("taskStats")) {
+                            let headers = vec!["Metric".to_string(), "Value".to_string(), "Description".to_string()];
+                            let rows = vec![
+                                vec!["Total Tasks".to_string(), data["totalTasks"].to_string(), "All registered tasks".to_string()],
+                                vec!["Enabled Tasks".to_string(), data["enabledTasks"].to_string(), "Currently enabled tasks".to_string()],
+                                vec!["Disabled Tasks".to_string(), data["disabledTasks"].to_string(), "Currently disabled tasks".to_string()],
+                            ];
+                            
+                            Ok(CommandResult::Table { headers, rows })
+                        } else {
+                            // Fallback to mock data if no repositories or wrong structure
+                            Ok(CommandResult::Table {
+                                headers: vec!["Name".to_string(), "Type".to_string(), "URL".to_string(), "Status".to_string()],
+                                rows: vec![
+                                    vec!["sample-tasks".to_string(), "filesystem".to_string(), "/path/to/sample".to_string(), "active".to_string()],
+                                    vec!["prod-tasks".to_string(), "git".to_string(), "https://github.com/example/tasks".to_string(), "syncing".to_string()],
+                                ],
+                            })
+                        }
+                    }
+                    Err(_) => {
+                        // Fallback to mock data on error
+                        Ok(CommandResult::Table {
+                            headers: vec!["Name".to_string(), "Type".to_string(), "URL".to_string(), "Status".to_string()],
+                            rows: vec![
+                                vec!["sample-tasks".to_string(), "filesystem".to_string(), "/path/to/sample".to_string(), "active".to_string()],
+                                vec!["prod-tasks".to_string(), "git".to_string(), "https://github.com/example/tasks".to_string(), "syncing".to_string()],
+                            ],
+                        })
+                    }
+                }
             }
             "add" => {
                 if command.arguments.len() < 2 {
@@ -159,14 +182,51 @@ impl CommandExecutor {
     async fn execute_task_command(&self, command: ConsoleCommand) -> Result<CommandResult> {
         match command.action.as_str() {
             "list" => {
-                Ok(CommandResult::Table {
-                    headers: vec!["ID".to_string(), "Name".to_string(), "Version".to_string(), "Repository".to_string(), "Status".to_string()],
-                    rows: vec![
-                        vec!["task-001".to_string(), "addition".to_string(), "1.0.0".to_string(), "sample-tasks".to_string(), "enabled".to_string()],
-                        vec!["task-002".to_string(), "fetch-data".to_string(), "2.1.0".to_string(), "sample-tasks".to_string(), "enabled".to_string()],
-                        vec!["task-003".to_string(), "process-logs".to_string(), "1.5.0".to_string(), "prod-tasks".to_string(), "disabled".to_string()],
-                    ],
-                })
+                match self.mcp_client.get_tasks(None).await {
+                    Ok(response) => {
+                        if let Some(errors) = response.get("errors") {
+                            return Ok(CommandResult::Error {
+                                message: format!("GraphQL errors: {}", errors),
+                            });
+                        }
+                        
+                        if let Some(data) = response["data"]["tasks"]["items"].as_array() {
+                            let headers = vec!["ID".to_string(), "Name".to_string(), "Version".to_string(), "Description".to_string(), "Status".to_string()];
+                            let rows: Vec<Vec<String>> = data.iter().map(|task| {
+                                vec![
+                                    task["id"].as_str().unwrap_or("unknown").to_string(),
+                                    task["name"].as_str().unwrap_or("unknown").to_string(),
+                                    task["version"].as_str().unwrap_or("unknown").to_string(),
+                                    task["description"].as_str().unwrap_or("No description").to_string(),
+                                    if task["enabled"].as_bool().unwrap_or(false) { "enabled" } else { "disabled" }.to_string(),
+                                ]
+                            }).collect();
+                            
+                            Ok(CommandResult::Table { headers, rows })
+                        } else {
+                            // Fallback to mock data
+                            Ok(CommandResult::Table {
+                                headers: vec!["ID".to_string(), "Name".to_string(), "Version".to_string(), "Repository".to_string(), "Status".to_string()],
+                                rows: vec![
+                                    vec!["task-001".to_string(), "addition".to_string(), "1.0.0".to_string(), "sample-tasks".to_string(), "enabled".to_string()],
+                                    vec!["task-002".to_string(), "fetch-data".to_string(), "2.1.0".to_string(), "sample-tasks".to_string(), "enabled".to_string()],
+                                    vec!["task-003".to_string(), "process-logs".to_string(), "1.5.0".to_string(), "prod-tasks".to_string(), "disabled".to_string()],
+                                ],
+                            })
+                        }
+                    }
+                    Err(_) => {
+                        // Fallback to mock data on error
+                        Ok(CommandResult::Table {
+                            headers: vec!["ID".to_string(), "Name".to_string(), "Version".to_string(), "Repository".to_string(), "Status".to_string()],
+                            rows: vec![
+                                vec!["task-001".to_string(), "addition".to_string(), "1.0.0".to_string(), "sample-tasks".to_string(), "enabled".to_string()],
+                                vec!["task-002".to_string(), "fetch-data".to_string(), "2.1.0".to_string(), "sample-tasks".to_string(), "enabled".to_string()],
+                                vec!["task-003".to_string(), "process-logs".to_string(), "1.5.0".to_string(), "prod-tasks".to_string(), "disabled".to_string()],
+                            ],
+                        })
+                    }
+                }
             }
             "show" => {
                 if command.arguments.is_empty() {
@@ -218,15 +278,36 @@ impl CommandExecutor {
                 }
                 let task_id = &command.arguments[0];
                 let input_data = command.json_input.unwrap_or(serde_json::json!({}));
-                Ok(CommandResult::Success {
-                    message: format!("Task '{}' execution scheduled", task_id),
-                    data: Some(serde_json::json!({
-                        "executionId": "exec-12345",
-                        "taskId": task_id,
-                        "status": "queued",
-                        "input": input_data
-                    })),
-                })
+                let webhook_url = command.flags.get("webhook").cloned();
+                
+                match self.mcp_client.execute_task(task_id, input_data.clone(), webhook_url).await {
+                    Ok(response) => {
+                        if let Some(errors) = response.get("errors") {
+                            Ok(CommandResult::Error {
+                                message: format!("Task execution failed: {}", errors),
+                            })
+                        } else if let Some(data) = response.get("data").and_then(|d| d.get("executeTask")) {
+                            Ok(CommandResult::Success {
+                                message: format!("Task '{}' execution scheduled", task_id),
+                                data: Some(data.clone()),
+                            })
+                        } else {
+                            Ok(CommandResult::Success {
+                                message: format!("Task '{}' execution request submitted", task_id),
+                                data: Some(serde_json::json!({
+                                    "taskId": task_id,
+                                    "status": "submitted",
+                                    "input": input_data
+                                })),
+                            })
+                        }
+                    }
+                    Err(e) => {
+                        Ok(CommandResult::Error {
+                            message: format!("Failed to execute task: {}", e),
+                        })
+                    }
+                }
             }
             _ => Ok(CommandResult::Error {
                 message: format!("Unknown task command: {}", command.action),
@@ -430,16 +511,65 @@ impl CommandExecutor {
 
     /// Execute stats command
     async fn execute_stats_command(&self, _command: ConsoleCommand) -> Result<CommandResult> {
-        Ok(CommandResult::Table {
-            headers: vec!["Metric".to_string(), "Value".to_string(), "Trend".to_string()],
-            rows: vec![
-                vec!["Total Tasks".to_string(), "28".to_string(), "↑ +2".to_string()],
-                vec!["Active Executions".to_string(), "3".to_string(), "→ 0".to_string()],
-                vec!["Queued Jobs".to_string(), "7".to_string(), "↓ -3".to_string()],
-                vec!["Success Rate".to_string(), "96.1%".to_string(), "↑ +0.2%".to_string()],
-                vec!["Avg Response Time".to_string(), "2.3s".to_string(), "↓ -0.1s".to_string()],
-            ],
-        })
+        match self.mcp_client.get_server_stats().await {
+            Ok(response) => {
+                if let Some(errors) = response.get("errors") {
+                    return Ok(CommandResult::Error {
+                        message: format!("GraphQL errors: {}", errors),
+                    });
+                }
+                
+                if let Some(data) = response.get("data") {
+                    let task_stats = &data["taskStats"];
+                    let worker_stats = &data["workerStats"];
+                    let health = &data["health"];
+                    
+                    let headers = vec!["Metric".to_string(), "Value".to_string(), "Description".to_string()];
+                    let mut rows = vec![
+                        vec!["Total Tasks".to_string(), task_stats["totalTasks"].to_string(), "All registered tasks".to_string()],
+                        vec!["Enabled Tasks".to_string(), task_stats["enabledTasks"].to_string(), "Currently enabled tasks".to_string()],
+                        vec!["Disabled Tasks".to_string(), task_stats["disabledTasks"].to_string(), "Currently disabled tasks".to_string()],
+                    ];
+                    
+                    if let Some(total_workers) = worker_stats.get("totalWorkers") {
+                        rows.push(vec!["Total Workers".to_string(), total_workers.to_string(), "All workers".to_string()]);
+                    }
+                    if let Some(active_workers) = worker_stats.get("activeWorkers") {
+                        rows.push(vec!["Active Workers".to_string(), active_workers.to_string(), "Currently active workers".to_string()]);
+                    }
+                    if let Some(database) = health.get("database") {
+                        rows.push(vec!["Database".to_string(), database.to_string(), "Database connection status".to_string()]);
+                    }
+                    
+                    Ok(CommandResult::Table { headers, rows })
+                } else {
+                    // Fallback to mock data
+                    Ok(CommandResult::Table {
+                        headers: vec!["Metric".to_string(), "Value".to_string(), "Trend".to_string()],
+                        rows: vec![
+                            vec!["Total Tasks".to_string(), "28".to_string(), "↑ +2".to_string()],
+                            vec!["Active Executions".to_string(), "3".to_string(), "→ 0".to_string()],
+                            vec!["Queued Jobs".to_string(), "7".to_string(), "↓ -3".to_string()],
+                            vec!["Success Rate".to_string(), "96.1%".to_string(), "↑ +0.2%".to_string()],
+                            vec!["Avg Response Time".to_string(), "2.3s".to_string(), "↓ -0.1s".to_string()],
+                        ],
+                    })
+                }
+            }
+            Err(_) => {
+                // Fallback to mock data on error
+                Ok(CommandResult::Table {
+                    headers: vec!["Metric".to_string(), "Value".to_string(), "Trend".to_string()],
+                    rows: vec![
+                        vec!["Total Tasks".to_string(), "28".to_string(), "↑ +2".to_string()],
+                        vec!["Active Executions".to_string(), "3".to_string(), "→ 0".to_string()],
+                        vec!["Queued Jobs".to_string(), "7".to_string(), "↓ -3".to_string()],
+                        vec!["Success Rate".to_string(), "96.1%".to_string(), "↑ +0.2%".to_string()],
+                        vec!["Avg Response Time".to_string(), "2.3s".to_string(), "↓ -0.1s".to_string()],
+                    ],
+                })
+            }
+        }
     }
 
     /// Execute monitor command

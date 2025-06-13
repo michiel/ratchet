@@ -10,6 +10,7 @@ pub mod parser;
 pub mod executor;
 pub mod formatter;
 pub mod commands;
+pub mod mcp_client;
 
 use repl::RatchetConsole;
 

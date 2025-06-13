@@ -90,16 +90,22 @@ impl RatchetConsole {
     async fn show_banner(&mut self) -> Result<()> {
         println!("{}", "Ratchet Console v0.6.0".bright_cyan().bold());
         
-        // Attempt to connect and show connection status
+        // Show connection status without failing on connection errors
         match self.executor.connect().await {
             Ok(info) => {
                 println!("Connected to: {}", info.bright_green());
-                let health = self.executor.check_health().await?;
-                self.formatter.print_success(&format!("Server status: {}", health));
+                match self.executor.check_health().await {
+                    Ok(health) => {
+                        self.formatter.print_success(&format!("Server status: {}", health));
+                    }
+                    Err(e) => {
+                        self.formatter.print_warning(&format!("Health check failed: {}", e));
+                    }
+                }
             }
             Err(e) => {
-                self.formatter.print_warning(&format!("Connection warning: {}", e));
-                self.formatter.print_info("Some commands may not be available");
+                self.formatter.print_warning(&format!("Connection failed: {}", e));
+                self.formatter.print_info("Console running in offline mode. Use 'connect' to retry connection.");
             }
         }
         
