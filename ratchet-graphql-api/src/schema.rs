@@ -6,7 +6,6 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use async_graphql_axum::GraphQLRequest;
 
 use crate::{
     context::{GraphQLContext, GraphQLConfig},
@@ -47,15 +46,25 @@ pub fn configure_schema(
     schema.finish()
 }
 
-/// GraphQL handler for Axum
+/// GraphQL handler for Axum 0.7 compatibility
 pub async fn graphql_handler(
     State(context): State<GraphQLContext>,
-    schema: axum::extract::Extension<RatchetSchema>,
-    req: GraphQLRequest,
-) -> impl IntoResponse {
-    let response = schema.execute(req.into_inner().data(context)).await;
+    axum::extract::Extension(schema): axum::extract::Extension<RatchetSchema>,
+    body: String,
+) -> axum::response::Json<async_graphql::Response> {
+    // Parse the GraphQL request manually from the body
+    let request = match serde_json::from_str::<async_graphql::Request>(&body) {
+        Ok(req) => req,
+        Err(_) => {
+            // Return error response
+            let response = async_graphql::Response::from_errors(vec![
+                async_graphql::ServerError::new("Invalid GraphQL request format", None)
+            ]);
+            return axum::response::Json(response);
+        }
+    };
     
-    // Convert the GraphQL response to JSON manually for axum 0.7 compatibility
+    let response = schema.execute(request.data(context)).await;
     axum::response::Json(response)
 }
 
