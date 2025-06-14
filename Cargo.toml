@@ -32,9 +32,9 @@ resolver = "2"
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-# Reduce tokio feature overhead - specific crates can add features as needed
+# Latest tokio version
 tokio = { version = "1.45", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-util", "io-std", "net", "fs", "signal", "process"] }
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 thiserror = "1.0"
 anyhow = "1.0"
 log = "0.4"
@@ -44,18 +44,20 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 lazy_static = "1.4"
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.10", features = ["v4", "serde"] }
-# Reduce SQLx features to essentials
+uuid = { version = "1.17", features = ["v4", "serde"] }
+# Latest SQLx version
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"], default-features = false }
+# Update to tower 0.5 (compatible with axum 0.6)
+tower = { version = "0.5", default-features = false, features = ["util", "timeout", "limit", "load-shed", "steer"] }
+# Keep axum 0.6 for now - major upgrade to 0.8 requires significant changes
 axum = { version = "0.6", default-features = false, features = ["http1", "http2", "json", "original-uri", "form", "headers", "matched-path"] }
-tower = { version = "0.4", default-features = false, features = ["util", "timeout", "limit", "load-shed", "steer"] }
 tower-http = { version = "0.4", features = ["cors", "trace", "timeout", "limit", "fs"] }
-# GraphQL with essential features
+# GraphQL with essential features - keep 6.0 for compatibility
 async-graphql = { version = "6.0", features = ["uuid", "chrono", "graphiql"], default-features = false }
 async-graphql-axum = "6.0"
-# Use reqwest 0.12 to consolidate versions with rustls
+# Latest reqwest version
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
-url = "2.4"
+url = "2.5"
 async-trait = "0.1"
 tokio-stream = "0.1"
 # Consolidate dependency versions
