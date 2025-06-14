@@ -2,6 +2,75 @@
 
 Ratchet provides a comprehensive command-line interface for task execution, server management, and configuration:
 
+## Quick Start (5 Minutes)
+
+### Get Started with Ratchet
+
+```bash
+# 1. Start the server (uses in-memory database for development)
+ratchet serve
+
+# 2. Open GraphQL playground in your browser
+# Navigate to: http://localhost:8080/playground
+
+# 3. Run a sample query to list available tasks
+query ListTasks {
+  registryTasks {
+    tasks {
+      id
+      label
+      description
+    }
+  }
+}
+
+# 4. Execute a task (example with addition task)
+mutation ExecuteTask {
+  executeTask(input: {
+    taskId: 1,
+    inputData: "{\"num1\": 5, \"num2\": 10}"
+  }) {
+    output
+    executionTimeMs
+  }
+}
+
+# 5. Check server health
+curl http://localhost:8080/health
+```
+
+### Quick MCP Setup for Claude Desktop
+
+```bash
+# 1. Start MCP server
+ratchet mcp-serve
+
+# 2. Add to Claude Desktop config (~/.config/claude-desktop/config.json):
+{
+  "mcpServers": {
+    "ratchet": {
+      "command": "ratchet",
+      "args": ["mcp-serve"]
+    }
+  }
+}
+
+# 3. Restart Claude Desktop - you now have access to 19 Ratchet tools!
+```
+
+### Quick Task Testing
+
+```bash
+# Test a task directly without a server
+ratchet run-once --from-fs ./sample/js-tasks/addition --input-json '{"num1":15,"num2":25}'
+
+# Validate a task structure  
+ratchet validate --from-fs ./my-task
+
+# Run task test suite
+ratchet test --from-fs ./my-task
+```
+
 ## Command Overview
 
 - **`ratchet serve`** - Full HTTP/GraphQL API server for web applications
@@ -257,7 +326,7 @@ Or with a custom configuration file:
 
 ### Available MCP Tools
 
-✅ **MCP Integration Verified** - 17 tools available and fully functional:
+✅ **MCP Integration Verified** - 19 tools available and fully functional:
 
 1. **`ratchet.execute_task`** - Execute a Ratchet task with progress streaming
 2. **`ratchet.list_available_tasks`** - Discover available tasks with schemas  
@@ -276,6 +345,8 @@ Or with a custom configuration file:
 15. **`ratchet.import_tasks`** - Import tasks from JSON/other formats
 16. **`ratchet.export_tasks`** - Export tasks to JSON/other formats  
 17. **`ratchet.create_task_version`** - Version existing tasks
+18. **`ratchet.store_result`** - Store task execution results for analysis
+19. **`ratchet.get_results`** - Retrieve historical execution results and patterns
 
 ### Example MCP Session
 
@@ -432,6 +503,130 @@ mcp:
   enabled: true
   transport: stdio
   auth_type: none
+```
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Port Already in Use
+**Problem**: `Error: Address already in use (os error 98)`
+```bash
+# Solution: Check what's using port 8080
+sudo lsof -i :8080
+
+# Kill the process or use a different port
+ratchet serve --port 8081
+# or
+RATCHET_SERVER_PORT=8081 ratchet serve
+```
+
+#### 2. Database Connection Failures
+**Problem**: `Error: Failed to connect to database`
+```bash
+# Solution: Check database URL and permissions
+ratchet config show --format json | grep database
+
+# For SQLite: ensure directory exists and is writable
+mkdir -p $(dirname "$RATCHET_DATABASE_URL")
+
+# Test with in-memory database
+RATCHET_DATABASE_URL="sqlite::memory:" ratchet serve
+```
+
+#### 3. Task Validation Errors
+**Problem**: `Validation failed: missing required field`
+```bash
+# Solution: Validate task structure
+ratchet validate --from-fs ./my-task --verbose
+
+# Check schemas against input
+ratchet run-once --from-fs ./my-task --input-json '{"test": "data"}' --record ./debug
+```
+
+#### 4. Permission Issues
+**Problem**: `Permission denied` or access errors
+```bash
+# Solution: Check file permissions
+ls -la ./my-task/
+chmod +r ./my-task/*.json
+chmod +x ./my-task/
+
+# For system-wide installation
+sudo chmod +x $(which ratchet)
+```
+
+#### 5. MCP Connection Issues
+**Problem**: Claude Desktop doesn't see Ratchet tools
+```bash
+# Solution: Verify MCP server is running
+ratchet mcp-serve --config debug-config.yaml
+
+# Check Claude Desktop logs (varies by OS)
+# macOS: ~/Library/Logs/Claude/
+# Windows: %APPDATA%/Claude/logs/
+# Linux: ~/.config/claude-desktop/logs/
+
+# Test MCP server directly
+echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}},"id":1}' | ratchet mcp-serve
+```
+
+#### 6. JavaScript Runtime Errors
+**Problem**: `JavaScript execution failed`
+```bash
+# Solution: Enable detailed logging
+RUST_LOG=debug ratchet run-once --from-fs ./my-task --input-json '{}' --record ./js-debug
+
+# Check for syntax errors
+ratchet validate --from-fs ./my-task --syntax-only
+
+# Test with minimal input
+ratchet run-once --from-fs ./my-task --input-json '{}' --verbose
+```
+
+#### 7. High Memory Usage
+**Problem**: Ratchet consuming too much memory
+```bash
+# Solution: Reduce worker count and connection limits
+RATCHET_MAX_WORKERS=2 ratchet serve
+
+# Use file-based database instead of memory
+RATCHET_DATABASE_URL="sqlite:ratchet.db" ratchet serve
+
+# Monitor memory usage
+watch -n 1 'ps aux | grep ratchet'
+```
+
+### Debugging Checklist
+
+When encountering issues:
+
+- [ ] Check `ratchet --version` to verify installation
+- [ ] Verify configuration with `ratchet config show`
+- [ ] Enable debug logging with `RUST_LOG=debug`
+- [ ] Test with minimal/default configuration
+- [ ] Check system requirements (disk space, memory, ports)
+- [ ] Review recent error logs
+- [ ] Test with a known-good task (e.g., `sample/js-tasks/addition`)
+- [ ] Verify network connectivity for external dependencies
+
+### Environment Variables for Debugging
+
+```bash
+# Enable all debug logging
+export RUST_LOG=debug
+
+# Enable trace logging for specific components  
+export RUST_LOG=ratchet=trace,ratchet_mcp=debug
+
+# Use in-memory database for testing
+export RATCHET_DATABASE_URL="sqlite::memory:"
+
+# Force specific bind address
+export RATCHET_SERVER_HOST="0.0.0.0"
+
+# Increase timeouts for slow systems
+export RATCHET_DATABASE_TIMEOUT=60
 ```
 
 ## Best Practices

@@ -138,6 +138,72 @@ my-task/
 - Use built-in `fetch()` for HTTP requests
 - No external modules or Node.js APIs
 
+#### Function Wrapper Do's and Don'ts
+
+```javascript
+// ✅ CORRECT - Synchronous function wrapper
+(function(input, context) {
+    return { result: "immediate value" };
+})
+
+// ✅ CORRECT - Synchronous fetch usage
+(function(input, context) {
+    const response = fetch("https://api.example.com/data");
+    if (response.ok) {
+        return { data: response.body };
+    } else {
+        throw new NetworkError(`API returned ${response.status}`);
+    }
+})
+
+// ✅ CORRECT - Proper error handling
+(function(input, context) {
+    try {
+        const { apiKey, url } = input;
+        if (!apiKey) {
+            throw new DataError("API key is required");
+        }
+        const response = fetch(url, {
+            headers: { "Authorization": `Bearer ${apiKey}` }
+        });
+        return { success: true, data: response.body };
+    } catch (error) {
+        throw new Error(`Task failed: ${error.message}`);
+    }
+})
+
+// ❌ INCORRECT - Async/await not supported
+(async function(input, context) {
+    const data = await fetch(url); // This will fail
+    return data;
+})
+
+// ❌ INCORRECT - Promise chains not supported
+(function(input, context) {
+    return fetch(url)
+        .then(response => response.json()) // This will fail
+        .then(data => ({ result: data }));
+})
+
+// ❌ INCORRECT - No external modules
+(function(input, context) {
+    const axios = require('axios'); // This will fail
+    return axios.get(url);
+})
+
+// ❌ INCORRECT - No Node.js APIs
+(function(input, context) {
+    const fs = require('fs'); // This will fail
+    const data = fs.readFileSync('file.txt');
+    return { data };
+})
+
+// ❌ INCORRECT - Missing function wrapper
+const myTask = (input, context) => { // This will fail
+    return { result: "value" };
+};
+```
+
 #### 3. input.schema.json
 ```json
 {
@@ -227,7 +293,7 @@ console.warn("Warning message");
 #### 1. Task Creation and Scaffolding
 
 ```bash
-# Create a new task with comprehensive scaffolding
+# ✅ STABLE - Create a new task with comprehensive scaffolding
 ratchet generate task my-api-task \
   --label "API Integration Task" \
   --description "Fetches data from external API" \
@@ -235,71 +301,79 @@ ratchet generate task my-api-task \
   --include-tests \
   --include-docs
 
-# Create task from existing template
+# ✅ STABLE - Create task from existing template
 ratchet generate task weather-service \
   --from-template rest-api \
   --author "LLM Agent" \
   --tags "weather,api,external"
 
-# Create task with custom configuration
+# ⚠️ EXPERIMENTAL - Create task with custom configuration
 ratchet generate task data-processor \
   --timeout 60000 \
   --memory-limit "256MB" \
   --retry-attempts 3 \
   --input-validation strict
 
-# Generate task from OpenAPI specification
+# 🚧 EXPERIMENTAL - Generate task from OpenAPI specification
 ratchet generate task from-openapi \
   --spec-url "https://api.example.com/openapi.json" \
   --operation "getUserData" \
   --auto-test-cases
 
-# Clone existing task for modification
+# 🚧 EXPERIMENTAL - Clone existing task for modification
 ratchet clone task existing-task new-variation \
   --update-metadata \
   --clear-tests
 
-# Update task metadata in batch
+# 🚧 EXPERIMENTAL - Update task metadata in batch
 ratchet update task-metadata my-task \
   --timeout 45000 \
   --add-tag "production" \
   --set-version "2.0.0"
 
-# Merge multiple tasks into one
+# 🚧 EXPERIMENTAL - Merge multiple tasks into one
 ratchet merge tasks task1 task2 task3 \
   --output combined-task \
   --strategy sequential \
   --preserve-tests
 
-# Extract common functionality
+# 🚧 EXPERIMENTAL - Extract common functionality
 ratchet extract task my-task \
   --function "validateInput" \
   --to-library common-utils
 ```
 
+**Legend:**
+- ✅ **STABLE**: Fully implemented and tested
+- ⚠️ **EXPERIMENTAL**: Implemented but may change in future versions
+- 🚧 **FUTURE**: Planned feature, not yet implemented
+
 #### 2. Comprehensive Validation and Analysis
 
 ```bash
-# Deep validation with analysis
+# ✅ STABLE - Basic validation
+ratchet validate my-api-task/
+
+# 🚧 FUTURE - Deep validation with analysis
 ratchet validate my-api-task/ \
   --deep \
   --analyze-performance \
   --check-security \
   --verify-dependencies
 
-# Validate with custom rules
+# 🚧 FUTURE - Validate with custom rules
 ratchet validate my-api-task/ \
   --rules-file validation-rules.json \
   --fail-on-warnings \
   --output-format detailed
 
-# Cross-task validation (dependencies)
+# 🚧 FUTURE - Cross-task validation (dependencies)
 ratchet validate --workspace \
   --check-conflicts \
   --analyze-compatibility \
   --report conflicts-report.json
 
-# Real-time validation during development
+# 🚧 FUTURE - Real-time validation during development
 ratchet validate my-api-task/ \
   --watch \
   --auto-fix \
@@ -349,35 +423,38 @@ ratchet watch my-api-task/ \
 #### 4. Comprehensive Testing Framework
 
 ```bash
-# Run full test suite with coverage
+# ✅ STABLE - Run basic test suite
+ratchet test my-api-task/
+
+# 🚧 FUTURE - Run full test suite with coverage
 ratchet test my-api-task/ \
   --coverage \
   --performance-baseline \
   --parallel \
   --report-format junit
 
-# Generate and run AI-powered test cases
+# 🚧 FUTURE - Generate and run AI-powered test cases
 ratchet test my-api-task/ \
   --generate-tests \
   --edge-cases \
   --property-based \
   --mutation-testing
 
-# Fuzz testing for robustness
+# 🚧 FUTURE - Fuzz testing for robustness
 ratchet fuzz my-api-task/ \
   --duration 300s \
   --seed 12345 \
   --strategy adaptive \
   --save-failures
 
-# Load testing and benchmarking
+# 🚧 FUTURE - Load testing and benchmarking
 ratchet benchmark my-api-task/ \
   --concurrent-users 100 \
   --duration 60s \
   --ramp-up 10s \
   --memory-profile
 
-# Regression testing against baselines
+# 🚧 FUTURE - Regression testing against baselines
 ratchet test my-api-task/ \
   --baseline-version "1.0.0" \
   --compare-performance \
@@ -602,7 +679,7 @@ mcp:
 
 ### Available MCP Tools
 
-The MCP server provides comprehensive tools for full-lifecycle task development with agent-level capabilities:
+The MCP server provides 19 comprehensive tools for full-lifecycle task development with agent-level capabilities:
 
 #### Task Creation & Management Tools
 
@@ -1103,21 +1180,190 @@ Whether using binary commands or MCP tools, follow this workflow:
 - Add helpful error messages
 - Create comprehensive test coverage
 
+## Decision Trees and Common Patterns
+
 ### Binary vs MCP: When to Use What
 
-#### Use Binary Commands When:
+```mermaid
+graph TD
+    A[Task Development Need] --> B{What are you doing?}
+    B -->|Creating new task| C[Binary: ratchet generate]
+    B -->|Testing & Validation| D{Need real-time feedback?}
+    B -->|Debugging issues| E[MCP: analyze_execution_error]
+    B -->|Monitoring execution| F[MCP: get_execution_status]
+    
+    D -->|Yes| G[MCP: execute_task with progress]
+    D -->|No| H[Binary: ratchet test]
+    
+    C --> I{Need templates?}
+    I -->|Yes| J[Binary: ratchet generate --template]
+    I -->|No| K[Binary: ratchet generate task]
+    
+    E --> L{Need suggestions?}
+    L -->|Yes| M[MCP: analyze with include_suggestions]
+    L -->|No| N[MCP: get_execution_logs]
+```
+
+### Development Method Selection
+
+**Use Binary Commands When:**
 - Creating new tasks (scaffolding)
 - Validating task structure  
 - Running comprehensive test suites
 - Quick one-off testing
 - Batch processing multiple tasks
+- CI/CD integration
+- Local development setup
 
-#### Use MCP Tools When:
+**Use MCP Tools When:**
 - Interactive development and debugging
 - Real-time execution monitoring
-- Error analysis and suggestions
+- Error analysis with AI suggestions
 - Understanding execution flows
 - Iterative testing with variations
+- Working within Claude Desktop/AI environments
+- Need detailed execution traces
+
+### Common LLM Development Patterns
+
+#### Pattern: API Integration Task
+**Steps:**
+1. Define input schema with API credentials and parameters
+2. Implement HTTP request with proper error handling
+3. Transform response to standard format
+4. Add validation for required response fields
+5. Create comprehensive test cases with mock responses
+
+**Example Structure:**
+```javascript
+(function(input, context) {
+    const { endpoint, apiKey, parameters = {} } = input;
+    
+    // 1. Validate inputs
+    if (!endpoint || !apiKey) {
+        throw new DataError("endpoint and apiKey are required");
+    }
+    
+    // 2. Build request
+    const url = `${endpoint}?${new URLSearchParams(parameters)}`;
+    const response = fetch(url, {
+        headers: { "Authorization": `Bearer ${apiKey}` }
+    });
+    
+    // 3. Handle response
+    if (!response.ok) {
+        throw new NetworkError(`API error: ${response.status}`);
+    }
+    
+    // 4. Transform and validate
+    const data = response.body;
+    if (!data || typeof data !== 'object') {
+        throw new DataError("Invalid API response format");
+    }
+    
+    return {
+        success: true,
+        data: data,
+        timestamp: new Date().toISOString()
+    };
+})
+```
+
+#### Pattern: Data Processing Task
+**Steps:**
+1. Define input schema with data validation rules
+2. Implement processing logic with error boundaries
+3. Ensure idempotent operations
+4. Add progress tracking for large datasets
+5. Include performance benchmarks
+
+**Example Structure:**
+```javascript
+(function(input, context) {
+    const { data, rules, options = {} } = input;
+    
+    // 1. Validate input data
+    if (!Array.isArray(data)) {
+        throw new DataError("Input data must be an array");
+    }
+    
+    // 2. Process with error handling
+    const results = [];
+    let processed = 0;
+    
+    for (const item of data) {
+        try {
+            const result = applyRules(item, rules);
+            results.push({ ...result, processed: true });
+            processed++;
+        } catch (error) {
+            if (options.stopOnError) {
+                throw error;
+            }
+            results.push({ error: error.message, processed: false });
+        }
+    }
+    
+    return {
+        results: results,
+        totalProcessed: processed,
+        totalItems: data.length,
+        successRate: processed / data.length
+    };
+})
+```
+
+#### Pattern: Validation and Transformation Task
+**Steps:**
+1. Define strict input/output schemas
+2. Implement validation with detailed error messages
+3. Add transformation logic with reversibility
+4. Include format conversion capabilities
+5. Test with edge cases and malformed data
+
+#### Pattern: External Service Integration
+**Steps:**
+1. Design fault-tolerant communication
+2. Implement retry logic with exponential backoff
+3. Add circuit breaker pattern for reliability
+4. Include comprehensive error classification
+5. Monitor service health and performance
+
+### Task Quality Checklist
+
+✅ **Schema Design**
+- [ ] Input schema defines all required fields
+- [ ] Input schema includes field descriptions
+- [ ] Output schema matches actual function return
+- [ ] Schemas use appropriate JSON Schema features
+
+✅ **Implementation Quality** 
+- [ ] Function wrapper is properly formatted
+- [ ] Error handling covers all edge cases
+- [ ] HTTP requests include proper headers
+- [ ] Response validation prevents malformed data
+- [ ] Code follows security best practices
+
+✅ **Testing Coverage**
+- [ ] Happy path test case included
+- [ ] Error condition test cases included  
+- [ ] Edge case scenarios tested
+- [ ] Performance benchmarks established
+- [ ] Integration tests with real APIs (where applicable)
+
+✅ **Documentation**
+- [ ] Task description is clear and complete
+- [ ] Input parameters are well documented
+- [ ] Output format is clearly defined
+- [ ] Error conditions are documented
+- [ ] Usage examples are provided
+
+✅ **Production Readiness**
+- [ ] Security review completed
+- [ ] Performance targets met
+- [ ] Monitoring and alerting configured
+- [ ] Deployment procedure documented
+- [ ] Rollback strategy defined
 
 ## Testing and Debugging
 
