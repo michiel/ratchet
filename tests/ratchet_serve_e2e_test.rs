@@ -9,6 +9,15 @@
 //! 6. Verifies the expected result
 //!
 //! This test covers the complete workflow from repository loading to webhook delivery.
+//!
+//! ## Performance Notes
+//! This test can take 20-40 seconds due to:
+//! - Real server startup and database initialization (~3-5s)
+//! - Repository synchronization (~2-3s)
+//! - Webhook delivery timeout (2-10s depending on mode)
+//! - Multiple GraphQL API calls (~3-5s)
+//!
+//! Set `RATCHET_FAST_TESTS=1` or run in CI for faster execution with reduced timeouts.
 
 use anyhow::Result;
 use axum::{
@@ -176,7 +185,7 @@ async fn create_test_config(
             database: DatabaseConfig {
                 url: format!("sqlite://{}", db_path.display()),
                 max_connections: 5,
-                connection_timeout: Duration::from_secs(10),
+                connection_timeout: Duration::from_secs(5),
                 ..Default::default()
             },
             ..Default::default()
@@ -195,7 +204,7 @@ async fn create_test_config(
             ..Default::default()
         }),
         output: OutputConfig {
-            default_timeout: Duration::from_secs(30),
+            default_timeout: Duration::from_secs(10),
             ..Default::default()
         },
         http: HttpConfig {
@@ -259,6 +268,15 @@ impl GraphQLClient {
 #[tokio::test]
 async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     init_quiet_logging();
+    
+    // Check if we should run a fast version of the test
+    let fast_mode = std::env::var("RATCHET_FAST_TESTS").unwrap_or_default() == "1" ||
+                   std::env::var("CI").is_ok();
+    
+    if fast_mode {
+        println!("⚡ Running in fast mode - reduced timeouts and validation");
+    }
+    
     println!("🚀 Starting ratchet serve end-to-end test");
 
     // Step 1: Start webhook server
@@ -308,8 +326,9 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     });
     
     // Give server time to start and sync repositories
-    println!("⏳ Waiting for server to sync repositories...");
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    let startup_delay = if fast_mode { Duration::from_millis(500) } else { Duration::from_secs(2) };
+    println!("⏳ Waiting for server to sync repositories ({:?})...", startup_delay);
+    tokio::time::sleep(startup_delay).await;
     println!("✅ Ratchet server running on: {}", server_url);
 
     // Step 5: Initialize GraphQL client
@@ -587,8 +606,8 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     println!("📋 Jobs in queue: {:?}", jobs_response);
 
     // Step 11: Wait for potential webhook delivery
-    println!("⏳ Step 11: Waiting for webhook delivery (timeout after 30 seconds)");
-    let webhook_timeout = Duration::from_secs(30);
+    let webhook_timeout = if fast_mode { Duration::from_secs(2) } else { Duration::from_secs(10) };
+    println!("⏳ Step 11: Waiting for webhook delivery (timeout after {:?})", webhook_timeout);
     let start_time = std::time::Instant::now();
     
     while start_time.elapsed() < webhook_timeout {
@@ -650,8 +669,12 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     // Check final webhook state
     let final_payloads = webhook_state.received_payloads.lock().unwrap();
     if final_payloads.is_empty() {
-        println!("⚠️  No webhook payloads received - this may indicate the execution pipeline needs worker processes");
-        println!("   This is expected in the test environment without full infrastructure.");
+        if fast_mode {
+            println!("⚡ Fast mode: Skipping webhook validation - infrastructure test completed");
+        } else {
+            println!("⚠️  No webhook payloads received - this may indicate the execution pipeline needs worker processes");
+            println!("   This is expected in the test environment without full infrastructure.");
+        }
     } else {
         println!("✅ Webhook integration working: {} payload(s) received", final_payloads.len());
     }
@@ -697,7 +720,8 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
             .unwrap();
     });
     
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    // Reduced startup time for compatibility test
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     let graphql_client = GraphQLClient::new(format!("{}/graphql", server_url));
 

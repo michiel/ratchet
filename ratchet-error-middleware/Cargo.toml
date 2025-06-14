@@ -1,0 +1,45 @@
+[package]
+name = "ratchet-error-middleware"
+version = "0.1.0"
+edition = "2021"
+description = "Shared error handling middleware for all Ratchet APIs"
+
+[dependencies]
+# Core dependencies
+ratchet-core = { path = "../ratchet-core" }
+ratchet-api-types = { path = "../ratchet-api-types" }
+
+# Web framework dependencies
+axum = { workspace = true }
+tower = { workspace = true }
+tower-layer = "0.3"
+
+# GraphQL dependencies
+async-graphql = { workspace = true, optional = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+futures = "0.3"
+
+# Utilities  
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# HTTP
+http = { workspace = true }
+hyper = { workspace = true }
+
+[features]
+default = ["graphql"]
+graphql = ["async-graphql"]

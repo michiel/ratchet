@@ -202,11 +202,11 @@ impl RateLimiter {
 }
 
 /// Rate limiting middleware
-pub async fn rate_limit_middleware<B>(
+pub async fn rate_limit_middleware(
     headers: HeaderMap,
     connect_info: Option<ConnectInfo<SocketAddr>>,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request<axum::body::Body>,
+    next: Next,
 ) -> Result<Response, WebError> {
     // Extract rate limiter from request extensions (it should be added by the layer)
     let rate_limiter = request

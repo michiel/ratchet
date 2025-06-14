@@ -1,6 +1,7 @@
 //! Main application configuration and router setup
 
 use axum::{
+    response::{Json, Html, IntoResponse},
     routing::{get, post},
     Router,
 };
@@ -14,6 +15,7 @@ use tower_http::trace::TraceLayer;
 use crate::{
     context::{TasksContext, ExecutionsContext, JobsContext, SchedulesContext, WorkersContext},
     handlers,
+    openapi_spec,
 };
 
 /// Application configuration
@@ -76,10 +78,13 @@ impl AppContext {
 pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
     let app = Router::new()
         // Health endpoints (no prefix)
-        .route("/health", get(handlers::health_check))
-        .route("/health/detailed", get(handlers::health_check_detailed))
-        .route("/ready", get(handlers::readiness_check))
-        .route("/live", get(handlers::liveness_check))
+        .route("/health", get(handlers::health::health_check))
+        .route("/health/detailed", get(handlers::health::health_check_detailed))
+        .route("/ready", get(handlers::health::readiness_check))
+        .route("/live", get(handlers::health::liveness_check))
+        // OpenAPI documentation endpoints
+        .route("/api-docs/openapi.json", get(serve_openapi_spec))
+        .route("/docs", get(serve_swagger_ui))
         // API routes with prefix
         .nest(&config.api_prefix, create_api_router())
         // Add application context
@@ -104,21 +109,100 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
     app
 }
 
+/// Serve OpenAPI specification as JSON
+async fn serve_openapi_spec() -> impl IntoResponse {
+    Json(openapi_spec())
+}
+
+/// Serve Swagger UI HTML page
+async fn serve_swagger_ui() -> impl IntoResponse {
+    
+    let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Ratchet API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui.css" />
+    <style>
+        html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }
+        *, *:before, *:after { box-sizing: inherit; }
+        body { margin:0; background: #fafafa; }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: '/api-docs/openapi.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+            });
+        }
+    </script>
+</body>
+</html>"#;
+
+    Html(html)
+}
+
 /// Create unified API router
 fn create_api_router() -> Router<TasksContext> {
     Router::new()
         // Task endpoints
-        .route("/tasks", get(handlers::list_tasks).post(handlers::create_task))
-        .route("/tasks/stats", get(handlers::get_task_stats))
-        .route("/tasks/sync", post(handlers::sync_tasks))
+        .route("/tasks", get(handlers::tasks::list_tasks).post(handlers::tasks::create_task))
+        .route("/tasks/stats", get(handlers::tasks::get_task_stats))
+        .route("/tasks/sync", post(handlers::tasks::sync_tasks))
         .route(
             "/tasks/:id",
-            get(handlers::get_task)
-                .patch(handlers::update_task)
-                .delete(handlers::delete_task),
+            get(handlers::tasks::get_task)
+                .patch(handlers::tasks::update_task)
+                .delete(handlers::tasks::delete_task),
         )
-        .route("/tasks/:id/enable", post(handlers::enable_task))
-        .route("/tasks/:id/disable", post(handlers::disable_task))
+        .route("/tasks/:id/enable", post(handlers::tasks::enable_task))
+        .route("/tasks/:id/disable", post(handlers::tasks::disable_task))
+        // Execution endpoints
+        .route("/executions", get(handlers::executions::list_executions).post(handlers::executions::create_execution))
+        .route("/executions/stats", get(handlers::executions::get_execution_stats))
+        .route(
+            "/executions/:id",
+            get(handlers::executions::get_execution)
+                .patch(handlers::executions::update_execution),
+        )
+        .route("/executions/:id/cancel", post(handlers::executions::cancel_execution))
+        .route("/executions/:id/retry", post(handlers::executions::retry_execution))
+        .route("/executions/:id/logs", get(handlers::executions::get_execution_logs))
+        // Job endpoints
+        .route("/jobs", get(handlers::jobs::list_jobs).post(handlers::jobs::create_job))
+        .route("/jobs/stats", get(handlers::jobs::get_job_stats))
+        .route(
+            "/jobs/:id",
+            get(handlers::jobs::get_job)
+                .patch(handlers::jobs::update_job),
+        )
+        .route("/jobs/:id/cancel", post(handlers::jobs::cancel_job))
+        .route("/jobs/:id/retry", post(handlers::jobs::retry_job))
+        // Schedule endpoints
+        .route("/schedules", get(handlers::schedules::list_schedules).post(handlers::schedules::create_schedule))
+        .route("/schedules/stats", get(handlers::schedules::get_schedule_stats))
+        .route(
+            "/schedules/:id",
+            get(handlers::schedules::get_schedule)
+                .patch(handlers::schedules::update_schedule)
+                .delete(handlers::schedules::delete_schedule),
+        )
+        .route("/schedules/:id/enable", post(handlers::schedules::enable_schedule))
+        .route("/schedules/:id/disable", post(handlers::schedules::disable_schedule))
+        .route("/schedules/:id/trigger", post(handlers::schedules::trigger_schedule))
         // MCP task development endpoints
         .route("/mcp/tasks", post(handlers::mcp_create_task))
         .route("/mcp/tasks/:name", 
@@ -129,12 +213,6 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/mcp/results", post(handlers::mcp_store_result))
         .route("/mcp/results/:name", get(handlers::mcp_get_results))
         // Placeholder endpoints
-        .route("/executions", get(placeholder_handler))
-        .route("/executions/:id", get(placeholder_handler))
-        .route("/jobs", get(placeholder_handler))
-        .route("/jobs/:id", get(placeholder_handler))
-        .route("/schedules", get(placeholder_handler))
-        .route("/schedules/:id", get(placeholder_handler))
         .route("/workers", get(placeholder_handler))
         .route("/workers/stats", get(placeholder_handler))
 }

@@ -48,6 +48,8 @@ clap = { version = "4.4", features = ["derive"] }
 # Internal dependencies
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-core = { path = "../ratchet-core" }
+ratchet-api-types = { path = "../ratchet-api-types" }
+# ratchet-error-middleware = { path = "../ratchet-error-middleware" } # DISABLED
 ratchet-ipc = { path = "../ratchet-ipc" }
 ratchet-runtime = { path = "../ratchet-runtime" }
 ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }

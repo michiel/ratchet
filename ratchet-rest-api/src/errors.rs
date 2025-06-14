@@ -1,4 +1,4 @@
-//! REST API specific error types and conversions
+//! REST API specific error types and conversions with sanitization
 
 use axum::{
     http::StatusCode,
@@ -6,6 +6,7 @@ use axum::{
     Json,
 };
 use ratchet_api_types::errors::ApiError;
+use ratchet_core::validation::error_sanitization::ErrorSanitizer;
 use ratchet_interfaces::DatabaseError;
 use ratchet_web::WebError;
 use serde_json::json;
@@ -59,71 +60,37 @@ impl IntoResponse for RestError {
             "error": {
                 "code": unified_error.code,
                 "message": unified_error.message,
-                "timestamp": unified_error.timestamp
+                "status": status.as_u16()
             }
         });
-
         (status, Json(error_response)).into_response()
     }
 }
 
 impl RestError {
-    /// Convert to unified API error
+    /// Convert to unified API error with sanitization
     pub fn to_unified_error(&self) -> ApiError {
-        match self {
-            RestError::NotFound(msg) => ApiError::not_found("Resource", msg),
-            RestError::BadRequest(msg) => ApiError::bad_request(msg),
-            RestError::InternalError(msg) => ApiError::internal_error(msg),
-            RestError::MethodNotAllowed(msg) => {
-                ApiError::bad_request(format!("Method not allowed: {}", msg))
+        // Apply error sanitization to prevent sensitive data leakage
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized = sanitizer.sanitize_error(self);
+        
+        // Use sanitized error message and determine appropriate error code
+        let error_code = sanitized.error_code.unwrap_or_else(|| {
+            match self {
+                RestError::NotFound(_) => "NOT_FOUND".to_string(),
+                RestError::BadRequest(_) => "BAD_REQUEST".to_string(),
+                RestError::InternalError(_) => "INTERNAL_ERROR".to_string(),
+                RestError::MethodNotAllowed(_) => "METHOD_NOT_ALLOWED".to_string(),
+                RestError::ServiceUnavailable(_) => "SERVICE_UNAVAILABLE".to_string(),
+                RestError::Conflict(_) => "CONFLICT".to_string(),
+                RestError::Timeout(_) => "TIMEOUT".to_string(),
+                RestError::Database(_) => "DATABASE_ERROR".to_string(),
+                RestError::Web(_) => "WEB_ERROR".to_string(),
+                RestError::Validation { .. } => "VALIDATION_ERROR".to_string(),
             }
-            RestError::ServiceUnavailable(msg) => ApiError::service_unavailable(Some(msg)),
-            RestError::Conflict(msg) => ApiError::conflict("Resource", msg),
-            RestError::Timeout(_msg) => ApiError::timeout("Request"),
-            RestError::Database(db_err) => match db_err {
-                DatabaseError::NotFound { entity, id } => {
-                    ApiError::not_found(entity, id)
-                }
-                DatabaseError::Constraint { message } => {
-                    ApiError::conflict("Database", message)
-                }
-                DatabaseError::Validation { message } => {
-                    ApiError::validation_error("field", message)
-                }
-                _ => ApiError::internal_error(&db_err.to_string()),
-            },
-            RestError::Web(web_err) => {
-                // Convert WebError to ApiError
-                match web_err {
-                    WebError::NotFound { message } => ApiError::not_found("Resource", message),
-                    WebError::BadRequest { message } => ApiError::bad_request(message),
-                    WebError::Unauthorized { message } => ApiError::unauthorized(Some(message)),
-                    WebError::Forbidden { message } => ApiError::forbidden(Some(message)),
-                    WebError::Conflict { message } => ApiError::conflict("Resource", message),
-                    WebError::Internal { message } => ApiError::internal_error(message),
-                    WebError::ServiceUnavailable { message } => {
-                        ApiError::service_unavailable(Some(message))
-                    }
-                    WebError::RateLimit => ApiError::rate_limited(None),
-                    WebError::Timeout => ApiError::timeout("Request"),
-                    WebError::Validation { errors } => {
-                        let first_error = errors.first();
-                        if let Some(error) = first_error {
-                            ApiError::validation_error(
-                                error.field.as_deref().unwrap_or("field"),
-                                &error.message,
-                            )
-                        } else {
-                            ApiError::validation_error("field", "Validation failed")
-                        }
-                    }
-                    _ => ApiError::internal_error(&web_err.to_string()),
-                }
-            }
-            RestError::Validation { message } => {
-                ApiError::validation_error("request", message)
-            }
-        }
+        });
+        
+        ApiError::new(error_code, sanitized.message)
     }
 
     // Common error constructors

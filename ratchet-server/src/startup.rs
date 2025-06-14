@@ -94,21 +94,20 @@ impl Server {
             // Create and configure the GraphQL schema
             let schema = configure_schema(create_schema(), &graphql_config);
             
+            // Add GraphQL context and schema as layers instead of state
+            app = app.layer(axum::extract::Extension(graphql_context.clone()));
+            app = app.layer(axum::extract::Extension(schema));
+            
             // Add GraphQL endpoint (supporting both GET and POST)
             app = app.route(
                 &self.config.graphql_api.endpoint,
                 axum::routing::get(graphql_handler).post(graphql_handler)
-                    .with_state(graphql_context.clone())
             );
             
             // Add GraphQL Playground if enabled
             if self.config.graphql_api.enable_playground {
-                app = app.route("/playground", axum::routing::get(graphql_playground)
-                    .with_state(graphql_context.clone()));
+                app = app.route("/playground", axum::routing::get(graphql_playground));
             }
-            
-            // Add GraphQL schema extension as shared state
-            app = app.layer(axum::extract::Extension(schema));
         }
 
         // Add MCP SSE API if enabled
@@ -166,10 +165,9 @@ impl Server {
         // Start the server
         tracing::info!("Server listening on {}", addr);
 
-        // Use axum 0.6 Server API with stateful router
-        let make_service = app.into_make_service();
-        axum::Server::bind(&addr)
-            .serve(make_service)
+        // Use axum 0.7 API with stateful router
+        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        axum::serve(listener, app)
             .with_graceful_shutdown(shutdown_signal())
             .await?;
 

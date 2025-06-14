@@ -12,6 +12,7 @@ ratchet-api-types = { path = "../ratchet-api-types" }
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-web = { path = "../ratchet-web" }
 ratchet-core = { path = "../ratchet-core" }
+# ratchet-error-middleware = { path = "../ratchet-error-middleware" } # DISABLED
 
 # External dependencies
 async-graphql = { workspace = true, features = ["playground", "apollo_tracing"] }

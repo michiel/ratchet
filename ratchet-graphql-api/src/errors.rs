@@ -1,6 +1,7 @@
-//! GraphQL error handling using unified error types
+//! GraphQL error handling using unified error types with sanitization
 
 use ratchet_api_types::ApiError;
+use ratchet_core::validation::error_sanitization::ErrorSanitizer;
 use thiserror::Error;
 
 // Re-export the unified error types for consistency
@@ -18,10 +19,20 @@ pub enum GraphQLError {
 
 impl From<GraphQLError> for ApiError {
     fn from(error: GraphQLError) -> Self {
-        match error {
-            GraphQLError::Repository(e) => ApiError::internal_error(format!("Database error: {}", e)),
-            GraphQLError::Registry(e) => ApiError::internal_error(format!("Registry error: {}", e)),
-        }
+        // Apply error sanitization to prevent sensitive data leakage
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized = sanitizer.sanitize_error(&error);
+        
+        // Use sanitized error message and code
+        ApiError::new(
+            sanitized.error_code.unwrap_or_else(|| {
+                match error {
+                    GraphQLError::Repository(_) => "DATABASE_ERROR".to_string(),
+                    GraphQLError::Registry(_) => "REGISTRY_ERROR".to_string(),
+                }
+            }),
+            sanitized.message
+        )
     }
 }
 

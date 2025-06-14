@@ -9,9 +9,9 @@ use tracing::error;
 use crate::errors::WebError;
 
 /// Error handling middleware that catches and converts errors to appropriate HTTP responses
-pub async fn error_handler_middleware<B>(
-    request: Request<B>,
-    next: Next<B>,
+pub async fn error_handler_middleware(
+    request: Request<axum::body::Body>,
+    next: Next,
 ) -> Response {
     let response = next.run(request).await;
     

@@ -18,6 +18,23 @@ use crate::{
 };
 
 /// List all tasks with optional filtering and pagination
+#[utoipa::path(
+    get,
+    path = "/tasks",
+    tag = "tasks",
+    operation_id = "listTasks",
+    params(
+        ("page" = Option<u32>, Query, description = "Page number (0-based)"),
+        ("limit" = Option<u32>, Query, description = "Number of items per page"),
+        ("filter" = Option<String>, Query, description = "Filter expression"),
+        ("sort" = Option<String>, Query, description = "Sort expression")
+    ),
+    responses(
+        (status = 200, description = "List of tasks retrieved successfully"),
+        (status = 400, description = "Invalid query parameters"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn list_tasks(
     State(ctx): State<TasksContext>,
     query: QueryParams,
@@ -45,6 +62,21 @@ pub async fn list_tasks(
 }
 
 /// Get a specific task by ID
+#[utoipa::path(
+    get,
+    path = "/tasks/{task_id}",
+    tag = "tasks",
+    operation_id = "getTask",
+    params(
+        ("task_id" = String, Path, description = "Unique task identifier")
+    ),
+    responses(
+        (status = 200, description = "Task retrieved successfully"),
+        (status = 400, description = "Invalid task ID"),
+        (status = 404, description = "Task not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_task(
     State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
@@ -77,6 +109,19 @@ pub async fn get_task(
 }
 
 /// Create a new task
+#[utoipa::path(
+    post,
+    path = "/tasks",
+    tag = "tasks",
+    operation_id = "createTask",
+    request_body = CreateTaskRequest,
+    responses(
+        (status = 201, description = "Task created successfully"),
+        (status = 400, description = "Invalid task data"),
+        (status = 409, description = "Task with same name already exists"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn create_task(
     State(_ctx): State<TasksContext>,
     Json(request): Json<CreateTaskRequest>,
@@ -145,6 +190,22 @@ pub async fn create_task(
 }
 
 /// Update an existing task
+#[utoipa::path(
+    put,
+    path = "/tasks/{task_id}",
+    tag = "tasks",
+    operation_id = "updateTask",
+    params(
+        ("task_id" = String, Path, description = "Unique task identifier")
+    ),
+    request_body = UpdateTaskRequest,
+    responses(
+        (status = 200, description = "Task updated successfully"),
+        (status = 400, description = "Invalid task data"),
+        (status = 404, description = "Task not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn update_task(
     State(_ctx): State<TasksContext>,
     Path(task_id): Path<String>,
@@ -241,6 +302,16 @@ pub async fn sync_tasks(
 }
 
 /// Get task statistics
+#[utoipa::path(
+    get,
+    path = "/tasks/stats",
+    tag = "tasks",
+    operation_id = "getTaskStats",
+    responses(
+        (status = 200, description = "Task statistics retrieved successfully"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_task_stats(
     State(ctx): State<TasksContext>,
 ) -> RestResult<impl IntoResponse> {

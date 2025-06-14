@@ -6,9 +6,9 @@ use axum::{
 use ratchet_api_types::pagination::PaginationMeta;
 
 /// Middleware to add pagination headers to responses
-pub async fn pagination_response_middleware<B>(
-    request: Request<B>,
-    next: Next<B>,
+pub async fn pagination_response_middleware(
+    request: Request<axum::body::Body>,
+    next: Next,
 ) -> Response {
     let mut response = next.run(request).await;
 
