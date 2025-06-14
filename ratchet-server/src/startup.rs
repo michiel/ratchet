@@ -98,13 +98,11 @@ impl Server {
             app = app.route(
                 &self.config.graphql_api.endpoint,
                 axum::routing::get(graphql_handler).post(graphql_handler)
-                    .with_state(graphql_context.clone())
-            );
+            ).with_state(graphql_context.clone());
             
             // Add GraphQL Playground if enabled
             if self.config.graphql_api.enable_playground {
-                app = app.route("/playground", axum::routing::get(graphql_playground)
-                    .with_state(graphql_context.clone()));
+                app = app.route("/playground", axum::routing::get(graphql_playground));
             }
             
             // Add GraphQL schema extension as shared state
@@ -166,10 +164,9 @@ impl Server {
         // Start the server
         tracing::info!("Server listening on {}", addr);
 
-        // Use axum 0.6 Server API with stateful router
-        let make_service = app.into_make_service();
-        axum::Server::bind(&addr)
-            .serve(make_service)
+        // Use axum 0.7 API with stateful router
+        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        axum::serve(listener, app)
             .with_graceful_shutdown(shutdown_signal())
             .await?;
 

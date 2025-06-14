@@ -42,10 +42,10 @@ impl std::fmt::Display for RequestId {
 }
 
 /// Middleware to add request ID to all requests
-pub async fn request_id_middleware<B>(
+pub async fn request_id_middleware(
     headers: HeaderMap,
-    mut request: Request<B>,
-    next: Next<B>,
+    mut request: Request<axum::body::Body>,
+    next: Next,
 ) -> Response {
     // Try to get request ID from incoming headers, otherwise generate one
     let request_id = headers
@@ -89,7 +89,7 @@ pub trait RequestIdExt {
     fn request_id_or_generate(&self) -> RequestId;
 }
 
-impl<B> RequestIdExt for Request<B> {
+impl RequestIdExt for Request<axum::body::Body> {
     fn request_id(&self) -> Option<RequestId> {
         self.extensions()
             .get::<Arc<RequestId>>()

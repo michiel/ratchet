@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use async_graphql_axum::GraphQLRequest;
 
 use crate::{
     context::{GraphQLContext, GraphQLConfig},
@@ -54,7 +54,9 @@ pub async fn graphql_handler(
     req: GraphQLRequest,
 ) -> impl IntoResponse {
     let response = schema.execute(req.into_inner().data(context)).await;
-    GraphQLResponse::from(response)
+    
+    // Convert the GraphQL response to JSON manually for axum 0.7 compatibility
+    axum::response::Json(response)
 }
 
 /// GraphQL playground handler for development

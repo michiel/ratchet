@@ -6,6 +6,7 @@ use axum::{
     Json,
 };
 use ratchet_api_types::errors::ApiError;
+use ratchet_core::validation::error_sanitization::ErrorSanitizer;
 use ratchet_interfaces::DatabaseError;
 use ratchet_web::WebError;
 use serde_json::json;
@@ -67,38 +68,29 @@ impl IntoResponse for RestError {
 }
 
 impl RestError {
-    /// Convert to unified API error
+    /// Convert to unified API error with sanitization
     pub fn to_unified_error(&self) -> ApiError {
-        match self {
-            RestError::NotFound(msg) => {
-                ApiError::not_found("resource", msg)
-            },
-            RestError::BadRequest(msg) => {
-                ApiError::bad_request(msg.clone())
-            },
-            RestError::InternalError(msg) => {
-                ApiError::internal_error(msg.clone())
-            },
-            RestError::MethodNotAllowed(msg) => {
-                ApiError::bad_request(format!("Method not allowed: {}", msg))
-            },
-            RestError::ServiceUnavailable(msg) => {
-                ApiError::service_unavailable(Some(msg))
-            },
-            RestError::Conflict(msg) => {
-                ApiError::conflict("resource", msg)
-            },
-            RestError::Timeout(_msg) => ApiError::timeout("Request"),
-            RestError::Database(db_err) => {
-                ApiError::internal_error(format!("Database error: {}", db_err))
-            },
-            RestError::Web(web_err) => {
-                ApiError::internal_error(web_err.to_string())
-            },
-            RestError::Validation { message } => {
-                ApiError::validation_error("input", message)
+        // Apply error sanitization to prevent sensitive data leakage
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized = sanitizer.sanitize_error(self);
+        
+        // Use sanitized error message and determine appropriate error code
+        let error_code = sanitized.error_code.unwrap_or_else(|| {
+            match self {
+                RestError::NotFound(_) => "NOT_FOUND".to_string(),
+                RestError::BadRequest(_) => "BAD_REQUEST".to_string(),
+                RestError::InternalError(_) => "INTERNAL_ERROR".to_string(),
+                RestError::MethodNotAllowed(_) => "METHOD_NOT_ALLOWED".to_string(),
+                RestError::ServiceUnavailable(_) => "SERVICE_UNAVAILABLE".to_string(),
+                RestError::Conflict(_) => "CONFLICT".to_string(),
+                RestError::Timeout(_) => "TIMEOUT".to_string(),
+                RestError::Database(_) => "DATABASE_ERROR".to_string(),
+                RestError::Web(_) => "WEB_ERROR".to_string(),
+                RestError::Validation { .. } => "VALIDATION_ERROR".to_string(),
             }
-        }
+        });
+        
+        ApiError::new(error_code, sanitized.message)
     }
 
     // Common error constructors

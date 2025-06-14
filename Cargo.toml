@@ -3,7 +3,7 @@ members = [
     "ratchet-interfaces", # Core interfaces - NEW for breaking circular deps
     "ratchet-api-types",  # Unified API types for REST and GraphQL
     "ratchet-web",        # Reusable web middleware and utilities
-    # "ratchet-error-middleware", # Shared error handling middleware - DISABLED due to axum 0.6 compatibility
+    # "ratchet-error-middleware", # Shared error handling middleware - TEMPORARILY DISABLED for direct implementation
     "ratchet-rest-api",   # REST API implementation with dependency injection
     "ratchet-graphql-api", # GraphQL API implementation with dependency injection
     "ratchet-server",     # Unified server combining REST and GraphQL APIs
@@ -47,12 +47,12 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.17", features = ["v4", "serde"] }
 # Latest SQLx version
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"], default-features = false }
-# Update to tower 0.5 (compatible with axum 0.6)
+# Upgrade to latest tower and axum for enhanced middleware support
 tower = { version = "0.5", default-features = false, features = ["util", "timeout", "limit", "load-shed", "steer"] }
-# Keep axum 0.6 for now - major upgrade to 0.8 requires significant changes
-axum = { version = "0.6", default-features = false, features = ["http1", "http2", "json", "original-uri", "form", "headers", "matched-path"] }
-tower-http = { version = "0.4", features = ["cors", "trace", "timeout", "limit", "fs"] }
-# GraphQL with essential features - keep 6.0 for compatibility
+# Upgrade to axum 0.7 for improved middleware support while maintaining compatibility
+axum = { version = "0.7", default-features = false, features = ["http1", "http2", "json", "original-uri", "form", "matched-path", "tokio", "query"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit", "fs"] }
+# Keep GraphQL at 6.0 for current Rust version compatibility
 async-graphql = { version = "6.0", features = ["uuid", "chrono", "graphiql"], default-features = false }
 async-graphql-axum = "6.0"
 # Latest reqwest version

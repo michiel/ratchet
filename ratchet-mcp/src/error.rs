@@ -279,9 +279,12 @@ impl From<ratchet_ipc::error::IpcError> for McpError {
     }
 }
 
-/// Conversion from McpError to unified ApiError
+/// Conversion from McpError to unified ApiError with sanitization
 impl From<McpError> for ApiError {
     fn from(error: McpError) -> Self {
+        // Apply error sanitization to prevent sensitive data leakage
+        let sanitizer = ratchet_core::validation::error_sanitization::ErrorSanitizer::default();
+        let sanitized = sanitizer.sanitize_error(&error);
         
         let (code, suggestions) = match &error {
             McpError::MethodNotFound { .. } => ("METHOD_NOT_FOUND", vec![
@@ -330,7 +333,9 @@ impl From<McpError> for ApiError {
             ]),
         };
         
-        ApiError::new(code, error.to_string())
+        // Use sanitized message and prefer the sanitized error code if available
+        let final_code = sanitized.error_code.unwrap_or_else(|| code.to_string());
+        ApiError::new(final_code, sanitized.message)
             .with_suggestions(suggestions)
     }
 }

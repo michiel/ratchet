@@ -475,18 +475,12 @@ impl McpServer {
                 reason: format!("Failed to bind to {}: {}", bind_address, e),
             })?;
 
-        // Axum 0.6 API for serving
-        axum::Server::from_tcp(listener.into_std().map_err(|e| McpError::ServerError {
-            message: format!("Failed to convert listener: {}", e),
-        })?)
-        .map_err(|e| McpError::ServerError {
-            message: format!("Failed to create server: {}", e),
-        })?
-        .serve(app.into_make_service())
-        .await
-        .map_err(|e| McpError::ServerError {
-            message: format!("SSE server error: {}", e),
-        })?;
+        // Axum 0.7 API for serving
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| McpError::ServerError {
+                message: format!("SSE server error: {}", e),
+            })?;
 
         Ok(())
     }

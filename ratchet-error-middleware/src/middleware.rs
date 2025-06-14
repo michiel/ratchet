@@ -8,11 +8,12 @@ use axum::{
 };
 use ratchet_api_types::errors::ApiError;
 use serde_json::json;
-use tracing::{error, warn};
+use tracing;
 use uuid::Uuid;
 use std::time::Instant;
 
-use crate::traits::{ToSanitizedApiError, ErrorSanitizationProvider};
+// Temporarily remove unused trait imports
+// use crate::traits::{ToSanitizedApiError, ErrorSanitizationProvider};
 
 /// Request context for error handling
 #[derive(Debug, Clone)]
@@ -27,7 +28,7 @@ pub struct ErrorContext {
 /// Middleware that adds request context and handles errors consistently
 pub async fn error_handling_middleware(
     request: Request<Body>,
-    next: Next<Body>,
+    next: Next,
 ) -> impl IntoResponse {
     let request_id = Uuid::new_v4().to_string();
     let path = request.uri().path().to_string();
@@ -85,7 +86,7 @@ pub async fn error_handling_middleware(
 /// Middleware for sanitizing error responses
 pub async fn error_sanitization_middleware(
     request: Request<Body>,
-    next: Next<Body>,
+    next: Next,
 ) -> impl IntoResponse {
     let response = next.run(request).await;
     
@@ -174,8 +175,8 @@ fn create_sanitized_error_response(
 ) -> Response {
     let error_json = json!({
         "error": {
-            "code": api_error.code(),
-            "message": api_error.message(),
+            "code": api_error.code,
+            "message": api_error.message,
             "status": status.as_u16()
         }
     });
@@ -204,11 +205,13 @@ fn create_json_response(
 }
 
 /// Create a basic error handling middleware layer
-pub fn create_error_middleware() -> axum::middleware::FromFnLayer<impl Clone> {
-    axum::middleware::from_fn(error_handling_middleware)
+pub fn create_error_middleware() -> tower::layer::util::Identity {
+    // Return identity layer for now - will implement proper layer later
+    tower::layer::util::Identity::new()
 }
 
 /// Create a basic error sanitization middleware layer  
-pub fn create_sanitization_middleware() -> axum::middleware::FromFnLayer<impl Clone> {
-    axum::middleware::from_fn(error_sanitization_middleware)
+pub fn create_sanitization_middleware() -> tower::layer::util::Identity {
+    // Return identity layer for now - will implement proper layer later
+    tower::layer::util::Identity::new()
 }
