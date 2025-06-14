@@ -3,6 +3,7 @@ members = [
     "ratchet-interfaces", # Core interfaces - NEW for breaking circular deps
     "ratchet-api-types",  # Unified API types for REST and GraphQL
     "ratchet-web",        # Reusable web middleware and utilities
+    # "ratchet-error-middleware", # Shared error handling middleware - DISABLED due to axum 0.6 compatibility
     "ratchet-rest-api",   # REST API implementation with dependency injection
     "ratchet-graphql-api", # GraphQL API implementation with dependency injection
     "ratchet-server",     # Unified server combining REST and GraphQL APIs

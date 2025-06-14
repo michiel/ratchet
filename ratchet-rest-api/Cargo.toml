@@ -37,6 +37,7 @@ ratchet-api-types = { path = "../ratchet-api-types" }
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-web = { path = "../ratchet-web" }
 ratchet-core = { path = "../ratchet-core" }
+# ratchet-error-middleware = { path = "../ratchet-error-middleware" } # DISABLED
 
 # OpenAPI documentation
 utoipa = { version = "4.0", features = ["axum_extras", "chrono", "uuid"] }

@@ -1,7 +1,9 @@
-//! Error types for MCP operations
+//! Error types for MCP operations with sanitization support
 
 use std::time::Duration;
 use thiserror::Error;
+use ratchet_api_types::errors::ApiError;
+// Note: Error middleware disabled due to axum compatibility issues
 
 /// Result type for MCP operations
 pub type McpResult<T> = Result<T, McpError>;
@@ -272,7 +274,63 @@ impl From<ratchet_core::error::RatchetError> for McpError {
 impl From<ratchet_ipc::error::IpcError> for McpError {
     fn from(err: ratchet_ipc::error::IpcError) -> Self {
         McpError::Transport {
-            message: format!("IPC error: {}", err),
+            message: err.to_string(),
         }
+    }
+}
+
+/// Conversion from McpError to unified ApiError
+impl From<McpError> for ApiError {
+    fn from(error: McpError) -> Self {
+        
+        let (code, suggestions) = match &error {
+            McpError::MethodNotFound { .. } => ("METHOD_NOT_FOUND", vec![
+                "Check the method name spelling".to_string(),
+                "Verify that the method is supported by this server".to_string(),
+            ]),
+            McpError::InvalidParams { .. } => ("INVALID_PARAMS", vec![
+                "Check the parameter types and values".to_string(),
+                "Refer to the method documentation".to_string(),
+            ]),
+            McpError::ToolNotFound { .. } => ("TOOL_NOT_FOUND", vec![
+                "Verify the tool name is correct".to_string(),
+                "Check if the tool is available in this context".to_string(),
+            ]),
+            McpError::AuthenticationFailed { .. } => ("AUTHENTICATION_FAILED", vec![
+                "Check your authentication credentials".to_string(),
+                "Verify the authentication method is supported".to_string(),
+            ]),
+            McpError::AuthorizationDenied { .. } => ("AUTHORIZATION_DENIED", vec![
+                "Verify you have permission for this operation".to_string(),
+                "Contact an administrator if needed".to_string(),
+            ]),
+            McpError::RateLimitExceeded { .. } => ("RATE_LIMITED", vec![
+                "Reduce the frequency of requests".to_string(),
+                "Wait before retrying".to_string(),
+            ]),
+            McpError::ServerTimeout { .. } | McpError::ConnectionTimeout { .. } => ("TIMEOUT", vec![
+                "Retry the operation".to_string(),
+                "Check network connectivity".to_string(),
+            ]),
+            McpError::ServerUnavailable { .. } => ("SERVICE_UNAVAILABLE", vec![
+                "Try again later".to_string(),
+                "Check server status".to_string(),
+            ]),
+            McpError::Validation { .. } => ("VALIDATION_ERROR", vec![
+                "Check input format and values".to_string(),
+                "Refer to the API documentation".to_string(),
+            ]),
+            McpError::ResourceNotFound { .. } => ("NOT_FOUND", vec![
+                "Verify the resource ID is correct".to_string(),
+                "Check if the resource still exists".to_string(),
+            ]),
+            _ => ("MCP_ERROR", vec![
+                "Check the MCP connection".to_string(),
+                "Retry the operation".to_string(),
+            ]),
+        };
+        
+        ApiError::new(code, error.to_string())
+            .with_suggestions(suggestions)
     }
 }
