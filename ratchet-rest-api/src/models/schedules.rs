@@ -1,7 +1,6 @@
 //! Schedule-related request and response models
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use utoipa::ToSchema;
 use ratchet_api_types::ApiId;
 
