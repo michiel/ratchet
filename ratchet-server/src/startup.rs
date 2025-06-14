@@ -94,19 +94,20 @@ impl Server {
             // Create and configure the GraphQL schema
             let schema = configure_schema(create_schema(), &graphql_config);
             
+            // Add GraphQL context and schema as layers instead of state
+            app = app.layer(axum::extract::Extension(graphql_context.clone()));
+            app = app.layer(axum::extract::Extension(schema));
+            
             // Add GraphQL endpoint (supporting both GET and POST)
             app = app.route(
                 &self.config.graphql_api.endpoint,
                 axum::routing::get(graphql_handler).post(graphql_handler)
-            ).with_state(graphql_context.clone());
+            );
             
             // Add GraphQL Playground if enabled
             if self.config.graphql_api.enable_playground {
                 app = app.route("/playground", axum::routing::get(graphql_playground));
             }
-            
-            // Add GraphQL schema extension as shared state
-            app = app.layer(axum::extract::Extension(schema));
         }
 
         // Add MCP SSE API if enabled

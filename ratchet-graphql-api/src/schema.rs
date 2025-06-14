@@ -2,7 +2,6 @@
 
 use async_graphql::{Schema, SchemaBuilder, EmptySubscription};
 use axum::{
-    extract::State,
     response::IntoResponse,
     Json,
 };
@@ -48,7 +47,7 @@ pub fn configure_schema(
 
 /// GraphQL handler for Axum 0.7 compatibility
 pub async fn graphql_handler(
-    State(context): State<GraphQLContext>,
+    axum::extract::Extension(context): axum::extract::Extension<GraphQLContext>,
     axum::extract::Extension(schema): axum::extract::Extension<RatchetSchema>,
     body: String,
 ) -> axum::response::Json<async_graphql::Response> {
