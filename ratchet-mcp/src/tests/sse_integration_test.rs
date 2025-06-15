@@ -34,11 +34,11 @@ fn create_initialize_request() -> JsonRpcRequest {
     let params = InitializeParams {
         protocol_version: "2024-11-05".to_string(),
         capabilities: ClientCapabilities::default(),
-        client_info: ClientInfo {
+        client_info: Some(ClientInfo {
             name: "Test Client".to_string(),
             version: "1.0.0".to_string(),
             metadata: HashMap::new(),
-        },
+        }),
     };
 
     JsonRpcRequest {

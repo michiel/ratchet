@@ -1181,15 +1181,24 @@ impl McpServer {
 
     /// Handle initialize request
     async fn handle_initialize(&self, params: InitializeParams) -> McpResult<InitializeResult> {
+        let client_name = params
+            .client_info
+            .as_ref()
+            .map(|info| info.name.as_str())
+            .unwrap_or("Unknown Client");
+        
         tracing::info!(
-            "Initializing MCP server with client: {}",
-            params.client_info.name
+            "Initializing MCP server with client: {} (protocol: {})",
+            client_name,
+            params.protocol_version
         );
 
         // Validate protocol version
         if !crate::protocol::validate_protocol_version(&params.protocol_version) {
             return Err(McpError::Protocol {
-                message: format!("Unsupported protocol version: {}", params.protocol_version),
+                message: format!("Unsupported protocol version: {}. Supported versions: {:?}", 
+                    params.protocol_version, 
+                    crate::protocol::SUPPORTED_PROTOCOL_VERSIONS),
             });
         }
 
@@ -1230,8 +1239,11 @@ impl McpServer {
             metadata: HashMap::new(),
         };
 
+        // Use the client's protocol version if supported, otherwise use our default
+        let negotiated_version = crate::protocol::get_protocol_version_for_client(&params.protocol_version);
+        
         Ok(InitializeResult {
-            protocol_version: crate::protocol::MCP_PROTOCOL_VERSION.to_string(),
+            protocol_version: negotiated_version,
             capabilities,
             server_info,
         })
@@ -1386,11 +1398,11 @@ mod tests {
         let params = InitializeParams {
             protocol_version: crate::protocol::MCP_PROTOCOL_VERSION.to_string(),
             capabilities: crate::protocol::ClientCapabilities::default(),
-            client_info: crate::protocol::ClientInfo {
+            client_info: Some(crate::protocol::ClientInfo {
                 name: "Test Client".to_string(),
                 version: "1.0.0".to_string(),
                 metadata: HashMap::new(),
-            },
+            }),
         };
 
         let result = server.handle_initialize(params).await;
@@ -1407,11 +1419,11 @@ mod tests {
         let params = InitializeParams {
             protocol_version: "999.0.0".to_string(),
             capabilities: crate::protocol::ClientCapabilities::default(),
-            client_info: crate::protocol::ClientInfo {
+            client_info: Some(crate::protocol::ClientInfo {
                 name: "Test Client".to_string(),
                 version: "1.0.0".to_string(),
                 metadata: HashMap::new(),
-            },
+            }),
         };
 
         let result = server.handle_initialize(params).await;

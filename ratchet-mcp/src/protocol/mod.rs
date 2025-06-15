@@ -18,8 +18,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-/// MCP protocol version
+/// MCP protocol version (server default)
 pub const MCP_PROTOCOL_VERSION: &str = "0.1.0";
+
+/// Supported MCP protocol versions
+pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[
+    "0.1.0",
+    "2024-11-05", // Claude Code current version
+    "1.0.0",      // Future version compatibility
+];
 
 /// Generate a new request ID
 pub fn generate_request_id() -> Value {
@@ -28,7 +35,16 @@ pub fn generate_request_id() -> Value {
 
 /// Validate MCP protocol version
 pub fn validate_protocol_version(version: &str) -> bool {
-    version == MCP_PROTOCOL_VERSION
+    SUPPORTED_PROTOCOL_VERSIONS.contains(&version)
+}
+
+/// Get the best supported protocol version for negotiation
+pub fn get_protocol_version_for_client(client_version: &str) -> String {
+    if SUPPORTED_PROTOCOL_VERSIONS.contains(&client_version) {
+        client_version.to_string()
+    } else {
+        MCP_PROTOCOL_VERSION.to_string()
+    }
 }
 
 /// Standard MCP methods

@@ -151,9 +151,9 @@ pub struct InitializeParams {
     /// Client capabilities
     pub capabilities: ClientCapabilities,
 
-    /// Client information
-    #[serde(rename = "clientInfo")]
-    pub client_info: ClientInfo,
+    /// Client information (optional for backward compatibility)
+    #[serde(rename = "clientInfo", skip_serializing_if = "Option::is_none")]
+    pub client_info: Option<ClientInfo>,
 }
 
 /// Result of the initialize method
