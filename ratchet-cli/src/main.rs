@@ -26,6 +26,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
+use std::sync::Arc;
 
 #[cfg(feature = "core")]
 use ratchet_core::task::Task as CoreTask;
@@ -336,7 +337,7 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
             database_url.trim_start_matches("sqlite:").to_string()
         } else {
             // Assume it's already a path
-            database_url
+            database_url.clone()
         };
         debug!("Parsed SQLite path for sync: {}", path);
         ratchet_storage::config::StorageConfig::sqlite(path)
@@ -356,12 +357,24 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
     info!("🔄 Creating database connection for repository synchronization");
     debug!("Sync database URL: {}", storage_config.connection_url().unwrap_or_default());
     
+    // Create base repository factory for sync (needed by DatabaseSync)
     let connection_manager = ratchet_storage::connection::create_connection_manager(&storage_config).await
         .context("Failed to create connection manager for repository synchronization")?;
 
     let repository_factory = ratchet_storage::RepositoryFactory::new(connection_manager);
     let task_repo_for_sync = repository_factory.task_repository();
-    let task_repo_for_health = repository_factory.task_repository();
+    
+    // Also create SeaORM connection for verification 
+    let seaorm_config = ratchet_storage::seaorm::config::DatabaseConfig {
+        url: database_url.clone(),
+        max_connections: storage_config.connection.max_connections,
+        connection_timeout: storage_config.connection.connect_timeout,
+    };
+    
+    let db_connection = ratchet_storage::seaorm::connection::DatabaseConnection::new(seaorm_config).await
+        .context("Failed to create SeaORM connection for verification")?;
+    let seaorm_factory = ratchet_storage::seaorm::repositories::RepositoryFactory::new(db_connection);
+    let task_repo_for_verification = Arc::new(seaorm_factory.task_repository());
     
     let sync_service = Arc::new(DatabaseSync::new(Arc::new(task_repo_for_sync)));
 
@@ -389,14 +402,28 @@ async fn sync_repositories_to_database(config: &RatchetConfig) -> Result<()> {
         }
     }
 
-    // Add a simple verification: try to get repository health status
+    // Add a simple verification: try to count tasks in the actual database
     info!("🔍 Verifying repository synchronization...");
-    match task_repo_for_health.health_check().await {
-        Ok(healthy) => {
-            info!("   📊 Repository health check: {}", healthy);
+    match task_repo_for_verification.health_check_send().await {
+        Ok(()) => {
+            info!("   📊 Repository health check: true");
         }
         Err(e) => {
             warn!("   ⚠️  Repository health check failed: {}", e);
+        }
+    }
+    
+    // Also verify that tasks were actually persisted to the database
+    match task_repo_for_verification.count().await {
+        Ok(count) => {
+            info!("   📈 Actual tasks in database: {}", count);
+            if count == 0 {
+                warn!("   ⚠️  No tasks found in database despite sync claiming success");
+                warn!("   💡 This suggests the sync process is using a different database or failed to persist");
+            }
+        }
+        Err(e) => {
+            warn!("   ⚠️  Failed to count tasks in database: {}", e);
         }
     }
 
