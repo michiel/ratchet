@@ -71,7 +71,7 @@ ahash = "0.8"
 
 # Workspace-level configuration for targets
 [workspace.package]
-version = "0.4.4"  # Common version for all crates
+version = "0.4.5"  # Common version for all crates
 authors = ["Michiel Kalkman <michiel@nosuchtype.com>"]
 edition = "2021"
 rust-version = "1.75"

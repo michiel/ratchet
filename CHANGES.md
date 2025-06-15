@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## v0.4.5 (2025-06-15)
 
 ### Features
 - **Complete API Interface Implementation**: Implemented fully functional CRUD operations across GraphQL, REST, and MCP interfaces with repository integration
