@@ -18,27 +18,6 @@ RUN useradd -m -u 1000 ratchet
 # Set working directory
 WORKDIR /usr/src/ratchet
 
-# Copy Cargo files first for better layer caching
-COPY Cargo.toml Cargo.lock ./
-COPY ratchet-*/Cargo.toml ./
-RUN mkdir -p ratchet-interfaces/src ratchet-api-types/src ratchet-web/src \
-    ratchet-rest-api/src ratchet-graphql-api/src ratchet-server/src \
-    ratchet-core/src ratchet-runtime/src ratchet-storage/src \
-    ratchet-ipc/src ratchet-resilience/src ratchet-caching/src \
-    ratchet-plugins/src ratchet-execution/src ratchet-http/src \
-    ratchet-js/src ratchet-logging/src ratchet-output/src \
-    ratchet-mcp/src ratchet-cli-tools/src ratchet-cli/src \
-    ratchet-config/src ratchet-plugin/src ratchet-registry/src \
-    tests/src && \
-    echo "fn main() {}" > ratchet-cli/src/main.rs && \
-    find . -name "Cargo.toml" -path "*/ratchet-*" -exec dirname {} \; | \
-    xargs -I {} sh -c 'echo "fn main() {}" > {}/src/lib.rs || true'
-
-# Build dependencies (this layer will be cached unless Cargo.toml changes)
-RUN cargo build --release --bin ratchet && \
-    rm -rf target/release/deps/ratchet* && \
-    rm -rf ratchet-*/src
-
 # Copy source code
 COPY . .
 
