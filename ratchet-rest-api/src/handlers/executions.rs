@@ -352,22 +352,73 @@ pub async fn cancel_execution(
     )
 )]
 pub async fn retry_execution(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
-    Json(_request): Json<RetryExecutionRequest>,
+    Json(request): Json<RetryExecutionRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Retrying execution with ID: {}", execution_id);
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate original execution exists and can be retried
-    // 2. Create new execution with same or updated input
-    // 3. Queue for processing
-    // 4. Return the new execution
+    // Validate execution ID
+    let validator = InputValidator::new();
+    if let Err(validation_err) = validator.validate_string(&execution_id, "execution_id") {
+        warn!("Invalid execution ID provided: {}", validation_err);
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
     
-    Err(RestError::InternalError(
-        "Execution retry not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    let api_id = ApiId::from_string(execution_id.clone());
+    let execution_repo = ctx.repositories.execution_repository();
+    
+    // Find the original execution
+    let original_execution = execution_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Execution", &execution_id))?;
+    
+    // Check if execution can be retried (only retry failed executions)
+    if !matches!(original_execution.status, ratchet_api_types::ExecutionStatus::Failed) {
+        return Err(RestError::BadRequest(
+            "Only failed executions can be retried".to_string()
+        ));
+    }
+    
+    // Use new input if provided, otherwise use original input
+    let input_data = request.input.unwrap_or(original_execution.input);
+    
+    // Create new execution from the original
+    let new_execution = ratchet_api_types::UnifiedExecution {
+        id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+        uuid: uuid::Uuid::new_v4(),
+        task_id: original_execution.task_id,
+        input: input_data,
+        output: None,
+        status: ratchet_api_types::ExecutionStatus::Pending,
+        error_message: None,
+        error_details: None,
+        queued_at: chrono::Utc::now(),
+        started_at: None,
+        completed_at: None,
+        duration_ms: None,
+        http_requests: None,
+        recording_path: None,
+        can_retry: false,
+        can_cancel: true,
+        progress: None,
+    };
+    
+    // Create the new execution
+    let created_execution = execution_repo.create(new_execution).await
+        .map_err(|e| RestError::InternalError(format!("Failed to create retry execution: {}", e)))?;
+    
+    info!("Created retry execution with ID: {}", created_execution.id);
+    
+    Ok(Json(ApiResponse::new(created_execution)))
 }
 
 /// Get execution logs

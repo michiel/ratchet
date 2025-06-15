@@ -421,21 +421,86 @@ pub async fn disable_schedule(
     )
 )]
 pub async fn trigger_schedule(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
 ) -> RestResult<impl IntoResponse> {
     info!("Triggering schedule with ID: {}", schedule_id);
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate schedule exists and is enabled
-    // 2. Create immediate job/execution for the scheduled task
-    // 3. Record the execution for the schedule
-    // 4. Return the created job/execution
+    // Validate schedule ID
+    let validator = InputValidator::new();
+    if let Err(validation_err) = validator.validate_string(&schedule_id, "schedule_id") {
+        warn!("Invalid schedule ID provided: {}", validation_err);
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
     
-    Err(RestError::InternalError(
-        "Schedule trigger not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    let api_id = ApiId::from_string(schedule_id.clone());
+    let schedule_repo = ctx.repositories.schedule_repository();
+    
+    // Find the schedule
+    let schedule = schedule_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Schedule", &schedule_id))?;
+    
+    // Check if schedule is enabled
+    if !schedule.enabled {
+        return Err(RestError::BadRequest(
+            "Cannot trigger disabled schedule".to_string()
+        ));
+    }
+    
+    // Validate that the associated task exists
+    let task_repo = ctx.repositories.task_repository();
+    let _task = task_repo
+        .find_by_id(schedule.task_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::BadRequest("Associated task not found".to_string()))?;
+    
+    // Create a job for immediate execution
+    let job_repo = ctx.repositories.job_repository();
+    let task_id_clone = schedule.task_id.clone();
+    let new_job = ratchet_api_types::UnifiedJob {
+        id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+        task_id: task_id_clone,
+        priority: ratchet_api_types::JobPriority::Normal, // Manual triggers get normal priority
+        status: ratchet_api_types::JobStatus::Queued,
+        retry_count: 0,
+        max_retries: 3, // Default retry count
+        queued_at: chrono::Utc::now(),
+        scheduled_for: None, // Immediate execution
+        error_message: None,
+        output_destinations: None,
+    };
+    
+    // Create the job
+    let created_job = job_repo.create(new_job).await
+        .map_err(|e| RestError::InternalError(format!("Failed to create job for schedule trigger: {}", e)))?;
+    
+    // Update the schedule's last_run timestamp
+    let mut updated_schedule = schedule;
+    updated_schedule.last_run = Some(chrono::Utc::now());
+    schedule_repo.update(updated_schedule).await
+        .map_err(|e| RestError::InternalError(format!("Failed to update schedule last_run: {}", e)))?;
+    
+    info!("Created job {} for triggered schedule {}", created_job.id, schedule_id);
+    
+    Ok(Json(ApiResponse::new(serde_json::json!({
+        "success": true,
+        "message": "Schedule triggered successfully",
+        "job": created_job
+    }))))
 }
 
 /// Get schedule statistics

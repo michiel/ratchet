@@ -6,14 +6,25 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkerStats {
-    pub total_workers: u64,
-    pub idle_workers: u64,
-    pub running_workers: u64,
-    pub stopping_workers: u64,
-    pub error_workers: u64,
-    pub total_tasks_processed: u64,
-    pub average_task_duration_ms: Option<f64>,
-    pub system_load: Option<f64>,
+    pub total_workers: i32,
+    pub active_workers: i32,
+    pub idle_workers: i32,
+    pub running_workers: i32,
+    pub stopping_workers: i32,
+    pub error_workers: i32,
+    pub total_tasks: i64,
+    pub average_uptime_seconds: Option<f64>,
+    pub total_memory_usage_mb: Option<u64>,
+}
+
+/// Workers list response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkersListResponse {
+    pub workers: Vec<serde_json::Value>,
+    pub total: i32,
+    pub page: u32,
+    pub limit: u32,
 }
 
 /// System health metrics

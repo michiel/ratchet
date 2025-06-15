@@ -212,9 +212,9 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/mcp/tasks/:name/test", post(handlers::mcp_test_task))
         .route("/mcp/results", post(handlers::mcp_store_result))
         .route("/mcp/results/:name", get(handlers::mcp_get_results))
-        // Placeholder endpoints
-        .route("/workers", get(placeholder_handler))
-        .route("/workers/stats", get(placeholder_handler))
+        // Worker endpoints  
+        .route("/workers", get(handlers::workers::list_workers))
+        .route("/workers/stats", get(handlers::workers::get_worker_stats))
 }
 
 
