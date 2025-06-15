@@ -49,20 +49,8 @@ pub fn configure_schema(
 pub async fn graphql_handler(
     axum::extract::Extension(context): axum::extract::Extension<GraphQLContext>,
     axum::extract::Extension(schema): axum::extract::Extension<RatchetSchema>,
-    body: String,
+    axum::extract::Json(request): axum::extract::Json<async_graphql::Request>,
 ) -> axum::response::Json<async_graphql::Response> {
-    // Parse the GraphQL request manually from the body
-    let request = match serde_json::from_str::<async_graphql::Request>(&body) {
-        Ok(req) => req,
-        Err(_) => {
-            // Return error response
-            let response = async_graphql::Response::from_errors(vec![
-                async_graphql::ServerError::new("Invalid GraphQL request format", None)
-            ]);
-            return axum::response::Json(response);
-        }
-    };
-    
     let response = schema.execute(request.data(context)).await;
     axum::response::Json(response)
 }

@@ -243,6 +243,12 @@ impl GraphQLClient {
             .send()
             .await?;
 
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
+            return Err(anyhow::anyhow!("GraphQL request failed with status {}: {}", status, text));
+        }
+
         let result: Value = response.json().await?;
         Ok(result)
     }
@@ -257,6 +263,12 @@ impl GraphQLClient {
             }))
             .send()
             .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
+            return Err(anyhow::anyhow!("GraphQL request failed with status {}: {}", status, text));
+        }
 
         let result: Value = response.json().await?;
         Ok(result)
@@ -327,12 +339,65 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     tokio::time::sleep(startup_delay).await;
     println!("✅ Ratchet server running on: {}", server_url);
 
-    // Step 5: Initialize GraphQL client
-    println!("🔌 Step 5: Connecting to GraphQL API");
+    // Step 5: Wait for server to be ready with basic HTTP health check
+    println!("🏥 Step 5: Waiting for server to be ready");
+    let http_client = reqwest::Client::new();
+    
+    // Try different health check endpoints
+    let health_endpoints = vec![
+        format!("{}/", server_url),
+        format!("{}/health", server_url),
+        format!("{}/api/v1/health", server_url),
+    ];
+    
+    // Retry health check up to 10 times with 500ms delays
+    let mut ready = false;
+    for attempt in 1..=10 {
+        let mut found_endpoint = false;
+        
+        for health_url in &health_endpoints {
+            match http_client.get(health_url).send().await {
+                Ok(response) if response.status().is_success() => {
+                    println!("✅ Server responding on: {}", health_url);
+                    ready = true;
+                    found_endpoint = true;
+                    break;
+                },
+                Ok(response) => {
+                    if attempt == 1 {
+                        println!("🔍 Attempt {}: {} returned status {}", attempt, health_url, response.status());
+                    }
+                },
+                Err(e) => {
+                    if attempt == 1 {
+                        println!("🔍 Attempt {}: {} connection failed: {}", attempt, health_url, e);
+                    }
+                }
+            }
+        }
+        
+        if found_endpoint {
+            break;
+        }
+        
+        if attempt == 1 {
+            println!("🔄 No endpoints ready yet, will retry...");
+        }
+        
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    
+    if !ready {
+        panic!("Server failed to become ready after 10 attempts");
+    }
+    println!("✅ Server is ready!");
+
+    // Step 6: Initialize GraphQL client
+    println!("🔌 Step 6: Connecting to GraphQL API");
     let graphql_endpoint = format!("{}/graphql", server_url);
     let graphql_client = GraphQLClient::new(graphql_endpoint);
 
-    // Test server health
+    // Test server health with GraphQL
     let health_query = r#"
         query {
             health {
@@ -349,8 +414,8 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     
     println!("✅ Server health check: {:?}", health_response);
 
-    // Step 6: Query for available tasks
-    println!("🔍 Step 6: Querying available tasks");
+    // Step 7: Query for available tasks
+    println!("🔍 Step 7: Querying available tasks");
     let tasks_query = r#"
         query {
             tasks {
