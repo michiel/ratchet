@@ -568,7 +568,7 @@ ratchet mcp-serve --config debug-config.yaml
 # Linux: ~/.config/claude-desktop/logs/
 
 # Test MCP server directly
-echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}},"id":1}' | ratchet mcp-serve
+echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"0.1.0","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}},"id":1}' | ratchet mcp-serve
 ```
 
 #### 6. JavaScript Runtime Errors
