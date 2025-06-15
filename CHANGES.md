@@ -1,28 +1,24 @@
 # Changes
 
-## Version 0.4.3 (2025-06-15)
+## Version 0.4.4 (2025-06-15)
+
+### Features
+- **Unified MCP Command Structure**: Added new `mcp` command for general-purpose MCP server operations with SSE transport as default
+- **Claude Code Compatibility**: Enhanced MCP protocol support with "2025-03-26" version for full Claude Code integration
+- **Command Harmonization**: Standardized `mcp` and `mcp-serve` commands to share identical configuration and behavior, differing only in transport defaults
 
 ### Bug Fixes
-- **GraphQL Context Extension Fix**: Resolved critical GraphQL context extension issues preventing API operations
-- **Axum 0.7 Compatibility**: Fixed GraphQL handler compatibility with Axum 0.7 framework upgrade
-- **Test Infrastructure**: Enhanced integration test reliability with comprehensive server readiness checks
-- **Error Handling**: Improved GraphQL client error handling with proper HTTP status code validation
-
-### Features  
-- **OpenAPI 3.0 Documentation**: Added comprehensive interactive API documentation with utoipa integration
-- **Enhanced MCP Server**: Improved Model Context Protocol server robustness for Claude Code compatibility
-- **Input Validation**: Implemented comprehensive input validation and error sanitization across all endpoints
-- **Performance Optimization**: Reduced end-to-end test execution time from 35s to 2.64s
+- **MCP Protocol Version Support**: Fixed protocol handshake issues with Claude Code by adding latest protocol version "2025-03-26"
+- **Future Type Compatibility**: Resolved Rust compilation errors in MCP server transport handling using boxed futures
 
 ### Developer Experience
-- **Security Improvements**: Added ErrorSanitizer for secure error handling and preventing information leakage
-- **REST API Testing**: Implemented comprehensive testing framework with full endpoint coverage
-- **Documentation Updates**: Enhanced LLM integration docs with quick start guides and troubleshooting
-- **Build Reliability**: Resolved all cargo build and test compilation errors across workspace
+- **Comprehensive Documentation Updates**: Updated README.md, MCP documentation, and integration guides to reflect new command structure
+- **Claude Code Integration**: Added seamless integration with `claude mcp add` command for zero-configuration setup
+- **Flexible Transport Options**: Both MCP commands now support both stdio and SSE transports via `--transport` flag
 
 ### Infrastructure
-- **Dependency Upgrades**: Successfully upgraded Axum from 0.6 to 0.7 with full compatibility maintained
-- **Windows Support**: Fixed PowerShell installation script property access errors
-- **Cross-Platform**: Improved build reliability across Linux, macOS, and Windows platforms
+- **Command Refactoring**: Consolidated MCP server logic into shared `mcp_command_with_config` function for better maintainability
+- **Transport Detection**: Added intelligent stdio mode detection for proper logging behavior
+- **Configuration Consistency**: Ensured both MCP commands use identical defaults and configuration handling
 
-This release focuses on stability and developer experience improvements, resolving critical GraphQL functionality issues while adding comprehensive API documentation and enhanced testing infrastructure.
+This release focuses on Claude Code integration and command structure improvements, providing a unified and flexible MCP server experience for both local desktop and web application use cases.
