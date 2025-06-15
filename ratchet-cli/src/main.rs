@@ -1454,6 +1454,114 @@ async fn handle_generate_task(
     Ok(())
 }
 
+/// Handle mcpServers JSON generation
+fn handle_generate_mcpservers_json(
+    name: &str,
+    command: &Option<String>,
+    args: &Option<Vec<String>>,
+    config: &Option<PathBuf>,
+    transport: &str,
+    host: &str,
+    port: u16,
+    env: &Option<Vec<String>>,
+    format: &str,
+    pretty: bool,
+) -> Result<()> {
+    info!("Generating mcpServers JSON configuration");
+
+    // Determine the command and arguments
+    let cmd = command.as_deref().unwrap_or("ratchet");
+    let mut cmd_args = vec!["mcp-serve".to_string()];
+
+    // Add transport argument
+    cmd_args.extend(["--transport".to_string(), transport.to_string()]);
+
+    // Add transport-specific arguments
+    if transport == "sse" {
+        cmd_args.extend(["--host".to_string(), host.to_string()]);
+        cmd_args.extend(["--port".to_string(), port.to_string()]);
+    }
+
+    // Add config file if specified
+    if let Some(config_path) = config {
+        cmd_args.extend(["--config".to_string(), config_path.to_string_lossy().to_string()]);
+    }
+
+    // Add any additional arguments provided
+    if let Some(additional_args) = args {
+        cmd_args.extend(additional_args.clone());
+    }
+
+    // Parse environment variables
+    let mut env_vars = std::collections::HashMap::new();
+    if let Some(env_list) = env {
+        for env_var in env_list {
+            if let Some((key, value)) = env_var.split_once('=') {
+                env_vars.insert(key.to_string(), value.to_string());
+            } else {
+                warn!("Invalid environment variable format: {}. Expected KEY=VALUE", env_var);
+            }
+        }
+    }
+
+    // Build the mcpServers object
+    let mcp_server = json!({
+        "command": cmd,
+        "args": cmd_args,
+        "env": if env_vars.is_empty() { None } else { Some(env_vars) }
+    });
+
+    let mcp_servers = json!({
+        name: mcp_server
+    });
+
+    // Generate output based on format
+    let output = match format {
+        "claude-config" => {
+            // Generate a complete Claude config snippet
+            let claude_config = json!({
+                "mcpServers": mcp_servers
+            });
+            if pretty {
+                serde_json::to_string_pretty(&claude_config)?
+            } else {
+                serde_json::to_string(&claude_config)?
+            }
+        }
+        "json" | _ => {
+            // Just the mcpServers object
+            if pretty {
+                serde_json::to_string_pretty(&mcp_servers)?
+            } else {
+                serde_json::to_string(&mcp_servers)?
+            }
+        }
+    };
+
+    println!("{}", output);
+
+    // Print helpful information
+    if format == "claude-config" {
+        eprintln!("\n# Add this to your Claude configuration file (.claude.json or claude_desktop_config.json)");
+        eprintln!("# For Claude Desktop, typically located at:");
+        eprintln!("#   macOS: ~/Library/Application Support/Claude/claude_desktop_config.json");
+        eprintln!("#   Windows: %APPDATA%\\Claude\\claude_desktop_config.json");
+        eprintln!("#   Linux: ~/.config/Claude/claude_desktop_config.json");
+    } else {
+        eprintln!("\n# Add this mcpServers object to your Claude configuration");
+        eprintln!("# Use --format=claude-config for a complete configuration snippet");
+    }
+
+    if transport == "sse" {
+        eprintln!("\n# Note: SSE transport requires the server to be running at {}:{}", host, port);
+        eprintln!("# Start the server with: ratchet mcp-serve --transport=sse --host={} --port={}", host, port);
+    } else {
+        eprintln!("\n# Note: stdio transport will start the server automatically when Claude connects");
+    }
+
+    Ok(())
+}
+
 /// Handle configuration validation
 fn handle_config_validate(config_file: &PathBuf) -> Result<()> {
     info!("Validating configuration file: {:?}", config_file);
@@ -3065,6 +3173,31 @@ async fn main() -> Result<()> {
                         "Task generation not available. Build with --features=javascript"
                     ))
                 }
+            }
+            GenerateCommands::McpserversJson {
+                name,
+                command,
+                args,
+                config: config_override,
+                transport,
+                host,
+                port,
+                env,
+                format,
+                pretty,
+            } => {
+                handle_generate_mcpservers_json(
+                    name,
+                    command,
+                    args,
+                    config_override,
+                    transport,
+                    host,
+                    *port,
+                    env,
+                    format,
+                    *pretty,
+                )
             }
         },
         Some(Commands::Config { config_cmd }) => match config_cmd {

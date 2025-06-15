@@ -20,6 +20,14 @@ path = "ratchet_serve_infrastructure_test.rs"
 name = "simple_rest_api_test"
 path = "simple_rest_api_test.rs"
 
+[[test]]
+name = "mcp_e2e_test"
+path = "mcp_e2e_test.rs"
+
+[[test]]
+name = "mcp_simple_e2e_test"
+path = "mcp_simple_e2e_test.rs"
+
 [dependencies]
 # Core dependencies
 anyhow = { workspace = true }
@@ -42,3 +50,8 @@ ratchet-config = { path = "../ratchet-config" }
 ratchet-server = { path = "../ratchet-server" }
 ratchet-storage = { path = "../ratchet-storage", features = ["testing"] }
 ratchet-rest-api = { path = "../ratchet-rest-api" }
+ratchet-mcp = { path = "../ratchet-mcp" }
+ratchet-http = { path = "../ratchet-http" }
+ratchet-execution = { path = "../ratchet-execution" }
+sea-orm = "1.1"
+sea-orm-migration = "1.1"
