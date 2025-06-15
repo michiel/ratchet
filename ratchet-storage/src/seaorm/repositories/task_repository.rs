@@ -150,6 +150,30 @@ impl TaskRepository {
         Ok(())
     }
 
+    /// Set task synchronization status (for registry sync tracking)
+    pub async fn set_in_sync(&self, id: i32, in_sync: bool) -> Result<(), DatabaseError> {
+        // Note: This would ideally require an 'in_sync' column in the tasks table
+        // For now, we'll store the sync status in the metadata JSON field
+        if let Ok(Some(mut task)) = self.find_by_id(id).await {
+            let mut metadata = task.metadata;
+            if let Some(metadata_obj) = metadata.as_object_mut() {
+                metadata_obj.insert("in_sync".to_string(), serde_json::Value::Bool(in_sync));
+                metadata_obj.insert("last_sync_check".to_string(), 
+                    serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
+            }
+
+            let active_model = TaskActiveModel {
+                id: Set(id),
+                metadata: Set(metadata),
+                updated_at: Set(chrono::Utc::now()),
+                ..Default::default()
+            };
+
+            active_model.update(self.db.get_connection()).await?;
+        }
+        Ok(())
+    }
+
     /// Delete a task by ID
     pub async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
         Tasks::delete_by_id(id)
