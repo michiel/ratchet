@@ -24,7 +24,8 @@ pub const MCP_PROTOCOL_VERSION: &str = "0.1.0";
 /// Supported MCP protocol versions
 pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[
     "0.1.0",
-    "2024-11-05", // Claude Code current version
+    "2024-11-05", // Claude Code compatibility
+    "2025-03-26", // Claude Code latest version
     "1.0.0",      // Future version compatibility
 ];
 

@@ -51,6 +51,25 @@ pub enum Commands {
     },
 
     /// Start the MCP (Model Context Protocol) server
+    Mcp {
+        /// Path to configuration file
+        #[arg(long, value_name = "PATH")]
+        config: Option<PathBuf>,
+
+        /// Transport type: stdio, sse
+        #[arg(long, value_name = "TYPE", default_value = "sse")]
+        transport: String,
+
+        /// Host to bind to (for SSE transport)
+        #[arg(long, value_name = "HOST", default_value = "127.0.0.1")]
+        host: String,
+
+        /// Port to bind to (for SSE transport)
+        #[arg(long, value_name = "PORT", default_value = "8090")]
+        port: u16,
+    },
+
+    /// Start the MCP (Model Context Protocol) server with stdio transport
     McpServe {
         /// Path to configuration file
         #[arg(long, value_name = "PATH")]

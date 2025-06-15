@@ -429,11 +429,12 @@ async fn mcp_serve_command(
 }
 
 #[cfg(feature = "mcp-server")]
-async fn mcp_serve_command_with_config(
+async fn mcp_command_with_config(
     mut ratchet_config: RatchetConfig,
-    _transport: &str,
-    _host: &str,
-    _port: u16,
+    transport: &str,
+    host: &str,
+    port: u16,
+    force_stdio: bool,
 ) -> Result<()> {
     use ratchet_mcp::{
         security::{McpAuth, McpAuthManager},
@@ -447,28 +448,42 @@ async fn mcp_serve_command_with_config(
     use std::sync::Arc;
     use tokio::signal;
 
-    // Force stdio transport for MCP serve (ignore CLI args)
+    // Configure MCP transport based on parameters
+    let final_transport = if force_stdio { "stdio" } else { transport };
     ratchet_config.mcp = Some(ratchet_config::domains::mcp::McpConfig {
         enabled: true,
-        transport: "stdio".to_string(),
-        host: "127.0.0.1".to_string(),
-        port: 8090,
+        transport: final_transport.to_string(),
+        host: host.to_string(),
+        port,
     });
 
     // Note: Logging is already initialized by main() with stderr-only for stdio mode
     // No need to reinitialize here as it would cause a panic
     
-    // Log to file only - stdio must remain clean for JSON-RPC
-    info!("🤖 Starting Ratchet MCP server in stdio mode");
+    // Log configuration info
+    info!("🤖 Starting Ratchet MCP server in {} mode", final_transport);
     
     // Use modern config directly
     let server_config = ratchet_config.server.as_ref().unwrap();
     
     info!("📋 MCP Configuration:");
-    info!("   • Transport: stdio (JSON-RPC over stdin/stdout)");
+    match final_transport {
+        "stdio" => {
+            info!("   • Transport: stdio (JSON-RPC over stdin/stdout)");
+            info!("   • Logging: stderr-only for stdio mode");
+        }
+        "sse" => {
+            info!("   • Transport: sse (Server-Sent Events over HTTP)");
+            info!("   • Host: {}", host);
+            info!("   • Port: {}", port);
+            info!("   • Logging: full logging enabled");
+        }
+        _ => {
+            info!("   • Transport: {}", final_transport);
+        }
+    }
     info!("   • Database: {}", server_config.database.url);
     info!("   • Max Workers: {}", ratchet_config.execution.max_concurrent_tasks);
-    info!("   • Logging: file-only (ratchet.log)");
 
     // Initialize database (same as serve)
     info!("💾 Initializing database connection...");
@@ -544,7 +559,17 @@ async fn mcp_serve_command_with_config(
         audit_logger,
     );
 
-    info!("✅ MCP server ready - listening on stdin/stdout for JSON-RPC messages");
+    match final_transport {
+        "stdio" => {
+            info!("✅ MCP server ready - listening on stdin/stdout for JSON-RPC messages");
+        }
+        "sse" => {
+            info!("✅ MCP server ready - listening on http://{}:{} for SSE connections", host, port);
+        }
+        _ => {
+            info!("✅ MCP server ready - using {} transport", final_transport);
+        }
+    }
     
     // Setup graceful shutdown
     let shutdown_future = async {
@@ -554,8 +579,14 @@ async fn mcp_serve_command_with_config(
         info!("🛑 Shutdown signal received, stopping MCP server...");
     };
 
-    // Run stdio server with graceful shutdown
-    let server_future = mcp_server.run_stdio();
+    // Run server with appropriate transport
+    let server_future: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ratchet_mcp::McpError>>>> = match final_transport {
+        "stdio" => Box::pin(mcp_server.run_stdio()),
+        "sse" => Box::pin(mcp_server.run_sse()),
+        _ => {
+            return Err(anyhow::anyhow!("Unsupported transport type: {}", final_transport));
+        }
+    };
     
     tokio::select! {
         result = server_future => {
@@ -587,6 +618,17 @@ async fn mcp_serve_command_with_config(
 
     info!("Ratchet MCP server shutdown complete");
     Ok(())
+}
+
+#[cfg(feature = "mcp-server")]
+async fn mcp_serve_command_with_config(
+    ratchet_config: RatchetConfig,
+    transport: &str,
+    host: &str,
+    port: u16,
+) -> Result<()> {
+    // mcp-serve always forces stdio for Claude Desktop compatibility
+    mcp_command_with_config(ratchet_config, transport, host, port, true).await
 }
 
 /// Initialize logging from configuration with fallback to simple tracing
@@ -2761,7 +2803,8 @@ async fn main() -> Result<()> {
 
     // Check if this is MCP stdio mode - if so, use minimal stderr-only logging
     let is_mcp_stdio =
-        matches!(&cli.command, Some(Commands::McpServe { transport, .. }) if transport == "stdio");
+        matches!(&cli.command, Some(Commands::McpServe { transport, .. }) if transport == "stdio") ||
+        matches!(&cli.command, Some(Commands::Mcp { transport, .. }) if transport == "stdio");
 
     // Load configuration first
     let config = load_config(cli.config.as_ref())?;
@@ -2900,6 +2943,32 @@ async fn main() -> Result<()> {
                 ))
             }
         }
+        Some(Commands::Mcp {
+            config: config_override,
+            transport,
+            host,
+            port,
+        }) => {
+            #[cfg(feature = "mcp-server")]
+            {
+                if !is_mcp_stdio {
+                    info!("Starting MCP server");
+                }
+                // Use config override if provided, otherwise use loaded config
+                let mcp_config = if config_override.is_some() {
+                    load_config(config_override.as_ref())?
+                } else {
+                    config.clone()
+                };
+                mcp_command_with_config(mcp_config, transport, host, *port, false).await
+            }
+            #[cfg(not(feature = "mcp-server"))]
+            {
+                Err(anyhow::anyhow!(
+                    "MCP server functionality not available. Build with --features=mcp-server"
+                ))
+            }
+        }
         Some(Commands::McpServe {
             config: config_override,
             transport,
@@ -2915,7 +2984,7 @@ async fn main() -> Result<()> {
                 let mcp_config = if config_override.is_some() {
                     load_config(config_override.as_ref())?
                 } else {
-                    config
+                    config.clone()
                 };
                 mcp_serve_command_with_config(mcp_config, transport, host, *port).await
             }
