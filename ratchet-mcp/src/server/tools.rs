@@ -343,10 +343,10 @@ impl RatchetToolRegistry {
         self.tools
             .insert("ratchet_get_execution_trace".to_string(), trace_tool);
 
-        // Task discovery tool
+        // Task discovery tool with pagination support
         let list_tasks_tool = McpTool::new(
             "ratchet_list_available_tasks",
-            "List all available tasks with their schemas",
+            "List all available tasks with their schemas and pagination support",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -362,6 +362,31 @@ impl RatchetToolRegistry {
                     "category": {
                         "type": "string",
                         "description": "Filter by task category"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Page number (0-based) for pagination"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 50,
+                        "description": "Maximum number of tasks to return per page"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "enum": ["name", "created_at", "updated_at", "version"],
+                        "default": "name",
+                        "description": "Field to sort tasks by"
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "default": "asc",
+                        "description": "Sort order (ascending or descending)"
                     }
                 }
             }),
@@ -475,6 +500,163 @@ impl RatchetToolRegistry {
         );
         self.tools
             .insert("ratchet_batch_execute".to_string(), batch_execute_tool);
+
+        // Executions listing tool with pagination
+        let list_executions_tool = McpTool::new(
+            "ratchet_list_executions",
+            "List task executions with filtering, sorting, and pagination support",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "Filter executions by task ID"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["queued", "running", "completed", "failed", "cancelled"],
+                        "description": "Filter executions by status"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Page number (0-based) for pagination"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 50,
+                        "description": "Maximum number of executions to return per page"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "enum": ["queued_at", "started_at", "completed_at", "duration_ms", "status"],
+                        "default": "queued_at",
+                        "description": "Field to sort executions by"
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "default": "desc",
+                        "description": "Sort order (ascending or descending)"
+                    },
+                    "include_output": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Whether to include execution output in results"
+                    }
+                }
+            }),
+            "monitoring",
+        );
+        self.tools
+            .insert("ratchet_list_executions".to_string(), list_executions_tool);
+
+        // Jobs listing tool with pagination  
+        let list_jobs_tool = McpTool::new(
+            "ratchet_list_jobs",
+            "List jobs with filtering, sorting, and pagination support",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "Filter jobs by task ID"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["queued", "processing", "completed", "failed", "cancelled"],
+                        "description": "Filter jobs by status"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["low", "normal", "high", "urgent"],
+                        "description": "Filter jobs by priority"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Page number (0-based) for pagination"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 50,
+                        "description": "Maximum number of jobs to return per page"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "enum": ["queued_at", "scheduled_for", "priority", "status", "retry_count"],
+                        "default": "queued_at",
+                        "description": "Field to sort jobs by"
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "default": "desc",
+                        "description": "Sort order (ascending or descending)"
+                    }
+                }
+            }),
+            "monitoring",
+        );
+        self.tools
+            .insert("ratchet_list_jobs".to_string(), list_jobs_tool);
+
+        // Schedules listing tool with pagination
+        let list_schedules_tool = McpTool::new(
+            "ratchet_list_schedules",
+            "List schedules with filtering, sorting, and pagination support",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "Filter schedules by task ID"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Filter schedules by enabled status"
+                    },
+                    "ready_to_run": {
+                        "type": "boolean",
+                        "description": "Filter schedules that are ready to run now"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Page number (0-based) for pagination"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 50,
+                        "description": "Maximum number of schedules to return per page"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "enum": ["name", "created_at", "updated_at", "next_run", "last_run"],
+                        "default": "name",
+                        "description": "Field to sort schedules by"
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "default": "asc",
+                        "description": "Sort order (ascending or descending)"
+                    }
+                }
+            }),
+            "monitoring",
+        );
+        self.tools
+            .insert("ratchet_list_schedules".to_string(), list_schedules_tool);
     }
 
     /// Configure the registry with task executor
@@ -567,6 +749,9 @@ impl ToolRegistry for RatchetToolRegistry {
                 self.analyze_execution_error_tool(execution_context).await
             }
             "ratchet_batch_execute" => self.batch_execute_tool(execution_context).await,
+            "ratchet_list_executions" => self.list_executions_tool(execution_context).await,
+            "ratchet_list_jobs" => self.list_jobs_tool(execution_context).await,
+            "ratchet_list_schedules" => self.list_schedules_tool(execution_context).await,
             // Task development tools
             "ratchet_create_task" | "ratchet_validate_task" | "ratchet_debug_task_execution" | 
             "ratchet_run_task_tests" | "ratchet_create_task_version" | "ratchet_edit_task" |
@@ -1087,7 +1272,7 @@ impl RatchetToolRegistry {
         }
     }
 
-    /// Execute the task listing tool
+    /// Execute the task listing tool with pagination support
     async fn list_available_tasks_tool(
         &self,
         context: ToolExecutionContext,
@@ -1095,19 +1280,33 @@ impl RatchetToolRegistry {
         let args = context.arguments.unwrap_or(serde_json::json!({}));
 
         let filter = args.get("filter").and_then(|v| v.as_str());
-
         let include_schemas = args
             .get("include_schemas")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-
         let category = args.get("category").and_then(|v| v.as_str());
+        
+        // Pagination parameters
+        let page = args.get("page").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+        let sort_by = args.get("sort_by").and_then(|v| v.as_str()).unwrap_or("name");
+        let sort_order = args.get("sort_order").and_then(|v| v.as_str()).unwrap_or("asc");
+
+        // Validate pagination parameters
+        if limit > 1000 {
+            return Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: "Limit cannot exceed 1000 tasks per page".to_string(),
+                }],
+                is_error: true,
+                metadata: HashMap::new(),
+            });
+        }
 
         // Check if executor is configured
         let executor = match self.task_executor.as_ref() {
             Some(exec) => exec,
             None => {
-                // Return error as a tool result rather than failing the request
                 return Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
                         text: "Task executor not configured for MCP server".to_string(),
@@ -1120,17 +1319,56 @@ impl RatchetToolRegistry {
 
         // Query tasks
         match executor.list_tasks(filter).await {
-            Ok(tasks) => {
-                let mut task_list = Vec::new();
+            Ok(mut tasks) => {
+                // Apply category filter if provided
+                if let Some(cat) = category {
+                    tasks.retain(|task| task.tags.contains(&cat.to_string()));
+                }
 
-                for task in tasks {
-                    // Apply category filter if provided
-                    if let Some(cat) = category {
-                        if !task.tags.contains(&cat.to_string()) {
-                            continue;
-                        }
+                // Sort tasks
+                tasks.sort_by(|a, b| {
+                    let ordering = match sort_by {
+                        "name" => a.name.cmp(&b.name),
+                        "version" => a.version.cmp(&b.version),
+                        // Note: created_at and updated_at would need to be added to McpTaskInfo
+                        "created_at" | "updated_at" => a.name.cmp(&b.name), // fallback to name
+                        _ => a.name.cmp(&b.name),
+                    };
+                    
+                    if sort_order == "desc" {
+                        ordering.reverse()
+                    } else {
+                        ordering
                     }
+                });
 
+                // Calculate pagination
+                let total_count = tasks.len();
+                let total_pages = (total_count + limit - 1) / limit; // ceiling division
+                let start_index = page * limit;
+                let end_index = std::cmp::min(start_index + limit, total_count);
+                
+                // Check if page is valid
+                if start_index >= total_count && total_count > 0 {
+                    return Ok(ToolsCallResult {
+                        content: vec![ToolContent::Text {
+                            text: format!("Page {} is out of range. Total pages: {}", page, total_pages),
+                        }],
+                        is_error: true,
+                        metadata: HashMap::new(),
+                    });
+                }
+
+                // Extract paginated tasks
+                let paginated_tasks = if total_count == 0 {
+                    Vec::new()
+                } else {
+                    tasks[start_index..end_index].to_vec()
+                };
+
+                // Build task list with optional schemas
+                let mut task_list = Vec::new();
+                for task in paginated_tasks {
                     let mut task_info = serde_json::json!({
                         "id": task.id,
                         "name": task.name,
@@ -1152,17 +1390,52 @@ impl RatchetToolRegistry {
                     task_list.push(task_info);
                 }
 
+                // Build paginated response
+                let response = serde_json::json!({
+                    "tasks": task_list,
+                    "pagination": {
+                        "page": page,
+                        "limit": limit,
+                        "total_count": total_count,
+                        "total_pages": total_pages,
+                        "has_next": page + 1 < total_pages,
+                        "has_previous": page > 0,
+                        "next_page": if page + 1 < total_pages { Some(page + 1) } else { None::<usize> },
+                        "previous_page": if page > 0 { Some(page - 1) } else { None::<usize> }
+                    },
+                    "sorting": {
+                        "sort_by": sort_by,
+                        "sort_order": sort_order
+                    },
+                    "filters": {
+                        "name_filter": filter,
+                        "category_filter": category
+                    }
+                });
+
                 Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
-                        text: serde_json::to_string_pretty(&task_list)
-                            .unwrap_or_else(|_| "[]".to_string()),
+                        text: serde_json::to_string_pretty(&response)
+                            .unwrap_or_else(|_| "{}".to_string()),
                     }],
                     is_error: false,
                     metadata: {
                         let mut meta = HashMap::new();
                         meta.insert(
-                            "task_count".to_string(),
-                            serde_json::Value::Number(serde_json::Number::from(task_list.len())),
+                            "total_count".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(total_count)),
+                        );
+                        meta.insert(
+                            "page".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(page)),
+                        );
+                        meta.insert(
+                            "limit".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(limit)),
+                        );
+                        meta.insert(
+                            "total_pages".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(total_pages)),
                         );
                         if let Some(f) = filter {
                             meta.insert(
@@ -1170,6 +1443,20 @@ impl RatchetToolRegistry {
                                 serde_json::Value::String(f.to_string()),
                             );
                         }
+                        if let Some(cat) = category {
+                            meta.insert(
+                                "category".to_string(),
+                                serde_json::Value::String(cat.to_string()),
+                            );
+                        }
+                        meta.insert(
+                            "sort_by".to_string(),
+                            serde_json::Value::String(sort_by.to_string()),
+                        );
+                        meta.insert(
+                            "sort_order".to_string(),
+                            serde_json::Value::String(sort_order.to_string()),
+                        );
                         meta
                     },
                 })
@@ -1948,6 +2235,216 @@ impl RatchetToolRegistry {
             }),
         }
     }
+
+    /// Execute the executions listing tool with pagination support
+    async fn list_executions_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
+        let args = context.arguments.unwrap_or(serde_json::json!({}));
+
+        // Extract filters and pagination parameters
+        let task_id = args.get("task_id").and_then(|v| v.as_str());
+        let status = args.get("status").and_then(|v| v.as_str());
+        let page = args.get("page").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+        let sort_by = args.get("sort_by").and_then(|v| v.as_str()).unwrap_or("queued_at");
+        let sort_order = args.get("sort_order").and_then(|v| v.as_str()).unwrap_or("desc");
+        let include_output = args.get("include_output").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        // Validate pagination parameters
+        if limit > 1000 {
+            return Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: "Limit cannot exceed 1000 executions per page".to_string(),
+                }],
+                is_error: true,
+                metadata: HashMap::new(),
+            });
+        }
+
+        // For now, return a placeholder since we'd need to access the repositories
+        // In a full implementation, this would query the execution repository
+        let response = serde_json::json!({
+            "executions": [],
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_count": 0,
+                "total_pages": 0,
+                "has_next": false,
+                "has_previous": false,
+                "next_page": null,
+                "previous_page": null
+            },
+            "sorting": {
+                "sort_by": sort_by,
+                "sort_order": sort_order
+            },
+            "filters": {
+                "task_id": task_id,
+                "status": status,
+                "include_output": include_output
+            },
+            "message": "MCP executions listing requires repository integration - placeholder implementation"
+        });
+
+        Ok(ToolsCallResult {
+            content: vec![ToolContent::Text {
+                text: serde_json::to_string_pretty(&response)
+                    .unwrap_or_else(|_| "{}".to_string()),
+            }],
+            is_error: false,
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("page".to_string(), serde_json::Value::Number(serde_json::Number::from(page)));
+                meta.insert("limit".to_string(), serde_json::Value::Number(serde_json::Number::from(limit)));
+                meta.insert("sort_by".to_string(), serde_json::Value::String(sort_by.to_string()));
+                meta.insert("sort_order".to_string(), serde_json::Value::String(sort_order.to_string()));
+                meta
+            },
+        })
+    }
+
+    /// Execute the jobs listing tool with pagination support
+    async fn list_jobs_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
+        let args = context.arguments.unwrap_or(serde_json::json!({}));
+
+        // Extract filters and pagination parameters
+        let task_id = args.get("task_id").and_then(|v| v.as_str());
+        let status = args.get("status").and_then(|v| v.as_str());
+        let priority = args.get("priority").and_then(|v| v.as_str());
+        let page = args.get("page").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+        let sort_by = args.get("sort_by").and_then(|v| v.as_str()).unwrap_or("queued_at");
+        let sort_order = args.get("sort_order").and_then(|v| v.as_str()).unwrap_or("desc");
+
+        // Validate pagination parameters
+        if limit > 1000 {
+            return Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: "Limit cannot exceed 1000 jobs per page".to_string(),
+                }],
+                is_error: true,
+                metadata: HashMap::new(),
+            });
+        }
+
+        // For now, return a placeholder since we'd need to access the repositories
+        // In a full implementation, this would query the job repository
+        let response = serde_json::json!({
+            "jobs": [],
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_count": 0,
+                "total_pages": 0,
+                "has_next": false,
+                "has_previous": false,
+                "next_page": null,
+                "previous_page": null
+            },
+            "sorting": {
+                "sort_by": sort_by,
+                "sort_order": sort_order
+            },
+            "filters": {
+                "task_id": task_id,
+                "status": status,
+                "priority": priority
+            },
+            "message": "MCP jobs listing requires repository integration - placeholder implementation"
+        });
+
+        Ok(ToolsCallResult {
+            content: vec![ToolContent::Text {
+                text: serde_json::to_string_pretty(&response)
+                    .unwrap_or_else(|_| "{}".to_string()),
+            }],
+            is_error: false,
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("page".to_string(), serde_json::Value::Number(serde_json::Number::from(page)));
+                meta.insert("limit".to_string(), serde_json::Value::Number(serde_json::Number::from(limit)));
+                meta.insert("sort_by".to_string(), serde_json::Value::String(sort_by.to_string()));
+                meta.insert("sort_order".to_string(), serde_json::Value::String(sort_order.to_string()));
+                meta
+            },
+        })
+    }
+
+    /// Execute the schedules listing tool with pagination support
+    async fn list_schedules_tool(
+        &self,
+        context: ToolExecutionContext,
+    ) -> McpResult<ToolsCallResult> {
+        let args = context.arguments.unwrap_or(serde_json::json!({}));
+
+        // Extract filters and pagination parameters
+        let task_id = args.get("task_id").and_then(|v| v.as_str());
+        let enabled = args.get("enabled").and_then(|v| v.as_bool());
+        let ready_to_run = args.get("ready_to_run").and_then(|v| v.as_bool());
+        let page = args.get("page").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+        let sort_by = args.get("sort_by").and_then(|v| v.as_str()).unwrap_or("name");
+        let sort_order = args.get("sort_order").and_then(|v| v.as_str()).unwrap_or("asc");
+
+        // Validate pagination parameters
+        if limit > 1000 {
+            return Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: "Limit cannot exceed 1000 schedules per page".to_string(),
+                }],
+                is_error: true,
+                metadata: HashMap::new(),
+            });
+        }
+
+        // For now, return a placeholder since we'd need to access the repositories
+        // In a full implementation, this would query the schedule repository
+        let response = serde_json::json!({
+            "schedules": [],
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_count": 0,
+                "total_pages": 0,
+                "has_next": false,
+                "has_previous": false,
+                "next_page": null,
+                "previous_page": null
+            },
+            "sorting": {
+                "sort_by": sort_by,
+                "sort_order": sort_order
+            },
+            "filters": {
+                "task_id": task_id,
+                "enabled": enabled,
+                "ready_to_run": ready_to_run
+            },
+            "message": "MCP schedules listing requires repository integration - placeholder implementation"
+        });
+
+        Ok(ToolsCallResult {
+            content: vec![ToolContent::Text {
+                text: serde_json::to_string_pretty(&response)
+                    .unwrap_or_else(|_| "{}".to_string()),
+            }],
+            is_error: false,
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("page".to_string(), serde_json::Value::Number(serde_json::Number::from(page)));
+                meta.insert("limit".to_string(), serde_json::Value::Number(serde_json::Number::from(limit)));
+                meta.insert("sort_by".to_string(), serde_json::Value::String(sort_by.to_string()));
+                meta.insert("sort_order".to_string(), serde_json::Value::String(sort_order.to_string()));
+                meta
+            },
+        })
+    }
 }
 
 impl Default for RatchetToolRegistry {
@@ -1987,6 +2484,11 @@ mod tests {
             .contains_key("ratchet_analyze_execution_error"));
         assert!(registry.tools.contains_key("ratchet_get_execution_trace"));
         assert!(registry.tools.contains_key("ratchet_batch_execute"));
+        
+        // Check that pagination listing tools are registered
+        assert!(registry.tools.contains_key("ratchet_list_executions"));
+        assert!(registry.tools.contains_key("ratchet_list_jobs"));
+        assert!(registry.tools.contains_key("ratchet_list_schedules"));
         
         // Check that task development tools are registered
         assert!(registry.tools.contains_key("ratchet_create_task"));

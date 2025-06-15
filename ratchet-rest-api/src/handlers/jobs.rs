@@ -129,35 +129,46 @@ pub async fn get_job(
     )
 )]
 pub async fn create_job(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Json(request): Json<CreateJobRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Creating job for task: {:?}", request.task_id);
     
     // Validate the request input
-    let validator = InputValidator::new();
+    let _validator = InputValidator::new();
     let sanitizer = ErrorSanitizer::default();
     
-    // Validate input JSON
-    let input_str = serde_json::to_string(&request.input)
-        .map_err(|e| RestError::BadRequest(format!("Invalid input JSON: {}", e)))?;
-    if let Err(validation_err) = validator.validate_json(&input_str) {
-        warn!("Invalid job input provided: {}", validation_err);
-        let sanitized_error = sanitizer.sanitize_error(&validation_err);
-        return Err(RestError::BadRequest(sanitized_error.message));
-    }
+    // Validate that task exists
+    let task_repo = ctx.repositories.task_repository();
+    let _task = task_repo
+        .find_by_id(request.task_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Task", &request.task_id.to_string()))?;
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate task exists and is enabled
-    // 2. Validate input against task's input schema
-    // 3. Create job in database with priority and retry settings
-    // 4. Add to job queue for processing
-    // 5. Return the created job
+    // Create UnifiedJob from request
+    let unified_job = ratchet_api_types::UnifiedJob {
+        id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+        task_id: request.task_id,
+        priority: request.priority.unwrap_or(ratchet_api_types::JobPriority::Normal),
+        status: ratchet_api_types::JobStatus::Queued,
+        retry_count: 0,
+        max_retries: request.max_retries.unwrap_or(3),
+        queued_at: chrono::Utc::now(),
+        scheduled_for: request.scheduled_for,
+        error_message: None,
+        output_destinations: request.output_destinations,
+    };
     
-    Err(RestError::InternalError(
-        "Job creation not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    // Create the job using the repository
+    let job_repo = ctx.repositories.job_repository();
+    let created_job = job_repo.create(unified_job).await
+        .map_err(|e| RestError::InternalError(format!("Failed to create job: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(created_job)))
 }
 
 /// Update an existing job
@@ -178,22 +189,66 @@ pub async fn create_job(
     )
 )]
 pub async fn update_job(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Path(job_id): Path<String>,
-    Json(_request): Json<UpdateJobRequest>,
+    Json(request): Json<UpdateJobRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Updating job with ID: {}", job_id);
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate job exists
-    // 2. Update job status, priority, or retry settings
-    // 3. Handle queue position changes if priority updated
-    // 4. Return the updated job
+    // Validate job ID input
+    let validator = InputValidator::new();
+    let sanitizer = ErrorSanitizer::default();
     
-    Err(RestError::InternalError(
-        "Job update not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    if let Err(validation_err) = validator.validate_string(&job_id, "job_id") {
+        warn!("Invalid job ID provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    // Validate error message if provided
+    if let Some(ref error_message) = request.error_message {
+        if let Err(validation_err) = validator.validate_string(error_message, "error_message") {
+            warn!("Invalid error message provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    let api_id = ApiId::from_string(job_id.clone());
+    let job_repo = ctx.repositories.job_repository();
+    
+    // Get the existing job
+    let mut existing_job = job_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Job", &job_id))?;
+    
+    // Apply updates
+    if let Some(priority) = request.priority {
+        existing_job.priority = priority;
+    }
+    if let Some(status) = request.status {
+        existing_job.status = status;
+    }
+    if let Some(max_retries) = request.max_retries {
+        existing_job.max_retries = max_retries;
+    }
+    if let Some(scheduled_for) = request.scheduled_for {
+        existing_job.scheduled_for = Some(scheduled_for);
+    }
+    if let Some(error_message) = request.error_message {
+        existing_job.error_message = Some(error_message);
+    }
+    
+    // Update the job using the repository
+    let updated_job = job_repo.update(existing_job).await
+        .map_err(|e| RestError::InternalError(format!("Failed to update job: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(updated_job)))
 }
 
 /// Cancel a queued job

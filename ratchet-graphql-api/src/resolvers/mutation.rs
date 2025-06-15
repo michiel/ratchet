@@ -21,7 +21,7 @@ impl Mutation {
         ctx: &Context<'_>,
         input: CreateTaskInput,
     ) -> Result<Task> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
         // Validate input
         let validator = InputValidator::new();
@@ -34,8 +34,6 @@ impl Mutation {
             return Err(ApiError::bad_request(&sanitized_error.message).into());
         }
         
-        // Note: Version validation would be done here if the input had a version field
-        
         // Validate description if provided
         if let Some(ref description) = input.description {
             if let Err(validation_err) = validator.validate_string(description, "description") {
@@ -45,84 +43,344 @@ impl Mutation {
             }
         }
         
-        // Note: Path validation would be done here if the input had a path field
+        // Create UnifiedTask from input
+        let unified_task = ratchet_api_types::UnifiedTask {
+            id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+            uuid: uuid::Uuid::new_v4(),
+            name: input.name,
+            description: input.description,
+            version: "1.0.0".to_string(), // Default version
+            enabled: input.enabled.unwrap_or(true),
+            registry_source: false, // Tasks created via API are not from registry
+            available_versions: vec!["1.0.0".to_string()],
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            validated_at: None,
+            in_sync: true,
+            input_schema: input.input_schema,
+            output_schema: input.output_schema,
+            metadata: input.metadata,
+        };
         
-        // For now, return an error as this is not yet implemented
-        Err(ApiError::internal_error("Task creation not yet implemented").into())
+        // Create the task using the repository
+        let task_repo = context.repositories.task_repository();
+        let created_task = task_repo.create(unified_task).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to create task: {}", e)))?;
+        
+        Ok(created_task)
     }
 
     /// Update an existing task
     async fn update_task(
         &self,
         ctx: &Context<'_>,
-        _id: GraphQLApiId,
-        _input: UpdateTaskInput,
+        id: GraphQLApiId,
+        input: UpdateTaskInput,
     ) -> Result<Task> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // For now, return an error as this is not yet implemented
-        Err(ApiError::internal_error("Task update not yet implemented").into())
+        // Validate input if provided
+        let validator = InputValidator::new();
+        let sanitizer = ErrorSanitizer::default();
+        
+        if let Some(ref name) = input.name {
+            if let Err(validation_err) = validator.validate_task_name(name) {
+                warn!("Invalid task name in GraphQL update_task: {}", validation_err);
+                let sanitized_error = sanitizer.sanitize_error(&validation_err);
+                return Err(ApiError::bad_request(&sanitized_error.message).into());
+            }
+        }
+        
+        if let Some(ref description) = input.description {
+            if let Err(validation_err) = validator.validate_string(description, "description") {
+                warn!("Invalid description in GraphQL update_task: {}", validation_err);
+                let sanitized_error = sanitizer.sanitize_error(&validation_err);
+                return Err(ApiError::bad_request(&sanitized_error.message).into());
+            }
+        }
+        
+        // Get the existing task
+        let task_repo = context.repositories.task_repository();
+        let mut existing_task = task_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .ok_or_else(|| ApiError::not_found("Task", &id.0.to_string()))?;
+        
+        // Apply updates
+        if let Some(name) = input.name {
+            existing_task.name = name;
+        }
+        if let Some(description) = input.description {
+            existing_task.description = Some(description);
+        }
+        if let Some(enabled) = input.enabled {
+            existing_task.enabled = enabled;
+        }
+        if let Some(input_schema) = input.input_schema {
+            existing_task.input_schema = Some(input_schema);
+        }
+        if let Some(output_schema) = input.output_schema {
+            existing_task.output_schema = Some(output_schema);
+        }
+        if let Some(metadata) = input.metadata {
+            existing_task.metadata = Some(metadata);
+        }
+        
+        // Update timestamp
+        existing_task.updated_at = chrono::Utc::now();
+        
+        // Update the task using the repository
+        let updated_task = task_repo.update(existing_task).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to update task: {}", e)))?;
+        
+        Ok(updated_task)
     }
 
     /// Delete a task
     async fn delete_task(
         &self,
         ctx: &Context<'_>,
-        _id: GraphQLApiId,
+        id: GraphQLApiId,
     ) -> Result<bool> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // For now, return an error as this is not yet implemented
-        Err(ApiError::internal_error("Task deletion not yet implemented").into())
+        // Check if task exists before deletion
+        let task_repo = context.repositories.task_repository();
+        let existing_task = task_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?;
+        
+        if existing_task.is_none() {
+            return Err(ApiError::not_found("Task", &id.0.to_string()).into());
+        }
+        
+        // Delete the task using the repository
+        task_repo.delete(id.0.as_i32().unwrap_or(0)).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to delete task: {}", e)))?;
+        
+        Ok(true)
     }
 
     /// Create a new execution
     async fn create_execution(
         &self,
         ctx: &Context<'_>,
-        _input: CreateExecutionInput,
+        input: CreateExecutionInput,
     ) -> Result<Execution> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // For now, return an error as this is not yet implemented
-        Err(ApiError::internal_error("Execution creation not yet implemented").into())
+        // Validate that task exists
+        let task_repo = context.repositories.task_repository();
+        let task = task_repo.find_by_id(input.task_id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .ok_or_else(|| ApiError::bad_request("Task not found"))?;
+        
+        // Validate input JSON
+        let validator = InputValidator::new();
+        let input_str = serde_json::to_string(&input.input)
+            .map_err(|e| ApiError::bad_request(&format!("Invalid input JSON: {}", e)))?;
+        if let Err(validation_err) = validator.validate_json(&input_str) {
+            warn!("Invalid input JSON in GraphQL create_execution: {}", validation_err);
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(ApiError::bad_request(&sanitized_error.message).into());
+        }
+        
+        // Create UnifiedExecution from input
+        let unified_execution = ratchet_api_types::UnifiedExecution {
+            id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+            uuid: uuid::Uuid::new_v4(),
+            task_id: input.task_id.0,
+            input: input.input,
+            output: None,
+            status: ratchet_api_types::ExecutionStatus::Pending,
+            error_message: None,
+            error_details: None,
+            queued_at: chrono::Utc::now(),
+            started_at: None,
+            completed_at: None,
+            duration_ms: None,
+            http_requests: None,
+            recording_path: None,
+            can_retry: false,
+            can_cancel: true,
+            progress: None,
+        };
+        
+        // Create the execution using the repository
+        let execution_repo = context.repositories.execution_repository();
+        let created_execution = execution_repo.create(unified_execution).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to create execution: {}", e)))?;
+        
+        Ok(created_execution)
     }
 
     /// Create a new job
     async fn create_job(
         &self,
         ctx: &Context<'_>,
-        _input: CreateJobInput,
+        input: CreateJobInput,
     ) -> Result<Job> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // For now, return an error as this is not yet implemented
-        Err(ApiError::internal_error("Job creation not yet implemented").into())
+        // Validate that task exists
+        let task_repo = context.repositories.task_repository();
+        let _task = task_repo.find_by_id(input.task_id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .ok_or_else(|| ApiError::bad_request("Task not found"))?;
+        
+        // Create UnifiedJob from input
+        let unified_job = ratchet_api_types::UnifiedJob {
+            id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+            task_id: input.task_id.0,
+            priority: input.priority.unwrap_or(ratchet_api_types::JobPriority::Normal),
+            status: ratchet_api_types::JobStatus::Queued,
+            retry_count: 0,
+            max_retries: input.max_retries.unwrap_or(3),
+            queued_at: chrono::Utc::now(),
+            scheduled_for: input.scheduled_for,
+            error_message: None,
+            output_destinations: None, // TODO: Add support for output destinations in input
+        };
+        
+        // Create the job using the repository
+        let job_repo = context.repositories.job_repository();
+        let created_job = job_repo.create(unified_job).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to create job: {}", e)))?;
+        
+        Ok(created_job.into())
     }
 
     /// Create a new schedule
     async fn create_schedule(
         &self,
         ctx: &Context<'_>,
-        _input: CreateScheduleInput,
+        input: CreateScheduleInput,
     ) -> Result<Schedule> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // For now, return an error as this is not yet implemented
-        Err(ApiError::internal_error("Schedule creation not yet implemented").into())
+        // Validate that task exists
+        let task_repo = context.repositories.task_repository();
+        let _task = task_repo.find_by_id(input.task_id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .ok_or_else(|| ApiError::bad_request("Task not found"))?;
+        
+        // Validate input
+        let validator = InputValidator::new();
+        let sanitizer = ErrorSanitizer::default();
+        
+        // Validate schedule name
+        if let Err(validation_err) = validator.validate_string(&input.name, "name") {
+            warn!("Invalid schedule name in GraphQL create_schedule: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(ApiError::bad_request(&sanitized_error.message).into());
+        }
+        
+        // Validate cron expression format (basic validation)
+        if input.cron_expression.trim().is_empty() {
+            return Err(ApiError::bad_request("Cron expression cannot be empty").into());
+        }
+        
+        // Validate description if provided
+        if let Some(ref description) = input.description {
+            if let Err(validation_err) = validator.validate_string(description, "description") {
+                warn!("Invalid description in GraphQL create_schedule: {}", validation_err);
+                let sanitized_error = sanitizer.sanitize_error(&validation_err);
+                return Err(ApiError::bad_request(&sanitized_error.message).into());
+            }
+        }
+        
+        // Create UnifiedSchedule from input
+        let unified_schedule = ratchet_api_types::UnifiedSchedule {
+            id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+            task_id: input.task_id.0,
+            name: input.name,
+            description: input.description,
+            cron_expression: input.cron_expression,
+            enabled: input.enabled.unwrap_or(true),
+            next_run: None, // Will be calculated by the scheduler
+            last_run: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        
+        // Create the schedule using the repository
+        let schedule_repo = context.repositories.schedule_repository();
+        let created_schedule = schedule_repo.create(unified_schedule).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to create schedule: {}", e)))?;
+        
+        Ok(created_schedule)
     }
 
     /// Update an existing schedule
     async fn update_schedule(
         &self,
         ctx: &Context<'_>,
-        _id: GraphQLApiId,
-        _input: UpdateScheduleInput,
+        id: GraphQLApiId,
+        input: UpdateScheduleInput,
     ) -> Result<Schedule> {
-        let _context = ctx.data::<GraphQLContext>()?;
+        let context = ctx.data::<GraphQLContext>()?;
         
-        // For now, return an error as this is not yet implemented
-        Err(ApiError::internal_error("Schedule update not yet implemented").into())
+        // Validate input if provided
+        let validator = InputValidator::new();
+        let sanitizer = ErrorSanitizer::default();
+        
+        if let Some(ref name) = input.name {
+            if let Err(validation_err) = validator.validate_string(name, "name") {
+                warn!("Invalid schedule name in GraphQL update_schedule: {}", validation_err);
+                let sanitized_error = sanitizer.sanitize_error(&validation_err);
+                return Err(ApiError::bad_request(&sanitized_error.message).into());
+            }
+        }
+        
+        if let Some(ref cron_expression) = input.cron_expression {
+            if cron_expression.trim().is_empty() {
+                return Err(ApiError::bad_request("Cron expression cannot be empty").into());
+            }
+        }
+        
+        if let Some(ref description) = input.description {
+            if let Err(validation_err) = validator.validate_string(description, "description") {
+                warn!("Invalid description in GraphQL update_schedule: {}", validation_err);
+                let sanitized_error = sanitizer.sanitize_error(&validation_err);
+                return Err(ApiError::bad_request(&sanitized_error.message).into());
+            }
+        }
+        
+        // Get the existing schedule
+        let schedule_repo = context.repositories.schedule_repository();
+        let mut existing_schedule = schedule_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch schedule: {}", e)))?
+            .ok_or_else(|| ApiError::not_found("Schedule", &id.0.to_string()))?;
+        
+        // Apply updates
+        if let Some(name) = input.name {
+            existing_schedule.name = name;
+        }
+        if let Some(description) = input.description {
+            existing_schedule.description = Some(description);
+        }
+        if let Some(cron_expression) = input.cron_expression {
+            existing_schedule.cron_expression = cron_expression;
+            // Reset next_run when cron expression changes (will be recalculated by scheduler)
+            existing_schedule.next_run = None;
+        }
+        if let Some(enabled) = input.enabled {
+            existing_schedule.enabled = enabled;
+        }
+        
+        // Update timestamp
+        existing_schedule.updated_at = chrono::Utc::now();
+        
+        // Update the schedule using the repository
+        let updated_schedule = schedule_repo.update(existing_schedule).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to update schedule: {}", e)))?;
+        
+        Ok(updated_schedule)
     }
 
     /// MCP task development - create a new task with full JavaScript code and testing
@@ -224,7 +482,7 @@ impl Mutation {
         // Create a job from the input
         let unified_job = ratchet_api_types::UnifiedJob {
             id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
-            task_id: input.task_id.into(),
+            task_id: input.task_id.0.into(),
             priority: input.priority.unwrap_or(ratchet_api_types::JobPriority::Normal),
             status: ratchet_api_types::JobStatus::Queued,
             retry_count: 0,

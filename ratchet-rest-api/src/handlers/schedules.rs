@@ -126,7 +126,7 @@ pub async fn get_schedule(
     )
 )]
 pub async fn create_schedule(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Json(request): Json<CreateScheduleRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Creating schedule: {:?}", request.name);
@@ -135,13 +135,6 @@ pub async fn create_schedule(
     let validator = InputValidator::new();
     let sanitizer = ErrorSanitizer::default();
     
-    // Validate cron expression format
-    if let Err(validation_err) = validator.validate_string(&request.cron_expression, "cron_expression") {
-        warn!("Invalid cron expression provided: {}", validation_err);
-        let sanitized_error = sanitizer.sanitize_error(&validation_err);
-        return Err(RestError::BadRequest(sanitized_error.message));
-    }
-    
     // Validate schedule name
     if let Err(validation_err) = validator.validate_string(&request.name, "name") {
         warn!("Invalid schedule name provided: {}", validation_err);
@@ -149,17 +142,58 @@ pub async fn create_schedule(
         return Err(RestError::BadRequest(sanitized_error.message));
     }
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate task exists and is enabled
-    // 2. Validate cron expression is valid
-    // 3. Create schedule in database
-    // 4. Calculate next run time
-    // 5. Return the created schedule
+    // Validate cron expression format
+    if let Err(validation_err) = validator.validate_string(&request.cron_expression, "cron_expression") {
+        warn!("Invalid cron expression provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
     
-    Err(RestError::InternalError(
-        "Schedule creation not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    // Basic cron expression validation
+    if request.cron_expression.trim().is_empty() {
+        return Err(RestError::BadRequest("Cron expression cannot be empty".to_string()));
+    }
+    
+    // Validate description if provided
+    if let Some(ref description) = request.description {
+        if let Err(validation_err) = validator.validate_string(description, "description") {
+            warn!("Invalid description provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    // Validate that task exists
+    let task_repo = ctx.repositories.task_repository();
+    let _task = task_repo
+        .find_by_id(request.task_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Task", &request.task_id.to_string()))?;
+    
+    // Create UnifiedSchedule from request
+    let unified_schedule = ratchet_api_types::UnifiedSchedule {
+        id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+        task_id: request.task_id,
+        name: request.name,
+        description: request.description,
+        cron_expression: request.cron_expression,
+        enabled: request.enabled.unwrap_or(true),
+        next_run: None, // Will be calculated by the scheduler
+        last_run: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    
+    // Create the schedule using the repository
+    let schedule_repo = ctx.repositories.schedule_repository();
+    let created_schedule = schedule_repo.create(unified_schedule).await
+        .map_err(|e| RestError::InternalError(format!("Failed to create schedule: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(created_schedule)))
 }
 
 /// Update an existing schedule
@@ -180,22 +214,89 @@ pub async fn create_schedule(
     )
 )]
 pub async fn update_schedule(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
-    Json(_request): Json<UpdateScheduleRequest>,
+    Json(request): Json<UpdateScheduleRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Updating schedule with ID: {}", schedule_id);
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate schedule exists
-    // 2. Update schedule name, description, cron expression, or enabled status
-    // 3. Recalculate next run time if cron expression changed
-    // 4. Return the updated schedule
+    // Validate schedule ID input
+    let validator = InputValidator::new();
+    let sanitizer = ErrorSanitizer::default();
     
-    Err(RestError::InternalError(
-        "Schedule update not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    if let Err(validation_err) = validator.validate_string(&schedule_id, "schedule_id") {
+        warn!("Invalid schedule ID provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    // Validate update request fields if provided
+    if let Some(ref name) = request.name {
+        if let Err(validation_err) = validator.validate_string(name, "name") {
+            warn!("Invalid schedule name provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    if let Some(ref description) = request.description {
+        if let Err(validation_err) = validator.validate_string(description, "description") {
+            warn!("Invalid description provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    if let Some(ref cron_expression) = request.cron_expression {
+        if let Err(validation_err) = validator.validate_string(cron_expression, "cron_expression") {
+            warn!("Invalid cron expression provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+        
+        // Basic cron expression validation
+        if cron_expression.trim().is_empty() {
+            return Err(RestError::BadRequest("Cron expression cannot be empty".to_string()));
+        }
+    }
+    
+    let api_id = ApiId::from_string(schedule_id.clone());
+    let schedule_repo = ctx.repositories.schedule_repository();
+    
+    // Get the existing schedule
+    let mut existing_schedule = schedule_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Schedule", &schedule_id))?;
+    
+    // Apply updates
+    if let Some(name) = request.name {
+        existing_schedule.name = name;
+    }
+    if let Some(description) = request.description {
+        existing_schedule.description = Some(description);
+    }
+    if let Some(cron_expression) = request.cron_expression {
+        existing_schedule.cron_expression = cron_expression;
+        // Reset next_run when cron expression changes (will be recalculated by scheduler)
+        existing_schedule.next_run = None;
+    }
+    if let Some(enabled) = request.enabled {
+        existing_schedule.enabled = enabled;
+    }
+    
+    // Update timestamp
+    existing_schedule.updated_at = chrono::Utc::now();
+    
+    // Update the schedule using the repository
+    let updated_schedule = schedule_repo.update(existing_schedule).await
+        .map_err(|e| RestError::InternalError(format!("Failed to update schedule: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(updated_schedule)))
 }
 
 /// Delete a schedule
