@@ -1,0 +1,69 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+!README.md
+
+# Development files
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+
+# Docker
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Package files
+*.tar.gz
+*.zip
+
+# Local development
+dev/
+scratch/
+examples/data/
+test-data/
