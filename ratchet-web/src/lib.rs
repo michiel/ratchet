@@ -31,10 +31,9 @@
 //!     .layer(request_id_layer())
 //!     .layer(cors_layer());
 //! 
-//! // Start the server (axum 0.6)
-//! let addr = "0.0.0.0:3000".parse().unwrap();
-//! axum::Server::bind(&addr)
-//!     .serve(app.into_make_service())
+//! // Start the server (axum 0.7)
+//! let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+//! axum::serve(listener, app)
 //!     .await
 //!     .unwrap();
 //! # }

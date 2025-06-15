@@ -157,9 +157,7 @@ async fn start_webhook_server() -> Result<(SocketAddr, WebhookState)> {
     let addr = listener.local_addr()?;
 
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .serve(app.into_make_service())
+        axum::serve(listener, app)
             .await
             .unwrap();
     });
@@ -318,9 +316,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     let server_url = format!("http://{}", server_addr);
     
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .serve(app.into_make_service())
+        axum::serve(listener, app)
             .await
             .unwrap();
     });
@@ -713,9 +709,7 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
     let server_url = format!("http://{}", server_addr);
     
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .serve(app.into_make_service())
+        axum::serve(listener, app)
             .await
             .unwrap();
     });

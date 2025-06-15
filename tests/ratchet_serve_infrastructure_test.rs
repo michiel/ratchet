@@ -24,7 +24,7 @@ use ratchet_config::{
     domains::{
         database::DatabaseConfig,
         server::ServerConfig,
-        registry::{RegistryConfig, RegistrySourceConfig, RegistrySourceType},
+        registry::RegistryConfig,
         output::OutputConfig,
         http::HttpConfig,
         logging::{LoggingConfig, LogLevel, LogFormat},
@@ -106,9 +106,7 @@ async fn start_test_webhook_server() -> Result<(SocketAddr, TestWebhookState)> {
     let addr = listener.local_addr()?;
 
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .serve(app.into_make_service())
+        axum::serve(listener, app)
             .await
             .unwrap();
     });
@@ -228,9 +226,7 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
     let server_url = format!("http://{}", server_addr);
     
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .serve(app.into_make_service())
+        axum::serve(listener, app)
             .await
             .unwrap();
     });
@@ -439,9 +435,7 @@ async fn test_graphql_error_handling() -> Result<()> {
     let server_url = format!("http://{}", server_addr);
     
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .serve(app.into_make_service())
+        axum::serve(listener, app)
             .await
             .unwrap();
     });
@@ -491,9 +485,7 @@ async fn test_concurrent_requests() -> Result<()> {
     let server_url = format!("http://{}", server_addr);
     
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .serve(app.into_make_service())
+        axum::serve(listener, app)
             .await
             .unwrap();
     });
