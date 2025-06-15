@@ -267,8 +267,12 @@ async fn test_mcp_complete_workflow() -> Result<()> {
     
     // Parse the tool result
     let content = &list_result["content"][0]["text"];
-    let tasks: Value = serde_json::from_str(content.as_str().unwrap())?;
-    let initial_task_count = tasks.as_array().unwrap().len();
+    let response: Value = serde_json::from_str(content.as_str().unwrap())?;
+    let initial_task_count = if let Some(tasks) = response["tasks"].as_array() {
+        tasks.len()
+    } else {
+        0
+    };
     println!("📊 Found {} existing tasks in repository", initial_task_count);
     
     // Step 4: Create a new task using MCP

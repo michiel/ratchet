@@ -123,7 +123,7 @@ pub async fn get_task(
     )
 )]
 pub async fn create_task(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Json(request): Json<CreateTaskRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Creating task: {}", request.name);
@@ -178,15 +178,31 @@ pub async fn create_task(
         }
     }
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Create task in registry or database
-    // 2. Sync with other systems  
-    // 3. Return the created task
+    // Create UnifiedTask from request
+    let unified_task = ratchet_api_types::UnifiedTask {
+        id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+        uuid: uuid::Uuid::new_v4(),
+        name: request.name,
+        description: request.description,
+        version: request.version.clone(),
+        enabled: request.enabled.unwrap_or(true),
+        registry_source: false, // Tasks created via API are not from registry
+        available_versions: vec![request.version],
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        validated_at: None,
+        in_sync: true,
+        input_schema: request.input_schema,
+        output_schema: request.output_schema,
+        metadata: request.metadata,
+    };
     
-    Err(RestError::InternalError(
-        "Task creation not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    // Create the task using the repository
+    let task_repo = ctx.repositories.task_repository();
+    let created_task = task_repo.create(unified_task).await
+        .map_err(|e| RestError::InternalError(format!("Failed to create task: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(created_task)))
 }
 
 /// Update an existing task
@@ -207,41 +223,174 @@ pub async fn create_task(
     )
 )]
 pub async fn update_task(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
-    Json(_request): Json<UpdateTaskRequest>,
+    Json(request): Json<UpdateTaskRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Updating task with ID: {}", task_id);
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate the request and task existence
-    // 2. Update task in database
-    // 3. Sync with registry if needed
-    // 4. Return the updated task
+    // Validate task ID input
+    let validator = InputValidator::new();
+    let sanitizer = ErrorSanitizer::default();
     
-    Err(RestError::InternalError(
-        "Task update not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    if let Err(validation_err) = validator.validate_string(&task_id, "task_id") {
+        warn!("Invalid task ID provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    // Validate update request fields if provided
+    if let Some(ref name) = request.name {
+        if let Err(validation_err) = validator.validate_task_name(name) {
+            warn!("Invalid task name provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    if let Some(ref description) = request.description {
+        if let Err(validation_err) = validator.validate_string(description, "description") {
+            warn!("Invalid task description provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    if let Some(ref version) = request.version {
+        if let Err(validation_err) = validator.validate_semver(version) {
+            warn!("Invalid task version provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    // Validate JSON schemas if provided
+    if let Some(ref input_schema) = request.input_schema {
+        let input_str = serde_json::to_string(input_schema)
+            .map_err(|e| RestError::BadRequest(format!("Invalid input schema JSON: {}", e)))?;
+        if let Err(validation_err) = validator.validate_json(&input_str) {
+            warn!("Invalid input schema provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    if let Some(ref output_schema) = request.output_schema {
+        let output_str = serde_json::to_string(output_schema)
+            .map_err(|e| RestError::BadRequest(format!("Invalid output schema JSON: {}", e)))?;
+        if let Err(validation_err) = validator.validate_json(&output_str) {
+            warn!("Invalid output schema provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    let api_id = ApiId::from_string(task_id.clone());
+    let task_repo = ctx.repositories.task_repository();
+    
+    // Get the existing task
+    let mut existing_task = task_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Task", &task_id))?;
+    
+    // Apply updates
+    if let Some(name) = request.name {
+        existing_task.name = name;
+    }
+    if let Some(description) = request.description {
+        existing_task.description = Some(description);
+    }
+    if let Some(version) = request.version {
+        existing_task.version = version.clone();
+        // Add to available versions if not already present
+        if !existing_task.available_versions.contains(&version) {
+            existing_task.available_versions.push(version);
+        }
+    }
+    if let Some(enabled) = request.enabled {
+        existing_task.enabled = enabled;
+    }
+    if let Some(input_schema) = request.input_schema {
+        existing_task.input_schema = Some(input_schema);
+    }
+    if let Some(output_schema) = request.output_schema {
+        existing_task.output_schema = Some(output_schema);
+    }
+    if let Some(metadata) = request.metadata {
+        existing_task.metadata = Some(metadata);
+    }
+    
+    // Update timestamp
+    existing_task.updated_at = chrono::Utc::now();
+    
+    // Update the task using the repository
+    let updated_task = task_repo.update(existing_task).await
+        .map_err(|e| RestError::InternalError(format!("Failed to update task: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(updated_task)))
 }
 
 /// Delete a task
+#[utoipa::path(
+    delete,
+    path = "/tasks/{task_id}",
+    tag = "tasks",
+    operation_id = "deleteTask",
+    params(
+        ("task_id" = String, Path, description = "Unique task identifier")
+    ),
+    responses(
+        (status = 200, description = "Task deleted successfully"),
+        (status = 400, description = "Invalid task ID"),
+        (status = 404, description = "Task not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn delete_task(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
 ) -> RestResult<impl IntoResponse> {
     info!("Deleting task with ID: {}", task_id);
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate task existence and dependencies
-    // 2. Delete from database
-    // 3. Clean up related executions/jobs if needed
-    // 4. Return success confirmation
+    // Validate task ID input
+    let validator = InputValidator::new();
+    let sanitizer = ErrorSanitizer::default();
     
-    Err(RestError::InternalError(
-        "Task deletion not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    if let Err(validation_err) = validator.validate_string(&task_id, "task_id") {
+        warn!("Invalid task ID provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    let api_id = ApiId::from_string(task_id.clone());
+    let task_repo = ctx.repositories.task_repository();
+    
+    // Check if task exists before deletion
+    let existing_task = task_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?;
+    
+    if existing_task.is_none() {
+        return Err(RestError::not_found("Task", &task_id));
+    }
+    
+    // Delete the task using the repository
+    task_repo.delete(api_id.as_i32().unwrap_or(0)).await
+        .map_err(|e| RestError::InternalError(format!("Failed to delete task: {}", e)))?;
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Task {} deleted successfully", task_id)
+    })))
 }
 
 /// Enable a task

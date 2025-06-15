@@ -164,8 +164,12 @@ async fn test_mcp_api_workflow() -> Result<()> {
                 list_result["content"][0]["text"]);
     } else {
         let content_text = list_result["content"][0]["text"].as_str().unwrap();
-        let tasks: Value = serde_json::from_str(content_text)?;
-        let task_count = tasks.as_array().unwrap().len();
+        let response: Value = serde_json::from_str(content_text)?;
+        let task_count = if let Some(tasks) = response["tasks"].as_array() {
+            tasks.len()
+        } else {
+            0
+        };
         println!("📊 Found {} tasks in repository", task_count);
     }
     

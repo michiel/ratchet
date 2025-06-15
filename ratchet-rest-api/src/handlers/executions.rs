@@ -127,7 +127,7 @@ pub async fn get_execution(
     )
 )]
 pub async fn create_execution(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Json(request): Json<CreateExecutionRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Creating execution for task: {:?}", request.task_id);
@@ -145,17 +145,44 @@ pub async fn create_execution(
         return Err(RestError::BadRequest(sanitized_error.message));
     }
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate task exists and is enabled
-    // 2. Validate input against task's input schema
-    // 3. Create execution in database
-    // 4. Queue for processing if not scheduled
-    // 5. Return the created execution
+    // Validate that task exists
+    let task_repo = ctx.repositories.task_repository();
+    let _task = task_repo
+        .find_by_id(request.task_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Task", &request.task_id.to_string()))?;
     
-    Err(RestError::InternalError(
-        "Execution creation not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    // Create UnifiedExecution from request
+    let unified_execution = ratchet_api_types::UnifiedExecution {
+        id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
+        uuid: uuid::Uuid::new_v4(),
+        task_id: request.task_id,
+        input: request.input,
+        output: None,
+        status: ratchet_api_types::ExecutionStatus::Pending,
+        error_message: None,
+        error_details: None,
+        queued_at: chrono::Utc::now(),
+        started_at: None,
+        completed_at: None,
+        duration_ms: None,
+        http_requests: None,
+        recording_path: None,
+        can_retry: false,
+        can_cancel: true,
+        progress: None,
+    };
+    
+    // Create the execution using the repository
+    let execution_repo = ctx.repositories.execution_repository();
+    let created_execution = execution_repo.create(unified_execution).await
+        .map_err(|e| RestError::InternalError(format!("Failed to create execution: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(created_execution)))
 }
 
 /// Update an existing execution
@@ -176,22 +203,99 @@ pub async fn create_execution(
     )
 )]
 pub async fn update_execution(
-    State(_ctx): State<TasksContext>,
+    State(ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
-    Json(_request): Json<UpdateExecutionRequest>,
+    Json(request): Json<UpdateExecutionRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Updating execution with ID: {}", execution_id);
     
-    // For now, return a placeholder response
-    // In a full implementation, this would:
-    // 1. Validate execution exists
-    // 2. Update execution status, output, or error information
-    // 3. Trigger any necessary downstream actions
-    // 4. Return the updated execution
+    // Validate execution ID input
+    let validator = InputValidator::new();
+    let sanitizer = ErrorSanitizer::default();
     
-    Err(RestError::InternalError(
-        "Execution update not yet implemented".to_string(),
-    )) as RestResult<Json<serde_json::Value>>
+    if let Err(validation_err) = validator.validate_string(&execution_id, "execution_id") {
+        warn!("Invalid execution ID provided: {}", validation_err);
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    // Validate output JSON if provided
+    if let Some(ref output) = request.output {
+        let output_str = serde_json::to_string(output)
+            .map_err(|e| RestError::BadRequest(format!("Invalid output JSON: {}", e)))?;
+        if let Err(validation_err) = validator.validate_json(&output_str) {
+            warn!("Invalid execution output provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    // Validate error message if provided
+    if let Some(ref error_message) = request.error_message {
+        if let Err(validation_err) = validator.validate_string(error_message, "error_message") {
+            warn!("Invalid error message provided: {}", validation_err);
+            let sanitized_error = sanitizer.sanitize_error(&validation_err);
+            return Err(RestError::BadRequest(sanitized_error.message));
+        }
+    }
+    
+    let api_id = ApiId::from_string(execution_id.clone());
+    let execution_repo = ctx.repositories.execution_repository();
+    
+    // Get the existing execution
+    let mut existing_execution = execution_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Execution", &execution_id))?;
+    
+    // Apply updates
+    if let Some(output) = request.output {
+        existing_execution.output = Some(output);
+    }
+    if let Some(status) = request.status {
+        existing_execution.status = status;
+        
+        // Update timestamps based on status
+        match status {
+            ratchet_api_types::ExecutionStatus::Running => {
+                if existing_execution.started_at.is_none() {
+                    existing_execution.started_at = Some(chrono::Utc::now());
+                }
+            }
+            ratchet_api_types::ExecutionStatus::Completed | 
+            ratchet_api_types::ExecutionStatus::Failed | 
+            ratchet_api_types::ExecutionStatus::Cancelled => {
+                if existing_execution.completed_at.is_none() {
+                    existing_execution.completed_at = Some(chrono::Utc::now());
+                }
+                // Calculate duration if we have started_at
+                if let Some(started_at) = existing_execution.started_at {
+                    let duration = chrono::Utc::now().signed_duration_since(started_at);
+                    existing_execution.duration_ms = Some(duration.num_milliseconds() as i32);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(error_message) = request.error_message {
+        existing_execution.error_message = Some(error_message);
+    }
+    if let Some(error_details) = request.error_details {
+        existing_execution.error_details = Some(error_details);
+    }
+    if let Some(progress) = request.progress {
+        existing_execution.progress = Some(progress);
+    }
+    
+    // Update the execution using the repository
+    let updated_execution = execution_repo.update(existing_execution).await
+        .map_err(|e| RestError::InternalError(format!("Failed to update execution: {}", e)))?;
+    
+    Ok(Json(ApiResponse::new(updated_execution)))
 }
 
 /// Cancel a running execution
