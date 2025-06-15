@@ -187,6 +187,49 @@ pub enum GenerateCommands {
         #[arg(long, value_name = "STRING", default_value = "1.0.0")]
         version: Option<String>,
     },
+
+    /// Generate mcpServers JSON object for Claude configuration
+    McpserversJson {
+        /// Server name for the MCP server entry
+        #[arg(long, value_name = "NAME", default_value = "ratchet")]
+        name: String,
+
+        /// Command to execute (defaults to 'ratchet mcp-serve')
+        #[arg(long, value_name = "COMMAND")]
+        command: Option<String>,
+
+        /// Arguments to pass to the command
+        #[arg(long, value_name = "ARGS")]
+        args: Option<Vec<String>>,
+
+        /// Configuration file path
+        #[arg(long, value_name = "PATH")]
+        config: Option<PathBuf>,
+
+        /// Transport type: stdio, sse
+        #[arg(long, value_name = "TYPE", default_value = "stdio")]
+        transport: String,
+
+        /// Host to bind to (for SSE transport)
+        #[arg(long, value_name = "HOST", default_value = "127.0.0.1")]
+        host: String,
+
+        /// Port to bind to (for SSE transport)
+        #[arg(long, value_name = "PORT", default_value = "8090")]
+        port: u16,
+
+        /// Environment variables to set
+        #[arg(long, value_name = "KEY=VALUE")]
+        env: Option<Vec<String>>,
+
+        /// Output format: json, claude-config
+        #[arg(long, value_name = "FORMAT", default_value = "json")]
+        format: String,
+
+        /// Pretty print the JSON output
+        #[arg(long)]
+        pretty: bool,
+    },
 }
 
 #[derive(Subcommand)]
