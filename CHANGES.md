@@ -1,5 +1,25 @@
 # Changes
 
+## v0.4.6 (2025-06-15)
+
+### Bug Fixes
+- **Repository Synchronization**: Fixed critical issue where repository sync claimed success but tasks weren't persisted to database, causing empty API responses
+- **Database Persistence**: Resolved sync process using stub repository implementations instead of actual SeaORM repositories for data persistence
+- **API Data Access**: Fixed disconnect between successful sync logging and empty GraphQL/REST API responses by ensuring consistent repository layer usage
+
+### Infrastructure
+- **Docker Support**: Added comprehensive Docker containerization with multi-stage builds, GitHub Container Registry CI/CD pipeline, and multi-platform support (AMD64/ARM64)
+- **Container Security**: Implemented security-focused container with non-root user, health checks, and proper volume mounts for data persistence
+- **CI/CD Pipeline**: Added automated Docker image publishing to ghcr.io on releases with semantic versioning and build attestation
+- **Development Tools**: Added Docker Compose setup for local development and .dockerignore for optimized builds
+
+### Developer Experience
+- **Sync Verification**: Added database verification step to confirm actual task persistence during repository synchronization
+- **Error Diagnostics**: Enhanced sync logging to distinguish between claimed success and actual database persistence
+- **Repository Consistency**: Ensured sync process and API layer use compatible repository implementations for data access
+
+This release resolves the critical issue where users experienced empty API responses despite successful repository synchronization, and adds comprehensive Docker support for containerized deployments.
+
 ## v0.4.5 (2025-06-15)
 
 ### Features
