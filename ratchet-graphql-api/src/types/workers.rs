@@ -5,7 +5,7 @@ use ratchet_api_types::{UnifiedWorkerStatus, WorkerStatusType};
 use chrono::{DateTime, Utc};
 
 /// GraphQL Worker type
-#[derive(SimpleObject, Clone)]
+#[derive(SimpleObject, Clone, Debug)]
 pub struct Worker {
     pub id: String,
     pub status: WorkerStatusGraphQL,
@@ -18,7 +18,7 @@ pub struct Worker {
 }
 
 /// GraphQL enum for worker status
-#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+#[derive(Enum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkerStatusGraphQL {
     Idle,
     Running,

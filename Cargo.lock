@@ -4312,6 +4312,7 @@ dependencies = [
  "ratchet-api-types",
  "ratchet-core",
  "ratchet-interfaces",
+ "ratchet-mcp",
  "ratchet-web",
  "serde",
  "serde_json",

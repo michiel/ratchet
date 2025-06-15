@@ -12,6 +12,7 @@ ratchet-api-types = { path = "../ratchet-api-types" }
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-web = { path = "../ratchet-web" }
 ratchet-core = { path = "../ratchet-core" }
+ratchet-mcp = { path = "../ratchet-mcp" }
 # ratchet-error-middleware = { path = "../ratchet-error-middleware" } # DISABLED
 
 # External dependencies
@@ -28,6 +29,7 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 async-trait = { workspace = true }
 futures-util = "0.3"
+# tokio-stream removed - using futures directly for simpler implementation
 
 [dev-dependencies]
 tokio-test = "0.4"

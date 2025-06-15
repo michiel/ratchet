@@ -1,6 +1,6 @@
 //! GraphQL schema definition
 
-use async_graphql::{Schema, SchemaBuilder, EmptySubscription};
+use async_graphql::{Schema, SchemaBuilder};
 use axum::{
     response::IntoResponse,
     Json,
@@ -8,20 +8,20 @@ use axum::{
 
 use crate::{
     context::{GraphQLContext, GraphQLConfig},
-    resolvers::{Query, Mutation},
+    resolvers::{Query, Mutation, Subscription},
 };
 
 /// The main GraphQL schema type
-pub type RatchetSchema = Schema<Query, Mutation, EmptySubscription>;
+pub type RatchetSchema = Schema<Query, Mutation, Subscription>;
 
 /// Create the GraphQL schema with all resolvers
-pub fn create_schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
-    Schema::build(Query, Mutation, EmptySubscription)
+pub fn create_schema() -> SchemaBuilder<Query, Mutation, Subscription> {
+    Schema::build(Query, Mutation, Subscription)
 }
 
 /// Configure the schema with limits and extensions
 pub fn configure_schema(
-    builder: SchemaBuilder<Query, Mutation, EmptySubscription>,
+    builder: SchemaBuilder<Query, Mutation, Subscription>,
     config: &GraphQLConfig,
 ) -> RatchetSchema {
     let mut schema = builder;

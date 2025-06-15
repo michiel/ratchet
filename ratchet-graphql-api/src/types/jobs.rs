@@ -6,7 +6,7 @@ use super::scalars::GraphQLApiId;
 use chrono::{DateTime, Utc};
 
 /// GraphQL Job type with additional fields for GraphQL API
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone, Debug)]
 #[graphql(rename_fields = "camelCase")]
 pub struct Job {
     pub id: GraphQLApiId,
@@ -131,7 +131,7 @@ pub struct RetryPolicyInput {
 }
 
 /// Output destination type
-#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(async_graphql::Enum, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum OutputDestinationType {
     #[graphql(name = "WEBHOOK")]
     Webhook,
@@ -142,7 +142,7 @@ pub enum OutputDestinationType {
 }
 
 /// Output destination info for responses
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone, Debug)]
 #[graphql(rename_fields = "camelCase")]
 pub struct OutputDestination {
     pub destination_type: OutputDestinationType,

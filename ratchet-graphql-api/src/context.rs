@@ -5,6 +5,8 @@ use ratchet_interfaces::{
     RepositoryFactory, TaskRegistry, RegistryManager, 
     TaskValidator
 };
+use ratchet_mcp::server::adapter::RatchetMcpAdapter;
+use crate::events::EventBroadcaster;
 
 /// Main GraphQL context containing all service dependencies
 #[derive(Clone)]
@@ -13,6 +15,8 @@ pub struct GraphQLContext {
     pub registry: Arc<dyn TaskRegistry>,
     pub registry_manager: Arc<dyn RegistryManager>,
     pub validator: Arc<dyn TaskValidator>,
+    pub event_broadcaster: Arc<EventBroadcaster>,
+    pub mcp_adapter: Option<Arc<RatchetMcpAdapter>>,
 }
 
 impl GraphQLContext {
@@ -27,6 +31,45 @@ impl GraphQLContext {
             registry,
             registry_manager,
             validator,
+            event_broadcaster: Arc::new(EventBroadcaster::new()),
+            mcp_adapter: None,
+        }
+    }
+
+    /// Create context with custom event broadcaster
+    pub fn with_event_broadcaster(
+        repositories: Arc<dyn RepositoryFactory>,
+        registry: Arc<dyn TaskRegistry>,
+        registry_manager: Arc<dyn RegistryManager>,
+        validator: Arc<dyn TaskValidator>,
+        event_broadcaster: Arc<EventBroadcaster>,
+    ) -> Self {
+        Self {
+            repositories,
+            registry,
+            registry_manager,
+            validator,
+            event_broadcaster,
+            mcp_adapter: None,
+        }
+    }
+
+    /// Create context with MCP adapter
+    pub fn with_mcp_adapter(
+        repositories: Arc<dyn RepositoryFactory>,
+        registry: Arc<dyn TaskRegistry>,
+        registry_manager: Arc<dyn RegistryManager>,
+        validator: Arc<dyn TaskValidator>,
+        event_broadcaster: Arc<EventBroadcaster>,
+        mcp_adapter: Arc<RatchetMcpAdapter>,
+    ) -> Self {
+        Self {
+            repositories,
+            registry,
+            registry_manager,
+            validator,
+            event_broadcaster,
+            mcp_adapter: Some(mcp_adapter),
         }
     }
 }
