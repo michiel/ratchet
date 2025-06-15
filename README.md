@@ -539,11 +539,17 @@ Ratchet includes a built-in MCP server that allows Language Learning Models (LLM
 ### Starting the MCP Server
 
 ```bash
-# Start the main server with MCP enabled
+# Option 1: Start integrated server with MCP enabled
 ratchet serve --config config.yaml
 
-# Or start standalone MCP server (planned)
-# ratchet mcp-serve --transport stdio
+# Option 2: Start standalone MCP server with SSE transport (web applications)
+ratchet mcp --transport sse --port 8090
+
+# Option 3: Start MCP server for Claude Desktop (stdio transport)  
+ratchet mcp-serve
+
+# Option 4: Add to Claude Desktop using Claude Code CLI
+claude mcp add ratchet ratchet mcp-serve
 ```
 
 Configure MCP in your `config.yaml`:
@@ -572,16 +578,16 @@ For Claude Desktop, add to your config:
   "mcpServers": {
     "ratchet": {
       "command": "ratchet",
-      "args": ["serve", "--config", "/path/to/mcp-config.yaml"],
+      "args": ["mcp-serve"],
       "env": {
-        "RATCHET_MCP_ENABLED": "true"
+        "RUST_LOG": "info"
       }
     }
   }
 }
 ```
 
-The MCP server will be available at `http://127.0.0.1:8081/mcp` when configured with SSE transport. See the sample configs in `sample/configs/` for complete MCP setup examples.
+The MCP server supports both stdio transport (for Claude Desktop) and SSE transport (for web applications). The `mcp-serve` command defaults to stdio transport for seamless Claude Desktop integration, while the `mcp` command defaults to SSE transport for general use. See the sample configs in `sample/configs/` for complete MCP setup examples.
 
 ## 🔐 Configuration
 
@@ -833,9 +839,14 @@ console:
   ratchet run-once --from-fs <path> --input-json='<json>'
   ```
 
-- **`mcp-serve`** - Start standalone MCP server
+- **`mcp`** - Start MCP server with SSE transport (general use)
   ```bash
-  ratchet mcp-serve [--config=<path>] [--transport=stdio|sse]
+  ratchet mcp [--config=<path>] [--transport=stdio|sse] [--host=<host>] [--port=<port>]
+  ```
+
+- **`mcp-serve`** - Start MCP server with stdio transport (Claude Desktop)
+  ```bash
+  ratchet mcp-serve [--config=<path>] [--transport=stdio|sse] [--host=<host>] [--port=<port>]
   ```
 
 - **`test`** - Run task test suite

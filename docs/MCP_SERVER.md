@@ -12,11 +12,11 @@ Ratchet now includes a comprehensive MCP server implementation that allows Langu
 - **JSON-RPC 2.0 Implementation**: Full support for request/response and notification patterns
 - **MCP Message Types**: Initialize, tools/list, tools/call, resources/list, resources/read
 - **Server Capabilities**: Dynamic capability negotiation during initialization
-- **Protocol Version**: MCP 1.0.0 compliant
+- **Protocol Versions**: Supports MCP "0.1.0", "2024-11-05", "2025-03-26", "1.0.0" for broad compatibility
 
 #### 2. **Transport Layer** (`ratchet-mcp/src/transport/`)
 - **Stdio Transport**: ✅ Implemented - For local process communication
-- **SSE Transport**: 🚧 Planned - For HTTP-based connections
+- **SSE Transport**: ✅ Implemented - For HTTP-based connections and web applications
 - **Connection Pooling**: Health monitoring, automatic cleanup, and lifecycle management
 
 #### 3. **Security Layer** (`ratchet-mcp/src/security/`)

@@ -19,14 +19,17 @@ npm install
 
 ### 2. Start Ratchet MCP Server (SSE Mode)
 
-Start your Ratchet MCP server with SSE transport using the unified `ratchet` command:
+Start your Ratchet MCP server with SSE transport:
 
 ```bash
-# Start Ratchet MCP server on localhost:8090
+# Option 1: Use the general MCP command (SSE default)
+ratchet mcp --host 127.0.0.1 --port 8090
+
+# Option 2: Use mcp-serve with explicit SSE transport
 ratchet mcp-serve --transport sse --host 127.0.0.1 --port 8090
 
-# Or with configuration file
-ratchet mcp-serve --config /path/to/config.yaml
+# Option 3: With configuration file
+ratchet mcp --config /path/to/config.yaml
 ```
 
 ### 3. Configure Claude Desktop

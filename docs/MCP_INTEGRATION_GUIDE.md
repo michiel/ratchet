@@ -20,10 +20,30 @@ Ratchet provides comprehensive MCP (Model Context Protocol) support that allows 
 
 ### Server Modes
 
-Ratchet offers two server modes:
+Ratchet offers multiple server modes:
 
 1. **Regular Server** (`ratchet serve`) - Full HTTP/GraphQL API server for web applications
-2. **MCP Server** (`ratchet mcp-serve`) - Specialized MCP server for LLM integration
+2. **MCP Server** (`ratchet mcp`) - General-purpose MCP server with SSE transport (default)
+3. **MCP Server for Claude Desktop** (`ratchet mcp-serve`) - Optimized MCP server with stdio transport
+
+Both MCP commands support both stdio and SSE transports with `--transport` option.
+
+### Command Quick Reference
+
+```bash
+# General MCP server (SSE transport, port 8090)
+ratchet mcp
+
+# Claude Desktop optimized (stdio transport) 
+ratchet mcp-serve
+
+# Custom configuration
+ratchet mcp --transport sse --port 8091 --config config.yaml
+ratchet mcp-serve --config config.yaml
+
+# Using Claude Code CLI (automatic integration)
+claude mcp add ratchet ratchet mcp-serve
+```
 
 ## Quick Setup for Claude Desktop
 
