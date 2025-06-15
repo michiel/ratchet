@@ -466,7 +466,7 @@ mod tests {
         let security_ctx = create_test_security_context();
 
         let params = serde_json::json!({
-            "name": "ratchet.execute_task",
+            "name": "ratchet_execute_task",
             "arguments": {
                 "task_id": "test-task",
                 "input": {"key": "value"}

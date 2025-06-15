@@ -10,6 +10,7 @@
 ### Bug Fixes
 - **MCP Protocol Version Support**: Fixed protocol handshake issues with Claude Code by adding latest protocol version "2025-03-26"
 - **Future Type Compatibility**: Resolved Rust compilation errors in MCP server transport handling using boxed futures
+- **Claude Code Tool Name Validation**: Fixed MCP tool name validation errors by replacing dots with underscores in all tool names to comply with Claude Code's `^[a-zA-Z0-9_-]{1,64}$` pattern
 
 ### Developer Experience
 - **Comprehensive Documentation Updates**: Updated README.md, MCP documentation, and integration guides to reflect new command structure

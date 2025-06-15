@@ -766,9 +766,9 @@ impl TaskDevelopmentService {
                 "performance_profiling"
             ],
             "next_steps": [
-                "Use ratchet.execute_task with trace=true for execution traces",
-                "Use ratchet.get_execution_trace for detailed trace analysis",
-                "Use ratchet.analyze_execution_error for error debugging"
+                "Use ratchet_execute_task with trace=true for execution traces",
+                "Use ratchet_get_execution_trace for detailed trace analysis",
+                "Use ratchet_analyze_execution_error for error debugging"
             ]
         });
         
@@ -2076,7 +2076,7 @@ struct TaskInfo {
 pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
     // Create task tool
     let create_task_tool = McpTool::new(
-        "ratchet.create_task",
+        "ratchet_create_task",
         "Create a new task with code, schemas, and optional test cases",
         json!({
             "type": "object",
@@ -2140,11 +2140,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.create_task".to_string(), create_task_tool);
+    tools.insert("ratchet_create_task".to_string(), create_task_tool);
     
     // Validate task tool
     let validate_task_tool = McpTool::new(
-        "ratchet.validate_task",
+        "ratchet_validate_task",
         "Validate task code, schemas, and optionally run tests without execution",
         json!({
             "type": "object",
@@ -2180,11 +2180,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.validate_task".to_string(), validate_task_tool);
+    tools.insert("ratchet_validate_task".to_string(), validate_task_tool);
     
     // Debug task tool
     let debug_task_tool = McpTool::new(
-        "ratchet.debug_task_execution",
+        "ratchet_debug_task_execution",
         "Debug task execution with breakpoints and variable inspection",
         json!({
             "type": "object",
@@ -2222,11 +2222,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.debug_task_execution".to_string(), debug_task_tool);
+    tools.insert("ratchet_debug_task_execution".to_string(), debug_task_tool);
     
     // Run tests tool
     let run_tests_tool = McpTool::new(
-        "ratchet.run_task_tests",
+        "ratchet_run_task_tests",
         "Execute test cases for a task and report results",
         json!({
             "type": "object",
@@ -2260,11 +2260,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.run_task_tests".to_string(), run_tests_tool);
+    tools.insert("ratchet_run_task_tests".to_string(), run_tests_tool);
     
     // Create version tool
     let create_version_tool = McpTool::new(
-        "ratchet.create_task_version",
+        "ratchet_create_task_version",
         "Create a new version of an existing task",
         json!({
             "type": "object",
@@ -2300,11 +2300,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.create_task_version".to_string(), create_version_tool);
+    tools.insert("ratchet_create_task_version".to_string(), create_version_tool);
     
     // Edit task tool
     let edit_task_tool = McpTool::new(
-        "ratchet.edit_task",
+        "ratchet_edit_task",
         "Edit existing task code, schemas, and metadata",
         json!({
             "type": "object",
@@ -2349,11 +2349,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.edit_task".to_string(), edit_task_tool);
+    tools.insert("ratchet_edit_task".to_string(), edit_task_tool);
     
     // Delete task tool
     let delete_task_tool = McpTool::new(
-        "ratchet.delete_task",
+        "ratchet_delete_task",
         "Delete an existing task with optional backup and file cleanup",
         json!({
             "type": "object",
@@ -2382,11 +2382,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.delete_task".to_string(), delete_task_tool);
+    tools.insert("ratchet_delete_task".to_string(), delete_task_tool);
     
     // Import tasks tool
     let import_tasks_tool = McpTool::new(
-        "ratchet.import_tasks",
+        "ratchet_import_tasks",
         "Import tasks from JSON or other formats",
         json!({
             "type": "object",
@@ -2419,11 +2419,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.import_tasks".to_string(), import_tasks_tool);
+    tools.insert("ratchet_import_tasks".to_string(), import_tasks_tool);
     
     // Export tasks tool
     let export_tasks_tool = McpTool::new(
-        "ratchet.export_tasks",
+        "ratchet_export_tasks",
         "Export tasks to JSON or other formats",
         json!({
             "type": "object",
@@ -2450,11 +2450,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.export_tasks".to_string(), export_tasks_tool);
+    tools.insert("ratchet_export_tasks".to_string(), export_tasks_tool);
     
     // Generate from template tool
     let generate_template_tool = McpTool::new(
-        "ratchet.generate_from_template",
+        "ratchet_generate_from_template",
         "Generate a new task from a predefined template",
         json!({
             "type": "object",
@@ -2480,11 +2480,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.generate_from_template".to_string(), generate_template_tool);
+    tools.insert("ratchet_generate_from_template".to_string(), generate_template_tool);
     
     // List templates tool
     let list_templates_tool = McpTool::new(
-        "ratchet.list_templates",
+        "ratchet_list_templates",
         "List all available task templates",
         json!({
             "type": "object",
@@ -2492,11 +2492,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.list_templates".to_string(), list_templates_tool);
+    tools.insert("ratchet_list_templates".to_string(), list_templates_tool);
     
     // Store result tool
     let store_result_tool = McpTool::new(
-        "ratchet.store_result",
+        "ratchet_store_result",
         "Store task execution result in the database",
         json!({
             "type": "object",
@@ -2544,11 +2544,11 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.store_result".to_string(), store_result_tool);
+    tools.insert("ratchet_store_result".to_string(), store_result_tool);
     
     // Get results tool
     let get_results_tool = McpTool::new(
-        "ratchet.get_results",
+        "ratchet_get_results",
         "Retrieve task execution results from the database",
         json!({
             "type": "object",
@@ -2593,7 +2593,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         }),
         "development",
     );
-    tools.insert("ratchet.get_results".to_string(), get_results_tool);
+    tools.insert("ratchet_get_results".to_string(), get_results_tool);
 }
 
 /// Execute task development tools
@@ -2608,7 +2608,7 @@ pub async fn execute_task_dev_tool(
     })?;
     
     match tool_name {
-        "ratchet.create_task" => {
+        "ratchet_create_task" => {
             let request: CreateTaskRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2633,7 +2633,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.validate_task" => {
+        "ratchet_validate_task" => {
             let request: ValidateTaskRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2658,7 +2658,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.debug_task_execution" => {
+        "ratchet_debug_task_execution" => {
             let request: DebugTaskRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2683,7 +2683,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.run_task_tests" => {
+        "ratchet_run_task_tests" => {
             let request: RunTaskTestsRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2708,7 +2708,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.create_task_version" => {
+        "ratchet_create_task_version" => {
             let request: CreateTaskVersionRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2733,7 +2733,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.edit_task" => {
+        "ratchet_edit_task" => {
             let request: EditTaskRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2758,7 +2758,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.import_tasks" => {
+        "ratchet_import_tasks" => {
             let request: ImportTaskRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2783,7 +2783,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.export_tasks" => {
+        "ratchet_export_tasks" => {
             let request: ExportTaskRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2808,7 +2808,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.generate_from_template" => {
+        "ratchet_generate_from_template" => {
             let request: GenerateFromTemplateRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2833,7 +2833,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.delete_task" => {
+        "ratchet_delete_task" => {
             let request: DeleteTaskRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2858,7 +2858,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.list_templates" => {
+        "ratchet_list_templates" => {
             match service.list_templates().await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2877,7 +2877,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.store_result" => {
+        "ratchet_store_result" => {
             let request: StoreResultRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
@@ -2902,7 +2902,7 @@ pub async fn execute_task_dev_tool(
             }
         }
         
-        "ratchet.get_results" => {
+        "ratchet_get_results" => {
             let request: GetResultsRequest = serde_json::from_value(args)
                 .map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),

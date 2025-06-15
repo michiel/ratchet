@@ -200,7 +200,7 @@ impl RatchetToolRegistry {
         
         // Task execution tool
         let execute_task_tool = McpTool::new(
-            "ratchet.execute_task",
+            "ratchet_execute_task",
             "Execute a Ratchet task with given input and optional progress streaming",
             serde_json::json!({
                 "type": "object",
@@ -257,11 +257,11 @@ impl RatchetToolRegistry {
             "execution",
         );
         self.tools
-            .insert("ratchet.execute_task".to_string(), execute_task_tool);
+            .insert("ratchet_execute_task".to_string(), execute_task_tool);
 
         // Execution status tool
         let status_tool = McpTool::new(
-            "ratchet.get_execution_status",
+            "ratchet_get_execution_status",
             "Get status and progress of a running execution",
             serde_json::json!({
                 "type": "object",
@@ -276,11 +276,11 @@ impl RatchetToolRegistry {
             "monitoring",
         );
         self.tools
-            .insert("ratchet.get_execution_status".to_string(), status_tool);
+            .insert("ratchet_get_execution_status".to_string(), status_tool);
 
         // Logs retrieval tool
         let logs_tool = McpTool::new(
-            "ratchet.get_execution_logs",
+            "ratchet_get_execution_logs",
             "Retrieve logs for a specific execution",
             serde_json::json!({
                 "type": "object",
@@ -311,11 +311,11 @@ impl RatchetToolRegistry {
             "monitoring",
         );
         self.tools
-            .insert("ratchet.get_execution_logs".to_string(), logs_tool);
+            .insert("ratchet_get_execution_logs".to_string(), logs_tool);
 
         // Trace retrieval tool
         let trace_tool = McpTool::new(
-            "ratchet.get_execution_trace",
+            "ratchet_get_execution_trace",
             "Get detailed execution trace with timing and context",
             serde_json::json!({
                 "type": "object",
@@ -341,11 +341,11 @@ impl RatchetToolRegistry {
             "debugging",
         );
         self.tools
-            .insert("ratchet.get_execution_trace".to_string(), trace_tool);
+            .insert("ratchet_get_execution_trace".to_string(), trace_tool);
 
         // Task discovery tool
         let list_tasks_tool = McpTool::new(
-            "ratchet.list_available_tasks",
+            "ratchet_list_available_tasks",
             "List all available tasks with their schemas",
             serde_json::json!({
                 "type": "object",
@@ -368,11 +368,11 @@ impl RatchetToolRegistry {
             "discovery",
         );
         self.tools
-            .insert("ratchet.list_available_tasks".to_string(), list_tasks_tool);
+            .insert("ratchet_list_available_tasks".to_string(), list_tasks_tool);
 
         // Error analysis tool
         let analyze_error_tool = McpTool::new(
-            "ratchet.analyze_execution_error",
+            "ratchet_analyze_execution_error",
             "Get detailed error analysis for failed execution",
             serde_json::json!({
                 "type": "object",
@@ -397,13 +397,13 @@ impl RatchetToolRegistry {
             "debugging",
         );
         self.tools.insert(
-            "ratchet.analyze_execution_error".to_string(),
+            "ratchet_analyze_execution_error".to_string(),
             analyze_error_tool,
         );
 
         // Batch execution tool
         let batch_execute_tool = McpTool::new(
-            "ratchet.batch_execute",
+            "ratchet_batch_execute",
             "Execute multiple tasks in parallel or sequence with dependency management",
             serde_json::json!({
                 "type": "object",
@@ -474,7 +474,7 @@ impl RatchetToolRegistry {
             "execution",
         );
         self.tools
-            .insert("ratchet.batch_execute".to_string(), batch_execute_tool);
+            .insert("ratchet_batch_execute".to_string(), batch_execute_tool);
     }
 
     /// Configure the registry with task executor
@@ -554,24 +554,24 @@ impl ToolRegistry for RatchetToolRegistry {
 
         // Execute the tool based on its name
         match name {
-            "ratchet.execute_task" => self.execute_task_tool(execution_context).await,
-            "ratchet.get_execution_status" => {
+            "ratchet_execute_task" => self.execute_task_tool(execution_context).await,
+            "ratchet_get_execution_status" => {
                 self.get_execution_status_tool(execution_context).await
             }
-            "ratchet.get_execution_logs" => self.get_execution_logs_tool(execution_context).await,
-            "ratchet.get_execution_trace" => self.get_execution_trace_tool(execution_context).await,
-            "ratchet.list_available_tasks" => {
+            "ratchet_get_execution_logs" => self.get_execution_logs_tool(execution_context).await,
+            "ratchet_get_execution_trace" => self.get_execution_trace_tool(execution_context).await,
+            "ratchet_list_available_tasks" => {
                 self.list_available_tasks_tool(execution_context).await
             }
-            "ratchet.analyze_execution_error" => {
+            "ratchet_analyze_execution_error" => {
                 self.analyze_execution_error_tool(execution_context).await
             }
-            "ratchet.batch_execute" => self.batch_execute_tool(execution_context).await,
+            "ratchet_batch_execute" => self.batch_execute_tool(execution_context).await,
             // Task development tools
-            "ratchet.create_task" | "ratchet.validate_task" | "ratchet.debug_task_execution" | 
-            "ratchet.run_task_tests" | "ratchet.create_task_version" | "ratchet.edit_task" |
-            "ratchet.import_tasks" | "ratchet.export_tasks" | "ratchet.generate_from_template" |
-            "ratchet.list_templates" => {
+            "ratchet_create_task" | "ratchet_validate_task" | "ratchet_debug_task_execution" | 
+            "ratchet_run_task_tests" | "ratchet_create_task_version" | "ratchet_edit_task" |
+            "ratchet_delete_task" | "ratchet_import_tasks" | "ratchet_export_tasks" | "ratchet_generate_from_template" |
+            "ratchet_list_templates" | "ratchet_store_result" | "ratchet_get_results" => {
                 if let Some(service) = &self.task_dev_service {
                     super::task_dev_tools::execute_task_dev_tool(name, execution_context, service.clone()).await
                 } else {
@@ -621,7 +621,7 @@ impl RatchetToolRegistry {
     async fn execute_task_tool(&self, context: ToolExecutionContext) -> McpResult<ToolsCallResult> {
         // Extract arguments
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
-            method: "ratchet.execute_task".to_string(),
+            method: "ratchet_execute_task".to_string(),
             details: "Missing arguments".to_string(),
         })?;
 
@@ -630,7 +630,7 @@ impl RatchetToolRegistry {
             .get("task_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
-                method: "ratchet.execute_task".to_string(),
+                method: "ratchet_execute_task".to_string(),
                 details: "Missing or invalid task_id".to_string(),
             })?;
 
@@ -821,7 +821,7 @@ impl RatchetToolRegistry {
         context: ToolExecutionContext,
     ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
-            method: "ratchet.get_execution_status".to_string(),
+            method: "ratchet_get_execution_status".to_string(),
             details: "Missing arguments".to_string(),
         })?;
 
@@ -830,7 +830,7 @@ impl RatchetToolRegistry {
             .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
-                method: "ratchet.get_execution_status".to_string(),
+                method: "ratchet_get_execution_status".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
 
@@ -900,7 +900,7 @@ impl RatchetToolRegistry {
         context: ToolExecutionContext,
     ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
-            method: "ratchet.get_execution_logs".to_string(),
+            method: "ratchet_get_execution_logs".to_string(),
             details: "Missing arguments".to_string(),
         })?;
 
@@ -909,7 +909,7 @@ impl RatchetToolRegistry {
             .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
-                method: "ratchet.get_execution_logs".to_string(),
+                method: "ratchet_get_execution_logs".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
 
@@ -992,7 +992,7 @@ impl RatchetToolRegistry {
         context: ToolExecutionContext,
     ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
-            method: "ratchet.get_execution_trace".to_string(),
+            method: "ratchet_get_execution_trace".to_string(),
             details: "Missing arguments".to_string(),
         })?;
 
@@ -1001,7 +1001,7 @@ impl RatchetToolRegistry {
             .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
-                method: "ratchet.get_execution_trace".to_string(),
+                method: "ratchet_get_execution_trace".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
 
@@ -1190,7 +1190,7 @@ impl RatchetToolRegistry {
         context: ToolExecutionContext,
     ) -> McpResult<ToolsCallResult> {
         let args = context.arguments.ok_or_else(|| McpError::InvalidParams {
-            method: "ratchet.analyze_execution_error".to_string(),
+            method: "ratchet_analyze_execution_error".to_string(),
             details: "Missing arguments".to_string(),
         })?;
 
@@ -1199,7 +1199,7 @@ impl RatchetToolRegistry {
             .get("execution_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams {
-                method: "ratchet.analyze_execution_error".to_string(),
+                method: "ratchet_analyze_execution_error".to_string(),
                 details: "Missing or invalid execution_id".to_string(),
             })?;
 
@@ -1844,13 +1844,13 @@ impl RatchetToolRegistry {
         }
 
         let arguments = context.arguments.ok_or_else(|| McpError::InvalidParams {
-            method: "ratchet.batch_execute".to_string(),
+            method: "ratchet_batch_execute".to_string(),
             details: "Missing arguments".to_string(),
         })?;
 
         let request: BatchExecuteRequest =
             serde_json::from_value(arguments).map_err(|e| McpError::InvalidParams {
-                method: "ratchet.batch_execute".to_string(),
+                method: "ratchet_batch_execute".to_string(),
                 details: format!("Invalid batch execute request: {}", e),
             })?;
 
@@ -1870,7 +1870,7 @@ impl RatchetToolRegistry {
                 id: req.id,
                 method: "tools/call".to_string(),
                 params: Some(serde_json::json!({
-                    "name": "ratchet.execute_task",
+                    "name": "ratchet_execute_task",
                     "arguments": {
                         "task_id": req.task_id,
                         "input": req.input
@@ -1979,21 +1979,21 @@ mod tests {
         assert!(!registry.tools.is_empty());
 
         // Check that built-in tools are registered
-        assert!(registry.tools.contains_key("ratchet.execute_task"));
-        assert!(registry.tools.contains_key("ratchet.get_execution_logs"));
-        assert!(registry.tools.contains_key("ratchet.list_available_tasks"));
+        assert!(registry.tools.contains_key("ratchet_execute_task"));
+        assert!(registry.tools.contains_key("ratchet_get_execution_logs"));
+        assert!(registry.tools.contains_key("ratchet_list_available_tasks"));
         assert!(registry
             .tools
-            .contains_key("ratchet.analyze_execution_error"));
-        assert!(registry.tools.contains_key("ratchet.get_execution_trace"));
-        assert!(registry.tools.contains_key("ratchet.batch_execute"));
+            .contains_key("ratchet_analyze_execution_error"));
+        assert!(registry.tools.contains_key("ratchet_get_execution_trace"));
+        assert!(registry.tools.contains_key("ratchet_batch_execute"));
         
         // Check that task development tools are registered
-        assert!(registry.tools.contains_key("ratchet.create_task"));
-        assert!(registry.tools.contains_key("ratchet.validate_task"));
-        assert!(registry.tools.contains_key("ratchet.debug_task_execution"));
-        assert!(registry.tools.contains_key("ratchet.run_task_tests"));
-        assert!(registry.tools.contains_key("ratchet.create_task_version"));
+        assert!(registry.tools.contains_key("ratchet_create_task"));
+        assert!(registry.tools.contains_key("ratchet_validate_task"));
+        assert!(registry.tools.contains_key("ratchet_debug_task_execution"));
+        assert!(registry.tools.contains_key("ratchet_run_task_tests"));
+        assert!(registry.tools.contains_key("ratchet_create_task_version"));
     }
 
     #[tokio::test]
@@ -2005,7 +2005,7 @@ mod tests {
         assert!(!tools.is_empty());
 
         // Find the execute task tool
-        let execute_tool = tools.iter().find(|t| t.name == "ratchet.execute_task");
+        let execute_tool = tools.iter().find(|t| t.name == "ratchet_execute_task");
         assert!(execute_tool.is_some());
         assert_eq!(
             execute_tool.unwrap().description,
@@ -2015,7 +2015,7 @@ mod tests {
         // Find the debugging tools
         let error_analysis_tool = tools
             .iter()
-            .find(|t| t.name == "ratchet.analyze_execution_error");
+            .find(|t| t.name == "ratchet_analyze_execution_error");
         assert!(error_analysis_tool.is_some());
         assert_eq!(
             error_analysis_tool.unwrap().description,
@@ -2024,7 +2024,7 @@ mod tests {
 
         let trace_tool = tools
             .iter()
-            .find(|t| t.name == "ratchet.get_execution_trace");
+            .find(|t| t.name == "ratchet_get_execution_trace");
         assert!(trace_tool.is_some());
         assert_eq!(
             trace_tool.unwrap().description,
@@ -2032,7 +2032,7 @@ mod tests {
         );
 
         // Find the batch execution tool
-        let batch_tool = tools.iter().find(|t| t.name == "ratchet.batch_execute");
+        let batch_tool = tools.iter().find(|t| t.name == "ratchet_batch_execute");
         assert!(batch_tool.is_some());
         assert_eq!(
             batch_tool.unwrap().description,
@@ -2040,17 +2040,17 @@ mod tests {
         );
         
         // Find task development tools
-        let create_tool = tools.iter().find(|t| t.name == "ratchet.create_task");
+        let create_tool = tools.iter().find(|t| t.name == "ratchet_create_task");
         assert!(create_tool.is_some());
         assert_eq!(
             create_tool.unwrap().description,
             "Create a new task with code, schemas, and optional test cases"
         );
         
-        let validate_tool = tools.iter().find(|t| t.name == "ratchet.validate_task");
+        let validate_tool = tools.iter().find(|t| t.name == "ratchet_validate_task");
         assert!(validate_tool.is_some());
         
-        let debug_tool = tools.iter().find(|t| t.name == "ratchet.debug_task_execution");
+        let debug_tool = tools.iter().find(|t| t.name == "ratchet_debug_task_execution");
         assert!(debug_tool.is_some());
     }
 
@@ -2060,11 +2060,11 @@ mod tests {
         let context = create_test_context();
 
         let tool = registry
-            .get_tool("ratchet.execute_task", &context)
+            .get_tool("ratchet_execute_task", &context)
             .await
             .unwrap();
         assert!(tool.is_some());
-        assert_eq!(tool.unwrap().tool.name, "ratchet.execute_task");
+        assert_eq!(tool.unwrap().tool.name, "ratchet_execute_task");
 
         let nonexistent = registry
             .get_tool("nonexistent.tool", &context)
@@ -2074,14 +2074,14 @@ mod tests {
 
         // Test debugging tools
         let error_tool = registry
-            .get_tool("ratchet.analyze_execution_error", &context)
+            .get_tool("ratchet_analyze_execution_error", &context)
             .await
             .unwrap();
         assert!(error_tool.is_some());
         assert_eq!(error_tool.unwrap().category, "debugging");
 
         let trace_tool = registry
-            .get_tool("ratchet.get_execution_trace", &context)
+            .get_tool("ratchet_get_execution_trace", &context)
             .await
             .unwrap();
         assert!(trace_tool.is_some());
@@ -2104,7 +2104,7 @@ mod tests {
 
         // Without a configured executor, the tool should return an error result
         let result = registry
-            .execute_tool("ratchet.execute_task", execution_context)
+            .execute_tool("ratchet_execute_task", execution_context)
             .await;
         assert!(result.is_ok());
 

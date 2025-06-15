@@ -119,15 +119,15 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
         .map(|tool| tool["name"].as_str().unwrap().to_string())
         .collect();
 
-    assert!(tool_names.contains(&"ratchet.execute_task".to_string()));
-    assert!(tool_names.contains(&"ratchet.list_available_tasks".to_string()));
+    assert!(tool_names.contains(&"ratchet_execute_task".to_string()));
+    assert!(tool_names.contains(&"ratchet_list_available_tasks".to_string()));
 
     // 3. Send tools/call request to further verify session persistence
     let call_request = json!({
         "jsonrpc": "2.0",
         "method": "tools/call",
         "params": {
-            "name": "ratchet.list_available_tasks",
+            "name": "ratchet_list_available_tasks",
             "arguments": {
                 "include_schemas": false
             }

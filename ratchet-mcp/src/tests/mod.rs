@@ -134,8 +134,8 @@ async fn test_mcp_server_tools_list_without_initialized_notification() {
         .map(|tool| tool["name"].as_str().unwrap().to_string())
         .collect();
 
-    assert!(tool_names.contains(&"ratchet.execute_task".to_string()));
-    assert!(tool_names.contains(&"ratchet.list_available_tasks".to_string()));
+    assert!(tool_names.contains(&"ratchet_execute_task".to_string()));
+    assert!(tool_names.contains(&"ratchet_list_available_tasks".to_string()));
 }
 
 /// Test the tools/list request
@@ -206,10 +206,10 @@ async fn test_mcp_server_tools_list() {
     // Should have our built-in tools
     assert!(!tools.is_empty());
 
-    // Check for ratchet.execute_task tool
+    // Check for ratchet_execute_task tool
     let execute_task_tool = tools
         .iter()
-        .find(|tool| tool["name"].as_str() == Some("ratchet.execute_task"));
+        .find(|tool| tool["name"].as_str() == Some("ratchet_execute_task"));
     assert!(execute_task_tool.is_some());
 }
 
@@ -344,7 +344,7 @@ async fn test_complete_mcp_session() {
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "ratchet.execute_task",
+            "name": "ratchet_execute_task",
             "arguments": {
                 "task_id": "nonexistent-task",
                 "input": {}
@@ -401,7 +401,7 @@ async fn test_monitoring_tools() {
         "id": 2,
         "method": "tools/call",
         "params": {
-            "name": "ratchet.get_execution_status",
+            "name": "ratchet_get_execution_status",
             "arguments": {
                 "execution_id": "00000000-0000-0000-0000-000000000000"
             }
@@ -428,7 +428,7 @@ async fn test_monitoring_tools() {
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "ratchet.get_execution_logs",
+            "name": "ratchet_get_execution_logs",
             "arguments": {
                 "execution_id": "00000000-0000-0000-0000-000000000000",
                 "level": "info",
@@ -474,10 +474,10 @@ async fn test_monitoring_tools() {
         .collect();
 
     // Verify monitoring tools are available
-    assert!(tool_names.contains(&"ratchet.get_execution_status".to_string()));
-    assert!(tool_names.contains(&"ratchet.get_execution_logs".to_string()));
-    assert!(tool_names.contains(&"ratchet.get_execution_trace".to_string()));
-    assert!(tool_names.contains(&"ratchet.analyze_execution_error".to_string()));
+    assert!(tool_names.contains(&"ratchet_get_execution_status".to_string()));
+    assert!(tool_names.contains(&"ratchet_get_execution_logs".to_string()));
+    assert!(tool_names.contains(&"ratchet_get_execution_trace".to_string()));
+    assert!(tool_names.contains(&"ratchet_analyze_execution_error".to_string()));
 }
 
 /// Test monitoring tools with a real execution record
@@ -519,7 +519,7 @@ async fn test_monitoring_tools_with_real_execution() {
         "id": 2,
         "method": "tools/call",
         "params": {
-            "name": "ratchet.get_execution_status",
+            "name": "ratchet_get_execution_status",
             "arguments": {
                 "execution_id": execution_uuid.to_string()
             }
@@ -548,7 +548,7 @@ async fn test_monitoring_tools_with_real_execution() {
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "ratchet.get_execution_status",
+            "name": "ratchet_get_execution_status",
             "arguments": {
                 "execution_id": "invalid-uuid-format"
             }

@@ -168,8 +168,8 @@ async fn test_mcp_server_basic_stdio_functionality() {
         .map(|tool| tool["name"].as_str().unwrap().to_string())
         .collect();
 
-    assert!(tool_names.contains(&"ratchet.execute_task".to_string()));
-    assert!(tool_names.contains(&"ratchet.list_available_tasks".to_string()));
+    assert!(tool_names.contains(&"ratchet_execute_task".to_string()));
+    assert!(tool_names.contains(&"ratchet_list_available_tasks".to_string()));
 
     // Close stdin to signal server to shut down
     drop(stdin);
