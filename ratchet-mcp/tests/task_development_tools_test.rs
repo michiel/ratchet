@@ -27,11 +27,11 @@ async fn test_task_development_tools_registered() {
     // Verify task development tools are registered
     let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
     
-    assert!(tool_names.contains(&"ratchet.create_task"));
-    assert!(tool_names.contains(&"ratchet.validate_task"));
-    assert!(tool_names.contains(&"ratchet.debug_task_execution"));
-    assert!(tool_names.contains(&"ratchet.run_task_tests"));
-    assert!(tool_names.contains(&"ratchet.create_task_version"));
+    assert!(tool_names.contains(&"ratchet_create_task"));
+    assert!(tool_names.contains(&"ratchet_validate_task"));
+    assert!(tool_names.contains(&"ratchet_debug_task_execution"));
+    assert!(tool_names.contains(&"ratchet_run_task_tests"));
+    assert!(tool_names.contains(&"ratchet_create_task_version"));
 }
 
 #[tokio::test]
@@ -40,11 +40,11 @@ async fn test_create_task_tool_schema() {
     let context = create_test_context();
     
     // Get the create_task tool
-    let tool = registry.get_tool("ratchet.create_task", &context).await.unwrap();
+    let tool = registry.get_tool("ratchet_create_task", &context).await.unwrap();
     assert!(tool.is_some());
     
     let create_tool = tool.unwrap();
-    assert_eq!(create_tool.tool.name, "ratchet.create_task");
+    assert_eq!(create_tool.tool.name, "ratchet_create_task");
     assert_eq!(create_tool.category, "development");
     
     // Verify schema has required fields
@@ -67,11 +67,11 @@ async fn test_validate_task_tool_schema() {
     let context = create_test_context();
     
     // Get the validate_task tool
-    let tool = registry.get_tool("ratchet.validate_task", &context).await.unwrap();
+    let tool = registry.get_tool("ratchet_validate_task", &context).await.unwrap();
     assert!(tool.is_some());
     
     let validate_tool = tool.unwrap();
-    assert_eq!(validate_tool.tool.name, "ratchet.validate_task");
+    assert_eq!(validate_tool.tool.name, "ratchet_validate_task");
     
     // Verify schema
     let schema = &validate_tool.tool.input_schema;
@@ -141,7 +141,7 @@ async fn test_task_dev_tools_without_service() {
     };
     
     // Try to execute create_task without service configured
-    let result = registry.execute_tool("ratchet.create_task", execution_context).await;
+    let result = registry.execute_tool("ratchet_create_task", execution_context).await;
     assert!(result.is_ok());
     
     let tool_result = result.unwrap();
