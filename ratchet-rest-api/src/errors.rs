@@ -21,6 +21,12 @@ pub enum RestError {
     #[error("Bad request: {0}")]
     BadRequest(String),
 
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Internal server error: {0}")]
     InternalError(String),
 
@@ -79,6 +85,8 @@ impl RestError {
             match self {
                 RestError::NotFound(_) => "NOT_FOUND".to_string(),
                 RestError::BadRequest(_) => "BAD_REQUEST".to_string(),
+                RestError::Unauthorized(_) => "UNAUTHORIZED".to_string(),
+                RestError::Forbidden(_) => "FORBIDDEN".to_string(),
                 RestError::InternalError(_) => "INTERNAL_ERROR".to_string(),
                 RestError::MethodNotAllowed(_) => "METHOD_NOT_ALLOWED".to_string(),
                 RestError::ServiceUnavailable(_) => "SERVICE_UNAVAILABLE".to_string(),
@@ -100,6 +108,14 @@ impl RestError {
 
     pub fn bad_request(message: impl Into<String>) -> Self {
         RestError::BadRequest(message.into())
+    }
+
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        RestError::Unauthorized(message.into())
+    }
+
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        RestError::Forbidden(message.into())
     }
 
     pub fn internal_error(message: impl Into<String>) -> Self {

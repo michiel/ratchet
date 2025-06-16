@@ -1,14 +1,16 @@
-pub mod tasks;
+pub mod auth;
 pub mod executions;
+pub mod health;
 pub mod jobs;
 pub mod schedules;
+pub mod tasks;
 pub mod workers;
-pub mod health;
 
 // Re-export handler functions
-pub use tasks::*;
+pub use auth::*;
 pub use executions::*;
+pub use health::*;
 pub use jobs::*;
 pub use schedules::*;
+pub use tasks::*;
 pub use workers::*;
-pub use health::*;

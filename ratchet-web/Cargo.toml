@@ -25,6 +25,9 @@ chrono.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 
+# JWT authentication
+jsonwebtoken = "9.2"
+
 # Async runtime and observability
 tokio = { workspace = true, features = ["time", "sync"] }
 tracing.workspace = true

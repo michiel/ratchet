@@ -25,6 +25,9 @@ chrono.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 
+# Authentication
+bcrypt = "0.15"
+
 # Async runtime and observability
 tokio.workspace = true
 tracing.workspace = true

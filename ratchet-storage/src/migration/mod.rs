@@ -3,6 +3,7 @@
 //! This module provides tools for migrating data from legacy ratchet-lib database
 //! structures to the modern ratchet-storage format.
 
+pub mod auth_migration;
 pub mod legacy_migrator;
 pub mod schema_version;
 pub mod validation;
@@ -11,6 +12,7 @@ pub mod validation;
 pub mod cli;
 
 // Re-export commonly used types
+pub use auth_migration::*;
 pub use legacy_migrator::*;
 pub use schema_version::*;
 pub use validation::*;

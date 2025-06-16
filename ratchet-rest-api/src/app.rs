@@ -158,6 +158,12 @@ async fn serve_swagger_ui() -> impl IntoResponse {
 /// Create unified API router
 fn create_api_router() -> Router<TasksContext> {
     Router::new()
+        // Authentication endpoints (no auth required)
+        .route("/auth/login", post(handlers::auth::login))
+        .route("/auth/register", post(handlers::auth::register))
+        .route("/auth/me", get(handlers::auth::get_current_user))
+        .route("/auth/logout", post(handlers::auth::logout))
+        .route("/auth/change-password", post(handlers::auth::change_password))
         // Task endpoints
         .route("/tasks", get(handlers::tasks::list_tasks).post(handlers::tasks::create_task))
         .route("/tasks/stats", get(handlers::tasks::get_task_stats))
