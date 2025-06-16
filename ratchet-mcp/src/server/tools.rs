@@ -2444,31 +2444,137 @@ impl RatchetToolRegistry {
             });
         }
 
-        // For now, return a placeholder since we'd need to access the repositories
-        // In a full implementation, this would query the job repository
-        let response = serde_json::json!({
-            "jobs": [],
-            "pagination": {
-                "page": page,
-                "limit": limit,
-                "total_count": 0,
-                "total_pages": 0,
-                "has_next": false,
-                "has_previous": false,
-                "next_page": null,
-                "previous_page": null
-            },
-            "sorting": {
-                "sort_by": sort_by,
-                "sort_order": sort_order
-            },
-            "filters": {
-                "task_id": task_id,
-                "status": status,
-                "priority": priority
-            },
-            "message": "MCP jobs listing requires repository integration - placeholder implementation"
-        });
+        // Check if repositories are available
+        let repositories = match &self.repositories {
+            Some(repos) => repos,
+            None => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: "Repository factory not configured for MCP server".to_string(),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        // Convert status string to JobStatus if provided
+        let status_filter = if let Some(status_str) = status {
+            match status_str.to_lowercase().as_str() {
+                "queued" => Some(ratchet_api_types::JobStatus::Queued),
+                "processing" => Some(ratchet_api_types::JobStatus::Processing),
+                "completed" => Some(ratchet_api_types::JobStatus::Completed),
+                "failed" => Some(ratchet_api_types::JobStatus::Failed),
+                "cancelled" => Some(ratchet_api_types::JobStatus::Cancelled),
+                "retrying" => Some(ratchet_api_types::JobStatus::Retrying),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        // Convert priority string to JobPriority if provided
+        let priority_filter = if let Some(priority_str) = priority {
+            match priority_str.to_lowercase().as_str() {
+                "low" => Some(ratchet_api_types::JobPriority::Low),
+                "normal" => Some(ratchet_api_types::JobPriority::Normal),
+                "high" => Some(ratchet_api_types::JobPriority::High),
+                "critical" => Some(ratchet_api_types::JobPriority::Critical),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        // Convert task_id string to ApiId if provided
+        let task_id_filter = task_id.map(|id| ApiId::from_string(id.to_string()));
+
+        // Create job filters
+        let filters = JobFilters {
+            task_id: task_id_filter,
+            status: status_filter,
+            priority: priority_filter,
+            queued_after: None,
+            scheduled_before: None,
+            task_id_in: None,
+            id_in: None,
+            status_in: None,
+            status_not: None,
+            priority_in: None,
+            priority_min: None,
+            queued_before: None,
+            scheduled_after: None,
+            retry_count_min: None,
+            retry_count_max: None,
+            max_retries_min: None,
+            max_retries_max: None,
+            has_retries_remaining: None,
+            has_error: None,
+            error_message_contains: None,
+            is_scheduled: None,
+            due_now: None,
+        };
+
+        // Create pagination input
+        let pagination = PaginationInput {
+            page: Some(page as u32),
+            limit: Some(limit as u32),
+            offset: Some((page * limit) as u32),
+        };
+
+        // Query the job repository
+        let job_repo = repositories.job_repository();
+        let response = match job_repo.find_with_filters(filters, pagination).await {
+            Ok(list_response) => {
+                // Convert jobs to MCP format
+                let jobs: Vec<serde_json::Value> = list_response.items.into_iter().map(|job| {
+                    serde_json::json!({
+                        "id": job.id.to_string(),
+                        "task_id": job.task_id.to_string(),
+                        "priority": job.priority,
+                        "status": job.status,
+                        "retry_count": job.retry_count,
+                        "max_retries": job.max_retries,
+                        "queued_at": job.queued_at,
+                        "scheduled_for": job.scheduled_for,
+                        "error_message": job.error_message,
+                        "output_destinations": job.output_destinations,
+                    })
+                }).collect();
+
+                serde_json::json!({
+                    "jobs": jobs,
+                    "pagination": {
+                        "page": list_response.meta.page,
+                        "limit": list_response.meta.limit,
+                        "total_count": list_response.meta.total,
+                        "total_pages": list_response.meta.total_pages,
+                        "has_next": list_response.meta.has_next,
+                        "has_previous": list_response.meta.has_previous,
+                        "next_page": if list_response.meta.has_next { Some(list_response.meta.page + 1) } else { None },
+                        "previous_page": if list_response.meta.has_previous { Some(list_response.meta.page - 1) } else { None }
+                    },
+                    "sorting": {
+                        "sort_by": sort_by,
+                        "sort_order": sort_order
+                    },
+                    "filters": {
+                        "task_id": task_id,
+                        "status": status,
+                        "priority": priority
+                    }
+                })
+            }
+            Err(e) => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to fetch jobs: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
 
         Ok(ToolsCallResult {
             content: vec![ToolContent::Text {
@@ -2514,31 +2620,109 @@ impl RatchetToolRegistry {
             });
         }
 
-        // For now, return a placeholder since we'd need to access the repositories
-        // In a full implementation, this would query the schedule repository
-        let response = serde_json::json!({
-            "schedules": [],
-            "pagination": {
-                "page": page,
-                "limit": limit,
-                "total_count": 0,
-                "total_pages": 0,
-                "has_next": false,
-                "has_previous": false,
-                "next_page": null,
-                "previous_page": null
-            },
-            "sorting": {
-                "sort_by": sort_by,
-                "sort_order": sort_order
-            },
-            "filters": {
-                "task_id": task_id,
-                "enabled": enabled,
-                "ready_to_run": ready_to_run
-            },
-            "message": "MCP schedules listing requires repository integration - placeholder implementation"
-        });
+        // Check if repositories are available
+        let repositories = match &self.repositories {
+            Some(repos) => repos,
+            None => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: "Repository factory not configured for MCP server".to_string(),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        // Convert task_id string to ApiId if provided
+        let task_id_filter = task_id.map(|id| ApiId::from_string(id.to_string()));
+
+        // Create schedule filters
+        let filters = ScheduleFilters {
+            task_id: task_id_filter,
+            enabled,
+            next_run_before: None,
+            task_id_in: None,
+            id_in: None,
+            name_contains: None,
+            name_exact: None,
+            name_starts_with: None,
+            name_ends_with: None,
+            cron_expression_contains: None,
+            cron_expression_exact: None,
+            next_run_after: None,
+            last_run_after: None,
+            last_run_before: None,
+            created_after: None,
+            created_before: None,
+            updated_after: None,
+            updated_before: None,
+            has_next_run: None,
+            has_last_run: None,
+            is_due: ready_to_run, // Map ready_to_run to is_due filter
+            overdue: None,
+        };
+
+        // Create pagination input
+        let pagination = PaginationInput {
+            page: Some(page as u32),
+            limit: Some(limit as u32),
+            offset: Some((page * limit) as u32),
+        };
+
+        // Query the schedule repository
+        let schedule_repo = repositories.schedule_repository();
+        let response = match schedule_repo.find_with_filters(filters, pagination).await {
+            Ok(list_response) => {
+                // Convert schedules to MCP format
+                let schedules: Vec<serde_json::Value> = list_response.items.into_iter().map(|schedule| {
+                    serde_json::json!({
+                        "id": schedule.id.to_string(),
+                        "task_id": schedule.task_id.to_string(),
+                        "name": schedule.name,
+                        "description": schedule.description,
+                        "cron_expression": schedule.cron_expression,
+                        "enabled": schedule.enabled,
+                        "next_run": schedule.next_run,
+                        "last_run": schedule.last_run,
+                        "created_at": schedule.created_at,
+                        "updated_at": schedule.updated_at,
+                    })
+                }).collect();
+
+                serde_json::json!({
+                    "schedules": schedules,
+                    "pagination": {
+                        "page": list_response.meta.page,
+                        "limit": list_response.meta.limit,
+                        "total_count": list_response.meta.total,
+                        "total_pages": list_response.meta.total_pages,
+                        "has_next": list_response.meta.has_next,
+                        "has_previous": list_response.meta.has_previous,
+                        "next_page": if list_response.meta.has_next { Some(list_response.meta.page + 1) } else { None },
+                        "previous_page": if list_response.meta.has_previous { Some(list_response.meta.page - 1) } else { None }
+                    },
+                    "sorting": {
+                        "sort_by": sort_by,
+                        "sort_order": sort_order
+                    },
+                    "filters": {
+                        "task_id": task_id,
+                        "enabled": enabled,
+                        "ready_to_run": ready_to_run
+                    }
+                })
+            }
+            Err(e) => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to fetch schedules: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
 
         Ok(ToolsCallResult {
             content: vec![ToolContent::Text {
