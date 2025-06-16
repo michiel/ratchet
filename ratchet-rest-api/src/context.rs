@@ -7,6 +7,7 @@
 use ratchet_interfaces::{
     RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator,
 };
+use ratchet_mcp::server::task_dev_tools::TaskDevelopmentService;
 use std::sync::Arc;
 
 /// Context for task-related endpoints
@@ -22,6 +23,8 @@ pub struct TasksContext {
     pub registry_manager: Arc<dyn RegistryManager>,
     /// Task validator for content validation
     pub validator: Arc<dyn TaskValidator>,
+    /// Optional MCP task development service for advanced task operations
+    pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
 }
 
 impl TasksContext {
@@ -36,6 +39,24 @@ impl TasksContext {
             registry,
             registry_manager,
             validator,
+            mcp_task_service: None,
+        }
+    }
+    
+    /// Create a new TasksContext with MCP task development service
+    pub fn with_mcp_service(
+        repositories: Arc<dyn RepositoryFactory>,
+        registry: Arc<dyn TaskRegistry>,
+        registry_manager: Arc<dyn RegistryManager>,
+        validator: Arc<dyn TaskValidator>,
+        mcp_task_service: Arc<TaskDevelopmentService>,
+    ) -> Self {
+        Self {
+            repositories,
+            registry,
+            registry_manager,
+            validator,
+            mcp_task_service: Some(mcp_task_service),
         }
     }
 }

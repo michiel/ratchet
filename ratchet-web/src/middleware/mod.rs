@@ -6,6 +6,7 @@ pub mod pagination;
 pub mod rate_limit;
 pub mod request_id;
 pub mod security;
+pub mod session;
 
 // Re-export layer creation functions
 pub use audit::{
@@ -23,4 +24,8 @@ pub use rate_limit::{rate_limit_layer, rate_limit_middleware, create_rate_limit_
 pub use request_id::{request_id_layer, RequestId, RequestIdExt, REQUEST_ID_HEADER};
 pub use security::{
     security_headers_layer, security_headers_middleware, SecurityConfig, TlsConfig, TlsProtocol,
+};
+pub use session::{
+    session_layer, session_middleware, create_session_manager, SessionConfig, SessionInfo, 
+    SessionManager, SessionStats, SessionError,
 };

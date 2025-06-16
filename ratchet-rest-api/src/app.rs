@@ -9,7 +9,8 @@ use ratchet_interfaces::{RepositoryFactory, TaskRegistry, RegistryManager, TaskV
 use ratchet_web::{
     middleware::{
         audit_middleware, cors_layer, error_handler_layer, request_id_layer, security_headers_middleware,
-        rate_limit_middleware, create_rate_limit_middleware, AuditConfig, SecurityConfig, RateLimitConfig,
+        rate_limit_middleware, create_rate_limit_middleware, session_middleware, create_session_manager,
+        AuditConfig, SecurityConfig, RateLimitConfig, SessionConfig,
     },
 };
 use std::sync::Arc;
@@ -36,12 +37,16 @@ pub struct AppConfig {
     pub enable_audit_logging: bool,
     /// Enable rate limiting
     pub enable_rate_limiting: bool,
+    /// Enable session management
+    pub enable_session_management: bool,
     /// Security configuration
     pub security_config: SecurityConfig,
     /// Audit configuration
     pub audit_config: AuditConfig,
     /// Rate limiting configuration
     pub rate_limit_config: RateLimitConfig,
+    /// Session management configuration
+    pub session_config: SessionConfig,
     /// API path prefix
     pub api_prefix: String,
 }
@@ -55,9 +60,11 @@ impl Default for AppConfig {
             enable_security_headers: true,
             enable_audit_logging: true,
             enable_rate_limiting: true,
+            enable_session_management: true,
             security_config: SecurityConfig::development(),
             audit_config: AuditConfig::development(),
             rate_limit_config: RateLimitConfig::permissive(),
+            session_config: SessionConfig::development(),
             api_prefix: "/api/v1".to_string(),
         }
     }
@@ -73,9 +80,11 @@ impl AppConfig {
             enable_security_headers: true,
             enable_audit_logging: true,
             enable_rate_limiting: true,
+            enable_session_management: true,
             security_config: SecurityConfig::production(),
             audit_config: AuditConfig::production(),
             rate_limit_config: RateLimitConfig::strict(),
+            session_config: SessionConfig::production(),
             api_prefix: "/api/v1".to_string(),
         }
     }
@@ -89,9 +98,11 @@ impl AppConfig {
             enable_security_headers: true,
             enable_audit_logging: true,
             enable_rate_limiting: true,
+            enable_session_management: true,
             security_config: SecurityConfig::development(),
             audit_config: AuditConfig::development(),
             rate_limit_config: RateLimitConfig::permissive(),
+            session_config: SessionConfig::development(),
             api_prefix: "/api/v1".to_string(),
         }
     }
@@ -171,6 +182,18 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
                     Ok(response) => response,
                     Err(err) => err.into_response(),
                 }
+            }
+        }));
+    }
+    
+    // Session management (applied after rate limiting but before other middleware)
+    if config.enable_session_management {
+        let session_manager = create_session_manager(config.session_config.clone());
+        app = app.layer(axum::middleware::from_fn(move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+            let session_manager = session_manager.clone();
+            async move {
+                req.extensions_mut().insert(session_manager);
+                session_middleware(req, next).await
             }
         }));
     }
