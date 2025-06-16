@@ -7,3 +7,4 @@
 - All items in a configuration file (example: config.yaml) are optional and must have a default value. This includes nested properties
 - When a task encounters an error it should throw a typed error with a descriptive message
 - When writing files to docs/docs/reviews/ prefix each file with the date in format YYYY-MM-DD
+- Do not break existing functionality when making changes

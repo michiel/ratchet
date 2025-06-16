@@ -1065,8 +1065,18 @@ async fn main() -> Result<()> {
         Some(Commands::Replay { from_fs, recording: _ }) => {
             execute_js_task(None, &from_fs, None, "json").await?;
         }
-        Some(Commands::Console { config: _, connect: _, transport: _, host: _, port: _, auth_token: _, history_file: _, script: _ }) => {
-            info!("Console mode not yet implemented");
+        Some(Commands::Console { config, connect, transport, host, port, auth_token, history_file, script }) => {
+            let console_config = commands::console::ConsoleConfig {
+                config_file: config,
+                connect_url: connect,
+                transport,
+                host,
+                port,
+                auth_token,
+                history_file,
+                script_file: script,
+            };
+            commands::console::run_console(console_config).await?;
         }
         None => {
             // No command provided, show help

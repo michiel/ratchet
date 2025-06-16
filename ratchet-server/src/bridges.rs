@@ -31,22 +31,29 @@ use ratchet_registry::RegistryService;
 
 impl BridgeTaskRegistry {
     pub async fn new(config: &crate::config::ServerConfig) -> anyhow::Result<Self> {
-        // Create a filesystem source pointing to the sample tasks directory
-        let sample_tasks_path = std::env::current_dir()?
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Cannot find parent directory"))?
-            .join("sample")
-            .join("js-tasks")
-            .join("tasks");
-            
-        let filesystem_source = ratchet_registry::TaskSource::Filesystem {
-            path: sample_tasks_path.to_string_lossy().to_string(),
-            recursive: true,
-            watch: false,
+        // Create a Git source pointing to the default repository
+        let git_source = ratchet_registry::TaskSource::Git {
+            url: "https://github.com/michiel/ratchet-repo-samples.git".to_string(),
+            auth: None,
+            config: ratchet_registry::config::GitConfig {
+                branch: "main".to_string(),
+                subdirectory: None,
+                shallow: true,
+                depth: Some(1),
+                sync_strategy: ratchet_registry::config::GitSyncStrategy::Fetch,
+                cleanup_on_error: true,
+                verify_signatures: false,
+                allowed_refs: None,
+                timeout: std::time::Duration::from_secs(300),
+                max_repo_size: None,
+                local_cache_path: None,
+                cache_ttl: std::time::Duration::from_secs(3600),
+                keep_history: false,
+            },
         };
 
         let registry_config = ratchet_registry::RegistryConfig {
-            sources: vec![filesystem_source],
+            sources: vec![git_source],
             sync_interval: std::time::Duration::from_secs(300),
             enable_auto_sync: false,
             enable_validation: true,
