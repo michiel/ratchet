@@ -315,6 +315,11 @@ impl Server {
         tracing::info!("      • Readiness:        {}://{}/ready", protocol, self.config.server.bind_address);
         tracing::info!("      • Liveness:         {}://{}/live", protocol, self.config.server.bind_address);
         
+        // Monitoring endpoints
+        tracing::info!("   📊 Monitoring Endpoints:");
+        tracing::info!("      • System Metrics:   {}://{}/metrics", protocol, self.config.server.bind_address);
+        tracing::info!("      • Prometheus:       {}://{}/metrics/prometheus", protocol, self.config.server.bind_address);
+        
         if self.config.rest_api.enabled {
             let base_url = format!("{}://{}", protocol, self.config.server.bind_address);
             let api_prefix = &self.config.rest_api.prefix;

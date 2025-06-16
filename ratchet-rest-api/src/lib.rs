@@ -117,6 +117,10 @@ use utoipa::OpenApi;
         
         // Health check
         handlers::health::health_check,
+        
+        // Monitoring and metrics
+        handlers::metrics::get_metrics,
+        handlers::metrics::get_prometheus_metrics,
     ),
     components(
         schemas(
@@ -146,6 +150,18 @@ use utoipa::OpenApi;
             models::schedules::CreateScheduleRequest,
             models::schedules::UpdateScheduleRequest,
             models::schedules::ScheduleStats,
+            
+            // Metrics and monitoring models
+            handlers::metrics::SystemMetrics,
+            handlers::metrics::SystemInfo,
+            handlers::metrics::PerformanceMetrics,
+            handlers::metrics::ResourceMetrics,
+            handlers::metrics::ApplicationMetrics,
+            handlers::metrics::DatabaseMetrics,
+            handlers::metrics::TaskMetrics,
+            handlers::metrics::ExecutionMetrics,
+            handlers::metrics::JobMetrics,
+            handlers::metrics::ScheduleMetrics,
         )
     ),
     tags(
@@ -155,7 +171,8 @@ use utoipa::OpenApi;
         (name = "schedules", description = "Task scheduling operations"),
         (name = "workers", description = "Worker monitoring and management"),
         (name = "mcp", description = "MCP (Model Context Protocol) development tools"),
-        (name = "health", description = "System health and monitoring")
+        (name = "health", description = "System health and monitoring"),
+        (name = "monitoring", description = "System metrics and observability")
     )
 )]
 pub struct ApiDoc;

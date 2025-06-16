@@ -143,17 +143,20 @@ impl AppContext {
 /// Create the complete REST API application
 pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
     let app = Router::new()
-        // Health endpoints (no prefix)
+        // Health endpoints (no prefix) - need context for detailed checks
         .route("/health", get(handlers::health::health_check))
         .route("/health/detailed", get(handlers::health::health_check_detailed))
         .route("/ready", get(handlers::health::readiness_check))
         .route("/live", get(handlers::health::liveness_check))
-        // OpenAPI documentation endpoints
+        // Metrics endpoints (no prefix) - need context for application metrics
+        .route("/metrics", get(handlers::metrics::get_metrics))
+        .route("/metrics/prometheus", get(handlers::metrics::get_prometheus_metrics))
+        // OpenAPI documentation endpoints (no context needed)
         .route("/api-docs/openapi.json", get(serve_openapi_spec))
         .route("/docs", get(serve_swagger_ui))
         // API routes with prefix
         .nest(&config.api_prefix, create_api_router())
-        // Add application context
+        // Add application context for all routes
         .with_state(context.tasks);
 
     // Add middleware layers (applied in reverse order)
