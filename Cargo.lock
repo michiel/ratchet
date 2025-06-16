@@ -4516,6 +4516,7 @@ dependencies = [
  "ratchet-runtime",
  "ratchet-storage",
  "reqwest 0.12.20",
+ "sea-orm",
  "serde",
  "serde_json",
  "serde_yaml",

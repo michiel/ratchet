@@ -68,3 +68,4 @@ transport-sse = ["reqwest/stream", "axum/tokio", "tower/timeout", "tower-http/co
 
 [dev-dependencies]
 tokio-test = "0.4"
+sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
