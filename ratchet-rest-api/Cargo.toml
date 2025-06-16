@@ -53,3 +53,5 @@ utoipa-swagger-ui = { version = "4.0", features = ["axum"] }
 axum-test = "13.0"
 tokio-test = "0.4"
 tower = { workspace = true, features = ["util"] }
+hyper = { workspace = true, features = ["client"] }
+fastrand = { workspace = true }

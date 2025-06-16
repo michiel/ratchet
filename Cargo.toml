@@ -68,6 +68,7 @@ http-body = "1.0"
 hyper = "1.0"
 lru = "0.10"
 ahash = "0.8"
+fastrand = "2.0"
 
 # Workspace-level configuration for targets
 [workspace.package]

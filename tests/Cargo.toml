@@ -44,14 +44,22 @@ reqwest = { version = "0.11", features = ["json"] }
 futures = "0.3"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+fastrand = { workspace = true }
+tokio-test = "0.4"
+hyper = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+http = { workspace = true }
 
 # Ratchet crates for integration testing
 ratchet-config = { path = "../ratchet-config" }
 ratchet-server = { path = "../ratchet-server" }
 ratchet-storage = { path = "../ratchet-storage", features = ["testing"] }
 ratchet-rest-api = { path = "../ratchet-rest-api" }
+ratchet-graphql-api = { path = "../ratchet-graphql-api" }
 ratchet-mcp = { path = "../ratchet-mcp" }
 ratchet-http = { path = "../ratchet-http" }
 ratchet-execution = { path = "../ratchet-execution" }
+ratchet-interfaces = { path = "../ratchet-interfaces" }
 sea-orm = "1.1"
 sea-orm-migration = "1.1"
