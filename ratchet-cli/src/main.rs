@@ -449,35 +449,85 @@ async fn mcp_serve_command_with_config(
     host: &str,
     port: u16,
 ) -> Result<()> {
-    use ratchet_mcp::McpServer;
-    use ratchet_mcp::transport::{McpTransport, StdioTransport};
+    use ratchet_mcp::{McpServer, config::McpConfig, config::SimpleTransportType};
+    use ratchet_mcp::server::adapter::RatchetMcpAdapterBuilder;
+    use ratchet_execution::{ExecutionBridge, ProcessExecutorConfig};
+    use ratchet_storage::seaorm::repositories::RepositoryFactory;
+    use ratchet_storage::seaorm::connection::DatabaseConnection;
     
     info!("Starting MCP server with {} transport", transport);
     
-    // Create the MCP server - simplified for now
-    // TODO: Properly configure McpServer with registry, auth, and audit logger
-    info!("MCP server creation temporarily simplified - full implementation needed");
+    // Validate transport type
+    if transport.to_lowercase() != "stdio" {
+        return Err(anyhow::anyhow!("Only 'stdio' transport is currently supported. Use: ratchet mcp-serve stdio"));
+    }
     
-    // Choose transport based on the argument
-    let transport: Box<dyn McpTransport> = match transport.to_lowercase().as_str() {
-        "stdio" => {
-            let stdio_transport = StdioTransport::new(
-                "ratchet".to_string(),
-                vec!["mcp-serve".to_string()],
-                HashMap::new(),
-                None,
-            )?;
-            Box::new(stdio_transport)
-        }
-        "http" => {
-            // HTTP transport not available in current version
-            return Err(anyhow::anyhow!("HTTP transport not available"));
-        }
-        _ => return Err(anyhow::anyhow!("Unsupported transport: {}. Use 'stdio' or 'http'", transport)),
+    // Create MCP configuration
+    let mcp_config = McpConfig {
+        transport_type: SimpleTransportType::Stdio,
+        host: host.to_string(),
+        port,
+        auth: Default::default(),
+        limits: Default::default(),
+        timeouts: Default::default(),
+        tools: Default::default(),
     };
     
-    // Run the server - temporarily disabled
-    info!("MCP server would run with transport");
+    // Create database connection if configured through server config
+    let repositories = if let Some(server_config) = &config.server {
+        info!("Connecting to database for MCP server");
+        
+        // Convert ratchet-config DatabaseConfig to ratchet-storage DatabaseConfig
+        let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
+            url: server_config.database.url.clone(),
+            max_connections: server_config.database.max_connections,
+            connection_timeout: server_config.database.connection_timeout,
+        };
+        
+        let connection = DatabaseConnection::new(storage_db_config).await
+            .context("Failed to connect to database")?;
+        let factory = RepositoryFactory::new(connection);
+        Some(Arc::new(factory))
+    } else {
+        warn!("No server configuration found. MCP server will run with limited functionality.");
+        None
+    };
+    
+    // Create execution bridge with default configuration
+    let execution_config = ProcessExecutorConfig {
+        worker_count: 4,
+        task_timeout_seconds: 300,
+        restart_on_crash: true,
+        max_restart_attempts: 3,
+    };
+    let execution_bridge = Arc::new(ExecutionBridge::new(execution_config));
+    
+    // Create MCP adapter with available components
+    let mut adapter_builder = RatchetMcpAdapterBuilder::new()
+        .with_bridge_executor(execution_bridge);
+    
+    // Add repositories if available
+    if let Some(repo_factory) = repositories {
+        let task_repo = Arc::new(repo_factory.task_repository());
+        let exec_repo = Arc::new(repo_factory.execution_repository());
+        
+        adapter_builder = adapter_builder
+            .with_task_repository(task_repo)
+            .with_execution_repository(exec_repo);
+    }
+    
+    let adapter = adapter_builder.build()
+        .map_err(|e| anyhow::anyhow!("Failed to build MCP adapter: {}", e))?;
+    
+    // Create and start MCP server
+    info!("Creating MCP server with stdio transport");
+    let mut mcp_server = McpServer::with_adapter(mcp_config, adapter).await
+        .context("Failed to create MCP server")?;
+    
+    info!("Starting MCP server stdio transport");
+    mcp_server.run_stdio().await
+        .context("MCP server failed to run")?;
+    
     Ok(())
 }
 
