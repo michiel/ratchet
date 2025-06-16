@@ -100,6 +100,15 @@ pub struct SortQuery {
     pub order: Option<String>,
 }
 
+impl Default for SortQuery {
+    fn default() -> Self {
+        Self {
+            sort: None,
+            order: None,
+        }
+    }
+}
+
 impl SortQuery {
     /// Convert to standard sort input
     pub fn to_sort_input(&self) -> Option<ratchet_api_types::pagination::SortInput> {
@@ -111,7 +120,7 @@ impl SortQuery {
 }
 
 /// Filter query parameters
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FilterQuery {
     /// Generic filter fields (field_name=value)
     #[serde(flatten)]
@@ -126,6 +135,11 @@ impl FilterQuery {
             .filter_map(|(field, value)| {
                 // Skip pagination and sort fields
                 if field.starts_with('_') {
+                    return None;
+                }
+                
+                // Skip standard pagination fields to avoid conflicts
+                if matches!(field.as_str(), "page" | "limit" | "start" | "end") {
                     return None;
                 }
 
@@ -148,6 +162,16 @@ pub struct ListQuery {
     pub sort: SortQuery,
     #[serde(flatten)]
     pub filter: FilterQuery,
+}
+
+impl Default for ListQuery {
+    fn default() -> Self {
+        Self {
+            pagination: PaginationQuery::default(),
+            sort: SortQuery::default(),
+            filter: FilterQuery::default(),
+        }
+    }
 }
 
 impl ListQuery {
