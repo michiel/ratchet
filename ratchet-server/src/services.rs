@@ -97,6 +97,9 @@ pub struct DirectRepositoryFactory {
     execution_repository: DirectExecutionRepository,
     job_repository: DirectJobRepository,
     schedule_repository: DirectScheduleRepository,
+    user_repository: ratchet_storage::seaorm::repositories::SeaOrmUserRepository,
+    session_repository: ratchet_storage::seaorm::repositories::SeaOrmSessionRepository,
+    api_key_repository: ratchet_storage::seaorm::repositories::SeaOrmApiKeyRepository,
 }
 
 impl DirectRepositoryFactory {
@@ -105,6 +108,9 @@ impl DirectRepositoryFactory {
         let execution_repository = DirectExecutionRepository::new(Arc::new(storage_factory.execution_repository()));
         let job_repository = DirectJobRepository::new(Arc::new(storage_factory.job_repository()));
         let schedule_repository = DirectScheduleRepository::new(Arc::new(storage_factory.schedule_repository()));
+        let user_repository = storage_factory.user_repository();
+        let session_repository = storage_factory.session_repository();
+        let api_key_repository = storage_factory.api_key_repository();
         
         Self {
             storage_factory,
@@ -112,6 +118,9 @@ impl DirectRepositoryFactory {
             execution_repository,
             job_repository,
             schedule_repository,
+            user_repository,
+            session_repository,
+            api_key_repository,
         }
     }
     
@@ -140,15 +149,15 @@ impl RepositoryFactory for DirectRepositoryFactory {
     }
     
     fn user_repository(&self) -> &dyn ratchet_interfaces::database::UserRepository {
-        todo!("User repository not implemented yet")
+        &self.user_repository
     }
     
     fn session_repository(&self) -> &dyn ratchet_interfaces::database::SessionRepository {
-        todo!("Session repository not implemented yet")
+        &self.session_repository
     }
     
     fn api_key_repository(&self) -> &dyn ratchet_interfaces::database::ApiKeyRepository {
-        todo!("API key repository not implemented yet")
+        &self.api_key_repository
     }
     
     async fn health_check(&self) -> Result<(), DatabaseError> {

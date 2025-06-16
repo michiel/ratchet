@@ -2,11 +2,17 @@ pub mod execution_repository;
 pub mod job_repository;
 pub mod schedule_repository;
 pub mod task_repository;
+pub mod user_repository;
+pub mod session_repository;
+pub mod api_key_repository;
 
 pub use execution_repository::ExecutionRepository;
 pub use job_repository::JobRepository;
 pub use schedule_repository::ScheduleRepository;
 pub use task_repository::TaskRepository;
+pub use user_repository::SeaOrmUserRepository;
+pub use session_repository::SeaOrmSessionRepository;
+pub use api_key_repository::SeaOrmApiKeyRepository;
 
 use crate::seaorm::connection::DatabaseError;
 use async_trait::async_trait;
@@ -25,6 +31,9 @@ pub struct RepositoryFactory {
     pub execution_repo: ExecutionRepository,
     pub schedule_repo: ScheduleRepository,
     pub job_repo: JobRepository,
+    pub user_repo: SeaOrmUserRepository,
+    pub session_repo: SeaOrmSessionRepository,
+    pub api_key_repo: SeaOrmApiKeyRepository,
     db: crate::seaorm::connection::DatabaseConnection,
 }
 
@@ -36,6 +45,9 @@ impl RepositoryFactory {
             execution_repo: ExecutionRepository::new(db.clone()),
             schedule_repo: ScheduleRepository::new(db.clone()),
             job_repo: JobRepository::new(db.clone()),
+            user_repo: SeaOrmUserRepository::new(db.clone()),
+            session_repo: SeaOrmSessionRepository::new(db.clone()),
+            api_key_repo: SeaOrmApiKeyRepository::new(db.clone()),
             db,
         }
     }
@@ -63,5 +75,20 @@ impl RepositoryFactory {
     /// Get the job repository
     pub fn job_repository(&self) -> JobRepository {
         self.job_repo.clone()
+    }
+
+    /// Get the user repository
+    pub fn user_repository(&self) -> SeaOrmUserRepository {
+        self.user_repo.clone()
+    }
+
+    /// Get the session repository
+    pub fn session_repository(&self) -> SeaOrmSessionRepository {
+        self.session_repo.clone()
+    }
+
+    /// Get the API key repository
+    pub fn api_key_repository(&self) -> SeaOrmApiKeyRepository {
+        self.api_key_repo.clone()
     }
 }
