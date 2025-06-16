@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use ratchet_api_types::{
     ApiId, PaginationInput, ListResponse,
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
+    UnifiedUser, UnifiedSession, UnifiedApiKey,
     ExecutionStatus, JobStatus, JobPriority,
     pagination::ListInput
 };
@@ -370,6 +371,94 @@ pub trait ScheduleRepository: FilteredRepository<UnifiedSchedule, ScheduleFilter
 }
 
 // =============================================================================
+// Authentication Repositories
+// =============================================================================
+
+/// Filter criteria for user queries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserFilters {
+    pub username: Option<String>,
+    pub email: Option<String>,
+    pub role: Option<String>,
+    pub is_active: Option<bool>,
+    pub email_verified: Option<bool>,
+    pub created_after: Option<DateTime<Utc>>,
+    pub created_before: Option<DateTime<Utc>>,
+}
+
+/// User repository interface
+#[async_trait]
+pub trait UserRepository: FilteredRepository<UnifiedUser, UserFilters> {
+    /// Find user by username
+    async fn find_by_username(&self, username: &str) -> Result<Option<UnifiedUser>, DatabaseError>;
+    
+    /// Find user by email
+    async fn find_by_email(&self, email: &str) -> Result<Option<UnifiedUser>, DatabaseError>;
+    
+    /// Create user with password hash
+    async fn create_user(&self, username: &str, email: &str, password_hash: &str, role: &str) -> Result<UnifiedUser, DatabaseError>;
+    
+    /// Update password hash
+    async fn update_password(&self, user_id: ApiId, password_hash: &str) -> Result<(), DatabaseError>;
+    
+    /// Update last login time
+    async fn update_last_login(&self, user_id: ApiId) -> Result<(), DatabaseError>;
+    
+    /// Set user active status
+    async fn set_active(&self, user_id: ApiId, is_active: bool) -> Result<(), DatabaseError>;
+    
+    /// Verify email
+    async fn verify_email(&self, user_id: ApiId) -> Result<(), DatabaseError>;
+}
+
+/// Session repository interface  
+#[async_trait]
+pub trait SessionRepository: CrudRepository<UnifiedSession> {
+    /// Create a new session
+    async fn create_session(&self, user_id: ApiId, session_id: &str, jwt_id: &str, expires_at: DateTime<Utc>) -> Result<UnifiedSession, DatabaseError>;
+    
+    /// Find session by session ID
+    async fn find_by_session_id(&self, session_id: &str) -> Result<Option<UnifiedSession>, DatabaseError>;
+    
+    /// Find sessions by user ID
+    async fn find_by_user_id(&self, user_id: ApiId) -> Result<Vec<UnifiedSession>, DatabaseError>;
+    
+    /// Invalidate session
+    async fn invalidate_session(&self, session_id: &str) -> Result<(), DatabaseError>;
+    
+    /// Invalidate all user sessions
+    async fn invalidate_user_sessions(&self, user_id: ApiId) -> Result<(), DatabaseError>;
+    
+    /// Update last used time
+    async fn update_last_used(&self, session_id: &str) -> Result<(), DatabaseError>;
+    
+    /// Clean up expired sessions
+    async fn cleanup_expired_sessions(&self) -> Result<u64, DatabaseError>;
+}
+
+/// API key repository interface
+#[async_trait]
+pub trait ApiKeyRepository: CrudRepository<UnifiedApiKey> {
+    /// Find API key by hash
+    async fn find_by_key_hash(&self, key_hash: &str) -> Result<Option<UnifiedApiKey>, DatabaseError>;
+    
+    /// Find API keys by user ID
+    async fn find_by_user_id(&self, user_id: ApiId) -> Result<Vec<UnifiedApiKey>, DatabaseError>;
+    
+    /// Create API key
+    async fn create_api_key(&self, user_id: ApiId, name: &str, key_hash: &str, key_prefix: &str, permissions: &str) -> Result<UnifiedApiKey, DatabaseError>;
+    
+    /// Update last used time
+    async fn update_last_used(&self, api_key_id: ApiId) -> Result<(), DatabaseError>;
+    
+    /// Increment usage count
+    async fn increment_usage(&self, api_key_id: ApiId) -> Result<(), DatabaseError>;
+    
+    /// Set API key active status
+    async fn set_active(&self, api_key_id: ApiId, is_active: bool) -> Result<(), DatabaseError>;
+}
+
+// =============================================================================
 // Repository Factory
 // =============================================================================
 
@@ -387,6 +476,15 @@ pub trait RepositoryFactory: Send + Sync {
     
     /// Get schedule repository instance
     fn schedule_repository(&self) -> &dyn ScheduleRepository;
+    
+    /// Get user repository instance
+    fn user_repository(&self) -> &dyn UserRepository;
+    
+    /// Get session repository instance
+    fn session_repository(&self) -> &dyn SessionRepository;
+    
+    /// Get API key repository instance
+    fn api_key_repository(&self) -> &dyn ApiKeyRepository;
     
     /// Check health of all repositories
     async fn health_check(&self) -> Result<(), DatabaseError>;

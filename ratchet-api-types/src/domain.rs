@@ -190,3 +190,56 @@ pub struct UnifiedWorkerStatus {
     pub cpu_usage_percent: Option<f32>,
     pub last_heartbeat: DateTime<Utc>,
 }
+
+/// Unified User representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiedUser {
+    pub id: ApiId,
+    pub username: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub role: UserRole,
+    pub is_active: bool,
+    pub email_verified: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub last_login_at: Option<DateTime<Utc>>,
+    // Password hash is never included in API responses
+}
+
+/// Unified Session representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiedSession {
+    pub id: ApiId,
+    pub session_id: String,
+    pub user_id: ApiId,
+    pub expires_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: DateTime<Utc>,
+    pub client_ip: Option<String>,
+    pub user_agent: Option<String>,
+    pub is_active: bool,
+    // JWT ID and metadata are internal fields not exposed via API
+}
+
+/// Unified API Key representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiedApiKey {
+    pub id: ApiId,
+    pub name: String,
+    pub user_id: ApiId,
+    pub key_prefix: String, // Only prefix shown for security
+    pub permissions: ApiKeyPermissions,
+    pub is_active: bool,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub usage_count: i64,
+    // Key hash is never included in API responses
+}

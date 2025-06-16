@@ -17,11 +17,13 @@ pub use domain::{
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
     UnifiedOutputDestination, UnifiedFilesystemConfig, UnifiedWebhookConfig,
     UnifiedRetryPolicy, UnifiedWebhookAuth, UnifiedBearerAuth,
-    UnifiedBasicAuth, UnifiedApiKeyAuth, UnifiedWorkerStatus
+    UnifiedBasicAuth, UnifiedApiKeyAuth, UnifiedWorkerStatus,
+    UnifiedUser, UnifiedSession, UnifiedApiKey
 };
 pub use enums::{
     ExecutionStatus, JobPriority, JobStatus, OutputFormat,
-    CompressionType, HttpMethod, WorkerStatusType
+    CompressionType, HttpMethod, WorkerStatusType,
+    UserRole, ApiKeyPermissions
 };
 pub use errors::ApiError;
 pub use pagination::{PaginationInput, ListResponse};

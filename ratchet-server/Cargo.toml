@@ -27,6 +27,7 @@ ratchet-mcp = { path = "../ratchet-mcp", optional = true, default-features = tru
 
 # External dependencies
 axum = { workspace = true, features = ["tokio", "query"] }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tokio = { workspace = true }
@@ -41,6 +42,8 @@ clap = { workspace = true }
 serde_yaml = "0.9"
 uuid = { workspace = true }
 chrono = { workspace = true }
+rustls = "0.23"
+rustls-pemfile = "2.1"
 sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-chrono", "with-uuid", "with-json"] }
 async-graphql = { workspace = true, features = ["playground", "apollo_tracing"] }
 async-graphql-axum = { workspace = true }

@@ -139,6 +139,18 @@ impl RepositoryFactory for DirectRepositoryFactory {
         &self.schedule_repository
     }
     
+    fn user_repository(&self) -> &dyn ratchet_interfaces::database::UserRepository {
+        todo!("User repository not implemented yet")
+    }
+    
+    fn session_repository(&self) -> &dyn ratchet_interfaces::database::SessionRepository {
+        todo!("Session repository not implemented yet")
+    }
+    
+    fn api_key_repository(&self) -> &dyn ratchet_interfaces::database::ApiKeyRepository {
+        todo!("API key repository not implemented yet")
+    }
+    
     async fn health_check(&self) -> Result<(), DatabaseError> {
         // Delegate to storage health check
         self.storage_factory.task_repository().health_check_send().await
@@ -928,6 +940,18 @@ impl RepositoryFactory for StubRepositoryFactory {
     }
     
     fn schedule_repository(&self) -> &dyn ScheduleRepository {
+        unimplemented!("Repository factory stubs not implemented yet")
+    }
+    
+    fn user_repository(&self) -> &dyn ratchet_interfaces::database::UserRepository {
+        unimplemented!("Repository factory stubs not implemented yet")
+    }
+    
+    fn session_repository(&self) -> &dyn ratchet_interfaces::database::SessionRepository {
+        unimplemented!("Repository factory stubs not implemented yet")
+    }
+    
+    fn api_key_repository(&self) -> &dyn ratchet_interfaces::database::ApiKeyRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
     

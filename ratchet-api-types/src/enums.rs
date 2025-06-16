@@ -76,3 +76,23 @@ pub enum WorkerStatusType {
     Stopping,
     Error,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(Enum))]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum UserRole {
+    Admin,
+    User,
+    ReadOnly,
+    Service,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(Enum))]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApiKeyPermissions {
+    Full,
+    ReadOnly,
+    ExecuteOnly,
+    Admin,
+}

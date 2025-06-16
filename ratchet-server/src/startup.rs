@@ -8,6 +8,8 @@ use axum::{
 use tower_http::{
     trace::TraceLayer,
 };
+use std::fs;
+use std::sync::Arc;
 
 use ratchet_rest_api::context::TasksContext;
 
@@ -174,16 +176,61 @@ impl Server {
         // Print configuration summary
         self.log_config_summary();
 
-        // Start the server
-        tracing::info!("Server listening on {}", addr);
+        // Start the server with TLS if configured
+        if let Some(tls_config) = &self.config.server.tls {
+            tracing::info!("Starting HTTPS server with TLS on {}", addr);
+            self.start_tls_server(app, addr, tls_config).await?;
+        } else {
+            tracing::info!("Starting HTTP server on {}", addr);
+            self.start_http_server(app, addr).await?;
+        }
 
-        // Use axum 0.7 API with stateful router
+        tracing::info!("Server shutdown complete");
+        Ok(())
+    }
+
+    /// Start HTTP server
+    async fn start_http_server(&self, app: Router<()>, addr: std::net::SocketAddr) -> Result<()> {
         let listener = tokio::net::TcpListener::bind(&addr).await?;
         axum::serve(listener, app)
             .with_graceful_shutdown(shutdown_signal())
             .await?;
+        Ok(())
+    }
 
-        tracing::info!("Server shutdown complete");
+    /// Start HTTPS server with TLS
+    async fn start_tls_server(&self, app: Router<()>, addr: std::net::SocketAddr, tls_config: &crate::config::TlsConfig) -> Result<()> {
+        // Load TLS certificates
+        let cert_pem = fs::read(&tls_config.cert_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read certificate file '{}': {}", tls_config.cert_path, e))?;
+        let key_pem = fs::read(&tls_config.key_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read private key file '{}': {}", tls_config.key_path, e))?;
+
+        // Parse certificates
+        let cert_chain = rustls_pemfile::certs(&mut cert_pem.as_slice())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow::anyhow!("Failed to parse certificate: {}", e))?;
+
+        // Parse private key
+        let private_key = rustls_pemfile::private_key(&mut key_pem.as_slice())
+            .map_err(|e| anyhow::anyhow!("Failed to parse private key: {}", e))?
+            .ok_or_else(|| anyhow::anyhow!("No private key found in key file"))?;
+
+        // Build TLS configuration
+        let rustls_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(cert_chain, private_key)
+            .map_err(|e| anyhow::anyhow!("Failed to build TLS configuration: {}", e))?;
+
+        // Create axum-server RustlsConfig
+        let axum_tls_config = axum_server::tls_rustls::RustlsConfig::from_config(Arc::new(rustls_config));
+
+        // Start HTTPS server using axum-server
+        axum_server::bind_rustls(addr, axum_tls_config)
+            .serve(app.into_make_service())
+            .await
+            .map_err(|e| anyhow::anyhow!("HTTPS server error: {}", e))?;
+
         Ok(())
     }
 
@@ -224,6 +271,17 @@ impl Server {
         tracing::info!("🚀 === Ratchet Server Configuration ===");
         tracing::info!("📍 Bind Address: {}", self.config.server.bind_address);
         
+        // TLS Configuration
+        if let Some(tls_config) = &self.config.server.tls {
+            tracing::info!("🔒 TLS: ✅ Enabled (HTTPS)");
+            tracing::info!("   📄 Certificate: {}", tls_config.cert_path);
+            tracing::info!("   🔑 Private Key: {}", tls_config.key_path);
+            tracing::info!("   ↩️  HTTP Redirect: {}", if tls_config.enable_http_redirect { "✅ Enabled" } else { "❌ Disabled" });
+        } else {
+            tracing::info!("🔒 TLS: ❌ Disabled (HTTP only)");
+            tracing::warn!("⚠️  Production Warning: TLS is disabled. Enable TLS for production deployment.");
+        }
+        
         // Core APIs
         tracing::info!("🔗 REST API: {} ({})", 
                       if self.config.rest_api.enabled { "✅ Enabled" } else { "❌ Disabled" },
@@ -246,18 +304,19 @@ impl Server {
         tracing::info!("📊 Tracing: {}", if self.config.server.enable_tracing { "✅ Enabled" } else { "❌ Disabled" });
         
         // Endpoints
+        let protocol = if self.config.server.tls.is_some() { "https" } else { "http" };
         tracing::info!("📋 Available endpoints:");
-        tracing::info!("   🏠 Root: http://{}/", self.config.server.bind_address);
+        tracing::info!("   🏠 Root: {}://{}/", protocol, self.config.server.bind_address);
         
         // Health endpoints
         tracing::info!("   ❤️  Health Endpoints:");
-        tracing::info!("      • Basic Health:     http://{}/health", self.config.server.bind_address);
-        tracing::info!("      • Detailed Health:  http://{}/health/detailed", self.config.server.bind_address);
-        tracing::info!("      • Readiness:        http://{}/ready", self.config.server.bind_address);
-        tracing::info!("      • Liveness:         http://{}/live", self.config.server.bind_address);
+        tracing::info!("      • Basic Health:     {}://{}/health", protocol, self.config.server.bind_address);
+        tracing::info!("      • Detailed Health:  {}://{}/health/detailed", protocol, self.config.server.bind_address);
+        tracing::info!("      • Readiness:        {}://{}/ready", protocol, self.config.server.bind_address);
+        tracing::info!("      • Liveness:         {}://{}/live", protocol, self.config.server.bind_address);
         
         if self.config.rest_api.enabled {
-            let base_url = format!("http://{}", self.config.server.bind_address);
+            let base_url = format!("{}://{}", protocol, self.config.server.bind_address);
             let api_prefix = &self.config.rest_api.prefix;
             tracing::info!("   🔗 REST API Base: {}{}/", base_url, api_prefix);
             tracing::info!("      📝 Task Management:");
@@ -286,11 +345,11 @@ impl Server {
         
         if self.config.graphql_api.enabled {
             tracing::info!("   🔍 GraphQL API:");
-            tracing::info!("      • Endpoint:         http://{}{}", self.config.server.bind_address, self.config.graphql_api.endpoint);
+            tracing::info!("      • Endpoint:         {}://{}{}", protocol, self.config.server.bind_address, self.config.graphql_api.endpoint);
             tracing::info!("      • Queries:          tasks, executions, jobs, schedules, workers");
             tracing::info!("      • Mutations:        createTask, updateTask, deleteTask, etc.");
             if self.config.graphql_api.enable_playground {
-                tracing::info!("      • Playground:       http://{}/playground", self.config.server.bind_address);
+                tracing::info!("      • Playground:       {}://{}/playground", protocol, self.config.server.bind_address);
             }
             if self.config.graphql_api.enable_introspection {
                 tracing::info!("      • Introspection:    ✅ Enabled");

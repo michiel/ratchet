@@ -23,6 +23,15 @@ pub struct HttpServerConfig {
     pub enable_request_id: bool,
     pub enable_tracing: bool,
     pub shutdown_timeout_seconds: u64,
+    pub tls: Option<TlsConfig>,
+}
+
+/// TLS configuration for HTTPS
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsConfig {
+    pub cert_path: String,
+    pub key_path: String,
+    pub enable_http_redirect: bool,
 }
 
 /// REST API configuration
@@ -109,6 +118,17 @@ impl Default for HttpServerConfig {
             enable_request_id: true,
             enable_tracing: true,
             shutdown_timeout_seconds: 30,
+            tls: None,
+        }
+    }
+}
+
+impl Default for TlsConfig {
+    fn default() -> Self {
+        Self {
+            cert_path: "./certs/cert.pem".to_string(),
+            key_path: "./certs/key.pem".to_string(),
+            enable_http_redirect: true,
         }
     }
 }
@@ -204,6 +224,7 @@ impl ServerConfig {
                 enable_request_id: true, // Default enabled
                 enable_tracing: true, // Default enabled  
                 shutdown_timeout_seconds: 30, // Default value
+                tls: None, // TODO: Extract from config if available
             },
             rest_api: RestApiConfig {
                 enabled: true, // Default enabled
