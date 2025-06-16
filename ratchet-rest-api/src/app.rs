@@ -7,7 +7,10 @@ use axum::{
 };
 use ratchet_interfaces::{RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator};
 use ratchet_web::{
-    middleware::{cors_layer, error_handler_layer, request_id_layer},
+    middleware::{
+        audit_middleware, cors_layer, error_handler_layer, request_id_layer, security_headers_middleware,
+        rate_limit_middleware, create_rate_limit_middleware, AuditConfig, SecurityConfig, RateLimitConfig,
+    },
 };
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
@@ -27,6 +30,18 @@ pub struct AppConfig {
     pub enable_request_id: bool,
     /// Enable request tracing
     pub enable_tracing: bool,
+    /// Enable security headers
+    pub enable_security_headers: bool,
+    /// Enable audit logging
+    pub enable_audit_logging: bool,
+    /// Enable rate limiting
+    pub enable_rate_limiting: bool,
+    /// Security configuration
+    pub security_config: SecurityConfig,
+    /// Audit configuration
+    pub audit_config: AuditConfig,
+    /// Rate limiting configuration
+    pub rate_limit_config: RateLimitConfig,
     /// API path prefix
     pub api_prefix: String,
 }
@@ -37,6 +52,46 @@ impl Default for AppConfig {
             enable_cors: true,
             enable_request_id: true,
             enable_tracing: true,
+            enable_security_headers: true,
+            enable_audit_logging: true,
+            enable_rate_limiting: true,
+            security_config: SecurityConfig::development(),
+            audit_config: AuditConfig::development(),
+            rate_limit_config: RateLimitConfig::permissive(),
+            api_prefix: "/api/v1".to_string(),
+        }
+    }
+}
+
+impl AppConfig {
+    /// Create a production configuration
+    pub fn production() -> Self {
+        Self {
+            enable_cors: true,
+            enable_request_id: true,
+            enable_tracing: true,
+            enable_security_headers: true,
+            enable_audit_logging: true,
+            enable_rate_limiting: true,
+            security_config: SecurityConfig::production(),
+            audit_config: AuditConfig::production(),
+            rate_limit_config: RateLimitConfig::strict(),
+            api_prefix: "/api/v1".to_string(),
+        }
+    }
+    
+    /// Create a development configuration
+    pub fn development() -> Self {
+        Self {
+            enable_cors: true,
+            enable_request_id: true,
+            enable_tracing: true,
+            enable_security_headers: true,
+            enable_audit_logging: true,
+            enable_rate_limiting: true,
+            security_config: SecurityConfig::development(),
+            audit_config: AuditConfig::development(),
+            rate_limit_config: RateLimitConfig::permissive(),
             api_prefix: "/api/v1".to_string(),
         }
     }
@@ -92,18 +147,62 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
 
     // Add middleware layers (applied in reverse order)
     let mut app = app;
+    
+    // Security headers (applied first, affects all responses)
+    if config.enable_security_headers {
+        let security_config = config.security_config.clone();
+        app = app.layer(axum::middleware::from_fn(move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+            let config = security_config.clone();
+            async move {
+                req.extensions_mut().insert(config);
+                security_headers_middleware(req, next).await
+            }
+        }));
+    }
+    
+    // Rate limiting (applied early to prevent abuse)
+    if config.enable_rate_limiting {
+        let rate_limiter = create_rate_limit_middleware(config.rate_limit_config.clone());
+        app = app.layer(axum::middleware::from_fn(move |connect_info: Option<axum::extract::ConnectInfo<std::net::SocketAddr>>, mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+            let rate_limiter = rate_limiter.clone();
+            async move {
+                req.extensions_mut().insert(rate_limiter);
+                match rate_limit_middleware(connect_info, req, next).await {
+                    Ok(response) => response,
+                    Err(err) => err.into_response(),
+                }
+            }
+        }));
+    }
+    
+    // Audit logging (should be one of the first middleware to capture all requests)
+    if config.enable_audit_logging {
+        let audit_config = config.audit_config.clone();
+        app = app.layer(axum::middleware::from_fn(move |connect_info: Option<axum::extract::ConnectInfo<std::net::SocketAddr>>, mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+            let config = audit_config.clone();
+            async move {
+                req.extensions_mut().insert(config);
+                audit_middleware(connect_info, req, next).await
+            }
+        }));
+    }
+    
+    // CORS handling
     if config.enable_cors {
         app = app.layer(cors_layer());
     }
 
+    // Request ID tracking
     if config.enable_request_id {
         app = app.layer(request_id_layer());
     }
 
+    // HTTP tracing
     if config.enable_tracing {
         app = app.layer(TraceLayer::new_for_http());
     }
 
+    // Error handling (should be last to catch all errors)
     app = app.layer(error_handler_layer());
 
     app

@@ -61,6 +61,12 @@ impl Server {
             enable_cors: self.config.server.enable_cors,
             enable_request_id: self.config.server.enable_request_id,
             enable_tracing: self.config.server.enable_tracing,
+            enable_security_headers: true,
+            enable_audit_logging: true,
+            enable_rate_limiting: true,
+            security_config: ratchet_web::middleware::SecurityConfig::development(),
+            audit_config: ratchet_web::middleware::AuditConfig::development(),
+            rate_limit_config: ratchet_web::middleware::RateLimitConfig::permissive(),
         };
 
         // Always create the REST app (even if disabled, we use its context)
