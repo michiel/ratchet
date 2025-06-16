@@ -95,10 +95,37 @@ pub trait FilteredRepository<T, F>: CrudRepository<T> {
 /// Filter criteria for task queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskFilters {
+    // Basic filters (existing)
     pub name: Option<String>,
     pub enabled: Option<bool>,
     pub registry_source: Option<bool>,
     pub validated_after: Option<DateTime<Utc>>,
+    
+    // Advanced string filtering
+    pub name_exact: Option<String>,
+    pub name_contains: Option<String>,
+    pub name_starts_with: Option<String>,
+    pub name_ends_with: Option<String>,
+    
+    // Version filtering
+    pub version: Option<String>,
+    pub version_in: Option<Vec<String>>,
+    
+    // Extended date filtering
+    pub created_after: Option<DateTime<Utc>>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
+    pub validated_before: Option<DateTime<Utc>>,
+    
+    // ID filtering
+    pub uuid: Option<String>,
+    pub uuid_in: Option<Vec<String>>,
+    pub id_in: Option<Vec<i32>>,
+    
+    // Advanced boolean filtering
+    pub has_validation: Option<bool>,
+    pub in_sync: Option<bool>,
 }
 
 /// Task repository interface
@@ -127,10 +154,42 @@ pub trait TaskRepository: FilteredRepository<UnifiedTask, TaskFilters> {
 /// Filter criteria for execution queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionFilters {
+    // Basic filters (existing)
     pub task_id: Option<ApiId>,
     pub status: Option<ExecutionStatus>,
     pub queued_after: Option<DateTime<Utc>>,
     pub completed_after: Option<DateTime<Utc>>,
+    
+    // Advanced ID filtering
+    pub task_id_in: Option<Vec<ApiId>>,
+    pub id_in: Option<Vec<ApiId>>,
+    
+    // Advanced status filtering
+    pub status_in: Option<Vec<ExecutionStatus>>,
+    pub status_not: Option<ExecutionStatus>,
+    
+    // Extended date filtering
+    pub queued_before: Option<DateTime<Utc>>,
+    pub started_after: Option<DateTime<Utc>>,
+    pub started_before: Option<DateTime<Utc>>,
+    pub completed_before: Option<DateTime<Utc>>,
+    
+    // Duration filtering
+    pub duration_min_ms: Option<i32>,
+    pub duration_max_ms: Option<i32>,
+    
+    // Progress filtering
+    pub progress_min: Option<f32>,
+    pub progress_max: Option<f32>,
+    pub has_progress: Option<bool>,
+    
+    // Error filtering
+    pub has_error: Option<bool>,
+    pub error_message_contains: Option<String>,
+    
+    // Advanced boolean filtering
+    pub can_retry: Option<bool>,
+    pub can_cancel: Option<bool>,
 }
 
 /// Execution repository interface
@@ -178,11 +237,43 @@ pub trait ExecutionRepository: FilteredRepository<UnifiedExecution, ExecutionFil
 /// Filter criteria for job queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobFilters {
+    // Basic filters (existing)
     pub task_id: Option<ApiId>,
     pub status: Option<JobStatus>,
     pub priority: Option<JobPriority>,
     pub queued_after: Option<DateTime<Utc>>,
     pub scheduled_before: Option<DateTime<Utc>>,
+    
+    // Advanced ID filtering
+    pub task_id_in: Option<Vec<ApiId>>,
+    pub id_in: Option<Vec<ApiId>>,
+    
+    // Advanced status filtering
+    pub status_in: Option<Vec<JobStatus>>,
+    pub status_not: Option<JobStatus>,
+    
+    // Advanced priority filtering
+    pub priority_in: Option<Vec<JobPriority>>,
+    pub priority_min: Option<JobPriority>,
+    
+    // Extended date filtering
+    pub queued_before: Option<DateTime<Utc>>,
+    pub scheduled_after: Option<DateTime<Utc>>,
+    
+    // Retry filtering
+    pub retry_count_min: Option<i32>,
+    pub retry_count_max: Option<i32>,
+    pub max_retries_min: Option<i32>,
+    pub max_retries_max: Option<i32>,
+    pub has_retries_remaining: Option<bool>,
+    
+    // Error filtering
+    pub has_error: Option<bool>,
+    pub error_message_contains: Option<String>,
+    
+    // Scheduling filtering
+    pub is_scheduled: Option<bool>,
+    pub due_now: Option<bool>, // scheduled_for <= now
 }
 
 /// Job repository interface
@@ -222,9 +313,41 @@ pub trait JobRepository: FilteredRepository<UnifiedJob, JobFilters> {
 /// Filter criteria for schedule queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScheduleFilters {
+    // Basic filters (existing)
     pub task_id: Option<ApiId>,
     pub enabled: Option<bool>,
     pub next_run_before: Option<DateTime<Utc>>,
+    
+    // Advanced ID filtering
+    pub task_id_in: Option<Vec<ApiId>>,
+    pub id_in: Option<Vec<ApiId>>,
+    
+    // Name filtering
+    pub name_contains: Option<String>,
+    pub name_exact: Option<String>,
+    pub name_starts_with: Option<String>,
+    pub name_ends_with: Option<String>,
+    
+    // Cron expression filtering
+    pub cron_expression_contains: Option<String>,
+    pub cron_expression_exact: Option<String>,
+    
+    // Schedule timing filtering
+    pub next_run_after: Option<DateTime<Utc>>,
+    pub last_run_after: Option<DateTime<Utc>>,
+    pub last_run_before: Option<DateTime<Utc>>,
+    
+    // Date range filtering
+    pub created_after: Option<DateTime<Utc>>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
+    
+    // Advanced filtering
+    pub has_next_run: Option<bool>,
+    pub has_last_run: Option<bool>,
+    pub is_due: Option<bool>, // next_run <= now
+    pub overdue: Option<bool>, // next_run < now and enabled
 }
 
 /// Schedule repository interface

@@ -49,12 +49,39 @@ pub async fn list_tasks(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to task filters
+    // Convert query filters to task filters - using default values for advanced filters
     let filters = TaskFilters {
+        // Basic filters (existing)
         name: None, // TODO: Extract from query filters
         enabled: None,
         registry_source: None,
         validated_after: None,
+        
+        // Advanced string filtering
+        name_exact: None,
+        name_contains: None,
+        name_starts_with: None,
+        name_ends_with: None,
+        
+        // Version filtering
+        version: None,
+        version_in: None,
+        
+        // Extended date filtering
+        created_after: None,
+        created_before: None,
+        updated_after: None,
+        updated_before: None,
+        validated_before: None,
+        
+        // ID filtering
+        uuid: None,
+        uuid_in: None,
+        id_in: None,
+        
+        // Advanced boolean filtering
+        has_validation: None,
+        in_sync: None,
     };
     
     let task_repo = ctx.repositories.task_repository();
@@ -699,10 +726,42 @@ pub async fn mcp_get_results(
     // Query executions for this task (using empty filters for now)
     use ratchet_interfaces::ExecutionFilters;
     let empty_filters = ExecutionFilters {
+        // Basic filters (existing)
         task_id: None,
         status: None,
         queued_after: None,
         completed_after: None,
+        
+        // Advanced ID filtering
+        task_id_in: None,
+        id_in: None,
+        
+        // Advanced status filtering
+        status_in: None,
+        status_not: None,
+        
+        // Extended date filtering
+        queued_before: None,
+        started_after: None,
+        started_before: None,
+        completed_before: None,
+        
+        // Duration filtering
+        duration_min_ms: None,
+        duration_max_ms: None,
+        
+        // Progress filtering
+        progress_min: None,
+        progress_max: None,
+        has_progress: None,
+        
+        // Error filtering
+        has_error: None,
+        error_message_contains: None,
+        
+        // Advanced boolean filtering
+        can_retry: None,
+        can_cancel: None,
     };
     
     match execution_repo.find_with_filters(empty_filters, pagination).await {

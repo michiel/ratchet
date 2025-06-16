@@ -12,6 +12,9 @@ use crate::{McpError, McpResult};
 
 // Import Ratchet's execution types
 use ratchet_interfaces::logging::StructuredLogger;
+use ratchet_interfaces::{RepositoryFactory, ExecutionRepository, JobRepository, ScheduleRepository, TaskRepository, ExecutionFilters, JobFilters, ScheduleFilters};
+use ratchet_api_types::{ApiId, PaginationInput, ExecutionStatus as ApiExecutionStatus, JobStatus, JobPriority};
+use ratchet_api_types::pagination::ListInput;
 
 /// MCP tool definition with execution capability
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,6 +177,9 @@ pub struct RatchetToolRegistry {
     
     /// Task development service for dev tools
     task_dev_service: Option<Arc<super::task_dev_tools::TaskDevelopmentService>>,
+    
+    /// Repository factory for data access
+    repositories: Option<Arc<dyn RepositoryFactory>>,
 }
 
 impl RatchetToolRegistry {
@@ -185,6 +191,7 @@ impl RatchetToolRegistry {
             logger: None,
             progress_manager: Arc::new(super::progress::ProgressNotificationManager::new()),
             task_dev_service: None,
+            repositories: None,
         };
 
         // Register built-in Ratchet tools
@@ -684,6 +691,12 @@ impl RatchetToolRegistry {
     /// Configure with task development service
     pub fn with_task_dev_service(mut self, service: Arc<super::task_dev_tools::TaskDevelopmentService>) -> Self {
         self.task_dev_service = Some(service);
+        self
+    }
+
+    /// Set the repository factory for data access
+    pub fn with_repositories(mut self, repositories: Arc<dyn RepositoryFactory>) -> Self {
+        self.repositories = Some(repositories);
         self
     }
 
@@ -2263,31 +2276,129 @@ impl RatchetToolRegistry {
             });
         }
 
-        // For now, return a placeholder since we'd need to access the repositories
-        // In a full implementation, this would query the execution repository
-        let response = serde_json::json!({
-            "executions": [],
-            "pagination": {
-                "page": page,
-                "limit": limit,
-                "total_count": 0,
-                "total_pages": 0,
-                "has_next": false,
-                "has_previous": false,
-                "next_page": null,
-                "previous_page": null
-            },
-            "sorting": {
-                "sort_by": sort_by,
-                "sort_order": sort_order
-            },
-            "filters": {
-                "task_id": task_id,
-                "status": status,
-                "include_output": include_output
-            },
-            "message": "MCP executions listing requires repository integration - placeholder implementation"
-        });
+        // Check if repositories are available
+        let repositories = match &self.repositories {
+            Some(repos) => repos,
+            None => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: "Repository factory not configured for MCP server".to_string(),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        // Convert status string to ExecutionStatus if provided
+        let status_filter = if let Some(status_str) = status {
+            match status_str.to_lowercase().as_str() {
+                "pending" => Some(ApiExecutionStatus::Pending),
+                "running" => Some(ApiExecutionStatus::Running),
+                "completed" => Some(ApiExecutionStatus::Completed),
+                "failed" => Some(ApiExecutionStatus::Failed),
+                "cancelled" => Some(ApiExecutionStatus::Cancelled),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        // Convert task_id string to ApiId if provided
+        let task_id_filter = task_id.map(|id| ApiId::from_string(id.to_string()));
+
+        // Create execution filters
+        let filters = ExecutionFilters {
+            task_id: task_id_filter,
+            status: status_filter,
+            queued_after: None,
+            completed_after: None,
+            task_id_in: None,
+            id_in: None,
+            status_in: None,
+            status_not: None,
+            queued_before: None,
+            started_after: None,
+            started_before: None,
+            completed_before: None,
+            duration_min_ms: None,
+            duration_max_ms: None,
+            progress_min: None,
+            progress_max: None,
+            has_progress: None,
+            has_error: None,
+            error_message_contains: None,
+            can_retry: None,
+            can_cancel: None,
+        };
+
+        // Create pagination input
+        let pagination = PaginationInput {
+            page: Some(page as u32),
+            limit: Some(limit as u32),
+            offset: Some((page * limit) as u32),
+        };
+
+        // Query the execution repository
+        let execution_repo = repositories.execution_repository();
+        let response = match execution_repo.find_with_filters(filters, pagination).await {
+            Ok(list_response) => {
+                // Convert executions to MCP format
+                let executions: Vec<serde_json::Value> = list_response.items.into_iter().map(|execution| {
+                    let mut exec_json = serde_json::json!({
+                        "id": execution.id.to_string(),
+                        "task_id": execution.task_id.to_string(),
+                        "status": execution.status,
+                        "queued_at": execution.queued_at,
+                        "started_at": execution.started_at,
+                        "completed_at": execution.completed_at,
+                        "duration_ms": execution.duration_ms,
+                        "progress": execution.progress,
+                        "error_message": execution.error_message,
+                    });
+
+                    // Include output if requested
+                    if include_output {
+                        exec_json["output"] = execution.output.unwrap_or(serde_json::Value::Null);
+                        exec_json["error_details"] = execution.error_details.unwrap_or(serde_json::Value::Null);
+                    }
+
+                    exec_json
+                }).collect();
+
+                serde_json::json!({
+                    "executions": executions,
+                    "pagination": {
+                        "page": list_response.meta.page,
+                        "limit": list_response.meta.limit,
+                        "total_count": list_response.meta.total,
+                        "total_pages": list_response.meta.total_pages,
+                        "has_next": list_response.meta.has_next,
+                        "has_previous": list_response.meta.has_previous,
+                        "next_page": if list_response.meta.has_next { Some(list_response.meta.page + 1) } else { None },
+                        "previous_page": if list_response.meta.has_previous { Some(list_response.meta.page - 1) } else { None }
+                    },
+                    "sorting": {
+                        "sort_by": sort_by,
+                        "sort_order": sort_order
+                    },
+                    "filters": {
+                        "task_id": task_id,
+                        "status": status,
+                        "include_output": include_output
+                    }
+                })
+            }
+            Err(e) => {
+                return Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to fetch executions: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                });
+            }
+        };
 
         Ok(ToolsCallResult {
             content: vec![ToolContent::Text {

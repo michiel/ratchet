@@ -49,13 +49,45 @@ pub async fn list_jobs(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to job filters
+    // Convert query filters to job filters - using default values for advanced filters
     let filters = JobFilters {
+        // Basic filters (existing)
         task_id: None, // TODO: Extract from query filters
         status: None,
         priority: None,
         queued_after: None,
         scheduled_before: None,
+        
+        // Advanced ID filtering
+        task_id_in: None,
+        id_in: None,
+        
+        // Advanced status filtering
+        status_in: None,
+        status_not: None,
+        
+        // Advanced priority filtering
+        priority_in: None,
+        priority_min: None,
+        
+        // Extended date filtering
+        queued_before: None,
+        scheduled_after: None,
+        
+        // Retry filtering
+        retry_count_min: None,
+        retry_count_max: None,
+        max_retries_min: None,
+        max_retries_max: None,
+        has_retries_remaining: None,
+        
+        // Error filtering
+        has_error: None,
+        error_message_contains: None,
+        
+        // Scheduling filtering
+        is_scheduled: None,
+        due_now: None,
     };
     
     let job_repo = ctx.repositories.job_repository();
@@ -249,6 +281,66 @@ pub async fn update_job(
         .map_err(|e| RestError::InternalError(format!("Failed to update job: {}", e)))?;
     
     Ok(Json(ApiResponse::new(updated_job)))
+}
+
+/// Delete a job
+#[utoipa::path(
+    delete,
+    path = "/jobs/{job_id}",
+    tag = "jobs",
+    operation_id = "deleteJob",
+    params(
+        ("job_id" = String, Path, description = "Unique job identifier")
+    ),
+    responses(
+        (status = 200, description = "Job deleted successfully"),
+        (status = 404, description = "Job not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn delete_job(
+    State(ctx): State<TasksContext>,
+    Path(job_id): Path<String>,
+) -> RestResult<impl IntoResponse> {
+    info!("Deleting job with ID: {}", job_id);
+    
+    // Validate job ID input
+    let validator = InputValidator::new();
+    if let Err(validation_err) = validator.validate_string(&job_id, "job_id") {
+        warn!("Invalid job ID provided: {}", validation_err);
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    let api_id = ApiId::from_string(job_id.clone());
+    let job_repo = ctx.repositories.job_repository();
+    
+    // Check if job exists
+    let _job = job_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Job", &job_id))?;
+    
+    // Delete the job
+    job_repo
+        .delete(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?;
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Job {} deleted successfully", job_id)
+    })))
 }
 
 /// Cancel a queued job

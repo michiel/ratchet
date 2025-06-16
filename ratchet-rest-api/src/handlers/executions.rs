@@ -48,12 +48,44 @@ pub async fn list_executions(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to execution filters
+    // Convert query filters to execution filters - using default values for advanced filters
     let filters = ExecutionFilters {
+        // Basic filters (existing)
         task_id: None, // TODO: Extract from query filters
         status: None,
         queued_after: None,
         completed_after: None,
+        
+        // Advanced ID filtering
+        task_id_in: None,
+        id_in: None,
+        
+        // Advanced status filtering
+        status_in: None,
+        status_not: None,
+        
+        // Extended date filtering
+        queued_before: None,
+        started_after: None,
+        started_before: None,
+        completed_before: None,
+        
+        // Duration filtering
+        duration_min_ms: None,
+        duration_max_ms: None,
+        
+        // Progress filtering
+        progress_min: None,
+        progress_max: None,
+        has_progress: None,
+        
+        // Error filtering
+        has_error: None,
+        error_message_contains: None,
+        
+        // Advanced boolean filtering
+        can_retry: None,
+        can_cancel: None,
     };
     
     let execution_repo = ctx.repositories.execution_repository();
@@ -296,6 +328,66 @@ pub async fn update_execution(
         .map_err(|e| RestError::InternalError(format!("Failed to update execution: {}", e)))?;
     
     Ok(Json(ApiResponse::new(updated_execution)))
+}
+
+/// Delete an execution
+#[utoipa::path(
+    delete,
+    path = "/executions/{execution_id}",
+    tag = "executions",
+    operation_id = "deleteExecution",
+    params(
+        ("execution_id" = String, Path, description = "Unique execution identifier")
+    ),
+    responses(
+        (status = 200, description = "Execution deleted successfully"),
+        (status = 404, description = "Execution not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn delete_execution(
+    State(ctx): State<TasksContext>,
+    Path(execution_id): Path<String>,
+) -> RestResult<impl IntoResponse> {
+    info!("Deleting execution with ID: {}", execution_id);
+    
+    // Validate execution ID input
+    let validator = InputValidator::new();
+    if let Err(validation_err) = validator.validate_string(&execution_id, "execution_id") {
+        warn!("Invalid execution ID provided: {}", validation_err);
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized_error = sanitizer.sanitize_error(&validation_err);
+        return Err(RestError::BadRequest(sanitized_error.message));
+    }
+    
+    let api_id = ApiId::from_string(execution_id.clone());
+    let execution_repo = ctx.repositories.execution_repository();
+    
+    // Check if execution exists
+    let _execution = execution_repo
+        .find_by_id(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?
+        .ok_or_else(|| RestError::not_found("Execution", &execution_id))?;
+    
+    // Delete the execution
+    execution_repo
+        .delete(api_id.as_i32().unwrap_or(0))
+        .await
+        .map_err(|db_err| {
+            let sanitizer = ErrorSanitizer::default();
+            let sanitized_error = sanitizer.sanitize_error(&db_err);
+            RestError::InternalError(sanitized_error.message)
+        })?;
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Execution {} deleted successfully", execution_id)
+    })))
 }
 
 /// Cancel a running execution

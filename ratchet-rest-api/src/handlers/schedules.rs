@@ -48,11 +48,43 @@ pub async fn list_schedules(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to schedule filters
+    // Convert query filters to schedule filters - using default values for advanced filters
     let filters = ScheduleFilters {
+        // Basic filters (existing)
         task_id: None, // TODO: Extract from query filters
         enabled: None,
         next_run_before: None,
+        
+        // Advanced ID filtering
+        task_id_in: None,
+        id_in: None,
+        
+        // Name filtering
+        name_contains: None,
+        name_exact: None,
+        name_starts_with: None,
+        name_ends_with: None,
+        
+        // Cron expression filtering
+        cron_expression_contains: None,
+        cron_expression_exact: None,
+        
+        // Schedule timing filtering
+        next_run_after: None,
+        last_run_after: None,
+        last_run_before: None,
+        
+        // Date range filtering
+        created_after: None,
+        created_before: None,
+        updated_after: None,
+        updated_before: None,
+        
+        // Advanced filtering
+        has_next_run: None,
+        has_last_run: None,
+        is_due: None,
+        overdue: None,
     };
     
     let schedule_repo = ctx.repositories.schedule_repository();

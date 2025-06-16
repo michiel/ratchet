@@ -304,7 +304,8 @@ fn create_api_router() -> Router<TasksContext> {
         .route(
             "/executions/:id",
             get(handlers::executions::get_execution)
-                .patch(handlers::executions::update_execution),
+                .patch(handlers::executions::update_execution)
+                .delete(handlers::executions::delete_execution),
         )
         .route("/executions/:id/cancel", post(handlers::executions::cancel_execution))
         .route("/executions/:id/retry", post(handlers::executions::retry_execution))
@@ -315,7 +316,8 @@ fn create_api_router() -> Router<TasksContext> {
         .route(
             "/jobs/:id",
             get(handlers::jobs::get_job)
-                .patch(handlers::jobs::update_job),
+                .patch(handlers::jobs::update_job)
+                .delete(handlers::jobs::delete_job),
         )
         .route("/jobs/:id/cancel", post(handlers::jobs::cancel_job))
         .route("/jobs/:id/retry", post(handlers::jobs::retry_job))

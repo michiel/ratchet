@@ -33,9 +33,41 @@ pub struct UpdateScheduleInput {
 #[derive(InputObject)]
 #[graphql(rename_fields = "camelCase")]
 pub struct ScheduleFiltersInput {
+    // ID filtering
     pub task_id: Option<GraphQLApiId>,
+    pub task_id_in: Option<Vec<GraphQLApiId>>,
+    pub id_in: Option<Vec<GraphQLApiId>>,
+    
+    // Name filtering
+    pub name_contains: Option<String>,
+    pub name_exact: Option<String>,
+    pub name_starts_with: Option<String>,
+    pub name_ends_with: Option<String>,
+    
+    // Status filtering
     pub enabled: Option<bool>,
+    
+    // Cron expression filtering
+    pub cron_expression_contains: Option<String>,
+    pub cron_expression_exact: Option<String>,
+    
+    // Schedule timing filtering
+    pub next_run_after: Option<DateTime<Utc>>,
     pub next_run_before: Option<DateTime<Utc>>,
+    pub last_run_after: Option<DateTime<Utc>>,
+    pub last_run_before: Option<DateTime<Utc>>,
+    
+    // Date range filtering
+    pub created_after: Option<DateTime<Utc>>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
+    
+    // Advanced filtering
+    pub has_next_run: Option<bool>,
+    pub has_last_run: Option<bool>,
+    pub is_due: Option<bool>, // next_run <= now
+    pub overdue: Option<bool>, // next_run < now and enabled
 }
 
 /// Schedule statistics
