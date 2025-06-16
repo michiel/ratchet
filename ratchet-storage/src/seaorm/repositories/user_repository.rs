@@ -3,18 +3,20 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set,
     PaginatorTrait,
 };
 
 use ratchet_api_types::{ApiId, PaginationInput, ListResponse, UnifiedUser};
 use ratchet_interfaces::{
-    DatabaseError, UserRepository, UserFilters, CrudRepository, FilteredRepository,
+    DatabaseError, CrudRepository, FilteredRepository,
+    database::{UserRepository, UserFilters},
 };
 
-use crate::seaorm::entities::{users, prelude::Users};
+use crate::seaorm::{entities::{users, Users}, connection::DatabaseConnection};
 
 /// SeaORM implementation of the UserRepository
+#[derive(Clone)]
 pub struct SeaOrmUserRepository {
     pub db: DatabaseConnection,
 }
@@ -108,7 +110,7 @@ impl CrudRepository<UnifiedUser> for SeaOrmUserRepository {
         };
 
         let result = active_model
-            .insert(&self.db)
+            .insert(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to create user: {}", e),
@@ -119,7 +121,7 @@ impl CrudRepository<UnifiedUser> for SeaOrmUserRepository {
 
     async fn find_by_id(&self, id: i32) -> Result<Option<UnifiedUser>, DatabaseError> {
         let user = Users::find_by_id(id)
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user by id: {}", e),
@@ -142,7 +144,7 @@ impl CrudRepository<UnifiedUser> for SeaOrmUserRepository {
         })?;
 
         let existing = Users::find_by_id(id)
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user for update: {}", e),
@@ -174,7 +176,7 @@ impl CrudRepository<UnifiedUser> for SeaOrmUserRepository {
         };
 
         let updated = active_model
-            .update(&self.db)
+            .update(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to update user: {}", e),
@@ -185,7 +187,7 @@ impl CrudRepository<UnifiedUser> for SeaOrmUserRepository {
 
     async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
         let result = Users::delete_by_id(id)
-            .exec(&self.db)
+            .exec(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to delete user: {}", e),
@@ -203,7 +205,7 @@ impl CrudRepository<UnifiedUser> for SeaOrmUserRepository {
 
     async fn count(&self) -> Result<u64, DatabaseError> {
         Users::find()
-            .count(&self.db)
+            .count(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to count users: {}", e),
@@ -225,7 +227,7 @@ impl FilteredRepository<UnifiedUser, UserFilters> for SeaOrmUserRepository {
         let offset = pagination.get_offset() as u64;
         let limit = pagination.limit.unwrap_or(50) as u64;
 
-        let paginator = query.paginate(&self.db, limit);
+        let paginator = query.paginate(self.db.get_connection(), limit);
         let page_number = offset / limit;
 
         let users = paginator
@@ -253,6 +255,7 @@ impl FilteredRepository<UnifiedUser, UserFilters> for SeaOrmUserRepository {
                 total_pages: ((total + limit - 1) / limit) as u32,
                 has_previous: page_number > 0,
                 has_next: (page_number + 1) * limit < total,
+                offset: offset as u32,
             },
         })
     }
@@ -271,7 +274,7 @@ impl FilteredRepository<UnifiedUser, UserFilters> for SeaOrmUserRepository {
         let query = self.apply_filters(query, &filters);
 
         query
-            .count(&self.db)
+            .count(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to count users with filters: {}", e),
@@ -284,7 +287,7 @@ impl UserRepository for SeaOrmUserRepository {
     async fn find_by_username(&self, username: &str) -> Result<Option<UnifiedUser>, DatabaseError> {
         let user = Users::find()
             .filter(users::Column::Username.eq(username))
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user by username: {}", e),
@@ -296,7 +299,7 @@ impl UserRepository for SeaOrmUserRepository {
     async fn find_by_email(&self, email: &str) -> Result<Option<UnifiedUser>, DatabaseError> {
         let user = Users::find()
             .filter(users::Column::Email.eq(email))
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user by email: {}", e),
@@ -338,7 +341,7 @@ impl UserRepository for SeaOrmUserRepository {
         };
 
         let result = active_model
-            .insert(&self.db)
+            .insert(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to create user: {}", e),
@@ -353,7 +356,7 @@ impl UserRepository for SeaOrmUserRepository {
         })?;
 
         let user = Users::find_by_id(id)
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user for password update: {}", e),
@@ -371,7 +374,7 @@ impl UserRepository for SeaOrmUserRepository {
         };
 
         active_model
-            .update(&self.db)
+            .update(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to update password: {}", e),
@@ -386,7 +389,7 @@ impl UserRepository for SeaOrmUserRepository {
         })?;
 
         let user = Users::find_by_id(id)
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user for login update: {}", e),
@@ -404,7 +407,7 @@ impl UserRepository for SeaOrmUserRepository {
         };
 
         active_model
-            .update(&self.db)
+            .update(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to update last login: {}", e),
@@ -419,7 +422,7 @@ impl UserRepository for SeaOrmUserRepository {
         })?;
 
         let user = Users::find_by_id(id)
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user for active status update: {}", e),
@@ -437,7 +440,7 @@ impl UserRepository for SeaOrmUserRepository {
         };
 
         active_model
-            .update(&self.db)
+            .update(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to update active status: {}", e),
@@ -452,7 +455,7 @@ impl UserRepository for SeaOrmUserRepository {
         })?;
 
         let user = Users::find_by_id(id)
-            .one(&self.db)
+            .one(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to find user for email verification: {}", e),
@@ -470,7 +473,7 @@ impl UserRepository for SeaOrmUserRepository {
         };
 
         active_model
-            .update(&self.db)
+            .update(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Internal {
                 message: format!("Failed to verify email: {}", e),
@@ -485,7 +488,7 @@ impl ratchet_interfaces::Repository for SeaOrmUserRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         Users::find()
             .limit(1)
-            .all(&self.db)
+            .all(self.db.get_connection())
             .await
             .map_err(|e| DatabaseError::Connection {
                 message: format!("User repository health check failed: {}", e),

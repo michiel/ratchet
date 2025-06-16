@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
     PaginatorTrait, Condition,
 };
 
@@ -120,7 +120,7 @@ impl CrudRepository<UnifiedSession> for SeaOrmSessionRepository {
     }
 
     async fn update(&self, session: UnifiedSession) -> Result<UnifiedSession, DatabaseError> {
-        let active_model = Self::to_active_model_for_update(session.id.to_i32(), &session);
+        let active_model = Self::to_active_model_for_update(session.id.as_i32().unwrap_or(0), &session);
         
         let result = active_model.update(self.db.get_connection()).await
             .map_err(|e| DatabaseError::Internal { 
@@ -157,40 +157,58 @@ impl CrudRepository<UnifiedSession> for SeaOrmSessionRepository {
 impl FilteredRepository<UnifiedSession, ()> for SeaOrmSessionRepository {
     async fn find_with_filters(
         &self,
-        _filters: &(),
+        _filters: (),
         pagination: PaginationInput,
     ) -> Result<ListResponse<UnifiedSession>, DatabaseError> {
-        let offset = (pagination.page.saturating_sub(1)) * pagination.per_page;
-        
+        // Apply pagination
+        let offset = pagination.get_offset() as u64;
+        let limit = pagination.limit.unwrap_or(50) as u64;
+
         let paginator = Sessions::find()
             .order_by_desc(sessions::Column::CreatedAt)
-            .paginate(self.db.get_connection(), pagination.per_page as u64);
+            .paginate(self.db.get_connection(), limit);
+        let page_number = offset / limit;
 
-        let total_items = paginator.num_items().await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to count sessions: {}", e) 
+        let sessions = paginator
+            .fetch_page(page_number)
+            .await
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to fetch sessions: {}", e),
             })?;
 
-        let items = paginator
-            .fetch_page((pagination.page - 1) as u64)
+        let total = paginator
+            .num_items()
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to fetch sessions: {}", e) 
-            })?
-            .into_iter()
-            .map(Self::to_unified_session)
-            .collect();
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to count sessions: {}", e),
+            })?;
+
+        let items: Vec<UnifiedSession> = sessions.into_iter().map(Self::to_unified_session).collect();
 
         Ok(ListResponse {
             items,
-            total_items: total_items as u32,
-            page: pagination.page,
-            per_page: pagination.per_page,
-            total_pages: ((total_items + pagination.per_page as u64 - 1) / pagination.per_page as u64) as u32,
+            meta: ratchet_api_types::pagination::PaginationMeta {
+                page: (page_number + 1) as u32,
+                limit: limit as u32,
+                total,
+                total_pages: ((total + limit - 1) / limit) as u32,
+                has_previous: page_number > 0,
+                has_next: (page_number + 1) * limit < total,
+                offset: offset as u32,
+            },
         })
     }
 
-    async fn count_with_filters(&self, _filters: &()) -> Result<u64, DatabaseError> {
+    async fn find_with_list_input(
+        &self,
+        _filters: (),
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedSession>, DatabaseError> {
+        let pagination = list_input.pagination.unwrap_or_default();
+        self.find_with_filters(_filters, pagination).await
+    }
+
+    async fn count_with_filters(&self, _filters: ()) -> Result<u64, DatabaseError> {
         self.count().await
     }
 }
@@ -209,7 +227,7 @@ impl SessionRepository for SeaOrmSessionRepository {
         let active_model = sessions::ActiveModel {
             id: Default::default(), // Auto-generated
             session_id: Set(session_id.to_string()),
-            user_id: Set(user_id.to_i32()),
+            user_id: Set(user_id.as_i32().unwrap_or(0)),
             jwt_id: Set(jwt_id.to_string()),
             expires_at: Set(expires_at),
             created_at: Set(now),
@@ -244,7 +262,7 @@ impl SessionRepository for SeaOrmSessionRepository {
 
     async fn find_by_user_id(&self, user_id: ApiId) -> Result<Vec<UnifiedSession>, DatabaseError> {
         let models = Sessions::find()
-            .filter(sessions::Column::UserId.eq(user_id.to_i32()))
+            .filter(sessions::Column::UserId.eq(user_id.as_i32().unwrap_or(0)))
             .filter(sessions::Column::IsActive.eq(true))
             .order_by_desc(sessions::Column::LastUsedAt)
             .all(self.db.get_connection())
@@ -269,8 +287,8 @@ impl SessionRepository for SeaOrmSessionRepository {
             let mut active_model: sessions::ActiveModel = session.into();
             active_model.is_active = Set(false);
             
-            active_model.update(&self.db).await
-                .map_err(|e| DatabaseError::Database { 
+            active_model.update(self.db.get_connection()).await
+                .map_err(|e| DatabaseError::Internal { 
                     message: format!("Failed to invalidate session: {}", e) 
                 })?;
         }
@@ -281,7 +299,7 @@ impl SessionRepository for SeaOrmSessionRepository {
     async fn invalidate_user_sessions(&self, user_id: ApiId) -> Result<(), DatabaseError> {
         // Find all active sessions for the user
         let sessions = Sessions::find()
-            .filter(sessions::Column::UserId.eq(user_id.to_i32()))
+            .filter(sessions::Column::UserId.eq(user_id.as_i32().unwrap_or(0)))
             .filter(sessions::Column::IsActive.eq(true))
             .all(self.db.get_connection())
             .await
@@ -294,8 +312,8 @@ impl SessionRepository for SeaOrmSessionRepository {
             let mut active_model: sessions::ActiveModel = session.into();
             active_model.is_active = Set(false);
             
-            active_model.update(&self.db).await
-                .map_err(|e| DatabaseError::Database { 
+            active_model.update(self.db.get_connection()).await
+                .map_err(|e| DatabaseError::Internal { 
                     message: format!("Failed to invalidate user session: {}", e) 
                 })?;
         }
@@ -317,8 +335,8 @@ impl SessionRepository for SeaOrmSessionRepository {
             let mut active_model: sessions::ActiveModel = session.into();
             active_model.last_used_at = Set(Utc::now());
             
-            active_model.update(&self.db).await
-                .map_err(|e| DatabaseError::Database { 
+            active_model.update(self.db.get_connection()).await
+                .map_err(|e| DatabaseError::Internal { 
                     message: format!("Failed to update session last_used: {}", e) 
                 })?;
         }

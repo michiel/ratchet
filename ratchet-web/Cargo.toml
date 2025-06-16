@@ -37,6 +37,10 @@ lru.workspace = true
 
 # API types integration
 ratchet-api-types = { path = "../ratchet-api-types" }
+ratchet-interfaces = { path = "../ratchet-interfaces" }
+
+# Cryptography
+sha2 = "0.10"
 
 # HTTP utilities
 http.workspace = true

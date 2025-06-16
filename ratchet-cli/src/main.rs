@@ -24,7 +24,7 @@ use ratchet_storage::repositories::{BaseRepository, Repository};
 use ratchet_registry::RegistryService;
 
 #[cfg(feature = "server")]
-use ratchet_server::Server;
+use ratchet_server;
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use std::fs;
 use std::path::PathBuf;
@@ -504,22 +504,27 @@ async fn server_command(
     let config = load_config(config_path)?;
     
     // Override ports from command line if provided
-    let mut server_config = config.server.clone().unwrap_or_default();
+    let mut ratchet_config = config;
     if let Some(port) = rest_port {
-        server_config.port = port;
+        if let Some(ref mut server_config) = ratchet_config.server {
+            server_config.port = port;
+        }
     }
-    // Note: GraphQL and MCP port configuration moved to dedicated config sections
+    // Note: GraphQL and MCP port configuration would be handled via config file
     
-    // Start the unified server
-    info!("Starting Ratchet unified server...");
-    info!("  Server: http://{}:{}", server_config.bind_address, server_config.port);
+    // Convert RatchetConfig to ratchet-server ServerConfig
+    let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(ratchet_config)
+        .context("Failed to convert configuration to server config")?;
     
-    // Create a new config with the updated server config
-    let mut updated_config = config;
-    updated_config.server = Some(server_config);
+    // Create and start the unified server
+    info!("Creating Ratchet unified server...");
+    let server = ratchet_server::Server::new(server_config).await
+        .context("Failed to create server")?;
+        
+    info!("Starting server...");
+    server.start().await
+        .context("Server failed to start")?;
     
-    // TODO: Convert RatchetConfig to ratchet-server ServerConfig
-    info!("Server functionality temporarily disabled due to config conversion needs");
     Ok(())
 }
 

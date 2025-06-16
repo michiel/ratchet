@@ -9,7 +9,7 @@ use ratchet_graphql_api::{
     schema::{create_schema, configure_schema, RatchetSchema},
     context::{GraphQLContext, GraphQLConfig},
 };
-use ratchet_interfaces::{RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator};
+use ratchet_interfaces::{RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator, UserRepository, SessionRepository, ApiKeyRepository};
 use ratchet_api_types::{ApiId, UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule, ExecutionStatus, JobStatus, JobPriority};
 use serde_json::json;
 use std::sync::Arc;
@@ -123,6 +123,18 @@ mod mocks {
         
         fn schedule_repository(&self) -> &dyn ratchet_interfaces::ScheduleRepository {
             &MockScheduleRepository
+        }
+        
+        fn user_repository(&self) -> &dyn ratchet_interfaces::UserRepository {
+            &MockUserRepository
+        }
+        
+        fn session_repository(&self) -> &dyn ratchet_interfaces::SessionRepository {
+            &MockSessionRepository
+        }
+        
+        fn api_key_repository(&self) -> &dyn ratchet_interfaces::ApiKeyRepository {
+            &MockApiKeyRepository
         }
         
         async fn health_check(&self) -> Result<(), DatabaseError> {
@@ -355,6 +367,109 @@ mod mocks {
         async fn set_enabled(&self, _id: ApiId, _enabled: bool) -> Result<(), DatabaseError> { Ok(()) }
     }
     
+    // Mock authentication repositories
+    pub struct MockUserRepository;
+    #[async_trait]
+    impl ratchet_interfaces::Repository for MockUserRepository {
+        async fn health_check(&self) -> Result<(), DatabaseError> { Ok(()) }
+    }
+    #[async_trait]
+    impl ratchet_interfaces::CrudRepository<ratchet_api_types::UnifiedUser> for MockUserRepository {
+        async fn create(&self, entity: ratchet_api_types::UnifiedUser) -> Result<ratchet_api_types::UnifiedUser, DatabaseError> { Ok(entity) }
+        async fn find_by_id(&self, _id: i32) -> Result<Option<ratchet_api_types::UnifiedUser>, DatabaseError> { Ok(Some(create_test_user())) }
+        async fn find_by_uuid(&self, _uuid: Uuid) -> Result<Option<ratchet_api_types::UnifiedUser>, DatabaseError> { Ok(Some(create_test_user())) }
+        async fn update(&self, entity: ratchet_api_types::UnifiedUser) -> Result<ratchet_api_types::UnifiedUser, DatabaseError> { Ok(entity) }
+        async fn delete(&self, _id: i32) -> Result<(), DatabaseError> { Ok(()) }
+        async fn count(&self) -> Result<u64, DatabaseError> { Ok(1) }
+    }
+    #[async_trait]
+    impl ratchet_interfaces::FilteredRepository<ratchet_api_types::UnifiedUser, ratchet_interfaces::UserFilters> for MockUserRepository {
+        async fn find_with_filters(&self, _filters: ratchet_interfaces::UserFilters, pagination: PaginationInput) -> Result<ListResponse<ratchet_api_types::UnifiedUser>, DatabaseError> {
+            let users = vec![create_test_user()];
+            Ok(ListResponse {
+                items: users.clone(),
+                meta: PaginationMeta {
+                    page: pagination.page.unwrap_or(1),
+                    limit: pagination.limit.unwrap_or(20),
+                    offset: pagination.offset.unwrap_or(0),
+                    total: users.len() as u64,
+                    has_next: false,
+                    has_previous: false,
+                    total_pages: 1,
+                },
+            })
+        }
+        async fn find_with_list_input(&self, filters: ratchet_interfaces::UserFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<ratchet_api_types::UnifiedUser>, DatabaseError> {
+            self.find_with_filters(filters, list_input.get_pagination()).await
+        }
+        async fn count_with_filters(&self, _filters: ratchet_interfaces::UserFilters) -> Result<u64, DatabaseError> { Ok(1) }
+    }
+    #[async_trait]
+    impl UserRepository for MockUserRepository {
+        async fn find_by_username(&self, _username: &str) -> Result<Option<ratchet_api_types::UnifiedUser>, DatabaseError> { Ok(None) }
+        async fn find_by_email(&self, _email: &str) -> Result<Option<ratchet_api_types::UnifiedUser>, DatabaseError> { Ok(None) }
+        async fn create_user(&self, _username: &str, _email: &str, _password_hash: &str, _role: &str) -> Result<ratchet_api_types::UnifiedUser, DatabaseError> {
+            Ok(create_test_user())
+        }
+        async fn update_password(&self, _id: ApiId, _password_hash: &str) -> Result<(), DatabaseError> { Ok(()) }
+        async fn update_last_login(&self, _id: ApiId) -> Result<(), DatabaseError> { Ok(()) }
+        async fn set_active(&self, _id: ApiId, _active: bool) -> Result<(), DatabaseError> { Ok(()) }
+        async fn verify_email(&self, _id: ApiId) -> Result<(), DatabaseError> { Ok(()) }
+    }
+    
+    pub struct MockSessionRepository;
+    #[async_trait]
+    impl ratchet_interfaces::Repository for MockSessionRepository {
+        async fn health_check(&self) -> Result<(), DatabaseError> { Ok(()) }
+    }
+    #[async_trait]
+    impl ratchet_interfaces::CrudRepository<ratchet_api_types::UnifiedSession> for MockSessionRepository {
+        async fn create(&self, entity: ratchet_api_types::UnifiedSession) -> Result<ratchet_api_types::UnifiedSession, DatabaseError> { Ok(entity) }
+        async fn find_by_id(&self, _id: i32) -> Result<Option<ratchet_api_types::UnifiedSession>, DatabaseError> { Ok(Some(create_test_session())) }
+        async fn find_by_uuid(&self, _uuid: Uuid) -> Result<Option<ratchet_api_types::UnifiedSession>, DatabaseError> { Ok(Some(create_test_session())) }
+        async fn update(&self, entity: ratchet_api_types::UnifiedSession) -> Result<ratchet_api_types::UnifiedSession, DatabaseError> { Ok(entity) }
+        async fn delete(&self, _id: i32) -> Result<(), DatabaseError> { Ok(()) }
+        async fn count(&self) -> Result<u64, DatabaseError> { Ok(1) }
+    }
+    #[async_trait]
+    impl SessionRepository for MockSessionRepository {
+        async fn create_session(&self, _user_id: ApiId, _session_id: &str, _jwt_id: &str, _expires_at: chrono::DateTime<chrono::Utc>) -> Result<ratchet_api_types::UnifiedSession, DatabaseError> {
+            Ok(create_test_session())
+        }
+        async fn find_by_session_id(&self, _session_id: &str) -> Result<Option<ratchet_api_types::UnifiedSession>, DatabaseError> { Ok(None) }
+        async fn find_by_user_id(&self, _user_id: ApiId) -> Result<Vec<ratchet_api_types::UnifiedSession>, DatabaseError> { Ok(vec![]) }
+        async fn invalidate_session(&self, _session_id: &str) -> Result<(), DatabaseError> { Ok(()) }
+        async fn invalidate_user_sessions(&self, _user_id: ApiId) -> Result<(), DatabaseError> { Ok(()) }
+        async fn update_last_used(&self, _session_id: &str) -> Result<(), DatabaseError> { Ok(()) }
+        async fn cleanup_expired_sessions(&self) -> Result<u64, DatabaseError> { Ok(0) }
+    }
+    
+    pub struct MockApiKeyRepository;
+    #[async_trait]
+    impl ratchet_interfaces::Repository for MockApiKeyRepository {
+        async fn health_check(&self) -> Result<(), DatabaseError> { Ok(()) }
+    }
+    #[async_trait]
+    impl ratchet_interfaces::CrudRepository<ratchet_api_types::UnifiedApiKey> for MockApiKeyRepository {
+        async fn create(&self, entity: ratchet_api_types::UnifiedApiKey) -> Result<ratchet_api_types::UnifiedApiKey, DatabaseError> { Ok(entity) }
+        async fn find_by_id(&self, _id: i32) -> Result<Option<ratchet_api_types::UnifiedApiKey>, DatabaseError> { Ok(Some(create_test_api_key())) }
+        async fn find_by_uuid(&self, _uuid: Uuid) -> Result<Option<ratchet_api_types::UnifiedApiKey>, DatabaseError> { Ok(Some(create_test_api_key())) }
+        async fn update(&self, entity: ratchet_api_types::UnifiedApiKey) -> Result<ratchet_api_types::UnifiedApiKey, DatabaseError> { Ok(entity) }
+        async fn delete(&self, _id: i32) -> Result<(), DatabaseError> { Ok(()) }
+        async fn count(&self) -> Result<u64, DatabaseError> { Ok(1) }
+    }
+    #[async_trait]
+    impl ApiKeyRepository for MockApiKeyRepository {
+        async fn find_by_key_hash(&self, _key_hash: &str) -> Result<Option<ratchet_api_types::UnifiedApiKey>, DatabaseError> { Ok(None) }
+        async fn find_by_user_id(&self, _user_id: ApiId) -> Result<Vec<ratchet_api_types::UnifiedApiKey>, DatabaseError> { Ok(vec![]) }
+        async fn create_api_key(&self, _user_id: ApiId, _name: &str, _key_hash: &str, _key_prefix: &str, _permissions: &str) -> Result<ratchet_api_types::UnifiedApiKey, DatabaseError> {
+            Ok(create_test_api_key())
+        }
+        async fn update_last_used(&self, _id: ApiId) -> Result<(), DatabaseError> { Ok(()) }
+        async fn increment_usage(&self, _id: ApiId) -> Result<(), DatabaseError> { Ok(()) }
+        async fn set_active(&self, _id: ApiId, _active: bool) -> Result<(), DatabaseError> { Ok(()) }
+    }
+    
     pub struct MockTaskRegistry;
     #[async_trait]
     impl TaskRegistry for MockTaskRegistry {
@@ -511,6 +626,50 @@ fn create_test_schedule() -> UnifiedSchedule {
         last_run: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+    }
+}
+
+fn create_test_user() -> ratchet_api_types::UnifiedUser {
+    ratchet_api_types::UnifiedUser {
+        id: ApiId::from_i32(1),
+        username: "test-user".to_string(),
+        email: "test@example.com".to_string(),
+        display_name: Some("Test User".to_string()),
+        role: ratchet_api_types::UserRole::User,
+        is_active: true,
+        email_verified: true,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        last_login_at: None,
+    }
+}
+
+fn create_test_session() -> ratchet_api_types::UnifiedSession {
+    ratchet_api_types::UnifiedSession {
+        id: ApiId::from_i32(1),
+        user_id: ApiId::from_i32(1),
+        session_id: "test-session".to_string(),
+        expires_at: Utc::now() + chrono::Duration::hours(24),
+        created_at: Utc::now(),
+        last_used_at: Utc::now(),
+        client_ip: None,
+        user_agent: None,
+        is_active: true,
+    }
+}
+
+fn create_test_api_key() -> ratchet_api_types::UnifiedApiKey {
+    ratchet_api_types::UnifiedApiKey {
+        id: ApiId::from_i32(1),
+        user_id: ApiId::from_i32(1),
+        name: "test-api-key".to_string(),
+        key_prefix: "test-key".to_string(),
+        permissions: ratchet_api_types::ApiKeyPermissions::Full,
+        is_active: true,
+        expires_at: None,
+        created_at: Utc::now(),
+        last_used_at: None,
+        usage_count: 0,
     }
 }
 

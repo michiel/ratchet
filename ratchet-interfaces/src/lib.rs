@@ -31,7 +31,8 @@ pub use logging::{LogEvent, LogLevel, StructuredLogger};
 pub use database::{
     Repository, CrudRepository, FilteredRepository, RepositoryFactory,
     TaskRepository, ExecutionRepository, JobRepository, ScheduleRepository,
-    TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
+    UserRepository, SessionRepository, ApiKeyRepository,
+    TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters, UserFilters,
     DatabaseError, TransactionContext, TransactionManager
 };
 pub use registry::{
