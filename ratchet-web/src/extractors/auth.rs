@@ -2,13 +2,12 @@
 
 use axum::{
     async_trait,
-    extract::{FromRequestParts, Request},
+    extract::FromRequestParts,
     http::request::Parts,
-    response::Response,
 };
 
 use crate::{
-    middleware::{AuthContext, JwtManager},
+    middleware::AuthContext,
     errors::WebError,
 };
 

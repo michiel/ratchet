@@ -103,7 +103,7 @@ pub struct ChangePasswordRequest {
     )
 )]
 pub async fn login(
-    State(ctx): State<TasksContext>,
+    State(_ctx): State<TasksContext>,
     Json(request): Json<LoginRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Login attempt for user: {}", request.username);

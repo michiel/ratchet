@@ -1,6 +1,7 @@
 //! User session entity for JWT token management
 
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -47,13 +48,4 @@ impl Related<super::users::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {
-    fn before_save<C>(mut self, _db: &C, _insert: bool) -> Result<Self, DbErr>
-    where
-        C: ConnectionTrait,
-    {
-        // Update last_used_at on save
-        self.last_used_at = Set(chrono::Utc::now());
-        Ok(self)
-    }
-}
+impl ActiveModelBehavior for ActiveModel {}

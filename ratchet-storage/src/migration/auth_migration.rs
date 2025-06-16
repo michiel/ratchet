@@ -5,7 +5,7 @@
 //! - api_keys: API keys for service authentication
 //! - sessions: User sessions for JWT token management
 
-use sea_orm::{ConnectionTrait, DbErr, Statement};
+use sea_orm::DbErr;
 use sea_orm_migration::prelude::*;
 
 /// Authentication migration - adds user, api_keys, and sessions tables
