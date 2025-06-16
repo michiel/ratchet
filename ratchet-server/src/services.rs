@@ -20,6 +20,8 @@ use ratchet_api_types::{
 use uuid::Uuid;
 use ratchet_rest_api::context::TasksContext;
 use ratchet_graphql_api::context::GraphQLContext;
+use ratchet_mcp::server::task_dev_tools::TaskDevelopmentService;
+use ratchet_http::HttpManager;
 
 use crate::config::ServerConfig;
 use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
@@ -31,6 +33,7 @@ pub struct ServiceContainer {
     pub registry: Arc<dyn TaskRegistry>,
     pub registry_manager: Arc<dyn RegistryManager>,
     pub validator: Arc<dyn TaskValidator>,
+    pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
 }
 
 impl ServiceContainer {
@@ -40,7 +43,7 @@ impl ServiceContainer {
         // In the future, these would be replaced with the new modular implementations
         
         // This is a bridge implementation during the migration
-        let repositories = create_repository_factory(config).await?;
+        let (repositories, mcp_task_service) = create_repository_factory_with_mcp(config).await?;
         let registry = create_task_registry(config, repositories.clone()).await?;
         let registry_manager = create_registry_manager(config).await?;
         let validator = create_task_validator(config).await?;
@@ -50,6 +53,7 @@ impl ServiceContainer {
             registry,
             registry_manager,
             validator,
+            mcp_task_service,
         })
     }
 
@@ -70,7 +74,7 @@ impl ServiceContainer {
             registry: self.registry.clone(),
             registry_manager: self.registry_manager.clone(),
             validator: self.validator.clone(),
-            mcp_task_service: None,
+            mcp_task_service: self.mcp_task_service.clone(),
         }
     }
 
@@ -109,6 +113,11 @@ impl DirectRepositoryFactory {
             job_repository,
             schedule_repository,
         }
+    }
+    
+    /// Get access to the underlying storage factory (for MCP service creation)
+    pub fn storage_factory(&self) -> &Arc<ratchet_storage::seaorm::repositories::RepositoryFactory> {
+        &self.storage_factory
     }
 }
 
@@ -731,6 +740,11 @@ fn convert_interface_pagination_to_storage(pagination: PaginationInput) -> ratch
 
 /// Create repository factory from configuration
 async fn create_repository_factory(config: &ServerConfig) -> Result<Arc<dyn RepositoryFactory>> {
+    let (repos, _) = create_repository_factory_with_mcp(config).await?;
+    Ok(repos)
+}
+
+async fn create_repository_factory_with_mcp(config: &ServerConfig) -> Result<(Arc<dyn RepositoryFactory>, Option<Arc<TaskDevelopmentService>>)> {
     // Create storage database connection directly (no bridge pattern)
     let storage_config = ratchet_storage::seaorm::config::DatabaseConfig {
         url: config.database.url.clone(),
@@ -739,10 +753,45 @@ async fn create_repository_factory(config: &ServerConfig) -> Result<Arc<dyn Repo
     };
     
     let db_connection = ratchet_storage::seaorm::connection::DatabaseConnection::new(storage_config).await?;
-    let storage_factory = ratchet_storage::seaorm::repositories::RepositoryFactory::new(db_connection);
+    let storage_factory = Arc::new(ratchet_storage::seaorm::repositories::RepositoryFactory::new(db_connection));
+    
+    // Create the DirectRepositoryFactory
+    let direct_factory = DirectRepositoryFactory::new(storage_factory.clone());
+    
+    // Create MCP task development service if MCP is enabled
+    let mcp_task_service = if config.mcp_api.enabled {
+        // Create HTTP manager for task development service
+        let http_manager = HttpManager::new();
+        
+        // Get the database connection from storage factory
+        let storage_db = storage_factory.database();
+        
+        // Create concrete repository instances for TaskDevelopmentService
+        let task_repo_arc = Arc::new(ratchet_storage::seaorm::repositories::task_repository::TaskRepository::new(
+            storage_db.clone()
+        ));
+        let execution_repo_arc = Arc::new(ratchet_storage::seaorm::repositories::execution_repository::ExecutionRepository::new(
+            storage_db.clone()
+        ));
+        
+        // Use a default task base path - this could be configurable
+        let task_base_path = std::path::PathBuf::from("./tasks");
+        
+        let service = TaskDevelopmentService::new(
+            task_repo_arc,
+            execution_repo_arc,
+            http_manager,
+            task_base_path,
+            true, // allow_fs_operations
+        );
+        
+        Some(Arc::new(service))
+    } else {
+        None
+    };
     
     // Use the adapter factory that directly implements the interface
-    Ok(Arc::new(DirectRepositoryFactory::new(Arc::new(storage_factory))))
+    Ok((Arc::new(direct_factory), mcp_task_service))
 }
 
 /// Create task registry from configuration

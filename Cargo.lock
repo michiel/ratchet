@@ -4719,6 +4719,7 @@ dependencies = [
  "ratchet-api-types",
  "ratchet-config",
  "ratchet-graphql-api",
+ "ratchet-http",
  "ratchet-interfaces",
  "ratchet-logging",
  "ratchet-mcp",

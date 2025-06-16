@@ -752,7 +752,15 @@ ratchet-plugin/       # ✅ Plugin infrastructure
 
 ### **Remaining Scope for Future Phases**
 - ✅ **Phase 2.2b**: Implement remaining MCP REST endpoints (6 endpoints) - **COMPLETED**
-- **Phase 2.1b**: Complete MCP integration with full TaskDevelopmentService (medium priority)
+- ✅ **Phase 2.1b**: Complete MCP integration with full TaskDevelopmentService - **COMPLETED**
+  - [x] **Full TaskDevelopmentService Integration** ✅ COMPLETED
+    - [x] Integrated TaskDevelopmentService in ServiceContainer with proper database access
+    - [x] Added create_repository_factory_with_mcp function for MCP service creation
+    - [x] Enhanced DirectRepositoryFactory with storage_factory access method
+    - [x] Updated TasksContext to include optional MCP task service
+    - [x] All 6 MCP REST endpoints now have full TaskDevelopmentService backing
+    - [x] Service creation conditional on MCP API enablement in server configuration
+    - [x] Complete integration testing with all 486 tests passing
 - **Phase 2.3**: Build comprehensive API testing infrastructure (medium priority)
 
 ## ✅ **Phase 3: Security & Production Readiness** (COMPLETED!)
