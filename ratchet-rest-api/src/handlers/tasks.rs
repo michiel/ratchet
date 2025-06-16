@@ -7,7 +7,7 @@ use axum::{
 };
 use ratchet_api_types::ApiId;
 use ratchet_interfaces::TaskFilters;
-use ratchet_web::{QueryParams, ApiResponse};
+use ratchet_web::{QueryParams, ApiResponse, extract_task_filters};
 use ratchet_core::validation::{InputValidator, ErrorSanitizer};
 use ratchet_mcp::server::task_dev_tools::{
     CreateTaskRequest as McpCreateTaskRequest, EditTaskRequest as McpEditTaskRequest,
@@ -29,10 +29,31 @@ use crate::{
     tag = "tasks",
     operation_id = "listTasks",
     params(
-        ("page" = Option<u32>, Query, description = "Page number (0-based)"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page"),
-        ("filter" = Option<String>, Query, description = "Filter expression"),
-        ("sort" = Option<String>, Query, description = "Sort expression")
+        // Refine.dev pagination
+        ("_start" = Option<u64>, Query, description = "Starting index (0-based) - Refine.dev style"),
+        ("_end" = Option<u64>, Query, description = "Ending index (exclusive) - Refine.dev style"),
+        // Standard pagination (alternative)
+        ("page" = Option<u32>, Query, description = "Page number (1-based) - standard style"),
+        ("limit" = Option<u32>, Query, description = "Number of items per page (max 100)"),
+        // Refine.dev sorting
+        ("_sort" = Option<String>, Query, description = "Field to sort by - Refine.dev style"),
+        ("_order" = Option<String>, Query, description = "Sort order: ASC or DESC - Refine.dev style"),
+        // Task-specific filters
+        ("name" = Option<String>, Query, description = "Filter by task name (exact match)"),
+        ("name_like" = Option<String>, Query, description = "Filter by task name (contains text)"),
+        ("enabled" = Option<bool>, Query, description = "Filter by enabled status"),
+        ("version" = Option<String>, Query, description = "Filter by version"),
+        ("registry_source" = Option<bool>, Query, description = "Filter by registry source"),
+        ("uuid" = Option<String>, Query, description = "Filter by UUID"),
+        ("in_sync" = Option<bool>, Query, description = "Filter by sync status"),
+        ("has_validation" = Option<bool>, Query, description = "Filter by validation status"),
+        // Date filters (ISO 8601 format)
+        ("created_after" = Option<String>, Query, description = "Filter by creation date (after this date)"),
+        ("created_before" = Option<String>, Query, description = "Filter by creation date (before this date)"),
+        ("updated_after" = Option<String>, Query, description = "Filter by update date (after this date)"),
+        ("updated_before" = Option<String>, Query, description = "Filter by update date (before this date)"),
+        ("validated_after" = Option<String>, Query, description = "Filter by validation date (after this date)"),
+        ("validated_before" = Option<String>, Query, description = "Filter by validation date (before this date)")
     ),
     responses(
         (status = 200, description = "List of tasks retrieved successfully"),
@@ -49,40 +70,8 @@ pub async fn list_tasks(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to task filters - using default values for advanced filters
-    let filters = TaskFilters {
-        // Basic filters (existing)
-        name: None, // TODO: Extract from query filters
-        enabled: None,
-        registry_source: None,
-        validated_after: None,
-        
-        // Advanced string filtering
-        name_exact: None,
-        name_contains: None,
-        name_starts_with: None,
-        name_ends_with: None,
-        
-        // Version filtering
-        version: None,
-        version_in: None,
-        
-        // Extended date filtering
-        created_after: None,
-        created_before: None,
-        updated_after: None,
-        updated_before: None,
-        validated_before: None,
-        
-        // ID filtering
-        uuid: None,
-        uuid_in: None,
-        id_in: None,
-        
-        // Advanced boolean filtering
-        has_validation: None,
-        in_sync: None,
-    };
+    // Extract filters from query parameters
+    let filters = extract_task_filters(&query.0.filter.filters);
     
     let task_repo = ctx.repositories.task_repository();
     let list_response = task_repo

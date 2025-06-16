@@ -60,8 +60,8 @@ impl Default for SecurityConfig {
             
             csp_policy: Some(
                 "default-src 'self'; \
-                 script-src 'self' 'unsafe-inline' 'unsafe-eval'; \
-                 style-src 'self' 'unsafe-inline'; \
+                 script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; \
+                 style-src 'self' 'unsafe-inline' https://unpkg.com; \
                  img-src 'self' data: https:; \
                  font-src 'self'; \
                  connect-src 'self'; \
@@ -96,8 +96,8 @@ impl SecurityConfig {
             enable_hsts: false, // Don't enforce HTTPS in development
             csp_policy: Some(
                 "default-src 'self' 'unsafe-inline' 'unsafe-eval'; \
-                 script-src 'self' 'unsafe-inline' 'unsafe-eval'; \
-                 style-src 'self' 'unsafe-inline'; \
+                 script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; \
+                 style-src 'self' 'unsafe-inline' https://unpkg.com; \
                  img-src 'self' data: https: http:; \
                  connect-src 'self' ws: wss:".to_string()
             ),

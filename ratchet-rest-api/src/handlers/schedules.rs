@@ -7,7 +7,7 @@ use axum::{
 };
 use ratchet_api_types::ApiId;
 use ratchet_interfaces::ScheduleFilters;
-use ratchet_web::{QueryParams, ApiResponse};
+use ratchet_web::{QueryParams, ApiResponse, extract_schedule_filters};
 use ratchet_core::validation::{InputValidator, ErrorSanitizer};
 use tracing::{info, warn};
 
@@ -27,11 +27,35 @@ use crate::{
     tag = "schedules",
     operation_id = "listSchedules",
     params(
-        ("page" = Option<u32>, Query, description = "Page number (0-based)"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page"),
-        ("enabled" = Option<bool>, Query, description = "Filter by enabled status"),
+        // Refine.dev pagination
+        ("_start" = Option<u64>, Query, description = "Starting index (0-based) - Refine.dev style"),
+        ("_end" = Option<u64>, Query, description = "Ending index (exclusive) - Refine.dev style"),
+        // Standard pagination (alternative)
+        ("page" = Option<u32>, Query, description = "Page number (1-based) - standard style"),
+        ("limit" = Option<u32>, Query, description = "Number of items per page (max 100)"),
+        // Refine.dev sorting
+        ("_sort" = Option<String>, Query, description = "Field to sort by - Refine.dev style"),
+        ("_order" = Option<String>, Query, description = "Sort order: ASC or DESC - Refine.dev style"),
+        // Schedule-specific filters
         ("task_id" = Option<String>, Query, description = "Filter by task ID"),
-        ("sort" = Option<String>, Query, description = "Sort expression")
+        ("enabled" = Option<bool>, Query, description = "Filter by enabled status"),
+        ("name" = Option<String>, Query, description = "Filter by schedule name (exact match)"),
+        ("name_like" = Option<String>, Query, description = "Filter by schedule name (contains text)"),
+        ("cron_expression" = Option<String>, Query, description = "Filter by cron expression (exact match)"),
+        ("cron_expression_like" = Option<String>, Query, description = "Filter by cron expression (contains text)"),
+        ("is_due" = Option<bool>, Query, description = "Filter by schedules that are due now"),
+        ("overdue" = Option<bool>, Query, description = "Filter by overdue schedules"),
+        ("has_next_run" = Option<bool>, Query, description = "Filter by schedules with next run date"),
+        ("has_last_run" = Option<bool>, Query, description = "Filter by schedules with last run date"),
+        // Date filters (ISO 8601 format)
+        ("next_run_after" = Option<String>, Query, description = "Filter by next run date (after this date)"),
+        ("next_run_before" = Option<String>, Query, description = "Filter by next run date (before this date)"),
+        ("last_run_after" = Option<String>, Query, description = "Filter by last run date (after this date)"),
+        ("last_run_before" = Option<String>, Query, description = "Filter by last run date (before this date)"),
+        ("created_after" = Option<String>, Query, description = "Filter by creation date (after this date)"),
+        ("created_before" = Option<String>, Query, description = "Filter by creation date (before this date)"),
+        ("updated_after" = Option<String>, Query, description = "Filter by update date (after this date)"),
+        ("updated_before" = Option<String>, Query, description = "Filter by update date (before this date)")
     ),
     responses(
         (status = 200, description = "List of schedules retrieved successfully"),
@@ -48,44 +72,8 @@ pub async fn list_schedules(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to schedule filters - using default values for advanced filters
-    let filters = ScheduleFilters {
-        // Basic filters (existing)
-        task_id: None, // TODO: Extract from query filters
-        enabled: None,
-        next_run_before: None,
-        
-        // Advanced ID filtering
-        task_id_in: None,
-        id_in: None,
-        
-        // Name filtering
-        name_contains: None,
-        name_exact: None,
-        name_starts_with: None,
-        name_ends_with: None,
-        
-        // Cron expression filtering
-        cron_expression_contains: None,
-        cron_expression_exact: None,
-        
-        // Schedule timing filtering
-        next_run_after: None,
-        last_run_after: None,
-        last_run_before: None,
-        
-        // Date range filtering
-        created_after: None,
-        created_before: None,
-        updated_after: None,
-        updated_before: None,
-        
-        // Advanced filtering
-        has_next_run: None,
-        has_last_run: None,
-        is_due: None,
-        overdue: None,
-    };
+    // Extract filters from query parameters
+    let filters = extract_schedule_filters(&query.0.filter.filters);
     
     let schedule_repo = ctx.repositories.schedule_repository();
     let list_response = schedule_repo

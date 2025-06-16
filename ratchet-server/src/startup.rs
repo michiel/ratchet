@@ -320,6 +320,11 @@ impl Server {
         tracing::info!("      • System Metrics:   {}://{}/metrics", protocol, self.config.server.bind_address);
         tracing::info!("      • Prometheus:       {}://{}/metrics/prometheus", protocol, self.config.server.bind_address);
         
+        // API Documentation endpoints
+        tracing::info!("   📚 API Documentation:");
+        tracing::info!("      • OpenAPI Spec:     {}://{}/api-docs/openapi.json", protocol, self.config.server.bind_address);
+        tracing::info!("      • Swagger UI:       {}://{}/docs", protocol, self.config.server.bind_address);
+        
         if self.config.rest_api.enabled {
             let base_url = format!("{}://{}", protocol, self.config.server.bind_address);
             let api_prefix = &self.config.rest_api.prefix;

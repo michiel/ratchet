@@ -7,7 +7,7 @@ use axum::{
 };
 use ratchet_api_types::ApiId;
 use ratchet_interfaces::JobFilters;
-use ratchet_web::{QueryParams, ApiResponse};
+use ratchet_web::{QueryParams, ApiResponse, extract_job_filters};
 use ratchet_core::validation::{InputValidator, ErrorSanitizer};
 use tracing::{info, warn};
 
@@ -27,12 +27,42 @@ use crate::{
     tag = "jobs",
     operation_id = "listJobs",
     params(
-        ("page" = Option<u32>, Query, description = "Page number (0-based)"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page"),
-        ("status" = Option<String>, Query, description = "Filter by job status"),
-        ("priority" = Option<String>, Query, description = "Filter by job priority"),
+        // Refine.dev pagination
+        ("_start" = Option<u64>, Query, description = "Starting index (0-based) - Refine.dev style"),
+        ("_end" = Option<u64>, Query, description = "Ending index (exclusive) - Refine.dev style"),
+        // Standard pagination (alternative)
+        ("page" = Option<u32>, Query, description = "Page number (1-based) - standard style"),
+        ("limit" = Option<u32>, Query, description = "Number of items per page (max 100)"),
+        // Refine.dev sorting
+        ("_sort" = Option<String>, Query, description = "Field to sort by - Refine.dev style"),
+        ("_order" = Option<String>, Query, description = "Sort order: ASC or DESC - Refine.dev style"),
+        // Job-specific filters
         ("task_id" = Option<String>, Query, description = "Filter by task ID"),
-        ("sort" = Option<String>, Query, description = "Sort expression")
+        ("status" = Option<String>, Query, description = "Filter by job status (QUEUED, PROCESSING, COMPLETED, FAILED, CANCELLED, RETRYING)"),
+        ("status_ne" = Option<String>, Query, description = "Filter by job status (not equal)"),
+        ("status_in" = Option<String>, Query, description = "Filter by job status (comma-separated list)"),
+        ("priority" = Option<String>, Query, description = "Filter by job priority (LOW, NORMAL, HIGH, CRITICAL)"),
+        ("priority_gte" = Option<String>, Query, description = "Filter by job priority (greater than or equal)"),
+        ("priority_in" = Option<String>, Query, description = "Filter by job priority (comma-separated list)"),
+        // Retry and execution filters
+        ("retry_count_gte" = Option<i32>, Query, description = "Filter by retry count (greater than or equal to value)"),
+        ("retry_count_lte" = Option<i32>, Query, description = "Filter by retry count (less than or equal to value)"),
+        ("max_retries_gte" = Option<i32>, Query, description = "Filter by max retries (greater than or equal to value)"),
+        ("max_retries_lte" = Option<i32>, Query, description = "Filter by max retries (less than or equal to value)"),
+        ("has_retries_remaining" = Option<bool>, Query, description = "Filter by jobs with retries remaining"),
+        ("has_error" = Option<bool>, Query, description = "Filter by jobs with errors"),
+        ("error_message_like" = Option<String>, Query, description = "Filter by error message (contains text)"),
+        // Scheduling filters
+        ("is_scheduled" = Option<bool>, Query, description = "Filter by scheduled jobs"),
+        ("due_now" = Option<bool>, Query, description = "Filter by jobs due for execution now"),
+        // Date filters (ISO 8601 format)
+        ("queued_after" = Option<String>, Query, description = "Filter by queue date (after this date)"),
+        ("queued_before" = Option<String>, Query, description = "Filter by queue date (before this date)"),
+        ("scheduled_after" = Option<String>, Query, description = "Filter by scheduled date (after this date)"),
+        ("scheduled_before" = Option<String>, Query, description = "Filter by scheduled date (before this date)"),
+        // Advanced filtering
+        ("task_id_in" = Option<String>, Query, description = "Filter by task IDs (comma-separated list)"),
+        ("id_in" = Option<String>, Query, description = "Filter by job IDs (comma-separated list)")
     ),
     responses(
         (status = 200, description = "List of jobs retrieved successfully"),
@@ -49,46 +79,8 @@ pub async fn list_jobs(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to job filters - using default values for advanced filters
-    let filters = JobFilters {
-        // Basic filters (existing)
-        task_id: None, // TODO: Extract from query filters
-        status: None,
-        priority: None,
-        queued_after: None,
-        scheduled_before: None,
-        
-        // Advanced ID filtering
-        task_id_in: None,
-        id_in: None,
-        
-        // Advanced status filtering
-        status_in: None,
-        status_not: None,
-        
-        // Advanced priority filtering
-        priority_in: None,
-        priority_min: None,
-        
-        // Extended date filtering
-        queued_before: None,
-        scheduled_after: None,
-        
-        // Retry filtering
-        retry_count_min: None,
-        retry_count_max: None,
-        max_retries_min: None,
-        max_retries_max: None,
-        has_retries_remaining: None,
-        
-        // Error filtering
-        has_error: None,
-        error_message_contains: None,
-        
-        // Scheduling filtering
-        is_scheduled: None,
-        due_now: None,
-    };
+    // Extract filters from query parameters
+    let filters = extract_job_filters(&query.0.filter.filters);
     
     let job_repo = ctx.repositories.job_repository();
     let list_response = job_repo

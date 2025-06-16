@@ -50,5 +50,9 @@ pub use middleware::{
     cors_layer, error_handler_layer, request_id_layer,
     pagination_response_layer, rate_limit_layer
 };
-pub use extractors::{QueryParams, PaginationQuery, SortQuery, FilterQuery};
+pub use extractors::{
+    QueryParams, PaginationQuery, SortQuery, FilterQuery,
+    extract_task_filters, extract_execution_filters, 
+    extract_job_filters, extract_schedule_filters
+};
 pub use utils::{ApiResponse, ResponseBuilder};

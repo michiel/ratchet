@@ -246,32 +246,74 @@ async fn serve_swagger_ui() -> impl IntoResponse {
 <html>
 <head>
     <title>Ratchet API Documentation</title>
-    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui.css" />
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui.css" />
     <style>
         html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }
         *, *:before, *:after { box-sizing: inherit; }
         body { margin:0; background: #fafafa; }
+        .loading { 
+            padding: 20px; 
+            text-align: center; 
+            font-family: sans-serif; 
+            color: #666; 
+        }
     </style>
 </head>
 <body>
-    <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-bundle.js"></script>
-    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-standalone-preset.js"></script>
+    <div id="swagger-ui">
+        <div class="loading">Loading API Documentation...</div>
+    </div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-bundle.js" onerror="handleScriptError()"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js" onerror="handleScriptError()"></script>
     <script>
+        function handleScriptError() {
+            document.getElementById('swagger-ui').innerHTML = `
+                <div style="padding: 20px; font-family: sans-serif;">
+                    <h2>⚠️ Unable to Load Swagger UI</h2>
+                    <p>The Swagger UI resources failed to load from CDN. This might be due to:</p>
+                    <ul>
+                        <li>Network connectivity issues</li>
+                        <li>CDN being blocked by your network</li>
+                        <li>Browser security settings</li>
+                    </ul>
+                    <p><strong>Alternative:</strong> You can access the raw OpenAPI specification at: 
+                        <a href="/api-docs/openapi.json">/api-docs/openapi.json</a>
+                    </p>
+                </div>
+            `;
+        }
+
         window.onload = function() {
-            const ui = SwaggerUIBundle({
-                url: '/api-docs/openapi.json',
-                dom_id: '#swagger-ui',
-                deepLinking: true,
-                presets: [
-                    SwaggerUIBundle.presets.apis,
-                    SwaggerUIStandalonePreset
-                ],
-                plugins: [
-                    SwaggerUIBundle.plugins.DownloadUrl
-                ],
-                layout: "StandaloneLayout"
-            });
+            if (typeof SwaggerUIBundle === 'undefined') {
+                handleScriptError();
+                return;
+            }
+            
+            try {
+                const ui = SwaggerUIBundle({
+                    url: '/api-docs/openapi.json',
+                    dom_id: '#swagger-ui',
+                    deepLinking: true,
+                    presets: [
+                        SwaggerUIBundle.presets.apis,
+                        SwaggerUIStandalonePreset
+                    ],
+                    plugins: [
+                        SwaggerUIBundle.plugins.DownloadUrl
+                    ],
+                    layout: "StandaloneLayout",
+                    onComplete: function() {
+                        console.log('Swagger UI loaded successfully');
+                    },
+                    onFailure: function(error) {
+                        console.error('Swagger UI failed to load:', error);
+                        handleScriptError();
+                    }
+                });
+            } catch (error) {
+                console.error('Error initializing Swagger UI:', error);
+                handleScriptError();
+            }
         }
     </script>
 </body>

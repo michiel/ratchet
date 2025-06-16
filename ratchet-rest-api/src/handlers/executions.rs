@@ -7,7 +7,7 @@ use axum::{
 };
 use ratchet_api_types::ApiId;
 use ratchet_interfaces::ExecutionFilters;
-use ratchet_web::{QueryParams, ApiResponse};
+use ratchet_web::{QueryParams, ApiResponse, extract_execution_filters};
 use ratchet_core::validation::{InputValidator, ErrorSanitizer};
 use tracing::{info, warn};
 
@@ -27,11 +27,36 @@ use crate::{
     tag = "executions",
     operation_id = "listExecutions",
     params(
-        ("page" = Option<u32>, Query, description = "Page number (0-based)"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page"),
-        ("status" = Option<String>, Query, description = "Filter by execution status"),
+        // Refine.dev pagination
+        ("_start" = Option<u64>, Query, description = "Starting index (0-based) - Refine.dev style"),
+        ("_end" = Option<u64>, Query, description = "Ending index (exclusive) - Refine.dev style"),
+        // Standard pagination (alternative)
+        ("page" = Option<u32>, Query, description = "Page number (1-based) - standard style"),
+        ("limit" = Option<u32>, Query, description = "Number of items per page (max 100)"),
+        // Refine.dev sorting
+        ("_sort" = Option<String>, Query, description = "Field to sort by - Refine.dev style"),
+        ("_order" = Option<String>, Query, description = "Sort order: ASC or DESC - Refine.dev style"),
+        // Execution-specific filters
         ("task_id" = Option<String>, Query, description = "Filter by task ID"),
-        ("sort" = Option<String>, Query, description = "Sort expression")
+        ("status" = Option<String>, Query, description = "Filter by execution status (PENDING, RUNNING, COMPLETED, FAILED, CANCELLED)"),
+        ("status_ne" = Option<String>, Query, description = "Filter by execution status (not equal)"),
+        ("has_error" = Option<bool>, Query, description = "Filter by executions with errors"),
+        ("can_retry" = Option<bool>, Query, description = "Filter by executions that can be retried"),
+        ("can_cancel" = Option<bool>, Query, description = "Filter by executions that can be cancelled"),
+        ("has_progress" = Option<bool>, Query, description = "Filter by executions with progress data"),
+        ("error_message_like" = Option<String>, Query, description = "Filter by error message (contains text)"),
+        // Progress and duration filters
+        ("progress_gte" = Option<f32>, Query, description = "Filter by progress greater than or equal to value"),
+        ("progress_lte" = Option<f32>, Query, description = "Filter by progress less than or equal to value"),
+        ("duration_gte" = Option<i32>, Query, description = "Filter by duration greater than or equal to value (ms)"),
+        ("duration_lte" = Option<i32>, Query, description = "Filter by duration less than or equal to value (ms)"),
+        // Date filters (ISO 8601 format)
+        ("queued_after" = Option<String>, Query, description = "Filter by queue date (after this date)"),
+        ("queued_before" = Option<String>, Query, description = "Filter by queue date (before this date)"),
+        ("started_after" = Option<String>, Query, description = "Filter by start date (after this date)"),
+        ("started_before" = Option<String>, Query, description = "Filter by start date (before this date)"),
+        ("completed_after" = Option<String>, Query, description = "Filter by completion date (after this date)"),
+        ("completed_before" = Option<String>, Query, description = "Filter by completion date (before this date)")
     ),
     responses(
         (status = 200, description = "List of executions retrieved successfully"),
@@ -48,45 +73,8 @@ pub async fn list_executions(
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     
-    // Convert query filters to execution filters - using default values for advanced filters
-    let filters = ExecutionFilters {
-        // Basic filters (existing)
-        task_id: None, // TODO: Extract from query filters
-        status: None,
-        queued_after: None,
-        completed_after: None,
-        
-        // Advanced ID filtering
-        task_id_in: None,
-        id_in: None,
-        
-        // Advanced status filtering
-        status_in: None,
-        status_not: None,
-        
-        // Extended date filtering
-        queued_before: None,
-        started_after: None,
-        started_before: None,
-        completed_before: None,
-        
-        // Duration filtering
-        duration_min_ms: None,
-        duration_max_ms: None,
-        
-        // Progress filtering
-        progress_min: None,
-        progress_max: None,
-        has_progress: None,
-        
-        // Error filtering
-        has_error: None,
-        error_message_contains: None,
-        
-        // Advanced boolean filtering
-        can_retry: None,
-        can_cancel: None,
-    };
+    // Extract filters from query parameters
+    let filters = extract_execution_filters(&query.0.filter.filters);
     
     let execution_repo = ctx.repositories.execution_repository();
     let list_response = execution_repo
