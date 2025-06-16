@@ -64,9 +64,11 @@ impl Server {
             enable_security_headers: true,
             enable_audit_logging: true,
             enable_rate_limiting: true,
+            enable_session_management: true,
             security_config: ratchet_web::middleware::SecurityConfig::development(),
             audit_config: ratchet_web::middleware::AuditConfig::development(),
             rate_limit_config: ratchet_web::middleware::RateLimitConfig::permissive(),
+            session_config: ratchet_web::middleware::SessionConfig::development(),
         };
 
         // Always create the REST app (even if disabled, we use its context)

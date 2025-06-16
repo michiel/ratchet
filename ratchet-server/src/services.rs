@@ -70,6 +70,7 @@ impl ServiceContainer {
             registry: self.registry.clone(),
             registry_manager: self.registry_manager.clone(),
             validator: self.validator.clone(),
+            mcp_task_service: None,
         }
     }
 
