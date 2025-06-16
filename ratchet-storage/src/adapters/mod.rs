@@ -186,6 +186,39 @@ impl ratchet_interfaces::FilteredRepository<UnifiedTask, TaskFilters> for Unifie
         }
     }
     
+    async fn find_with_list_input(
+        &self,
+        filters: TaskFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedTask>, DatabaseError> {
+        // Convert interface filters to storage filters
+        let storage_filters = convert_task_filters_to_storage(filters);
+        let storage_pagination = convert_list_input_to_storage_pagination(list_input.clone());
+        
+        match self.seaorm_factory.task_repository().find_with_filters(storage_filters, storage_pagination).await {
+            Ok(tasks) => {
+                let unified_tasks: Vec<UnifiedTask> = tasks.into_iter()
+                    .map(convert_storage_task_to_unified)
+                    .collect();
+                    
+                let pagination = list_input.get_pagination();
+                Ok(ListResponse {
+                    items: unified_tasks,
+                    meta: ratchet_api_types::pagination::PaginationMeta {
+                        page: pagination.page.unwrap_or(1),
+                        limit: pagination.limit.unwrap_or(20),
+                        offset: pagination.offset.unwrap_or(0),
+                        total: 0, // Would need separate count query
+                        has_next: false, // Would need to calculate
+                        has_previous: pagination.offset.unwrap_or(0) > 0,
+                        total_pages: 1, // Would need to calculate
+                    },
+                })
+            },
+            Err(e) => Err(convert_storage_error(e)),
+        }
+    }
+    
     async fn count_with_filters(&self, filters: TaskFilters) -> Result<u64, DatabaseError> {
         let storage_filters = convert_task_filters_to_storage(filters);
         
@@ -323,6 +356,38 @@ impl ratchet_interfaces::FilteredRepository<UnifiedExecution, ExecutionFilters> 
                     .map(convert_storage_execution_to_unified)
                     .collect();
                     
+                Ok(ListResponse {
+                    items: unified_executions,
+                    meta: ratchet_api_types::pagination::PaginationMeta {
+                        page: pagination.page.unwrap_or(1),
+                        limit: pagination.limit.unwrap_or(20),
+                        offset: pagination.offset.unwrap_or(0),
+                        total: 0,
+                        has_next: false,
+                        has_previous: pagination.offset.unwrap_or(0) > 0,
+                        total_pages: 1,
+                    },
+                })
+            },
+            Err(e) => Err(convert_storage_error(e)),
+        }
+    }
+    
+    async fn find_with_list_input(
+        &self,
+        filters: ExecutionFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedExecution>, DatabaseError> {
+        let storage_filters = convert_execution_filters_to_storage(filters);
+        let storage_pagination = convert_list_input_to_execution_pagination(list_input.clone());
+        
+        match self.seaorm_factory.execution_repository().find_with_filters(storage_filters, storage_pagination).await {
+            Ok(executions) => {
+                let unified_executions: Vec<UnifiedExecution> = executions.into_iter()
+                    .map(convert_storage_execution_to_unified)
+                    .collect();
+                    
+                let pagination = list_input.get_pagination();
                 Ok(ListResponse {
                     items: unified_executions,
                     meta: ratchet_api_types::pagination::PaginationMeta {
@@ -520,6 +585,38 @@ impl ratchet_interfaces::FilteredRepository<UnifiedJob, JobFilters> for UnifiedJ
         }
     }
     
+    async fn find_with_list_input(
+        &self,
+        filters: JobFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedJob>, DatabaseError> {
+        let storage_filters = convert_job_filters_to_storage(filters);
+        let storage_pagination = convert_list_input_to_job_pagination(list_input.clone());
+        
+        match self.seaorm_factory.job_repository().find_with_filters(storage_filters, storage_pagination).await {
+            Ok(jobs) => {
+                let unified_jobs: Vec<UnifiedJob> = jobs.into_iter()
+                    .map(convert_storage_job_to_unified)
+                    .collect();
+                    
+                let pagination = list_input.get_pagination();
+                Ok(ListResponse {
+                    items: unified_jobs,
+                    meta: ratchet_api_types::pagination::PaginationMeta {
+                        page: pagination.page.unwrap_or(1),
+                        limit: pagination.limit.unwrap_or(20),
+                        offset: pagination.offset.unwrap_or(0),
+                        total: 0,
+                        has_next: false,
+                        has_previous: pagination.offset.unwrap_or(0) > 0,
+                        total_pages: 1,
+                    },
+                })
+            },
+            Err(e) => Err(convert_storage_error(e)),
+        }
+    }
+    
     async fn count_with_filters(&self, filters: JobFilters) -> Result<u64, DatabaseError> {
         let storage_filters = convert_job_filters_to_storage(filters);
         
@@ -697,6 +794,38 @@ impl ratchet_interfaces::FilteredRepository<UnifiedSchedule, ScheduleFilters> fo
         }
     }
     
+    async fn find_with_list_input(
+        &self,
+        filters: ScheduleFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedSchedule>, DatabaseError> {
+        let storage_filters = convert_schedule_filters_to_storage(filters);
+        let storage_pagination = convert_list_input_to_schedule_pagination(list_input.clone());
+        
+        match self.seaorm_factory.schedule_repository().find_with_filters(storage_filters, storage_pagination).await {
+            Ok(schedules) => {
+                let unified_schedules: Vec<UnifiedSchedule> = schedules.into_iter()
+                    .map(convert_storage_schedule_to_unified)
+                    .collect();
+                    
+                let pagination = list_input.get_pagination();
+                Ok(ListResponse {
+                    items: unified_schedules,
+                    meta: ratchet_api_types::pagination::PaginationMeta {
+                        page: pagination.page.unwrap_or(1),
+                        limit: pagination.limit.unwrap_or(20),
+                        offset: pagination.offset.unwrap_or(0),
+                        total: 0,
+                        has_next: false,
+                        has_previous: pagination.offset.unwrap_or(0) > 0,
+                        total_pages: 1,
+                    },
+                })
+            },
+            Err(e) => Err(convert_storage_error(e)),
+        }
+    }
+    
     async fn count_with_filters(&self, filters: ScheduleFilters) -> Result<u64, DatabaseError> {
         let storage_filters = convert_schedule_filters_to_storage(filters);
         
@@ -823,8 +952,13 @@ fn convert_storage_schedule_to_unified(_schedule: crate::seaorm::entities::sched
     todo!("Implement schedule conversion")
 }
 
-fn convert_task_filters_to_storage(_filters: TaskFilters) -> crate::seaorm::repositories::task_repository::TaskFilters {
-    todo!("Implement filter conversion")
+fn convert_task_filters_to_storage(filters: TaskFilters) -> crate::seaorm::repositories::task_repository::TaskFilters {
+    crate::seaorm::repositories::task_repository::TaskFilters {
+        name: filters.name,
+        enabled: filters.enabled,
+        has_validation: None, // Map from validated_after if needed
+        version: None, // Could be extended from interface if needed
+    }
 }
 
 fn convert_execution_filters_to_storage(_filters: ExecutionFilters) -> crate::seaorm::repositories::execution_repository::ExecutionFilters {
@@ -839,8 +973,104 @@ fn convert_schedule_filters_to_storage(_filters: ScheduleFilters) -> crate::seao
     todo!("Implement filter conversion")
 }
 
-fn convert_pagination_to_storage(_pagination: PaginationInput) -> crate::seaorm::repositories::task_repository::Pagination {
-    todo!("Implement pagination conversion")
+fn convert_pagination_to_storage(pagination: PaginationInput) -> crate::seaorm::repositories::task_repository::Pagination {
+    crate::seaorm::repositories::task_repository::Pagination {
+        limit: pagination.limit.map(|l| l as u64),
+        offset: Some(pagination.get_offset() as u64),
+        order_by: None, // TODO: Add sorting support - needs separate parameter
+        order_desc: None,
+    }
+}
+
+fn convert_list_input_to_storage_pagination(list_input: ratchet_api_types::pagination::ListInput) -> crate::seaorm::repositories::task_repository::Pagination {
+    let pagination = list_input.get_pagination();
+    let sort = list_input.sort;
+    
+    let (order_by, order_desc) = if let Some(sort_input) = sort {
+        let order_desc = match sort_input.direction {
+            Some(ratchet_api_types::pagination::SortDirection::Desc) => Some(true),
+            _ => Some(false),
+        };
+        (Some(sort_input.field), order_desc)
+    } else {
+        (None, None)
+    };
+    
+    crate::seaorm::repositories::task_repository::Pagination {
+        limit: pagination.limit.map(|l| l as u64),
+        offset: Some(pagination.get_offset() as u64),
+        order_by,
+        order_desc,
+    }
+}
+
+fn convert_list_input_to_execution_pagination(list_input: ratchet_api_types::pagination::ListInput) -> crate::seaorm::repositories::execution_repository::ExecutionPagination {
+    let pagination = list_input.get_pagination();
+    let sort = list_input.sort;
+    
+    let (order_by, order_desc) = if let Some(sort_input) = sort {
+        use crate::seaorm::repositories::execution_repository::executions;
+        let order_desc = match sort_input.direction {
+            Some(ratchet_api_types::pagination::SortDirection::Desc) => Some(true),
+            _ => Some(false),
+        };
+        let order_by = match sort_input.field.as_str() {
+            "id" => Some(executions::Column::Id),
+            "created_at" => Some(executions::Column::CreatedAt),
+            "updated_at" => Some(executions::Column::UpdatedAt),
+            "queued_at" => Some(executions::Column::QueuedAt),
+            "started_at" => Some(executions::Column::StartedAt),
+            "completed_at" => Some(executions::Column::CompletedAt),
+            _ => Some(executions::Column::Id), // Default fallback
+        };
+        (order_by, order_desc)
+    } else {
+        (None, None)
+    };
+    
+    crate::seaorm::repositories::execution_repository::ExecutionPagination {
+        limit: pagination.limit.map(|l| l as u64),
+        offset: Some(pagination.get_offset() as u64),
+        order_by,
+        order_desc,
+    }
+}
+
+fn convert_list_input_to_job_pagination(list_input: ratchet_api_types::pagination::ListInput) -> crate::seaorm::repositories::job_repository::JobPagination {
+    let pagination = list_input.get_pagination();
+    let sort = list_input.sort;
+    
+    let (order_by, order_desc) = if let Some(sort_input) = sort {
+        use crate::seaorm::repositories::job_repository::jobs;
+        let order_desc = match sort_input.direction {
+            Some(ratchet_api_types::pagination::SortDirection::Desc) => Some(true),
+            _ => Some(false),
+        };
+        let order_by = match sort_input.field.as_str() {
+            "id" => Some(jobs::Column::Id),
+            "created_at" => Some(jobs::Column::CreatedAt),
+            "updated_at" => Some(jobs::Column::UpdatedAt),
+            "queued_at" => Some(jobs::Column::QueuedAt),
+            "scheduled_for" => Some(jobs::Column::ScheduledFor),
+            "priority" => Some(jobs::Column::Priority),
+            _ => Some(jobs::Column::Id), // Default fallback
+        };
+        (order_by, order_desc)
+    } else {
+        (None, None)
+    };
+    
+    crate::seaorm::repositories::job_repository::JobPagination {
+        limit: pagination.limit.map(|l| l as u64),
+        offset: Some(pagination.get_offset() as u64),
+        order_by,
+        order_desc,
+    }
+}
+
+// Schedule repository uses task pagination for now since it doesn't have its own pagination type
+fn convert_list_input_to_schedule_pagination(list_input: ratchet_api_types::pagination::ListInput) -> crate::seaorm::repositories::task_repository::Pagination {
+    convert_list_input_to_storage_pagination(list_input)
 }
 
 fn convert_job_status_to_storage(_status: JobStatus) -> crate::seaorm::entities::jobs::JobStatus {

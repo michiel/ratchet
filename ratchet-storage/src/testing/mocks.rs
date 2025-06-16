@@ -57,6 +57,7 @@ mock! {
     #[async_trait]
     impl FilteredRepository<UnifiedTask, TaskFilters> for TaskRepo {
         async fn find_with_filters(&self, filters: TaskFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedTask>, DatabaseError>;
+        async fn find_with_list_input(&self, filters: TaskFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedTask>, DatabaseError>;
         async fn count_with_filters(&self, filters: TaskFilters) -> Result<u64, DatabaseError>;
     }
     
@@ -92,6 +93,7 @@ mock! {
     #[async_trait]
     impl FilteredRepository<UnifiedExecution, ExecutionFilters> for ExecutionRepo {
         async fn find_with_filters(&self, filters: ExecutionFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedExecution>, DatabaseError>;
+        async fn find_with_list_input(&self, filters: ExecutionFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedExecution>, DatabaseError>;
         async fn count_with_filters(&self, filters: ExecutionFilters) -> Result<u64, DatabaseError>;
     }
     
@@ -130,6 +132,7 @@ mock! {
     #[async_trait]
     impl FilteredRepository<UnifiedJob, JobFilters> for JobRepo {
         async fn find_with_filters(&self, filters: JobFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedJob>, DatabaseError>;
+        async fn find_with_list_input(&self, filters: JobFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedJob>, DatabaseError>;
         async fn count_with_filters(&self, filters: JobFilters) -> Result<u64, DatabaseError>;
     }
     
@@ -167,6 +170,7 @@ mock! {
     #[async_trait]
     impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for ScheduleRepo {
         async fn find_with_filters(&self, filters: ScheduleFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedSchedule>, DatabaseError>;
+        async fn find_with_list_input(&self, filters: ScheduleFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedSchedule>, DatabaseError>;
         async fn count_with_filters(&self, filters: ScheduleFilters) -> Result<u64, DatabaseError>;
     }
     

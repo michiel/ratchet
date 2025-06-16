@@ -2,7 +2,7 @@
 
 use async_graphql::{Object, Context, Result};
 use ratchet_interfaces::{TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters};
-use ratchet_api_types::ApiId;
+use ratchet_api_types::{ApiId, pagination::{SortInput, ListInput}};
 use crate::{
     context::GraphQLContext,
     types::*,
@@ -13,11 +13,12 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    /// Get all tasks with optional filtering
+    /// Get all tasks with optional filtering and sorting
     async fn tasks(
         &self,
         ctx: &Context<'_>,
         filters: Option<TaskFiltersInput>,
+        sort: Option<SortInput>,
         limit: Option<i32>,
         offset: Option<i32>,
     ) -> Result<TaskList> {
@@ -37,12 +38,18 @@ impl Query {
             validated_after: None,
         });
         
-        let pagination = ratchet_api_types::PaginationInput { 
-            page: None,
-            limit: Some(limit.unwrap_or(50) as u32), 
-            offset: Some(offset.unwrap_or(0) as u32),
+        // Create list input with pagination and sorting
+        let list_input = ListInput {
+            pagination: Some(ratchet_api_types::PaginationInput { 
+                page: None,
+                limit: Some(limit.unwrap_or(50) as u32), 
+                offset: Some(offset.unwrap_or(0) as u32),
+            }),
+            sort,
+            filters: None, // Using domain filters instead
         };
-        let result = task_repo.find_with_filters(domain_filters, pagination).await?;
+        
+        let result = task_repo.find_with_list_input(domain_filters, list_input).await?;
         let items: Vec<Task> = result.items.into_iter().map(|task| task.into()).collect();
         let meta = result.meta.into();
         Ok(TaskList { items, meta })

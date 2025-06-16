@@ -259,6 +259,15 @@ impl FilteredRepository<UnifiedTask, TaskFilters> for DirectTaskRepository {
         }
     }
     
+    async fn find_with_list_input(
+        &self,
+        filters: TaskFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedTask>, DatabaseError> {
+        // For direct repositories, we can just delegate to the existing find_with_filters method
+        self.find_with_filters(filters, list_input.get_pagination()).await
+    }
+    
     async fn count_with_filters(&self, filters: TaskFilters) -> Result<u64, DatabaseError> {
         let storage_filters = convert_interface_filters_to_storage(filters);
         self.storage_repo.count_with_filters(storage_filters).await
@@ -376,6 +385,14 @@ impl FilteredRepository<UnifiedExecution, ExecutionFilters> for DirectExecutionR
                 total_pages: 0,
             },
         })
+    }
+    
+    async fn find_with_list_input(
+        &self,
+        filters: ExecutionFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedExecution>, DatabaseError> {
+        self.find_with_filters(filters, list_input.get_pagination()).await
     }
     
     async fn count_with_filters(&self, _filters: ExecutionFilters) -> Result<u64, DatabaseError> {
@@ -502,6 +519,14 @@ impl FilteredRepository<UnifiedJob, JobFilters> for DirectJobRepository {
         })
     }
     
+    async fn find_with_list_input(
+        &self,
+        filters: JobFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedJob>, DatabaseError> {
+        self.find_with_filters(filters, list_input.get_pagination()).await
+    }
+    
     async fn count_with_filters(&self, _filters: JobFilters) -> Result<u64, DatabaseError> {
         // TODO: Implement job counting with filters
         Ok(0)
@@ -619,6 +644,14 @@ impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for DirectScheduleRepo
                 total_pages: 0,
             },
         })
+    }
+    
+    async fn find_with_list_input(
+        &self,
+        filters: ScheduleFilters,
+        list_input: ratchet_api_types::pagination::ListInput,
+    ) -> Result<ListResponse<UnifiedSchedule>, DatabaseError> {
+        self.find_with_filters(filters, list_input.get_pagination()).await
     }
     
     async fn count_with_filters(&self, _filters: ScheduleFilters) -> Result<u64, DatabaseError> {

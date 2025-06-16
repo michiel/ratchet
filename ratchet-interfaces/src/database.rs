@@ -9,7 +9,8 @@ use chrono::{DateTime, Utc};
 use ratchet_api_types::{
     ApiId, PaginationInput, ListResponse,
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
-    ExecutionStatus, JobStatus, JobPriority
+    ExecutionStatus, JobStatus, JobPriority,
+    pagination::ListInput
 };
 // ApiResult not needed in trait definitions - using DatabaseError instead
 use serde::{Deserialize, Serialize};
@@ -74,6 +75,13 @@ pub trait FilteredRepository<T, F>: CrudRepository<T> {
         &self, 
         filters: F, 
         pagination: PaginationInput
+    ) -> Result<ListResponse<T>, DatabaseError>;
+    
+    /// Find entities with filters, pagination, and sorting
+    async fn find_with_list_input(
+        &self,
+        filters: F,
+        list_input: ratchet_api_types::pagination::ListInput,
     ) -> Result<ListResponse<T>, DatabaseError>;
     
     /// Count entities matching filters

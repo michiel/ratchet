@@ -182,6 +182,10 @@ mod mocks {
             })
         }
         
+        async fn find_with_list_input(&self, filters: TaskFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedTask>, DatabaseError> {
+            self.find_with_filters(filters, list_input.get_pagination()).await
+        }
+        
         async fn count_with_filters(&self, _filters: TaskFilters) -> Result<u64, DatabaseError> {
             Ok(1)
         }
@@ -242,6 +246,9 @@ mod mocks {
                 },
             })
         }
+        async fn find_with_list_input(&self, filters: ExecutionFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedExecution>, DatabaseError> {
+            self.find_with_filters(filters, list_input.get_pagination()).await
+        }
         async fn count_with_filters(&self, _filters: ExecutionFilters) -> Result<u64, DatabaseError> { Ok(1) }
     }
     #[async_trait]
@@ -287,6 +294,9 @@ mod mocks {
                 },
             })
         }
+        async fn find_with_list_input(&self, filters: JobFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedJob>, DatabaseError> {
+            self.find_with_filters(filters, list_input.get_pagination()).await
+        }
         async fn count_with_filters(&self, _filters: JobFilters) -> Result<u64, DatabaseError> { Ok(1) }
     }
     #[async_trait]
@@ -330,6 +340,9 @@ mod mocks {
                     total_pages: 1,
                 },
             })
+        }
+        async fn find_with_list_input(&self, filters: ScheduleFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedSchedule>, DatabaseError> {
+            self.find_with_filters(filters, list_input.get_pagination()).await
         }
         async fn count_with_filters(&self, _filters: ScheduleFilters) -> Result<u64, DatabaseError> { Ok(1) }
     }
