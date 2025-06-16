@@ -67,6 +67,17 @@ pub struct CreateJobInput {
     pub max_retries: Option<i32>,
 }
 
+/// Input type for updating jobs
+#[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
+pub struct UpdateJobInput {
+    pub priority: Option<JobPriorityGraphQL>,
+    pub status: Option<JobStatusGraphQL>,
+    pub scheduled_for: Option<DateTime<Utc>>,
+    pub max_retries: Option<i32>,
+    pub error_message: Option<String>,
+}
+
 /// Input type for job filtering
 #[derive(InputObject)]
 #[graphql(rename_fields = "camelCase")]

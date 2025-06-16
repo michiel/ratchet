@@ -545,6 +545,166 @@ impl Mutation {
         }))
     }
 
+    /// Update an existing execution
+    async fn update_execution(
+        &self,
+        ctx: &Context<'_>,
+        id: GraphQLApiId,
+        input: UpdateExecutionInput,
+    ) -> Result<Execution> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        // Get the existing execution
+        let execution_repo = context.repositories.execution_repository();
+        let mut existing_execution = execution_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch execution: {}", e)))?
+            .ok_or_else(|| ApiError::not_found("Execution", &id.0.to_string()))?;
+        
+        // Apply updates
+        if let Some(status) = input.status {
+            existing_execution.status = status;
+        }
+        if let Some(output) = input.output {
+            existing_execution.output = Some(output);
+        }
+        if let Some(error_message) = input.error_message {
+            existing_execution.error_message = Some(error_message);
+        }
+        if let Some(error_details) = input.error_details {
+            existing_execution.error_details = Some(error_details);
+        }
+        if let Some(progress) = input.progress {
+            existing_execution.progress = Some(progress);
+        }
+        
+        // Update completion timestamp if status changed to completed
+        if matches!(existing_execution.status, ratchet_api_types::ExecutionStatus::Completed) && existing_execution.completed_at.is_none() {
+            existing_execution.completed_at = Some(chrono::Utc::now());
+        }
+        
+        // Update the execution using the repository
+        let updated_execution = execution_repo.update(existing_execution).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to update execution: {}", e)))?;
+        
+        Ok(updated_execution)
+    }
+
+    /// Delete an execution
+    async fn delete_execution(
+        &self,
+        ctx: &Context<'_>,
+        id: GraphQLApiId,
+    ) -> Result<bool> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        // Check if execution exists before deletion
+        let execution_repo = context.repositories.execution_repository();
+        let existing_execution = execution_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch execution: {}", e)))?;
+        
+        if existing_execution.is_none() {
+            return Err(ApiError::not_found("Execution", &id.0.to_string()).into());
+        }
+        
+        // Delete the execution using the repository
+        execution_repo.delete(id.0.as_i32().unwrap_or(0)).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to delete execution: {}", e)))?;
+        
+        Ok(true)
+    }
+
+    /// Update an existing job
+    async fn update_job(
+        &self,
+        ctx: &Context<'_>,
+        id: GraphQLApiId,
+        input: UpdateJobInput,
+    ) -> Result<Job> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        // Get the existing job
+        let job_repo = context.repositories.job_repository();
+        let mut existing_job = job_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch job: {}", e)))?
+            .ok_or_else(|| ApiError::not_found("Job", &id.0.to_string()))?;
+        
+        // Apply updates
+        if let Some(priority) = input.priority {
+            existing_job.priority = priority;
+        }
+        if let Some(status) = input.status {
+            existing_job.status = status;
+        }
+        if let Some(scheduled_for) = input.scheduled_for {
+            existing_job.scheduled_for = Some(scheduled_for);
+        }
+        if let Some(max_retries) = input.max_retries {
+            existing_job.max_retries = max_retries;
+        }
+        if let Some(error_message) = input.error_message {
+            existing_job.error_message = Some(error_message);
+        }
+        
+        // Update the job using the repository
+        let updated_job = job_repo.update(existing_job).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to update job: {}", e)))?;
+        
+        Ok(updated_job.into())
+    }
+
+    /// Delete a job
+    async fn delete_job(
+        &self,
+        ctx: &Context<'_>,
+        id: GraphQLApiId,
+    ) -> Result<bool> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        // Check if job exists before deletion
+        let job_repo = context.repositories.job_repository();
+        let existing_job = job_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch job: {}", e)))?;
+        
+        if existing_job.is_none() {
+            return Err(ApiError::not_found("Job", &id.0.to_string()).into());
+        }
+        
+        // Delete the job using the repository
+        job_repo.delete(id.0.as_i32().unwrap_or(0)).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to delete job: {}", e)))?;
+        
+        Ok(true)
+    }
+
+    /// Delete a schedule
+    async fn delete_schedule(
+        &self,
+        ctx: &Context<'_>,
+        id: GraphQLApiId,
+    ) -> Result<bool> {
+        let context = ctx.data::<GraphQLContext>()?;
+        
+        // Check if schedule exists before deletion
+        let schedule_repo = context.repositories.schedule_repository();
+        let existing_schedule = schedule_repo.find_by_id(id.0.as_i32().unwrap_or(0))
+            .await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch schedule: {}", e)))?;
+        
+        if existing_schedule.is_none() {
+            return Err(ApiError::not_found("Schedule", &id.0.to_string()).into());
+        }
+        
+        // Delete the schedule using the repository
+        schedule_repo.delete(id.0.as_i32().unwrap_or(0)).await
+            .map_err(|e| ApiError::internal_error(&format!("Failed to delete schedule: {}", e)))?;
+        
+        Ok(true)
+    }
+
     /// Execute a task (create a job for execution)
     async fn execute_task(
         &self,

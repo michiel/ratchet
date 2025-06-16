@@ -20,6 +20,17 @@ pub struct CreateExecutionInput {
     pub input: JsonValue,
 }
 
+/// Input type for updating executions
+#[derive(InputObject)]
+#[graphql(rename_fields = "camelCase")]
+pub struct UpdateExecutionInput {
+    pub status: Option<ExecutionStatusGraphQL>,
+    pub output: Option<JsonValue>,
+    pub error_message: Option<String>,
+    pub error_details: Option<JsonValue>,
+    pub progress: Option<f32>,
+}
+
 /// Input type for execution filtering
 #[derive(InputObject)]
 #[graphql(rename_fields = "camelCase")]
