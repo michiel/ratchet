@@ -225,7 +225,7 @@ impl FilterQuery {
     }
 }
 
-/// Combined query parameters for list endpoints - MINIMAL TEST VERSION
+/// Combined query parameters for list endpoints - Full Refine.dev Support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
     /// Alternative: Refine.dev style start offset
@@ -238,6 +238,15 @@ pub struct ListQuery {
     pub page: Option<u32>,
     /// Items per page (max 100)
     pub limit: Option<u32>,
+    /// Field to sort by
+    #[serde(rename = "_sort")]
+    pub sort: Option<String>,
+    /// Sort order (ASC/DESC)
+    #[serde(rename = "_order")]
+    pub order: Option<String>,
+    /// Generic filter fields (field_name=value)
+    #[serde(flatten)]
+    pub filters: std::collections::HashMap<String, String>,
 }
 
 impl Default for ListQuery {
@@ -247,6 +256,9 @@ impl Default for ListQuery {
             end: None,
             page: None,
             limit: None,
+            sort: None,
+            order: None,
+            filters: std::collections::HashMap::new(),
         }
     }
 }
@@ -264,10 +276,17 @@ impl ListQuery {
             }
         };
         
+        let sort_input = ratchet_api_types::pagination::SortInput::from_refine(
+            self.sort.clone(),
+            self.order.clone()
+        );
+        
+        let filter_inputs = self.to_filter_inputs();
+        
         ratchet_api_types::pagination::ListInput {
             pagination: Some(pagination_input),
-            sort: None,
-            filters: Some(vec![]),
+            sort: sort_input,
+            filters: Some(filter_inputs),
         }
     }
 
@@ -312,13 +331,73 @@ impl ListQuery {
         Ok(())
     }
     
-    // Temporary helper methods for compatibility
+    /// Convert to filter inputs with advanced Refine.dev operator support
+    pub fn to_filter_inputs(&self) -> Vec<ratchet_api_types::pagination::FilterInput> {
+        self.filters
+            .iter()
+            .filter_map(|(field, value)| {
+                // Skip pagination and sort fields
+                if matches!(field.as_str(), "_start" | "_end" | "page" | "limit" | "_sort" | "_order") {
+                    return None;
+                }
+
+                // Parse field name and operator from Refine.dev style suffixes
+                let (base_field, operator) = self.parse_field_and_operator(field);
+
+                Some(ratchet_api_types::pagination::FilterInput {
+                    field: base_field,
+                    operator,
+                    value: value.clone(),
+                })
+            })
+            .collect()
+    }
+
+    /// Parse field name and determine the appropriate FilterOperator from Refine.dev style suffixes
+    fn parse_field_and_operator(&self, field: &str) -> (String, ratchet_api_types::pagination::FilterOperator) {
+        use ratchet_api_types::pagination::FilterOperator;
+
+        // Check for Refine.dev style operator suffixes
+        if let Some(base) = field.strip_suffix("_like") {
+            (base.to_string(), FilterOperator::Contains)
+        } else if let Some(base) = field.strip_suffix("_ne") {
+            (base.to_string(), FilterOperator::Ne)
+        } else if let Some(base) = field.strip_suffix("_gte") {
+            (base.to_string(), FilterOperator::Gte)
+        } else if let Some(base) = field.strip_suffix("_lte") {
+            (base.to_string(), FilterOperator::Lte)
+        } else if let Some(base) = field.strip_suffix("_gt") {
+            (base.to_string(), FilterOperator::Gt)
+        } else if let Some(base) = field.strip_suffix("_lt") {
+            (base.to_string(), FilterOperator::Lt)
+        } else if let Some(base) = field.strip_suffix("_in") {
+            (base.to_string(), FilterOperator::In)
+        } else if let Some(base) = field.strip_suffix("_not_in") {
+            (base.to_string(), FilterOperator::NotIn)
+        } else if let Some(base) = field.strip_suffix("_starts_with") {
+            (base.to_string(), FilterOperator::StartsWith)
+        } else if let Some(base) = field.strip_suffix("_ends_with") {
+            (base.to_string(), FilterOperator::EndsWith)
+        } else if let Some(base) = field.strip_suffix("_contains") {
+            (base.to_string(), FilterOperator::Contains)
+        } else {
+            // Default to equality for exact field names
+            (field.to_string(), FilterOperator::Eq)
+        }
+    }
+    
+    // Helper methods for compatibility
     pub fn sort(&self) -> SortQuery {
-        SortQuery::default()
+        SortQuery {
+            sort: self.sort.clone(),
+            order: self.order.clone(),
+        }
     }
     
     pub fn filter(&self) -> FilterQuery {
-        FilterQuery::default()
+        FilterQuery {
+            filters: self.filters.clone(),
+        }
     }
 }
 

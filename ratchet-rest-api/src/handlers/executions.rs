@@ -71,14 +71,13 @@ pub async fn list_executions(
     info!("Listing executions with query: {:?}", query.0);
     
     let list_input = query.0.to_list_input();
-    let pagination = list_input.pagination.unwrap_or_default();
     
     // Extract filters from query parameters
-    let filters = extract_execution_filters(&query.0.filter().filters);
+    let filters = extract_execution_filters(&query.0.filters);
     
     let execution_repo = ctx.repositories.execution_repository();
     let list_response = execution_repo
-        .find_with_filters(filters, pagination.clone())
+        .find_with_list_input(filters, list_input)
         .await
         .map_err(RestError::Database)?;
     

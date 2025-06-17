@@ -77,14 +77,13 @@ pub async fn list_jobs(
     info!("Listing jobs with query: {:?}", query.0);
     
     let list_input = query.0.to_list_input();
-    let pagination = list_input.pagination.unwrap_or_default();
     
     // Extract filters from query parameters
-    let filters = extract_job_filters(&query.0.filter().filters);
+    let filters = extract_job_filters(&query.0.filters);
     
     let job_repo = ctx.repositories.job_repository();
     let list_response = job_repo
-        .find_with_filters(filters, pagination.clone())
+        .find_with_list_input(filters, list_input)
         .await
         .map_err(RestError::Database)?;
     
