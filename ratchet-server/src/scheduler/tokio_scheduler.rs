@@ -72,14 +72,16 @@ impl TokioCronSchedulerService {
     }
 
     /// Create a job execution handler for schedule execution
-    fn create_job_execution_handler(&self) -> impl Fn(Uuid) + Send + Sync + Clone {
+    fn create_job_execution_handler(&self, schedule_id: ApiId) -> impl Fn(Uuid) + Send + Sync + Clone {
         let bridge = self.repository_bridge.clone();
         
-        move |job_id: Uuid| {
+        move |_job_id: Uuid| {
             let bridge = bridge.clone();
+            let schedule_id_for_exec = schedule_id.clone();
+            let schedule_id_for_log = schedule_id.clone();
             tokio::spawn(async move {
-                if let Err(e) = Self::execute_scheduled_job(bridge, job_id).await {
-                    error!("Failed to execute scheduled job {}: {}", job_id, e);
+                if let Err(e) = Self::execute_scheduled_job(bridge, schedule_id_for_exec).await {
+                    error!("Failed to execute scheduled job for schedule {}: {}", schedule_id_for_log, e);
                 }
             });
         }
@@ -88,22 +90,21 @@ impl TokioCronSchedulerService {
     /// Execute a scheduled job by creating a job in the repository
     async fn execute_scheduled_job(
         bridge: Arc<RepositoryBridge>,
-        job_id: Uuid,
+        schedule_id: ApiId,
     ) -> Result<(), SchedulerError> {
-        let schedule_id = ApiId::from_uuid(job_id);
         let execution_time = Utc::now();
         
-        debug!("Executing scheduled job: job_id={}, schedule_id={}", job_id, schedule_id);
+        debug!("Executing scheduled job for schedule: {}", schedule_id);
         
         // Create job through repository pattern
         let created_job = bridge.create_job_for_schedule(schedule_id.clone(), execution_time).await?;
         
         // Update schedule execution metadata
         // Note: We don't have next_run info here, tokio-cron-scheduler handles that internally
-        bridge.update_schedule_execution(schedule_id, execution_time, None).await?;
+        bridge.update_schedule_execution(schedule_id.clone(), execution_time, None).await?;
         
-        info!("Successfully executed scheduled job: job_id={}, created_job_id={}", 
-              job_id, created_job.id);
+        info!("Successfully executed scheduled job for schedule {}, created_job_id={}", 
+              schedule_id, created_job.id);
         
         Ok(())
     }
@@ -125,9 +126,9 @@ impl TokioCronSchedulerService {
                    schedule.name, schedule.cron_expression);
             
             // Create job with our execution handler
-            let _job_id = schedule.id.as_uuid().unwrap_or_else(|| Uuid::new_v4());
+            let schedule_id = schedule.id.clone();
             let cron_expression = schedule.cron_expression.clone();
-            let execution_handler = self.create_job_execution_handler();
+            let execution_handler = self.create_job_execution_handler(schedule_id);
             
             let job = Job::new_async(cron_expression.as_str(), move |uuid, _| {
                 execution_handler(uuid);
@@ -212,9 +213,9 @@ impl SchedulerService for TokioCronSchedulerService {
         }
         
         // Create job with our execution handler
-        let _job_id = schedule.id.as_uuid().unwrap_or_else(|| Uuid::new_v4());
+        let schedule_id = schedule.id.clone();
         let cron_expression = schedule.cron_expression.clone();
-        let execution_handler = self.create_job_execution_handler();
+        let execution_handler = self.create_job_execution_handler(schedule_id);
         
         let job = Job::new_async(cron_expression.as_str(), move |uuid, _| {
             execution_handler(uuid);
