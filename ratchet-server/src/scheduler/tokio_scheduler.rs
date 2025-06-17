@@ -125,7 +125,7 @@ impl TokioCronSchedulerService {
                    schedule.name, schedule.cron_expression);
             
             // Create job with our execution handler
-            let job_id = schedule.id.as_uuid().unwrap_or_else(|| Uuid::new_v4());
+            let _job_id = schedule.id.as_uuid().unwrap_or_else(|| Uuid::new_v4());
             let cron_expression = schedule.cron_expression.clone();
             let execution_handler = self.create_job_execution_handler();
             
@@ -212,7 +212,7 @@ impl SchedulerService for TokioCronSchedulerService {
         }
         
         // Create job with our execution handler
-        let job_id = schedule.id.as_uuid().unwrap_or_else(|| Uuid::new_v4());
+        let _job_id = schedule.id.as_uuid().unwrap_or_else(|| Uuid::new_v4());
         let cron_expression = schedule.cron_expression.clone();
         let execution_handler = self.create_job_execution_handler();
         

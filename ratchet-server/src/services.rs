@@ -11,8 +11,8 @@ use ratchet_interfaces::{
     TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
     DatabaseError, TaskMetadata, RegistryError, ValidationResult, SyncResult
 };
-// Import storage repository trait for health checks
-use ratchet_storage::seaorm::repositories::Repository as StorageRepositoryTrait;
+// Import storage repository trait for health checks (unused for now)
+// use ratchet_storage::seaorm::repositories::Repository as StorageRepositoryTrait;
 use ratchet_api_types::{
     ApiId, PaginationInput, ListResponse,
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule
@@ -26,7 +26,7 @@ use ratchet_http::HttpManager;
 use crate::config::ServerConfig;
 use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
 use crate::scheduler::{SchedulerService, TokioCronSchedulerService, TokioCronSchedulerConfig};
-use crate::scheduler_legacy::{SchedulerService as LegacySchedulerService, SchedulerConfig as LegacySchedulerConfig};
+// use crate::scheduler_legacy::{SchedulerService as LegacySchedulerService, SchedulerConfig as LegacySchedulerConfig};
 use ratchet_output::OutputDeliveryManager;
 
 /// Service container holding all application services
@@ -48,7 +48,7 @@ impl ServiceContainer {
         // In the future, these would be replaced with the new modular implementations
         
         // This is a bridge implementation during the migration
-        let (repositories, mcp_task_service, seaorm_factory) = create_repository_factory_with_mcp(config).await?;
+        let (repositories, mcp_task_service, _seaorm_factory) = create_repository_factory_with_mcp(config).await?;
         let registry = create_task_registry(config, repositories.clone()).await?;
         let registry_manager = create_registry_manager(config).await?;
         let validator = create_task_validator(config).await?;

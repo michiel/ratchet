@@ -3,8 +3,7 @@
 use std::sync::Arc;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use tracing::{info, error, debug};
-use uuid::Uuid;
+use tracing::{info, debug};
 
 use ratchet_interfaces::RepositoryFactory;
 use ratchet_api_types::{UnifiedSchedule, UnifiedJob, ApiId, JobStatus, JobPriority};

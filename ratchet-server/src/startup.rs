@@ -5,25 +5,25 @@ use axum::{
     Router,
     routing::get,
 };
-use tower_http::{
-    trace::TraceLayer,
-};
+// use tower_http::{
+//     trace::TraceLayer,
+// };
 use std::fs;
 use std::sync::Arc;
 
-use ratchet_rest_api::context::TasksContext;
+// use ratchet_rest_api::context::TasksContext;
 
 use ratchet_rest_api::app::{create_rest_app, AppConfig as RestAppConfig, AppContext as RestAppContext};
 use ratchet_graphql_api::{
     schema::{create_schema, configure_schema, graphql_handler, graphql_playground},
     context::{GraphQLContext, GraphQLConfig},
 };
-use ratchet_web::middleware::{cors_layer, request_id_layer, error_handler_layer};
+// use ratchet_web::middleware::{cors_layer, request_id_layer, error_handler_layer};
 
 #[cfg(feature = "mcp")]
 use ratchet_mcp::{
-    server::{McpServer, tools::{RatchetToolRegistry, ToolRegistry}, adapter::RatchetMcpAdapter},
-    security::{McpAuth, McpAuthManager, AuditLogger, SecurityContext, SecurityConfig, ClientContext, ClientPermissions},
+    server::{McpServer, tools::{RatchetToolRegistry}},
+    security::{McpAuth, McpAuthManager, AuditLogger},
     server::config::McpServerConfig,
 };
 

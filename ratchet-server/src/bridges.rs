@@ -11,10 +11,10 @@ use anyhow::Result;
 
 use ratchet_interfaces::{
     database::RepositoryFactory,
-    registry::{TaskRegistry, RegistryManager, TaskValidator},
+    registry::{TaskRegistry},
 };
 use ratchet_api_types::{
-    ApiId, UnifiedTask
+    UnifiedTask
 };
 
 use crate::embedded::{EmbeddedTaskRegistry, EmbeddedTask};
