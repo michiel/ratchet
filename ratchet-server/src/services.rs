@@ -25,7 +25,8 @@ use ratchet_http::HttpManager;
 
 use crate::config::ServerConfig;
 use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
-use crate::scheduler_legacy::{SchedulerService, SchedulerConfig};
+use crate::scheduler::{SchedulerService, TokioCronSchedulerService, TokioCronSchedulerConfig};
+use crate::scheduler_legacy::{SchedulerService as LegacySchedulerService, SchedulerConfig as LegacySchedulerConfig};
 use ratchet_output::OutputDeliveryManager;
 
 /// Service container holding all application services
@@ -37,7 +38,7 @@ pub struct ServiceContainer {
     pub validator: Arc<dyn TaskValidator>,
     pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
     pub output_manager: Arc<OutputDeliveryManager>,
-    pub scheduler_service: Option<Arc<SchedulerService>>,
+    pub scheduler_service: Option<Arc<dyn SchedulerService>>,
 }
 
 impl ServiceContainer {
@@ -55,15 +56,11 @@ impl ServiceContainer {
         // Create output delivery manager
         let output_manager = Arc::new(OutputDeliveryManager::new());
 
-        // Create scheduler service (always enabled for now)
-        let scheduler_config = SchedulerConfig::default();
-        let scheduler_service = Some(Arc::new(SchedulerService::new(
-            scheduler_config,
-            repositories.clone(),
-            seaorm_factory,
-            registry.clone(),
-            output_manager.clone(),
-        )));
+        // Create scheduler service (using new tokio-cron-scheduler implementation)
+        let scheduler_config = TokioCronSchedulerConfig::default();
+        let scheduler_service: Option<Arc<dyn SchedulerService>> = Some(Arc::new(
+            TokioCronSchedulerService::new(repositories.clone(), scheduler_config).await?
+        ));
 
         Ok(Self {
             repositories,
@@ -88,12 +85,38 @@ impl ServiceContainer {
 
     /// Create REST API context from service container
     pub fn rest_context(&self) -> TasksContext {
-        TasksContext {
-            repositories: self.repositories.clone(),
-            registry: self.registry.clone(),
-            registry_manager: self.registry_manager.clone(),
-            validator: self.validator.clone(),
-            mcp_task_service: self.mcp_task_service.clone(),
+        if let (Some(mcp), Some(scheduler)) = (&self.mcp_task_service, &self.scheduler_service) {
+            TasksContext::with_all_services(
+                self.repositories.clone(),
+                self.registry.clone(),
+                self.registry_manager.clone(),
+                self.validator.clone(),
+                mcp.clone(),
+                scheduler.clone(),
+            )
+        } else if let Some(mcp) = &self.mcp_task_service {
+            TasksContext::with_mcp_service(
+                self.repositories.clone(),
+                self.registry.clone(),
+                self.registry_manager.clone(),
+                self.validator.clone(),
+                mcp.clone(),
+            )
+        } else if let Some(scheduler) = &self.scheduler_service {
+            TasksContext::with_scheduler(
+                self.repositories.clone(),
+                self.registry.clone(),
+                self.registry_manager.clone(),
+                self.validator.clone(),
+                scheduler.clone(),
+            )
+        } else {
+            TasksContext::new(
+                self.repositories.clone(),
+                self.registry.clone(),
+                self.registry_manager.clone(),
+                self.validator.clone(),
+            )
         }
     }
 

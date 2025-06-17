@@ -9,12 +9,9 @@ use uuid::Uuid;
 use tracing::{info, debug, error, warn};
 use chrono::Utc;
 
-use ratchet_interfaces::RepositoryFactory;
+use ratchet_interfaces::{RepositoryFactory, SchedulerService, SchedulerError, ScheduleStatus};
 use ratchet_api_types::{UnifiedSchedule, ApiId};
-use super::{
-    SchedulerService, SchedulerError, ScheduleStatus, 
-    RepositoryBridge
-};
+use super::RepositoryBridge;
 
 /// Configuration for the tokio-cron-scheduler service
 #[derive(Debug, Clone)]

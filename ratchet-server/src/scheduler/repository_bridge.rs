@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use ratchet_interfaces::RepositoryFactory;
 use ratchet_api_types::{UnifiedSchedule, UnifiedJob, ApiId, JobStatus, JobPriority};
-use super::SchedulerError;
+use ratchet_interfaces::SchedulerError;
 
 /// Bridge between scheduler and repository layer
 /// This ensures the scheduler only accesses data through repository interfaces
@@ -29,7 +29,7 @@ impl RepositoryBridge {
         let schedules = self.repositories.schedule_repository()
             .find_enabled()
             .await
-            .map_err(|e| SchedulerError::Database(e.to_string()))?;
+            .map_err(|e| SchedulerError::Repository(e.to_string()))?;
 
         info!("Loaded {} schedules from repository", schedules.len());
         Ok(schedules)
@@ -47,7 +47,7 @@ impl RepositoryBridge {
         let schedule = self.repositories.schedule_repository()
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| SchedulerError::Database(e.to_string()))?
+            .map_err(|e| SchedulerError::Repository(e.to_string()))?
             .ok_or_else(|| SchedulerError::ScheduleNotFound(schedule_id))?;
 
         // Extract values before moving schedule
@@ -72,7 +72,7 @@ impl RepositoryBridge {
         let created_job = self.repositories.job_repository()
             .create(job)
             .await
-            .map_err(|e| SchedulerError::Database(format!("Failed to create job: {}", e)))?;
+            .map_err(|e| SchedulerError::Repository(format!("Failed to create job: {}", e)))?;
 
         info!("Created job {} for schedule {} (task {})", 
               created_job.id, schedule_name, created_job.task_id);
@@ -94,7 +94,7 @@ impl RepositoryBridge {
         let mut schedule = self.repositories.schedule_repository()
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| SchedulerError::Database(e.to_string()))?
+            .map_err(|e| SchedulerError::Repository(e.to_string()))?
             .ok_or_else(|| SchedulerError::ScheduleNotFound(schedule_id))?;
 
         // Update execution metadata
@@ -106,7 +106,7 @@ impl RepositoryBridge {
         self.repositories.schedule_repository()
             .update(schedule)
             .await
-            .map_err(|e| SchedulerError::Database(format!("Failed to update schedule: {}", e)))?;
+            .map_err(|e| SchedulerError::Repository(format!("Failed to update schedule: {}", e)))?;
 
         debug!("Updated schedule {} execution metadata", schedule_id_clone);
         Ok(())
@@ -117,7 +117,7 @@ impl RepositoryBridge {
         self.repositories.schedule_repository()
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| SchedulerError::Database(e.to_string()))
+            .map_err(|e| SchedulerError::Repository(e.to_string()))
     }
 
     /// Create a new schedule
@@ -125,7 +125,7 @@ impl RepositoryBridge {
         self.repositories.schedule_repository()
             .create(schedule)
             .await
-            .map_err(|e| SchedulerError::Database(format!("Failed to create schedule: {}", e)))
+            .map_err(|e| SchedulerError::Repository(format!("Failed to create schedule: {}", e)))
     }
 
     /// Update an existing schedule
@@ -133,7 +133,7 @@ impl RepositoryBridge {
         self.repositories.schedule_repository()
             .update(schedule)
             .await
-            .map_err(|e| SchedulerError::Database(format!("Failed to update schedule: {}", e)))
+            .map_err(|e| SchedulerError::Repository(format!("Failed to update schedule: {}", e)))
     }
 
     /// Delete a schedule
@@ -141,6 +141,6 @@ impl RepositoryBridge {
         self.repositories.schedule_repository()
             .delete(schedule_id.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| SchedulerError::Database(format!("Failed to delete schedule: {}", e)))
+            .map_err(|e| SchedulerError::Repository(format!("Failed to delete schedule: {}", e)))
     }
 }
