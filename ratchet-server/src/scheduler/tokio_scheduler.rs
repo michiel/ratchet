@@ -164,16 +164,44 @@ impl SchedulerService for TokioCronSchedulerService {
         
         info!("Starting tokio-cron-scheduler service");
         
-        // Load existing schedules
+        // Start with a completely fresh scheduler instance to avoid any stale state
+        // This approach avoids the "Error receiving Closed" messages that occur
+        // when shutting down an existing scheduler
+        {
+            let mut scheduler_guard = self.scheduler.lock().await;
+            
+            // Check if the current scheduler is initialized
+            if scheduler_guard.inited().await {
+                info!("Replacing existing scheduler with fresh instance to avoid stale state");
+                
+                // Create a completely new scheduler instance
+                let fresh_scheduler = JobScheduler::new().await
+                    .map_err(|e| {
+                        error!("Failed to create fresh JobScheduler: {}", e);
+                        SchedulerError::Internal(format!("Failed to create fresh JobScheduler: {}", e))
+                    })?;
+                
+                // Replace the old scheduler with the new one
+                // The old scheduler will be dropped, cleaning up its resources naturally
+                *scheduler_guard = fresh_scheduler;
+                info!("Successfully replaced scheduler with fresh instance");
+            } else {
+                info!("Scheduler not yet initialized, using existing instance");
+            }
+        }
+        
+        // Load existing schedules from repository
         self.load_existing_schedules().await?;
         
         // Start the scheduler
-        let mut scheduler = self.scheduler.lock().await;
-        scheduler.start().await
-            .map_err(|e| {
-                error!("Failed to start scheduler: {}", e);
-                SchedulerError::Internal(format!("Failed to start scheduler: {}", e))
-            })?;
+        {
+            let scheduler = self.scheduler.lock().await;
+            scheduler.start().await
+                .map_err(|e| {
+                    error!("Failed to start scheduler: {}", e);
+                    SchedulerError::Internal(format!("Failed to start scheduler: {}", e))
+                })?;
+        }
         
         self.is_running.store(true, Ordering::Relaxed);
         info!("tokio-cron-scheduler service started successfully");

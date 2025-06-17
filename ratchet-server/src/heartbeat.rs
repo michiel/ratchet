@@ -384,11 +384,50 @@ pub struct HeartbeatStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+    
+    // Simple mock for testing that doesn't panic on unimplemented methods
+    struct TestRepositoryFactory;
+    
+    #[async_trait]
+    impl RepositoryFactory for TestRepositoryFactory {
+        fn task_repository(&self) -> &dyn ratchet_interfaces::TaskRepository {
+            unimplemented!("Not needed for these tests")
+        }
+        
+        fn execution_repository(&self) -> &dyn ratchet_interfaces::ExecutionRepository {
+            unimplemented!("Not needed for these tests")
+        }
+        
+        fn job_repository(&self) -> &dyn ratchet_interfaces::JobRepository {
+            unimplemented!("Not needed for these tests")
+        }
+        
+        fn schedule_repository(&self) -> &dyn ratchet_interfaces::ScheduleRepository {
+            unimplemented!("Not needed for these tests")
+        }
+        
+        fn user_repository(&self) -> &dyn ratchet_interfaces::database::UserRepository {
+            unimplemented!("Not needed for these tests")
+        }
+        
+        fn session_repository(&self) -> &dyn ratchet_interfaces::database::SessionRepository {
+            unimplemented!("Not needed for these tests")
+        }
+        
+        fn api_key_repository(&self) -> &dyn ratchet_interfaces::database::ApiKeyRepository {
+            unimplemented!("Not needed for these tests")
+        }
+        
+        async fn health_check(&self) -> Result<(), ratchet_interfaces::DatabaseError> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn test_cron_schedule_normalization() {
         let config = HeartbeatConfig::default();
-        let repositories = std::sync::Arc::new(crate::services::MockRepositoryFactory::new());
+        let repositories = std::sync::Arc::new(TestRepositoryFactory);
         let output_manager = std::sync::Arc::new(ratchet_output::OutputDeliveryManager::new());
         
         let service = HeartbeatService::new(config, repositories, output_manager);
@@ -424,7 +463,7 @@ mod tests {
     #[test]
     fn test_cron_schedule_validation() {
         let config = HeartbeatConfig::default();
-        let repositories = std::sync::Arc::new(crate::services::MockRepositoryFactory::new());
+        let repositories = std::sync::Arc::new(TestRepositoryFactory);
         let output_manager = std::sync::Arc::new(ratchet_output::OutputDeliveryManager::new());
         
         let service = HeartbeatService::new(config, repositories, output_manager);
