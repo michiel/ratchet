@@ -73,7 +73,7 @@ pub async fn list_schedules(
     let pagination = list_input.pagination.unwrap_or_default();
     
     // Extract filters from query parameters
-    let filters = extract_schedule_filters(&query.0.filter.filters);
+    let filters = extract_schedule_filters(&query.0.filter().filters);
     
     let schedule_repo = ctx.repositories.schedule_repository();
     let list_response = schedule_repo

@@ -80,7 +80,7 @@ pub async fn list_jobs(
     let pagination = list_input.pagination.unwrap_or_default();
     
     // Extract filters from query parameters
-    let filters = extract_job_filters(&query.0.filter.filters);
+    let filters = extract_job_filters(&query.0.filter().filters);
     
     let job_repo = ctx.repositories.job_repository();
     let list_response = job_repo

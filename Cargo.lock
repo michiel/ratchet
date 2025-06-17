@@ -4820,6 +4820,7 @@ dependencies = [
 name = "ratchet-rest-api"
 version = "0.4.6"
 dependencies = [
+ "anyhow",
  "async-trait",
  "axum 0.7.9",
  "axum-test",
@@ -4835,6 +4836,7 @@ dependencies = [
  "ratchet-mcp",
  "ratchet-storage",
  "ratchet-web",
+ "reqwest 0.12.20",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4960,6 +4962,7 @@ dependencies = [
  "ratchet-interfaces",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sha2",
  "thiserror 1.0.69",
  "tokio",

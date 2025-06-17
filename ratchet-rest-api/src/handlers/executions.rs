@@ -74,7 +74,7 @@ pub async fn list_executions(
     let pagination = list_input.pagination.unwrap_or_default();
     
     // Extract filters from query parameters
-    let filters = extract_execution_filters(&query.0.filter.filters);
+    let filters = extract_execution_filters(&query.0.filter().filters);
     
     let execution_repo = ctx.repositories.execution_repository();
     let list_response = execution_repo

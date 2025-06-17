@@ -25,8 +25,8 @@ pub struct PaginationQuery {
 impl Default for PaginationQuery {
     fn default() -> Self {
         Self {
-            page: Some(1),
-            limit: Some(25),
+            page: None,
+            limit: None,
             start: None,
             end: None,
         }
@@ -40,8 +40,8 @@ impl PaginationQuery {
             ratchet_api_types::PaginationInput::from_refine(Some(start), Some(end))
         } else {
             ratchet_api_types::PaginationInput {
-                page: self.page,
-                limit: self.limit,
+                page: self.page.or(Some(1)), // Default to page 1 if not specified
+                limit: self.limit.or(Some(25)), // Default to 25 items if not specified
                 offset: None,
             }
         }
@@ -120,11 +120,31 @@ impl SortQuery {
 }
 
 /// Filter query parameters
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct FilterQuery {
     /// Generic filter fields (field_name=value)
     #[serde(flatten)]
     pub filters: std::collections::HashMap<String, String>,
+}
+
+impl<'de> serde::Deserialize<'de> for FilterQuery {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let map = std::collections::HashMap::<String, String>::deserialize(deserializer)?;
+        
+        // Filter out pagination and sort fields to avoid conflicts
+        let filters: std::collections::HashMap<String, String> = map
+            .into_iter()
+            .filter(|(key, _)| {
+                // Exclude explicit pagination and sort fields
+                !matches!(key.as_str(), "_start" | "_end" | "page" | "limit" | "_sort" | "_order")
+            })
+            .collect();
+        
+        Ok(FilterQuery { filters })
+    }
 }
 
 impl FilterQuery {
@@ -205,23 +225,28 @@ impl FilterQuery {
     }
 }
 
-/// Combined query parameters for list endpoints
+/// Combined query parameters for list endpoints - MINIMAL TEST VERSION
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
-    #[serde(flatten)]
-    pub pagination: PaginationQuery,
-    #[serde(flatten)]
-    pub sort: SortQuery,
-    #[serde(flatten)]
-    pub filter: FilterQuery,
+    /// Alternative: Refine.dev style start offset
+    #[serde(rename = "_start")]
+    pub start: Option<u64>,
+    /// Alternative: Refine.dev style end offset
+    #[serde(rename = "_end")]
+    pub end: Option<u64>,
+    /// Page number (1-based)
+    pub page: Option<u32>,
+    /// Items per page (max 100)
+    pub limit: Option<u32>,
 }
 
 impl Default for ListQuery {
     fn default() -> Self {
         Self {
-            pagination: PaginationQuery::default(),
-            sort: SortQuery::default(),
-            filter: FilterQuery::default(),
+            start: None,
+            end: None,
+            page: None,
+            limit: None,
         }
     }
 }
@@ -229,16 +254,71 @@ impl Default for ListQuery {
 impl ListQuery {
     /// Convert to standard list input
     pub fn to_list_input(&self) -> ratchet_api_types::pagination::ListInput {
+        let pagination_input = if let (Some(start), Some(end)) = (self.start, self.end) {
+            ratchet_api_types::PaginationInput::from_refine(Some(start), Some(end))
+        } else {
+            ratchet_api_types::PaginationInput {
+                page: self.page.or(Some(1)),
+                limit: self.limit.or(Some(25)),
+                offset: None,
+            }
+        };
+        
         ratchet_api_types::pagination::ListInput {
-            pagination: Some(self.pagination.to_pagination_input()),
-            sort: self.sort.to_sort_input(),
-            filters: Some(self.filter.to_filter_inputs()),
+            pagination: Some(pagination_input),
+            sort: None,
+            filters: Some(vec![]),
         }
     }
 
     /// Validate all query parameters
     pub fn validate(&self) -> Result<(), WebError> {
-        self.pagination.validate()
+        // Check Refine.dev style parameters
+        if let (Some(start), Some(end)) = (self.start, self.end) {
+            if start >= end {
+                return Err(WebError::bad_request(
+                    "Invalid pagination: _start must be less than _end"
+                ));
+            }
+            if end - start > 100 {
+                return Err(WebError::bad_request(
+                    "Invalid pagination: maximum limit is 100"
+                ));
+            }
+        }
+
+        // Check standard parameters
+        if let Some(limit) = self.limit {
+            if limit > 100 {
+                return Err(WebError::bad_request(
+                    "Invalid pagination: maximum limit is 100"
+                ));
+            }
+            if limit == 0 {
+                return Err(WebError::bad_request(
+                    "Invalid pagination: limit must be greater than 0"
+                ));
+            }
+        }
+
+        if let Some(page) = self.page {
+            if page == 0 {
+                return Err(WebError::bad_request(
+                    "Invalid pagination: page must be greater than 0"
+                ));
+            }
+        }
+
+        Ok(())
+    }
+    
+    // Temporary helper methods for compatibility
+    pub fn sort(&self) -> SortQuery {
+        SortQuery::default()
+    }
+    
+    pub fn filter(&self) -> FilterQuery {
+        FilterQuery::default()
     }
 }
 
