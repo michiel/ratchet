@@ -1,5 +1,6 @@
 // Test to verify the query parameter fix works
-use ratchet_web::extractors::query::{ListQuery, PaginationQuery, SortQuery, FilterQuery};
+use ratchet_web::extractors::query::{ListQuery, PaginationQuery};
+use std::collections::HashMap;
 
 #[test]
 fn test_refine_query_parameters() {
@@ -9,6 +10,9 @@ fn test_refine_query_parameters() {
         end: Some(100),
         page: None,
         limit: None,
+        sort: None,
+        order: None,
+        filters: HashMap::new(),
     };
     
     // Test that the structs are correctly structured (this verifies our fix)
@@ -110,6 +114,9 @@ fn test_list_query_to_list_input_conversion() {
         end: Some(10),
         page: None,
         limit: None,
+        sort: None,
+        order: None,
+        filters: HashMap::new(),
     };
     
     let list_input = query.to_list_input();
@@ -126,6 +133,9 @@ fn test_list_query_to_list_input_conversion() {
         end: None,
         page: Some(2),
         limit: Some(20),
+        sort: None,
+        order: None,
+        filters: HashMap::new(),
     };
     
     let list_input = query.to_list_input();
@@ -140,6 +150,9 @@ fn test_list_query_to_list_input_conversion() {
         end: None,
         page: None,
         limit: None,
+        sort: None,
+        order: None,
+        filters: HashMap::new(),
     };
     
     let list_input = query.to_list_input();
