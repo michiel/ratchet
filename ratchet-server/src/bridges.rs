@@ -5,6 +5,7 @@
 //! of task registry, management, and validation functionality.
 
 use std::sync::Arc;
+use std::collections::HashMap;
 use async_trait::async_trait;
 use anyhow::Result;
 
@@ -16,6 +17,8 @@ use ratchet_api_types::{
     ApiId, UnifiedTask
 };
 
+use crate::embedded::{EmbeddedTaskRegistry, EmbeddedTask};
+
 // =============================================================================
 // Registry Bridge Implementations
 // =============================================================================
@@ -24,6 +27,7 @@ use ratchet_api_types::{
 pub struct BridgeTaskRegistry {
     service: Arc<ratchet_registry::DefaultRegistryService>,
     repositories: Option<Arc<dyn RepositoryFactory>>,
+    embedded_registry: EmbeddedTaskRegistry,
 }
 
 // Import the RegistryService trait to access methods
@@ -61,6 +65,17 @@ impl BridgeTaskRegistry {
         };
 
         let service = Arc::new(ratchet_registry::DefaultRegistryService::new(registry_config));
+        let embedded_registry = EmbeddedTaskRegistry::new();
+        
+        // Load embedded tasks first
+        let registry = service.registry().await;
+        for embedded_task in embedded_registry.get_all_tasks() {
+            if let Err(e) = load_embedded_task_into_registry(registry.clone(), embedded_task).await {
+                tracing::warn!("Failed to load embedded task {}: {}", embedded_task.name, e);
+            } else {
+                tracing::info!("Successfully loaded embedded task: {}", embedded_task.name);
+            }
+        }
         
         // Discover and load tasks on startup
         match service.discover_all_tasks().await {
@@ -98,7 +113,7 @@ impl BridgeTaskRegistry {
             }
         }
 
-        Ok(Self { service, repositories: None })
+        Ok(Self { service, repositories: None, embedded_registry })
     }
     
     /// Set the repository factory for database synchronization
@@ -376,4 +391,72 @@ fn convert_task_definition_to_unified(task_def: &ratchet_registry::TaskDefinitio
             "environment": task_def.environment
         })),
     }
+}
+
+/// Load an embedded task into the registry
+async fn load_embedded_task_into_registry(
+    registry: Arc<ratchet_registry::DefaultTaskRegistry>,
+    embedded_task: &EmbeddedTask,
+) -> Result<()> {
+    // Parse the metadata JSON
+    let metadata_value: serde_json::Value = serde_json::from_str(embedded_task.metadata)
+        .map_err(|e| anyhow::anyhow!("Failed to parse embedded task metadata: {}", e))?;
+    
+    // Parse input and output schemas
+    let input_schema: serde_json::Value = serde_json::from_str(embedded_task.input_schema)
+        .map_err(|e| anyhow::anyhow!("Failed to parse embedded task input schema: {}", e))?;
+    let output_schema: serde_json::Value = serde_json::from_str(embedded_task.output_schema)
+        .map_err(|e| anyhow::anyhow!("Failed to parse embedded task output schema: {}", e))?;
+    
+    // Create task metadata
+    let task_metadata = ratchet_registry::TaskMetadata {
+        uuid: uuid::Uuid::parse_str(
+            metadata_value.get("uuid")
+                .or_else(|| metadata_value.get("id"))
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing 'uuid' or 'id' in embedded task metadata"))?
+        ).map_err(|e| anyhow::anyhow!("Invalid UUID in embedded task metadata: {}", e))?,
+        name: metadata_value.get("name")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing 'name' in embedded task metadata"))?
+            .to_string(),
+        version: metadata_value.get("version")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing 'version' in embedded task metadata"))?
+            .to_string(),
+        description: metadata_value.get("description")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        tags: metadata_value.get("tags")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            .unwrap_or_else(|| vec!["system".to_string(), "embedded".to_string()]),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        checksum: None,
+    };
+    
+    // Create task reference for embedded tasks
+    let task_ref = ratchet_registry::TaskReference {
+        source: "embedded".to_string(),
+        name: embedded_task.name.clone(),
+        version: task_metadata.version.clone(),
+    };
+    
+    // Create task definition
+    let task_definition = ratchet_registry::TaskDefinition {
+        metadata: task_metadata,
+        script: embedded_task.main_js.to_string(),
+        input_schema: Some(input_schema),
+        output_schema: Some(output_schema),
+        dependencies: Vec::new(),
+        environment: HashMap::new(),
+        reference: task_ref,
+    };
+    
+    // Add task to registry
+    registry.add_task(task_definition).await
+        .map_err(|e| anyhow::anyhow!("Failed to add embedded task to registry: {}", e))?;
+    
+    Ok(())
 }

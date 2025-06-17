@@ -173,6 +173,17 @@ impl Server {
 
         tracing::info!("Starting Ratchet server on {}", addr);
         
+        // Start scheduler service as background task
+        if let Some(scheduler_service) = &self.services.scheduler_service {
+            let scheduler_clone = scheduler_service.clone();
+            tokio::spawn(async move {
+                if let Err(e) = scheduler_clone.start().await {
+                    tracing::error!("Scheduler service failed: {}", e);
+                }
+            });
+            tracing::info!("Started background scheduler service");
+        }
+        
         // Print configuration summary
         self.log_config_summary();
 

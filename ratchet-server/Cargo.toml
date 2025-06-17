@@ -18,6 +18,7 @@ ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-logging = { path = "../ratchet-logging" }
 ratchet-registry = { path = "../ratchet-registry" }
 ratchet-http = { path = "../ratchet-http" }
+ratchet-output = { path = "../ratchet-output" }
 
 # Workspace dependencies - legacy during migration
 # ratchet_lib = { path = "../ratchet-lib" } # REMOVED - using modern modular components
@@ -42,6 +43,7 @@ clap = { workspace = true }
 serde_yaml = "0.9"
 uuid = { workspace = true }
 chrono = { workspace = true }
+cron = "0.14"
 rustls = "0.23"
 rustls-pemfile = "2.1"
 sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-chrono", "with-uuid", "with-json"] }

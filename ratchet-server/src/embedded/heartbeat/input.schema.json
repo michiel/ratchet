@@ -1,0 +1,8 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Heartbeat Input Schema",
+  "description": "Input schema for heartbeat task - no input required",
+  "properties": {},
+  "additionalProperties": false
+}

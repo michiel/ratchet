@@ -9,7 +9,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput},
-    destinations::{FilesystemDestination, WebhookDestination},
+    destinations::{FilesystemDestination, WebhookDestination, StdioDestination, StdioConfig, StdStream},
     errors::{ConfigError, DeliveryError},
     metrics::DeliveryMetrics,
     template::TemplateEngine,
@@ -300,6 +300,35 @@ impl OutputDeliveryManager {
                 Ok(Arc::new(WebhookDestination::new(
                     webhook_config,
                     client,
+                    template_engine.clone(),
+                )))
+            }
+            OutputDestinationConfig::Stdio {
+                stream,
+                format,
+                include_metadata,
+                line_buffered,
+                prefix,
+            } => {
+                let std_stream = match stream.as_str() {
+                    "stdout" => StdStream::Stdout,
+                    "stderr" => StdStream::Stderr,
+                    _ => return Err(ConfigError::InvalidValue {
+                        field: "stream".to_string(),
+                        value: stream,
+                    }),
+                };
+
+                let stdio_config = StdioConfig {
+                    stream: std_stream,
+                    format,
+                    include_metadata,
+                    line_buffered,
+                    prefix_template: prefix,
+                };
+
+                Ok(Arc::new(StdioDestination::new(
+                    stdio_config,
                     template_engine.clone(),
                 )))
             }

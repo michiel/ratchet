@@ -25,6 +25,8 @@ use ratchet_http::HttpManager;
 
 use crate::config::ServerConfig;
 use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
+use crate::scheduler_legacy::{SchedulerService, SchedulerConfig};
+use ratchet_output::OutputDeliveryManager;
 
 /// Service container holding all application services
 #[derive(Clone)]
@@ -34,6 +36,8 @@ pub struct ServiceContainer {
     pub registry_manager: Arc<dyn RegistryManager>,
     pub validator: Arc<dyn TaskValidator>,
     pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
+    pub output_manager: Arc<OutputDeliveryManager>,
+    pub scheduler_service: Option<Arc<SchedulerService>>,
 }
 
 impl ServiceContainer {
@@ -43,10 +47,23 @@ impl ServiceContainer {
         // In the future, these would be replaced with the new modular implementations
         
         // This is a bridge implementation during the migration
-        let (repositories, mcp_task_service) = create_repository_factory_with_mcp(config).await?;
+        let (repositories, mcp_task_service, seaorm_factory) = create_repository_factory_with_mcp(config).await?;
         let registry = create_task_registry(config, repositories.clone()).await?;
         let registry_manager = create_registry_manager(config).await?;
         let validator = create_task_validator(config).await?;
+
+        // Create output delivery manager
+        let output_manager = Arc::new(OutputDeliveryManager::new());
+
+        // Create scheduler service (always enabled for now)
+        let scheduler_config = SchedulerConfig::default();
+        let scheduler_service = Some(Arc::new(SchedulerService::new(
+            scheduler_config,
+            repositories.clone(),
+            seaorm_factory,
+            registry.clone(),
+            output_manager.clone(),
+        )));
 
         Ok(Self {
             repositories,
@@ -54,6 +71,8 @@ impl ServiceContainer {
             registry_manager,
             validator,
             mcp_task_service,
+            output_manager,
+            scheduler_service,
         })
     }
 
@@ -487,9 +506,12 @@ impl Repository for DirectJobRepository {
 
 #[async_trait]
 impl CrudRepository<UnifiedJob> for DirectJobRepository {
-    async fn create(&self, _entity: UnifiedJob) -> Result<UnifiedJob, DatabaseError> {
-        // TODO: Implement job creation
-        Err(DatabaseError::Internal { message: "Not implemented yet".to_string() })
+    async fn create(&self, entity: UnifiedJob) -> Result<UnifiedJob, DatabaseError> {
+        let storage_job = convert_unified_job_to_storage(entity);
+        match self.storage_repo.create(storage_job).await {
+            Ok(created_job) => Ok(convert_storage_job_to_unified(created_job)),
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
     async fn find_by_id(&self, _id: i32) -> Result<Option<UnifiedJob>, DatabaseError> {
@@ -502,9 +524,12 @@ impl CrudRepository<UnifiedJob> for DirectJobRepository {
         Ok(None)
     }
     
-    async fn update(&self, _entity: UnifiedJob) -> Result<UnifiedJob, DatabaseError> {
-        // TODO: Implement job update
-        Err(DatabaseError::Internal { message: "Not implemented yet".to_string() })
+    async fn update(&self, entity: UnifiedJob) -> Result<UnifiedJob, DatabaseError> {
+        let storage_job = convert_unified_job_to_storage(entity);
+        match self.storage_repo.update(storage_job).await {
+            Ok(updated_job) => Ok(convert_storage_job_to_unified(updated_job)),
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
     async fn delete(&self, _id: i32) -> Result<(), DatabaseError> {
@@ -614,9 +639,13 @@ impl Repository for DirectScheduleRepository {
 
 #[async_trait]
 impl CrudRepository<UnifiedSchedule> for DirectScheduleRepository {
-    async fn create(&self, _entity: UnifiedSchedule) -> Result<UnifiedSchedule, DatabaseError> {
-        // TODO: Implement schedule creation
-        Err(DatabaseError::Internal { message: "Not implemented yet".to_string() })
+    async fn create(&self, entity: UnifiedSchedule) -> Result<UnifiedSchedule, DatabaseError> {
+        let storage_schedule = convert_unified_schedule_to_storage(entity);
+        
+        match self.storage_repo.create(storage_schedule).await {
+            Ok(created_schedule) => Ok(convert_storage_schedule_to_unified(created_schedule)),
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
     async fn find_by_id(&self, _id: i32) -> Result<Option<UnifiedSchedule>, DatabaseError> {
@@ -649,22 +678,40 @@ impl CrudRepository<UnifiedSchedule> for DirectScheduleRepository {
 impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for DirectScheduleRepository {
     async fn find_with_filters(
         &self, 
-        _filters: ScheduleFilters, 
+        filters: ScheduleFilters, 
         pagination: PaginationInput
     ) -> Result<ListResponse<UnifiedSchedule>, DatabaseError> {
-        // TODO: Implement schedule filtering
-        Ok(ListResponse {
-            items: Vec::new(),
-            meta: ratchet_api_types::pagination::PaginationMeta {
-                page: pagination.page.unwrap_or(1),
-                limit: pagination.limit.unwrap_or(20),
-                offset: pagination.offset.unwrap_or(0),
-                total: 0,
-                has_next: false,
-                has_previous: false,
-                total_pages: 0,
+        // For now, get enabled schedules (which should include our heartbeat schedule)
+        match self.storage_repo.find_enabled().await {
+            Ok(schedules) => {
+                let mut filtered_schedules = schedules;
+                
+                // Apply name filtering if provided
+                if let Some(ref name_exact) = filters.name_exact {
+                    filtered_schedules.retain(|s| s.name == *name_exact);
+                }
+                
+                // Convert to unified schedules
+                let unified_schedules: Vec<UnifiedSchedule> = filtered_schedules
+                    .into_iter()
+                    .map(convert_storage_schedule_to_unified)
+                    .collect();
+                
+                Ok(ListResponse {
+                    items: unified_schedules,
+                    meta: ratchet_api_types::pagination::PaginationMeta {
+                        page: pagination.page.unwrap_or(1),
+                        limit: pagination.limit.unwrap_or(20),
+                        offset: pagination.offset.unwrap_or(0),
+                        total: 0, // Would need separate count query
+                        has_next: false,
+                        has_previous: false,
+                        total_pages: 0,
+                    },
+                })
             },
-        })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
     async fn find_with_list_input(
@@ -728,6 +775,47 @@ fn convert_unified_task_to_storage(task: UnifiedTask) -> ratchet_storage::seaorm
     }
 }
 
+fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> ratchet_storage::seaorm::entities::Schedule {
+    ratchet_storage::seaorm::entities::Schedule {
+        id: schedule.id.as_i32().unwrap_or(0),
+        uuid: schedule.id.as_uuid().unwrap_or_else(|| uuid::Uuid::new_v4()), // Use schedule id as UUID or generate new one
+        task_id: schedule.task_id.as_i32().unwrap_or(0),
+        name: schedule.name,
+        cron_expression: schedule.cron_expression,
+        input_data: serde_json::Value::Null, // Default empty input
+        enabled: schedule.enabled,
+        next_run_at: schedule.next_run,
+        last_run_at: schedule.last_run,
+        execution_count: 0, // Default to 0
+        max_executions: None, // No limit by default
+        metadata: Some(serde_json::json!({
+            "description": schedule.description
+        })),
+        output_destinations: Some(serde_json::Value::Null), // Default empty output destinations
+        created_at: schedule.created_at,
+        updated_at: schedule.updated_at,
+    }
+}
+
+fn convert_storage_schedule_to_unified(schedule: ratchet_storage::seaorm::entities::Schedule) -> UnifiedSchedule {
+    UnifiedSchedule {
+        id: ApiId::from_i32(schedule.id),
+        task_id: ApiId::from_i32(schedule.task_id),
+        name: schedule.name,
+        description: schedule.metadata
+            .as_ref()
+            .and_then(|m| m.get("description"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        cron_expression: schedule.cron_expression,
+        enabled: schedule.enabled,
+        next_run: schedule.next_run_at,
+        last_run: schedule.last_run_at,
+        created_at: schedule.created_at,
+        updated_at: schedule.updated_at,
+    }
+}
+
 fn convert_storage_task_to_unified(task: ratchet_storage::seaorm::entities::Task) -> UnifiedTask {
     UnifiedTask {
         id: ApiId::from_i32(task.id),
@@ -745,6 +833,89 @@ fn convert_storage_task_to_unified(task: ratchet_storage::seaorm::entities::Task
         input_schema: Some(task.input_schema),
         output_schema: Some(task.output_schema),
         metadata: Some(task.metadata),
+    }
+}
+
+fn convert_unified_job_to_storage(job: UnifiedJob) -> ratchet_storage::seaorm::entities::Job {
+    ratchet_storage::seaorm::entities::Job {
+        id: job.id.as_i32().unwrap_or(0),
+        uuid: job.id.as_uuid().unwrap_or_else(|| uuid::Uuid::new_v4()),
+        task_id: job.task_id.as_i32().unwrap_or(0),
+        execution_id: None, // Not set until execution starts
+        schedule_id: None, // Would need to be provided if job is from a schedule
+        priority: convert_api_job_priority_to_storage(job.priority),
+        status: convert_api_job_status_to_storage(job.status),
+        input_data: serde_json::Value::Null, // Default empty input
+        retry_count: job.retry_count,
+        max_retries: job.max_retries,
+        retry_delay_seconds: 60, // Default 60 seconds
+        error_message: job.error_message,
+        error_details: None,
+        queued_at: job.queued_at,
+        process_at: job.scheduled_for,
+        started_at: None,
+        completed_at: None,
+        metadata: None,
+        output_destinations: job.output_destinations.map(|destinations| {
+            serde_json::to_value(destinations).unwrap_or(serde_json::Value::Null)
+        }),
+    }
+}
+
+fn convert_storage_job_to_unified(job: ratchet_storage::seaorm::entities::Job) -> UnifiedJob {
+    UnifiedJob {
+        id: ApiId::from_i32(job.id),
+        task_id: ApiId::from_i32(job.task_id),
+        priority: convert_storage_job_priority_to_api(job.priority),
+        status: convert_storage_job_status_to_api(job.status),
+        retry_count: job.retry_count,
+        max_retries: job.max_retries,
+        queued_at: job.queued_at,
+        scheduled_for: job.process_at,
+        error_message: job.error_message,
+        output_destinations: job.output_destinations.and_then(|v| {
+            serde_json::from_value(v).ok()
+        }),
+    }
+}
+
+fn convert_api_job_priority_to_storage(priority: ratchet_api_types::JobPriority) -> ratchet_storage::seaorm::entities::jobs::JobPriority {
+    match priority {
+        ratchet_api_types::JobPriority::Low => ratchet_storage::seaorm::entities::jobs::JobPriority::Low,
+        ratchet_api_types::JobPriority::Normal => ratchet_storage::seaorm::entities::jobs::JobPriority::Normal,
+        ratchet_api_types::JobPriority::High => ratchet_storage::seaorm::entities::jobs::JobPriority::High,
+        ratchet_api_types::JobPriority::Critical => ratchet_storage::seaorm::entities::jobs::JobPriority::Urgent,
+    }
+}
+
+fn convert_storage_job_priority_to_api(priority: ratchet_storage::seaorm::entities::jobs::JobPriority) -> ratchet_api_types::JobPriority {
+    match priority {
+        ratchet_storage::seaorm::entities::jobs::JobPriority::Low => ratchet_api_types::JobPriority::Low,
+        ratchet_storage::seaorm::entities::jobs::JobPriority::Normal => ratchet_api_types::JobPriority::Normal,
+        ratchet_storage::seaorm::entities::jobs::JobPriority::High => ratchet_api_types::JobPriority::High,
+        ratchet_storage::seaorm::entities::jobs::JobPriority::Urgent => ratchet_api_types::JobPriority::Critical,
+    }
+}
+
+fn convert_api_job_status_to_storage(status: ratchet_api_types::JobStatus) -> ratchet_storage::seaorm::entities::jobs::JobStatus {
+    match status {
+        ratchet_api_types::JobStatus::Queued => ratchet_storage::seaorm::entities::jobs::JobStatus::Queued,
+        ratchet_api_types::JobStatus::Processing => ratchet_storage::seaorm::entities::jobs::JobStatus::Processing,
+        ratchet_api_types::JobStatus::Completed => ratchet_storage::seaorm::entities::jobs::JobStatus::Completed,
+        ratchet_api_types::JobStatus::Failed => ratchet_storage::seaorm::entities::jobs::JobStatus::Failed,
+        ratchet_api_types::JobStatus::Cancelled => ratchet_storage::seaorm::entities::jobs::JobStatus::Cancelled,
+        ratchet_api_types::JobStatus::Retrying => ratchet_storage::seaorm::entities::jobs::JobStatus::Retrying,
+    }
+}
+
+fn convert_storage_job_status_to_api(status: ratchet_storage::seaorm::entities::jobs::JobStatus) -> ratchet_api_types::JobStatus {
+    match status {
+        ratchet_storage::seaorm::entities::jobs::JobStatus::Queued => ratchet_api_types::JobStatus::Queued,
+        ratchet_storage::seaorm::entities::jobs::JobStatus::Processing => ratchet_api_types::JobStatus::Processing,
+        ratchet_storage::seaorm::entities::jobs::JobStatus::Completed => ratchet_api_types::JobStatus::Completed,
+        ratchet_storage::seaorm::entities::jobs::JobStatus::Failed => ratchet_api_types::JobStatus::Failed,
+        ratchet_storage::seaorm::entities::jobs::JobStatus::Cancelled => ratchet_api_types::JobStatus::Cancelled,
+        ratchet_storage::seaorm::entities::jobs::JobStatus::Retrying => ratchet_api_types::JobStatus::Retrying,
     }
 }
 
@@ -794,11 +965,11 @@ fn convert_interface_pagination_to_storage(pagination: PaginationInput) -> ratch
 
 /// Create repository factory from configuration
 async fn create_repository_factory(config: &ServerConfig) -> Result<Arc<dyn RepositoryFactory>> {
-    let (repos, _) = create_repository_factory_with_mcp(config).await?;
+    let (repos, _, _) = create_repository_factory_with_mcp(config).await?;
     Ok(repos)
 }
 
-async fn create_repository_factory_with_mcp(config: &ServerConfig) -> Result<(Arc<dyn RepositoryFactory>, Option<Arc<TaskDevelopmentService>>)> {
+async fn create_repository_factory_with_mcp(config: &ServerConfig) -> Result<(Arc<dyn RepositoryFactory>, Option<Arc<TaskDevelopmentService>>, Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>)> {
     // Create storage database connection directly (no bridge pattern)
     let storage_config = ratchet_storage::seaorm::config::DatabaseConfig {
         url: config.database.url.clone(),
@@ -845,7 +1016,7 @@ async fn create_repository_factory_with_mcp(config: &ServerConfig) -> Result<(Ar
     };
     
     // Use the adapter factory that directly implements the interface
-    Ok((Arc::new(direct_factory), mcp_task_service))
+    Ok((Arc::new(direct_factory), mcp_task_service, storage_factory))
 }
 
 /// Create task registry from configuration

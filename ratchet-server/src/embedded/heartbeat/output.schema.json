@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Heartbeat Output Schema",
+  "description": "Output schema for heartbeat task",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ok", "warning", "error"],
+      "description": "System status indicator"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of heartbeat execution"
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable status message"
+    },
+    "system_info": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Ratchet server version"
+        },
+        "uptime_seconds": {
+          "type": "number",
+          "description": "Server uptime in seconds"
+        },
+        "active_jobs": {
+          "type": "integer",
+          "description": "Number of currently active jobs"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["status", "timestamp", "message"],
+  "additionalProperties": false
+}

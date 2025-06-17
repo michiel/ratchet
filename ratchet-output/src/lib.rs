@@ -59,7 +59,7 @@ pub mod metrics;
 pub mod template;
 
 pub use destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput};
-pub use destinations::{FilesystemDestination, WebhookDestination};
+pub use destinations::{FilesystemDestination, WebhookDestination, StdioDestination, StdioConfig, StdStream};
 pub use errors::{ConfigError, DeliveryError, ValidationError};
 pub use manager::{OutputDeliveryManager, TestResult};
 pub use template::TemplateEngine;
@@ -123,6 +123,17 @@ pub enum OutputDestinationConfig {
         storage_class: Option<String>, // Storage class
         #[serde(default)]
         metadata: HashMap<String, String>, // Object metadata
+    },
+    #[serde(rename = "stdio")]
+    Stdio {
+        #[serde(default = "default_stdout_stream")]
+        stream: String,               // "stdout" or "stderr"
+        format: OutputFormat,         // Output format
+        #[serde(default)]
+        include_metadata: bool,       // Include full task metadata
+        #[serde(default = "default_true")]
+        line_buffered: bool,          // Line buffered output
+        prefix: Option<String>,       // Optional prefix template
     },
 }
 
@@ -222,6 +233,9 @@ fn default_backoff_multiplier() -> f64 {
 }
 fn default_retry_status_codes() -> Vec<u16> {
     vec![429, 500, 502, 503, 504]
+}
+fn default_stdout_stream() -> String {
+    "stdout".to_string()
 }
 
 // Duration serialization helper

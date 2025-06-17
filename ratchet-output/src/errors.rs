@@ -54,6 +54,9 @@ pub enum DeliveryError {
 
     #[error("Platform-specific operation failed: {operation} - {error}")]
     PlatformSpecific { operation: String, error: String },
+
+    #[error("Stdio operation failed for {stream}: {error}")]
+    Stdio { stream: String, error: String },
 }
 
 /// Configuration validation errors

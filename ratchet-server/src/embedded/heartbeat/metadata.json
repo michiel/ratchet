@@ -1,0 +1,14 @@
+{
+  "name": "heartbeat",
+  "description": "Built-in heartbeat task that returns system status for monitoring",
+  "version": "1.0.0",
+  "uuid": "00000000-0000-0000-0000-000000000001",
+  "author": "Ratchet System",
+  "tags": ["system", "monitoring", "heartbeat"],
+  "runtime": "nodejs",
+  "timeout": 30,
+  "memory_limit": "64MB",
+  "cpu_limit": "0.1",
+  "system_task": true,
+  "readonly": true
+}
