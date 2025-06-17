@@ -2,9 +2,14 @@
 
 pub mod interface;
 pub mod repository_bridge;
+// TODO: Re-enable when tokio-cron-scheduler storage API is properly implemented
+// pub mod sqlite_storage;
+pub mod tokio_scheduler;
 
 pub use interface::{SchedulerService, SchedulerError, ScheduleStatus};
 pub use repository_bridge::RepositoryBridge;
+// pub use sqlite_storage::SqliteMetadataStore;
+pub use tokio_scheduler::{TokioCronSchedulerService, TokioCronSchedulerConfig};
 
-// Re-export the current implementation for now
+// Re-export the legacy implementation during migration
 pub use crate::scheduler_legacy::{SchedulerService as LegacySchedulerService, SchedulerConfig};
