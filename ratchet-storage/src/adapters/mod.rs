@@ -944,12 +944,42 @@ fn convert_storage_job_to_unified(_job: crate::seaorm::entities::jobs::Model) ->
     todo!("Implement job conversion")
 }
 
-fn convert_unified_schedule_to_storage(_schedule: UnifiedSchedule) -> crate::seaorm::entities::schedules::Model {
-    todo!("Implement schedule conversion")
+fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> crate::seaorm::entities::schedules::Model {
+    use crate::seaorm::entities::schedules::Model;
+    use uuid::Uuid;
+    
+    Model {
+        id: schedule.id.as_i32().unwrap_or(0), // For creation, this will be set by the database
+        uuid: Uuid::new_v4(), // Generate a new UUID for storage
+        task_id: schedule.task_id.as_i32().unwrap_or(0),
+        name: schedule.name,
+        cron_expression: schedule.cron_expression,
+        input_data: serde_json::Value::Object(serde_json::Map::new()).into(), // Default empty object
+        enabled: schedule.enabled,
+        next_run_at: schedule.next_run,
+        last_run_at: schedule.last_run,
+        execution_count: 0, // Start with 0 executions
+        max_executions: None, // Unlimited by default
+        metadata: None, // No metadata by default
+        output_destinations: None, // No output destinations by default
+        created_at: schedule.created_at,
+        updated_at: schedule.updated_at,
+    }
 }
 
-fn convert_storage_schedule_to_unified(_schedule: crate::seaorm::entities::schedules::Model) -> UnifiedSchedule {
-    todo!("Implement schedule conversion")
+fn convert_storage_schedule_to_unified(schedule: crate::seaorm::entities::schedules::Model) -> UnifiedSchedule {
+    UnifiedSchedule {
+        id: ApiId::new(schedule.id),
+        task_id: ApiId::new(schedule.task_id),
+        name: schedule.name,
+        description: None, // This field doesn't exist in storage model, could be extracted from metadata
+        cron_expression: schedule.cron_expression,
+        enabled: schedule.enabled,
+        next_run: schedule.next_run_at,
+        last_run: schedule.last_run_at,
+        created_at: schedule.created_at,
+        updated_at: schedule.updated_at,
+    }
 }
 
 fn convert_task_filters_to_storage(filters: TaskFilters) -> crate::seaorm::repositories::task_repository::TaskFilters {
@@ -969,8 +999,12 @@ fn convert_job_filters_to_storage(_filters: JobFilters) -> crate::seaorm::reposi
     todo!("Implement filter conversion")
 }
 
-fn convert_schedule_filters_to_storage(_filters: ScheduleFilters) -> crate::seaorm::repositories::schedule_repository::ScheduleFilters {
-    todo!("Implement filter conversion")
+fn convert_schedule_filters_to_storage(filters: ScheduleFilters) -> crate::seaorm::repositories::schedule_repository::ScheduleFilters {
+    crate::seaorm::repositories::schedule_repository::ScheduleFilters {
+        name: filters.name,
+        enabled: filters.enabled,
+        task_id: filters.task_id.map(|id| id.as_i32().unwrap_or(0)),
+    }
 }
 
 fn convert_pagination_to_storage(pagination: PaginationInput) -> crate::seaorm::repositories::task_repository::Pagination {

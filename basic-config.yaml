@@ -1,0 +1,16 @@
+server:
+  host: "127.0.0.1"
+  port: 8080
+  workers: 4
+  database:
+    url: "sqlite://test.db"
+
+rest_api:
+  enabled: true
+  prefix: "/api/v1"
+
+logging:
+  level: "info"
+  targets:
+    - type: "console"
+      enabled: true
