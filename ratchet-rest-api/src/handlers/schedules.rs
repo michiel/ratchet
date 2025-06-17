@@ -212,6 +212,19 @@ pub async fn create_schedule(
     let created_schedule = schedule_repo.create(unified_schedule).await
         .map_err(|e| RestError::InternalError(format!("Failed to create schedule: {}", e)))?;
     
+    // Add schedule to running scheduler if available and enabled
+    if let Some(scheduler) = &ctx.scheduler_service {
+        if created_schedule.enabled {
+            if let Err(scheduler_err) = scheduler.add_schedule(created_schedule.clone()).await {
+                warn!("Failed to add schedule to running scheduler: {}", scheduler_err);
+                // Don't fail the request - schedule is created in database
+                // Scheduler will pick it up on next restart
+            } else {
+                info!("Successfully added schedule {} to running scheduler", created_schedule.name);
+            }
+        }
+    }
+    
     Ok(Json(ApiResponse::new(created_schedule)))
 }
 
@@ -315,6 +328,17 @@ pub async fn update_schedule(
     let updated_schedule = schedule_repo.update(existing_schedule).await
         .map_err(|e| RestError::InternalError(format!("Failed to update schedule: {}", e)))?;
     
+    // Update schedule in running scheduler if available
+    if let Some(scheduler) = &ctx.scheduler_service {
+        if let Err(scheduler_err) = scheduler.update_schedule(updated_schedule.clone()).await {
+            warn!("Failed to update schedule in running scheduler: {}", scheduler_err);
+            // Don't fail the request - schedule is updated in database
+            // Scheduler will pick up changes on next restart
+        } else {
+            info!("Successfully updated schedule {} in running scheduler", updated_schedule.name);
+        }
+    }
+    
     Ok(Json(ApiResponse::new(updated_schedule)))
 }
 
@@ -342,6 +366,17 @@ pub async fn delete_schedule(
     let api_id = ApiId::from_string(schedule_id.clone());
     let schedule_repo = ctx.repositories.schedule_repository();
     
+    // Remove from running scheduler first if available
+    if let Some(scheduler) = &ctx.scheduler_service {
+        if let Err(scheduler_err) = scheduler.remove_schedule(api_id.clone()).await {
+            warn!("Failed to remove schedule from running scheduler: {}", scheduler_err);
+            // Continue with database deletion even if scheduler removal fails
+        } else {
+            info!("Successfully removed schedule {} from running scheduler", schedule_id);
+        }
+    }
+    
+    // Delete from database
     schedule_repo
         .delete(api_id.as_i32().unwrap_or(0))
         .await
@@ -377,10 +412,24 @@ pub async fn enable_schedule(
     let api_id = ApiId::from_string(schedule_id.clone());
     let schedule_repo = ctx.repositories.schedule_repository();
     
+    // Update the schedule in the database
     schedule_repo
-        .set_enabled(api_id, true)
+        .set_enabled(api_id.clone(), true)
         .await
         .map_err(RestError::Database)?;
+    
+    // Add to running scheduler if available
+    if let Some(scheduler) = &ctx.scheduler_service {
+        // Get the updated schedule to add to scheduler
+        if let Ok(Some(updated_schedule)) = schedule_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await {
+            if let Err(scheduler_err) = scheduler.add_schedule(updated_schedule).await {
+                warn!("Failed to add enabled schedule to running scheduler: {}", scheduler_err);
+                // Don't fail the request - schedule is enabled in database
+            } else {
+                info!("Successfully added enabled schedule {} to running scheduler", schedule_id);
+            }
+        }
+    }
     
     Ok(Json(serde_json::json!({
         "success": true,
@@ -412,6 +461,17 @@ pub async fn disable_schedule(
     let api_id = ApiId::from_string(schedule_id.clone());
     let schedule_repo = ctx.repositories.schedule_repository();
     
+    // Remove from running scheduler first if available
+    if let Some(scheduler) = &ctx.scheduler_service {
+        if let Err(scheduler_err) = scheduler.remove_schedule(api_id.clone()).await {
+            warn!("Failed to remove schedule from running scheduler: {}", scheduler_err);
+            // Continue with database update even if scheduler removal fails
+        } else {
+            info!("Successfully removed schedule {} from running scheduler", schedule_id);
+        }
+    }
+    
+    // Update the schedule in the database
     schedule_repo
         .set_enabled(api_id, false)
         .await

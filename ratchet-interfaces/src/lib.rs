@@ -23,6 +23,7 @@ pub mod execution;
 pub mod logging;
 pub mod database;
 pub mod registry;
+pub mod scheduler;
 
 // Re-export commonly used types
 pub use service::{Service, ServiceHealth, ServiceMetrics, HealthStatus};
@@ -39,4 +40,7 @@ pub use registry::{
     TaskRegistry, FilesystemRegistry, HttpRegistry, RegistryManager,
     TaskValidator, TaskMetadata, RegistryError, ValidationResult,
     SyncResult, HttpCredentials
+};
+pub use scheduler::{
+    SchedulerService, SchedulerError, ScheduleStatus
 };

@@ -566,10 +566,34 @@ impl UnifiedServer {
 
 **Note**: SQLite metadata storage temporarily uses default storage due to tokio-cron-scheduler v0.13 API changes. Custom storage will be re-enabled when API stabilizes.
 
-### 🔄 Next Steps: Phase 3 - Service Integration
-- [ ] Update service container to support new scheduler
-- [ ] Modify startup logic to use TokioCronSchedulerService  
-- [ ] Update schedule management APIs
+### ✅ Phase 3: Service Integration - **COMPLETED** (2025-06-17)
+- [x] Update service container to support new scheduler
+- [x] Modify startup logic to use TokioCronSchedulerService  
+- [x] Update schedule management APIs
+
+**Key Accomplishments:**
+- Moved SchedulerService trait to interfaces crate for proper separation of concerns
+- Updated TasksContext to include scheduler service for API integration
+- Integrated scheduler service into all schedule CRUD operations (create, update, delete, enable, disable)
+- Graceful error handling - API operations continue even if scheduler operations fail
+- Service container now creates TokioCronSchedulerService and passes it to contexts
+- Scheduler starts automatically as background task in server startup
+
+**Technical Details:**
+- Created `ratchet-interfaces/src/scheduler.rs` with SchedulerService trait, SchedulerError, and ScheduleStatus
+- Updated `ratchet-rest-api/src/context.rs` to include scheduler service in TasksContext
+- Modified schedule endpoints in `ratchet-rest-api/src/handlers/schedules.rs` to integrate with scheduler:
+  - Create: Adds new schedules to running scheduler if enabled
+  - Update: Updates schedules in running scheduler
+  - Delete: Removes schedules from running scheduler before database deletion
+  - Enable: Adds enabled schedules to running scheduler
+  - Disable: Removes schedules from running scheduler
+- All changes maintain backwards compatibility and graceful error handling
+
+### 🔄 Next Steps: Phase 4 - Configuration and Testing
+- [ ] Update configuration to remove legacy heartbeat settings
+- [ ] Implement registry-based task loading for heartbeat
+- [ ] Comprehensive testing and validation
 
 ---
 

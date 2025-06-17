@@ -6,6 +6,7 @@
 
 use ratchet_interfaces::{
     RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator,
+    SchedulerService,
 };
 use ratchet_mcp::server::task_dev_tools::TaskDevelopmentService;
 use std::sync::Arc;
@@ -25,6 +26,8 @@ pub struct TasksContext {
     pub validator: Arc<dyn TaskValidator>,
     /// Optional MCP task development service for advanced task operations
     pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
+    /// Optional scheduler service for schedule management integration
+    pub scheduler_service: Option<Arc<dyn SchedulerService>>,
 }
 
 impl TasksContext {
@@ -40,6 +43,7 @@ impl TasksContext {
             registry_manager,
             validator,
             mcp_task_service: None,
+            scheduler_service: None,
         }
     }
     
@@ -57,6 +61,44 @@ impl TasksContext {
             registry_manager,
             validator,
             mcp_task_service: Some(mcp_task_service),
+            scheduler_service: None,
+        }
+    }
+    
+    /// Create a new TasksContext with scheduler service
+    pub fn with_scheduler(
+        repositories: Arc<dyn RepositoryFactory>,
+        registry: Arc<dyn TaskRegistry>,
+        registry_manager: Arc<dyn RegistryManager>,
+        validator: Arc<dyn TaskValidator>,
+        scheduler_service: Arc<dyn SchedulerService>,
+    ) -> Self {
+        Self {
+            repositories,
+            registry,
+            registry_manager,
+            validator,
+            mcp_task_service: None,
+            scheduler_service: Some(scheduler_service),
+        }
+    }
+    
+    /// Create a new TasksContext with both MCP and scheduler services
+    pub fn with_all_services(
+        repositories: Arc<dyn RepositoryFactory>,
+        registry: Arc<dyn TaskRegistry>,
+        registry_manager: Arc<dyn RegistryManager>,
+        validator: Arc<dyn TaskValidator>,
+        mcp_task_service: Arc<TaskDevelopmentService>,
+        scheduler_service: Arc<dyn SchedulerService>,
+    ) -> Self {
+        Self {
+            repositories,
+            registry,
+            registry_manager,
+            validator,
+            mcp_task_service: Some(mcp_task_service),
+            scheduler_service: Some(scheduler_service),
         }
     }
 }
