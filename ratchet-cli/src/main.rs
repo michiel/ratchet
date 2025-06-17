@@ -27,7 +27,7 @@ use ratchet_registry::RegistryService;
 use ratchet_server;
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -704,9 +704,115 @@ async fn execute_task(
     ))
 }
 
-/// Validate a task definition
-async fn validate_task(task_path: &str) -> Result<()> {
+/// Validate a task definition and optionally fix missing files
+async fn validate_task(task_path: &str, fix: bool) -> Result<()> {
+    use std::path::Path;
+    
     info!("Validating task: {}", task_path);
+    
+    let path = Path::new(task_path);
+    
+    if path.is_dir() {
+        validate_task_directory(path, fix).await
+    } else {
+        validate_task_file(path, fix).await
+    }
+}
+
+/// Validate a task directory structure
+async fn validate_task_directory(task_dir: &Path, fix: bool) -> Result<()> {
+    info!("Validating task directory: {:?}", task_dir);
+    
+    let mut issues = Vec::new();
+    let mut fixed_issues = Vec::new();
+    
+    // Check required files
+    let metadata_path = task_dir.join("metadata.json");
+    let main_js_path = task_dir.join("main.js");
+    let input_schema_path = task_dir.join("input.schema.json");
+    let output_schema_path = task_dir.join("output.schema.json");
+    
+    // Validate metadata.json
+    if !metadata_path.exists() {
+        issues.push("Missing metadata.json file".to_string());
+        if fix {
+            generate_metadata_stub(&metadata_path, task_dir)?;
+            fixed_issues.push("Generated metadata.json stub".to_string());
+        }
+    } else {
+        validate_metadata_file(&metadata_path, fix)?;
+    }
+    
+    // Validate main.js
+    if !main_js_path.exists() {
+        issues.push("Missing main.js file".to_string());
+        if fix {
+            generate_main_js_stub(&main_js_path)?;
+            fixed_issues.push("Generated main.js stub".to_string());
+        }
+    } else {
+        validate_js_file(&main_js_path)?;
+    }
+    
+    // Validate input.schema.json
+    if !input_schema_path.exists() {
+        issues.push("Missing input.schema.json file".to_string());
+        if fix {
+            generate_input_schema_stub(&input_schema_path)?;
+            fixed_issues.push("Generated input.schema.json stub".to_string());
+        }
+    } else {
+        validate_schema_file(&input_schema_path, "input")?;
+    }
+    
+    // Validate output.schema.json
+    if !output_schema_path.exists() {
+        issues.push("Missing output.schema.json file".to_string());
+        if fix {
+            generate_output_schema_stub(&output_schema_path)?;
+            fixed_issues.push("Generated output.schema.json stub".to_string());
+        }
+    } else {
+        validate_schema_file(&output_schema_path, "output")?;
+    }
+    
+    // Create tests directory if it doesn't exist
+    let tests_dir = task_dir.join("tests");
+    if !tests_dir.exists() {
+        issues.push("Missing tests/ directory".to_string());
+        if fix {
+            std::fs::create_dir_all(&tests_dir)?;
+            generate_test_stub(&tests_dir.join("basic.test.js"))?;
+            fixed_issues.push("Generated tests/ directory with basic.test.js".to_string());
+        }
+    }
+    
+    // Report results
+    if !issues.is_empty() {
+        warn!("Found {} validation issue(s):", issues.len());
+        for issue in &issues {
+            warn!("  ❌ {}", issue);
+        }
+    }
+    
+    if !fixed_issues.is_empty() {
+        info!("Fixed {} issue(s):", fixed_issues.len());
+        for fix in &fixed_issues {
+            info!("  🔧 {}", fix);
+        }
+    }
+    
+    if issues.is_empty() || (fix && !fixed_issues.is_empty()) {
+        info!("✅ Task directory validation completed successfully");
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Task validation failed with {} issues. Use --fix to automatically resolve missing files", issues.len()))
+    }
+}
+
+/// Validate a single task file (legacy format)
+async fn validate_task_file(task_path: &Path, _fix: bool) -> Result<()> {
+    info!("Validating task file: {:?}", task_path);
     
     // Read task file
     let task_content = std::fs::read_to_string(task_path)
@@ -724,16 +830,290 @@ async fn validate_task(task_path: &str) -> Result<()> {
         }
     }
     
-    // Schema validation would require jsonschema crate - skipping for now
+    // Check schema fields
     if task_json.get("input_schema").is_some() {
-        debug!("Input schema present (validation skipped)");
+        debug!("Input schema present");
     }
     
     if task_json.get("output_schema").is_some() {
-        debug!("Output schema present (validation skipped)");
+        debug!("Output schema present");
     }
     
-    info!("✅ Task definition is valid");
+    info!("✅ Task file validation completed");
+    Ok(())
+}
+
+/// Generate a metadata.json stub
+fn generate_metadata_stub(metadata_path: &Path, task_dir: &Path) -> Result<()> {
+    use chrono::Utc;
+    
+    let task_name = task_dir.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unnamed_task");
+    
+    let metadata = serde_json::json!({
+        "name": task_name,
+        "uuid": uuid::Uuid::new_v4().to_string(),
+        "version": "1.0.0",
+        "label": format!("{} Task", task_name.replace('_', " ").replace('-', " ")),
+        "description": format!("TODO: Add description for {} task", task_name),
+        "tags": ["stub", "TODO"],
+        "category": "TODO",
+        "author": "TODO: Add author name",
+        "license": "MIT",
+        "ratchet_version": "0.4.6",
+        "created_at": Utc::now().to_rfc3339(),
+        "updated_at": Utc::now().to_rfc3339()
+    });
+    
+    std::fs::write(metadata_path, serde_json::to_string_pretty(&metadata)?)?;
+    Ok(())
+}
+
+/// Generate a main.js stub
+fn generate_main_js_stub(main_js_path: &Path) -> Result<()> {
+    let js_content = r#"/**
+ * TODO: Implement your task logic here
+ * 
+ * This function should accept input parameters and return output
+ * that matches the defined JSON schemas.
+ */
+function main(input) {
+    // TODO: Add your implementation here
+    console.log("Processing input:", JSON.stringify(input));
+    
+    // Example: return a simple result
+    return {
+        status: "success",
+        message: "Task completed successfully",
+        input_received: input
+    };
+}
+
+// Export the main function
+module.exports = { main };
+"#;
+    
+    std::fs::write(main_js_path, js_content)?;
+    Ok(())
+}
+
+/// Generate an input.schema.json stub
+fn generate_input_schema_stub(input_schema_path: &Path) -> Result<()> {
+    let schema = serde_json::json!({
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "title": "Task Input Schema",
+        "description": "TODO: Define the expected input structure for this task",
+        "properties": {
+            "example_field": {
+                "type": "string",
+                "description": "TODO: Replace with actual input fields"
+            }
+        },
+        "required": [],
+        "additionalProperties": true
+    });
+    
+    std::fs::write(input_schema_path, serde_json::to_string_pretty(&schema)?)?;
+    Ok(())
+}
+
+/// Generate an output.schema.json stub
+fn generate_output_schema_stub(output_schema_path: &Path) -> Result<()> {
+    let schema = serde_json::json!({
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "title": "Task Output Schema",
+        "description": "TODO: Define the expected output structure for this task",
+        "properties": {
+            "status": {
+                "type": "string",
+                "description": "Task execution status",
+                "enum": ["success", "error"]
+            },
+            "message": {
+                "type": "string",
+                "description": "Human-readable status message"
+            }
+        },
+        "required": ["status"],
+        "additionalProperties": true
+    });
+    
+    std::fs::write(output_schema_path, serde_json::to_string_pretty(&schema)?)?;
+    Ok(())
+}
+
+/// Generate a test stub
+fn generate_test_stub(test_path: &Path) -> Result<()> {
+    let test_content = r#"/**
+ * Basic tests for the task
+ * TODO: Add comprehensive test cases
+ */
+
+const { main } = require('../main.js');
+
+describe('Task Tests', () => {
+    test('should execute successfully with valid input', () => {
+        const input = {
+            example_field: "test_value"
+        };
+        
+        const result = main(input);
+        
+        expect(result).toBeDefined();
+        expect(result.status).toBe("success");
+    });
+    
+    test('should handle empty input', () => {
+        const result = main({});
+        
+        expect(result).toBeDefined();
+        expect(result.status).toBeDefined();
+    });
+    
+    // TODO: Add more specific test cases based on your task requirements
+});
+"#;
+    
+    std::fs::write(test_path, test_content)?;
+    Ok(())
+}
+
+/// Validate metadata.json file
+fn validate_metadata_file(metadata_path: &Path, fix: bool) -> Result<()> {
+    use chrono::Utc;
+    
+    let content = std::fs::read_to_string(metadata_path)?;
+    let mut metadata: JsonValue = serde_json::from_str(&content)
+        .context("metadata.json is not valid JSON")?;
+    
+    let required_fields = ["name", "version", "label"];
+    let mut missing_fields = Vec::new();
+    let mut fixed_fields = Vec::new();
+    
+    for field in &required_fields {
+        if !metadata.get(field).is_some() {
+            missing_fields.push(*field);
+        }
+    }
+    
+    if !missing_fields.is_empty() {
+        if fix {
+            // Fix missing metadata fields
+            let task_name = metadata_path.parent()
+                .and_then(|dir| dir.file_name())
+                .and_then(|name| name.to_str())
+                .unwrap_or("unnamed_task");
+            
+            let mut metadata_obj = metadata.as_object_mut()
+                .ok_or_else(|| anyhow::anyhow!("metadata.json is not a valid JSON object"))?;
+            
+            for field in &missing_fields {
+                match *field {
+                    "name" => {
+                        metadata_obj.insert("name".to_string(), serde_json::Value::String(task_name.to_string()));
+                        fixed_fields.push("name");
+                    }
+                    "version" => {
+                        metadata_obj.insert("version".to_string(), serde_json::Value::String("1.0.0".to_string()));
+                        fixed_fields.push("version");
+                    }
+                    "label" => {
+                        let label = format!("{} Task", task_name.replace('_', " ").replace('-', " "));
+                        metadata_obj.insert("label".to_string(), serde_json::Value::String(label));
+                        fixed_fields.push("label");
+                    }
+                    _ => {}
+                }
+            }
+            
+            // Add other useful fields if they don't exist
+            if !metadata_obj.contains_key("uuid") {
+                metadata_obj.insert("uuid".to_string(), serde_json::Value::String(uuid::Uuid::new_v4().to_string()));
+                fixed_fields.push("uuid");
+            }
+            
+            if !metadata_obj.contains_key("description") {
+                let description = format!("TODO: Add description for {} task", task_name);
+                metadata_obj.insert("description".to_string(), serde_json::Value::String(description));
+                fixed_fields.push("description");
+            }
+            
+            if !metadata_obj.contains_key("created_at") {
+                metadata_obj.insert("created_at".to_string(), serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
+                fixed_fields.push("created_at");
+            }
+            
+            if !metadata_obj.contains_key("updated_at") {
+                metadata_obj.insert("updated_at".to_string(), serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
+                fixed_fields.push("updated_at");
+            }
+            
+            // Write the updated metadata back to file
+            std::fs::write(metadata_path, serde_json::to_string_pretty(&metadata)?)?;
+            
+            info!("🔧 Fixed metadata.json - added missing fields: {:?}", fixed_fields);
+        } else {
+            return Err(anyhow::anyhow!("Missing required metadata fields: {:?}", missing_fields));
+        }
+    }
+    
+    debug!("✅ metadata.json is valid");
+    Ok(())
+}
+
+/// Validate JavaScript file
+fn validate_js_file(js_path: &Path) -> Result<()> {
+    let content = std::fs::read_to_string(js_path)?;
+    
+    if content.trim().is_empty() {
+        return Err(anyhow::anyhow!("JavaScript file is empty"));
+    }
+    
+    // Basic check for function definition
+    if !content.contains("function") && !content.contains("=>") && !content.contains("module.exports") {
+        warn!("JavaScript file may not contain a proper function definition");
+    }
+    
+    debug!("✅ main.js contains content");
+    Ok(())
+}
+
+/// Validate JSON schema file
+fn validate_schema_file(schema_path: &Path, schema_type: &str) -> Result<()> {
+    let content = std::fs::read_to_string(schema_path)?;
+    let schema: JsonValue = serde_json::from_str(&content)
+        .with_context(|| format!("{}.schema.json is not valid JSON", schema_type))?;
+    
+    // Basic schema validation
+    if !schema.is_object() {
+        return Err(anyhow::anyhow!("{} schema must be a JSON object", schema_type));
+    }
+    
+    debug!("✅ {}.schema.json is valid", schema_type);
+    Ok(())
+}
+
+/// Validate a configuration file
+async fn validate_config_file(config_path: &Path) -> Result<()> {
+    info!("Validating configuration file: {:?}", config_path);
+    
+    let content = std::fs::read_to_string(config_path)
+        .context("Failed to read configuration file")?;
+    
+    // Try to parse as YAML first, then JSON
+    let _config: serde_json::Value = if config_path.extension().and_then(|s| s.to_str()) == Some("yaml") 
+        || config_path.extension().and_then(|s| s.to_str()) == Some("yml") {
+        serde_yaml::from_str(&content)
+            .context("Configuration file is not valid YAML")?
+    } else {
+        serde_json::from_str(&content)
+            .context("Configuration file is not valid JSON")?
+    };
+    
+    info!("✅ Configuration file is valid");
     Ok(())
 }
 
@@ -1008,7 +1388,7 @@ async fn main() -> Result<()> {
                 generate_config(Some(&output), &config_type).await?;
             }
             ConfigCommands::Validate { config_file } => {
-                validate_task(&config_file.to_string_lossy()).await?;
+                validate_config_file(&config_file).await?;
             }
         },
         Some(Commands::Repo { repo_cmd }) => match repo_cmd {
@@ -1056,8 +1436,8 @@ async fn main() -> Result<()> {
         Some(Commands::RunOnce { from_fs, input_json, record: _ }) => {
             execute_js_task(None, &from_fs, input_json.as_deref(), "json").await?;
         }
-        Some(Commands::Validate { from_fs }) => {
-            validate_task(&from_fs).await?;
+        Some(Commands::Validate { from_fs, fix }) => {
+            validate_task(&from_fs, fix).await?;
         }
         Some(Commands::Test { from_fs }) => {
             execute_js_task(None, &from_fs, None, "json").await?;

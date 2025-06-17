@@ -93,6 +93,9 @@ pub enum Commands {
         /// Path to the file system resource
         #[arg(long, value_name = "STRING")]
         from_fs: String,
+        /// Automatically fix missing metadata and schema files by generating stubs
+        #[arg(long)]
+        fix: bool,
     },
 
     /// Test a task
