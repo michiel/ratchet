@@ -13,6 +13,7 @@ pub struct ServerConfig {
     pub logging: LoggingConfig,
     pub database: DatabaseConfig,
     pub registry: RegistryConfig,
+    pub heartbeat: HeartbeatConfig,
 }
 
 /// HTTP server configuration
@@ -96,6 +97,14 @@ pub struct RegistryConfig {
     pub enable_validation: bool,
 }
 
+/// Heartbeat configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeartbeatConfig {
+    pub enabled: bool,
+    pub cron_schedule: String,
+    pub output_destinations: Vec<String>,
+}
+
 
 impl Default for ServerConfig {
     fn default() -> Self {
@@ -107,6 +116,7 @@ impl Default for ServerConfig {
             logging: LoggingConfig::default(),
             database: DatabaseConfig::default(),
             registry: RegistryConfig::default(),
+            heartbeat: HeartbeatConfig::default(),
         }
     }
 }
@@ -208,6 +218,16 @@ impl Default for RegistryConfig {
     }
 }
 
+impl Default for HeartbeatConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cron_schedule: "*/5 * * * *".to_string(), // Every 5 minutes
+            output_destinations: vec!["stdio".to_string()],
+        }
+    }
+}
+
 
 impl ServerConfig {
     /// Convert from ratchet-config RatchetConfig to ServerConfig
@@ -272,6 +292,7 @@ impl ServerConfig {
                 enable_auto_sync: true, // Default enabled
                 enable_validation: true, // Default enabled
             },
+            heartbeat: HeartbeatConfig::default(),
         })
     }
 }

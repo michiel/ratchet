@@ -26,6 +26,7 @@ use ratchet_http::HttpManager;
 use crate::config::ServerConfig;
 use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
 use crate::scheduler::{SchedulerService, TokioCronSchedulerService, TokioCronSchedulerConfig};
+use crate::heartbeat::HeartbeatService;
 // use crate::scheduler_legacy::{SchedulerService as LegacySchedulerService, SchedulerConfig as LegacySchedulerConfig};
 use ratchet_output::OutputDeliveryManager;
 
@@ -39,6 +40,7 @@ pub struct ServiceContainer {
     pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
     pub output_manager: Arc<OutputDeliveryManager>,
     pub scheduler_service: Option<Arc<dyn SchedulerService>>,
+    pub heartbeat_service: Arc<HeartbeatService>,
 }
 
 impl ServiceContainer {
@@ -62,6 +64,13 @@ impl ServiceContainer {
             TokioCronSchedulerService::new(repositories.clone(), scheduler_config).await?
         ));
 
+        // Create heartbeat service
+        let heartbeat_service = Arc::new(HeartbeatService::new(
+            config.heartbeat.clone(),
+            repositories.clone(),
+            output_manager.clone(),
+        ));
+
         Ok(Self {
             repositories,
             registry,
@@ -70,6 +79,7 @@ impl ServiceContainer {
             mcp_task_service,
             output_manager,
             scheduler_service,
+            heartbeat_service,
         })
     }
 
@@ -671,24 +681,42 @@ impl CrudRepository<UnifiedSchedule> for DirectScheduleRepository {
         }
     }
     
-    async fn find_by_id(&self, _id: i32) -> Result<Option<UnifiedSchedule>, DatabaseError> {
-        // TODO: Implement schedule lookup
-        Ok(None)
+    async fn find_by_id(&self, id: i32) -> Result<Option<UnifiedSchedule>, DatabaseError> {
+        match self.storage_repo.find_by_id(id).await {
+            Ok(Some(schedule)) => Ok(Some(convert_storage_schedule_to_unified(schedule))),
+            Ok(None) => Ok(None),
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
-    async fn find_by_uuid(&self, _uuid: Uuid) -> Result<Option<UnifiedSchedule>, DatabaseError> {
-        // TODO: Implement schedule lookup by UUID
-        Ok(None)
+    async fn find_by_uuid(&self, uuid: Uuid) -> Result<Option<UnifiedSchedule>, DatabaseError> {
+        // For now, we don't have a direct UUID lookup in storage, so we'll need to search
+        // This is a temporary implementation - ideally storage would support UUID lookup
+        match self.storage_repo.find_enabled().await {
+            Ok(schedules) => {
+                for schedule in schedules {
+                    if schedule.uuid == uuid {
+                        return Ok(Some(convert_storage_schedule_to_unified(schedule)));
+                    }
+                }
+                Ok(None)
+            },
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
-    async fn update(&self, _entity: UnifiedSchedule) -> Result<UnifiedSchedule, DatabaseError> {
-        // TODO: Implement schedule update
-        Err(DatabaseError::Internal { message: "Not implemented yet".to_string() })
+    async fn update(&self, entity: UnifiedSchedule) -> Result<UnifiedSchedule, DatabaseError> {
+        let storage_schedule = convert_unified_schedule_to_storage(entity);
+        
+        match self.storage_repo.update(storage_schedule).await {
+            Ok(updated_schedule) => Ok(convert_storage_schedule_to_unified(updated_schedule)),
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
-    async fn delete(&self, _id: i32) -> Result<(), DatabaseError> {
-        // TODO: Implement schedule deletion
-        Ok(())
+    async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
+        self.storage_repo.delete(id).await
+            .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
     
     async fn count(&self) -> Result<u64, DatabaseError> {
@@ -754,28 +782,35 @@ impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for DirectScheduleRepo
 #[async_trait]
 impl ScheduleRepository for DirectScheduleRepository {
     async fn find_enabled(&self) -> Result<Vec<UnifiedSchedule>, DatabaseError> {
-        // TODO: Implement find enabled
-        Ok(Vec::new())
+        match self.storage_repo.find_enabled().await {
+            Ok(schedules) => Ok(schedules.into_iter().map(convert_storage_schedule_to_unified).collect()),
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
     async fn find_ready_to_run(&self) -> Result<Vec<UnifiedSchedule>, DatabaseError> {
-        // TODO: Implement find ready to run
-        Ok(Vec::new())
+        match self.storage_repo.find_ready_to_run().await {
+            Ok(schedules) => Ok(schedules.into_iter().map(convert_storage_schedule_to_unified).collect()),
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+        }
     }
     
-    async fn record_execution(&self, _id: ApiId, _execution_id: ApiId) -> Result<(), DatabaseError> {
-        // TODO: Implement record execution
-        Ok(())
+    async fn record_execution(&self, id: ApiId, _execution_id: ApiId) -> Result<(), DatabaseError> {
+        let i32_id = id.as_i32().unwrap_or(0);
+        self.storage_repo.record_execution(i32_id).await
+            .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
     
-    async fn update_next_run(&self, _id: ApiId, _next_run: chrono::DateTime<chrono::Utc>) -> Result<(), DatabaseError> {
-        // TODO: Implement update next run
-        Ok(())
+    async fn update_next_run(&self, id: ApiId, next_run: chrono::DateTime<chrono::Utc>) -> Result<(), DatabaseError> {
+        let i32_id = id.as_i32().unwrap_or(0);
+        self.storage_repo.update_next_run(i32_id, Some(next_run)).await
+            .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
     
-    async fn set_enabled(&self, _id: ApiId, _enabled: bool) -> Result<(), DatabaseError> {
-        // TODO: Implement set enabled
-        Ok(())
+    async fn set_enabled(&self, id: ApiId, enabled: bool) -> Result<(), DatabaseError> {
+        let i32_id = id.as_i32().unwrap_or(0);
+        self.storage_repo.set_enabled(i32_id, enabled).await
+            .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
 

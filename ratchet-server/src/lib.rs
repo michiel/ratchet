@@ -10,6 +10,7 @@ pub mod bridges;
 pub mod embedded;
 pub mod scheduler;
 pub mod scheduler_legacy;
+pub mod heartbeat;
 
 // Re-export main components
 pub use config::*;

@@ -278,7 +278,19 @@ impl Server {
 
         tracing::info!("Starting Ratchet server on {}", addr);
         
-        // Start scheduler service as background task
+        // Initialize heartbeat system
+        if let Err(e) = self.services.heartbeat_service.initialize().await {
+            tracing::warn!("Failed to initialize heartbeat system: {}", e);
+            // Don't fail server startup for this
+        }
+        
+        // Initialize default schedules from registry BEFORE starting scheduler
+        if let Err(e) = self.initialize_default_schedules().await {
+            tracing::warn!("Failed to initialize default schedules: {}", e);
+            // Don't fail server startup for this
+        }
+        
+        // Start scheduler service as background task AFTER schedules are initialized
         if let Some(scheduler_service) = &self.services.scheduler_service {
             let scheduler_clone = scheduler_service.clone();
             tokio::spawn(async move {
@@ -287,12 +299,6 @@ impl Server {
                 }
             });
             tracing::info!("Started background scheduler service");
-        }
-        
-        // Initialize default schedules from registry (heartbeat only)
-        if let Err(e) = self.initialize_default_schedules().await {
-            tracing::warn!("Failed to initialize default schedules: {}", e);
-            // Don't fail server startup for this
         }
         
         // Print configuration summary
