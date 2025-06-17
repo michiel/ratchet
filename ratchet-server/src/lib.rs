@@ -8,7 +8,6 @@ pub mod services;
 pub mod startup;
 pub mod bridges;
 pub mod embedded;
-pub mod heartbeat;
 pub mod scheduler;
 pub mod scheduler_legacy;
 

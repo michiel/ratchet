@@ -166,6 +166,111 @@ impl Server {
         app
     }
 
+    /// Initialize default schedules from embedded registry
+    async fn initialize_default_schedules(&self) -> Result<()> {
+        use ratchet_interfaces::ScheduleFilters;
+        use ratchet_api_types::{PaginationInput, UnifiedSchedule, ApiId};
+        use chrono::Utc;
+        
+        tracing::info!("Initializing default schedules from registry");
+        
+        // Only create heartbeat schedule if heartbeat task is available in repository
+        let task_repo = self.services.repositories.task_repository();
+        let heartbeat_task = match task_repo.find_by_name("heartbeat").await {
+            Ok(Some(task)) => {
+                tracing::debug!("Found heartbeat task in repository: {}", task.id);
+                task
+            }
+            Ok(None) => {
+                tracing::info!("Heartbeat task not found in repository, skipping default schedule creation");
+                return Ok(());
+            }
+            Err(e) => {
+                tracing::warn!("Failed to check repository for heartbeat task: {}", e);
+                return Ok(());
+            }
+        };
+        
+        // Check if heartbeat schedule already exists
+        let schedule_repo = self.services.repositories.schedule_repository();
+        let filters = ScheduleFilters {
+            task_id: Some(heartbeat_task.id.clone()),
+            name_exact: Some("system_heartbeat".to_string()),
+            enabled: Some(true),
+            next_run_before: None,
+            task_id_in: None,
+            id_in: None,
+            name_contains: None,
+            name_starts_with: None,
+            name_ends_with: None,
+            cron_expression_contains: None,
+            cron_expression_exact: None,
+            next_run_after: None,
+            last_run_after: None,
+            last_run_before: None,
+            created_after: None,
+            created_before: None,
+            updated_after: None,
+            updated_before: None,
+            has_next_run: None,
+            has_last_run: None,
+            is_due: None,
+            overdue: None,
+        };
+        let pagination = PaginationInput { page: Some(1), limit: Some(1), offset: None };
+        
+        match schedule_repo.find_with_filters(filters, pagination).await {
+            Ok(response) if !response.items.is_empty() => {
+                tracing::debug!("Heartbeat schedule already exists, skipping creation");
+                return Ok(());
+            }
+            Ok(_) => {
+                // No existing schedule, create one
+                tracing::info!("Creating default heartbeat schedule");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to check for existing heartbeat schedule: {}", e);
+                return Ok(());
+            }
+        }
+        
+        // Create default heartbeat schedule (every 5 minutes)
+        let heartbeat_schedule = UnifiedSchedule {
+            id: ApiId::from_i32(0), // Will be set by database
+            task_id: heartbeat_task.id,
+            name: "system_heartbeat".to_string(),
+            description: Some("System health monitoring heartbeat - managed by scheduler".to_string()),
+            cron_expression: "0 */5 * * * *".to_string(), // Every 5 minutes
+            enabled: true,
+            next_run: None, // Will be calculated by scheduler
+            last_run: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        
+        // Create the schedule in the repository
+        match schedule_repo.create(heartbeat_schedule.clone()).await {
+            Ok(created_schedule) => {
+                tracing::info!("Created default heartbeat schedule with ID: {}", created_schedule.id);
+                
+                // Add to running scheduler if available
+                if let Some(scheduler) = &self.services.scheduler_service {
+                    if let Err(e) = scheduler.add_schedule(created_schedule).await {
+                        tracing::warn!("Failed to add heartbeat schedule to running scheduler: {}", e);
+                        // Schedule will be picked up on next scheduler restart
+                    } else {
+                        tracing::info!("Successfully added heartbeat schedule to running scheduler");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to create default heartbeat schedule: {}", e);
+            }
+        }
+        
+        Ok(())
+    }
+
     /// Start the server
     pub async fn start(self) -> Result<()> {
         let app = self.build_app();
@@ -182,6 +287,12 @@ impl Server {
                 }
             });
             tracing::info!("Started background scheduler service");
+        }
+        
+        // Initialize default schedules from registry (heartbeat only)
+        if let Err(e) = self.initialize_default_schedules().await {
+            tracing::warn!("Failed to initialize default schedules: {}", e);
+            // Don't fail server startup for this
         }
         
         // Print configuration summary
