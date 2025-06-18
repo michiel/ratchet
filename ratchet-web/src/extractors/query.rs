@@ -1,5 +1,4 @@
 use axum::{
-    async_trait,
     extract::{FromRequestParts, Query},
     http::request::Parts,
 };
@@ -405,7 +404,6 @@ impl ListQuery {
 #[derive(Debug)]
 pub struct QueryParams(pub ListQuery);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for QueryParams
 where
     S: Send + Sync,
@@ -428,7 +426,6 @@ where
 #[derive(Debug)]
 pub struct PaginationParams(pub PaginationQuery);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for PaginationParams
 where
     S: Send + Sync,

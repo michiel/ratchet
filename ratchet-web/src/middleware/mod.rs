@@ -20,7 +20,7 @@ pub use auth::{
 pub use cors::cors_layer;
 pub use error_handler::{error_handler_layer, handle_error, handle_not_found, internal_error};
 pub use pagination::{pagination_response_layer, add_pagination_headers};
-pub use rate_limit::{rate_limit_layer, rate_limit_middleware, create_rate_limit_middleware, RateLimitConfig, UserQuotas, RateLimitQuota, ClientStats};
+pub use rate_limit::{rate_limit_layer, rate_limit_middleware, create_rate_limit_middleware, RateLimitConfig, UserQuotas, RateLimitQuota, ClientStats, RateLimiter};
 pub use request_id::{request_id_layer, RequestId, RequestIdExt, REQUEST_ID_HEADER};
 pub use security::{
     security_headers_layer, security_headers_middleware, SecurityConfig, TlsConfig, TlsProtocol,

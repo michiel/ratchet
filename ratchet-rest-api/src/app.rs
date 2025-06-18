@@ -10,7 +10,7 @@ use ratchet_web::{
     middleware::{
         audit_middleware, cors_layer, error_handler_layer, request_id_layer, security_headers_middleware,
         rate_limit_middleware, create_rate_limit_middleware, session_middleware, create_session_manager,
-        AuditConfig, SecurityConfig, RateLimitConfig, SessionConfig,
+        AuditConfig, SecurityConfig, RateLimitConfig, SessionConfig, RateLimiter,
     },
 };
 use std::sync::Arc;
@@ -177,9 +177,12 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
     // Rate limiting (applied early to prevent abuse)
     if config.enable_rate_limiting {
         let rate_limiter = create_rate_limit_middleware(config.rate_limit_config.clone());
-        app = app.layer(axum::middleware::from_fn(move |connect_info: Option<axum::extract::ConnectInfo<std::net::SocketAddr>>, mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+        app = app.layer(axum::middleware::from_fn(move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
             let rate_limiter = rate_limiter.clone();
             async move {
+                // Extract ConnectInfo from request extensions if available
+                let connect_info = req.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().cloned();
+                let mut req = req;
                 req.extensions_mut().insert(rate_limiter);
                 match rate_limit_middleware(connect_info, req, next).await {
                     Ok(response) => response,
@@ -204,9 +207,12 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
     // Audit logging (should be one of the first middleware to capture all requests)
     if config.enable_audit_logging {
         let audit_config = config.audit_config.clone();
-        app = app.layer(axum::middleware::from_fn(move |connect_info: Option<axum::extract::ConnectInfo<std::net::SocketAddr>>, mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+        app = app.layer(axum::middleware::from_fn(move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
             let config = audit_config.clone();
             async move {
+                // Extract ConnectInfo from request extensions if available
+                let connect_info = req.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().cloned();
+                let mut req = req;
                 req.extensions_mut().insert(config);
                 audit_middleware(connect_info, req, next).await
             }
@@ -336,57 +342,57 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/tasks/stats", get(handlers::tasks::get_task_stats))
         .route("/tasks/sync", post(handlers::tasks::sync_tasks))
         .route(
-            "/tasks/:id",
+            "/tasks/{id}",
             get(handlers::tasks::get_task)
                 .patch(handlers::tasks::update_task)
                 .delete(handlers::tasks::delete_task),
         )
-        .route("/tasks/:id/enable", post(handlers::tasks::enable_task))
-        .route("/tasks/:id/disable", post(handlers::tasks::disable_task))
+        .route("/tasks/{id}/enable", post(handlers::tasks::enable_task))
+        .route("/tasks/{id}/disable", post(handlers::tasks::disable_task))
         // Execution endpoints
         .route("/executions", get(handlers::executions::list_executions).post(handlers::executions::create_execution))
         .route("/executions/stats", get(handlers::executions::get_execution_stats))
         .route(
-            "/executions/:id",
+            "/executions/{id}",
             get(handlers::executions::get_execution)
                 .patch(handlers::executions::update_execution)
                 .delete(handlers::executions::delete_execution),
         )
-        .route("/executions/:id/cancel", post(handlers::executions::cancel_execution))
-        .route("/executions/:id/retry", post(handlers::executions::retry_execution))
-        .route("/executions/:id/logs", get(handlers::executions::get_execution_logs))
+        .route("/executions/{id}/cancel", post(handlers::executions::cancel_execution))
+        .route("/executions/{id}/retry", post(handlers::executions::retry_execution))
+        .route("/executions/{id}/logs", get(handlers::executions::get_execution_logs))
         // Job endpoints
         .route("/jobs", get(handlers::jobs::list_jobs).post(handlers::jobs::create_job))
         .route("/jobs/stats", get(handlers::jobs::get_job_stats))
         .route(
-            "/jobs/:id",
+            "/jobs/{id}",
             get(handlers::jobs::get_job)
                 .patch(handlers::jobs::update_job)
                 .delete(handlers::jobs::delete_job),
         )
-        .route("/jobs/:id/cancel", post(handlers::jobs::cancel_job))
-        .route("/jobs/:id/retry", post(handlers::jobs::retry_job))
+        .route("/jobs/{id}/cancel", post(handlers::jobs::cancel_job))
+        .route("/jobs/{id}/retry", post(handlers::jobs::retry_job))
         // Schedule endpoints
         .route("/schedules", get(handlers::schedules::list_schedules).post(handlers::schedules::create_schedule))
         .route("/schedules/stats", get(handlers::schedules::get_schedule_stats))
         .route(
-            "/schedules/:id",
+            "/schedules/{id}",
             get(handlers::schedules::get_schedule)
                 .patch(handlers::schedules::update_schedule)
                 .delete(handlers::schedules::delete_schedule),
         )
-        .route("/schedules/:id/enable", post(handlers::schedules::enable_schedule))
-        .route("/schedules/:id/disable", post(handlers::schedules::disable_schedule))
-        .route("/schedules/:id/trigger", post(handlers::schedules::trigger_schedule))
+        .route("/schedules/{id}/enable", post(handlers::schedules::enable_schedule))
+        .route("/schedules/{id}/disable", post(handlers::schedules::disable_schedule))
+        .route("/schedules/{id}/trigger", post(handlers::schedules::trigger_schedule))
         // MCP task development endpoints
         .route("/mcp/tasks", post(handlers::mcp_create_task))
-        .route("/mcp/tasks/:name", 
+        .route("/mcp/tasks/{name}", 
             get(handlers::mcp_edit_task)  // For getting current task config before editing
             .patch(handlers::mcp_edit_task)
             .delete(handlers::mcp_delete_task))
-        .route("/mcp/tasks/:name/test", post(handlers::mcp_test_task))
+        .route("/mcp/tasks/{name}/test", post(handlers::mcp_test_task))
         .route("/mcp/results", post(handlers::mcp_store_result))
-        .route("/mcp/results/:name", get(handlers::mcp_get_results))
+        .route("/mcp/results/{name}", get(handlers::mcp_get_results))
         // Worker endpoints  
         .route("/workers", get(handlers::workers::list_workers))
         .route("/workers/stats", get(handlers::workers::get_worker_stats))

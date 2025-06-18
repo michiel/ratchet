@@ -3,7 +3,6 @@ pub mod query;
 pub mod filter_extraction;
 
 // Re-export commonly used extractors
-pub use auth::*;
 pub use query::{
     QueryParams, PaginationParams, ListQuery, PaginationQuery,
     SortQuery, FilterQuery

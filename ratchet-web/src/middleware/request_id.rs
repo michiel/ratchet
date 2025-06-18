@@ -102,7 +102,6 @@ impl RequestIdExt for Request<axum::body::Body> {
 }
 
 /// Axum extractor for request ID
-#[async_trait::async_trait]
 impl<S> FromRequestParts<S> for RequestId
 where
     S: Send + Sync,

@@ -1,7 +1,6 @@
 //! Authentication extractors for Axum
 
 use axum::{
-    async_trait,
     extract::FromRequestParts,
     http::request::Parts,
 };
@@ -12,7 +11,6 @@ use crate::{
 };
 
 /// Auth context extractor for Axum handlers
-#[async_trait]
 impl<S> FromRequestParts<S> for AuthContext
 where
     S: Send + Sync,

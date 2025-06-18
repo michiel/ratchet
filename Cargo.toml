@@ -49,12 +49,12 @@ uuid = { version = "1.17", features = ["v4", "serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"], default-features = false }
 # Upgrade to latest tower and axum for enhanced middleware support
 tower = { version = "0.5", default-features = false, features = ["util", "timeout", "limit", "load-shed", "steer"] }
-# Upgrade to axum 0.7 for improved middleware support while maintaining compatibility
-axum = { version = "0.7", default-features = false, features = ["http1", "http2", "json", "original-uri", "form", "matched-path", "tokio", "query", "macros"] }
+# Upgrade to axum 0.8 for latest features and performance improvements
+axum = { version = "0.8", default-features = false, features = ["http1", "http2", "json", "original-uri", "form", "matched-path", "tokio", "query", "macros"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit", "fs"] }
-# Keep GraphQL at 6.0 for current Rust version compatibility
-async-graphql = { version = "6.0", features = ["uuid", "chrono", "graphiql"], default-features = false }
-async-graphql-axum = "6.0"
+# Update GraphQL to 7.0 for Axum 0.8 compatibility
+async-graphql = { version = "7.0", features = ["uuid", "chrono", "graphiql"], default-features = false }
+async-graphql-axum = "7.0"
 # Latest reqwest version
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
 url = "2.5"
