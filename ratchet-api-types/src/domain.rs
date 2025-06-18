@@ -8,9 +8,13 @@ use crate::enums::*;
 #[cfg(feature = "graphql")]
 use async_graphql::*;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Unified Task representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedTask {
     pub id: ApiId,
@@ -38,6 +42,7 @@ pub struct UnifiedTask {
 /// Unified Execution representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedExecution {
     pub id: ApiId,
@@ -64,6 +69,7 @@ pub struct UnifiedExecution {
 /// Unified Job representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedJob {
     pub id: ApiId,
@@ -81,6 +87,7 @@ pub struct UnifiedJob {
 /// Unified Schedule representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedSchedule {
     pub id: ApiId,
@@ -98,6 +105,7 @@ pub struct UnifiedSchedule {
 /// Unified Output Destination representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedOutputDestination {
     pub destination_type: String,
@@ -109,6 +117,7 @@ pub struct UnifiedOutputDestination {
 /// Unified Filesystem Configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedFilesystemConfig {
     pub path: String,
@@ -120,6 +129,7 @@ pub struct UnifiedFilesystemConfig {
 /// Unified Webhook Configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedWebhookConfig {
     pub url: String,
@@ -133,6 +143,7 @@ pub struct UnifiedWebhookConfig {
 /// Unified Retry Policy
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedRetryPolicy {
     pub max_attempts: i32,
@@ -144,6 +155,7 @@ pub struct UnifiedRetryPolicy {
 /// Unified Webhook Authentication
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedWebhookAuth {
     pub auth_type: String,
@@ -155,6 +167,7 @@ pub struct UnifiedWebhookAuth {
 /// Bearer Authentication
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct UnifiedBearerAuth {
     pub token: String,
 }
@@ -162,6 +175,7 @@ pub struct UnifiedBearerAuth {
 /// Basic Authentication
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct UnifiedBasicAuth {
     pub username: String,
     pub password: String,
@@ -170,6 +184,7 @@ pub struct UnifiedBasicAuth {
 /// API Key Authentication
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedApiKeyAuth {
     pub key: String,
@@ -179,6 +194,7 @@ pub struct UnifiedApiKeyAuth {
 /// Worker status representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedWorkerStatus {
     pub id: String,
@@ -194,6 +210,7 @@ pub struct UnifiedWorkerStatus {
 /// Unified User representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedUser {
     pub id: ApiId,
@@ -212,6 +229,7 @@ pub struct UnifiedUser {
 /// Unified Session representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedSession {
     pub id: ApiId,
@@ -229,6 +247,7 @@ pub struct UnifiedSession {
 /// Unified API Key representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedApiKey {
     pub id: ApiId,

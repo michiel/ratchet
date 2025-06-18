@@ -16,7 +16,7 @@ pub use error_sanitization::{ErrorSanitizer, SanitizedError, ErrorSanitizationCo
 // primarily used for task input/output validation.
 
 use crate::error::{RatchetError, ValidationError};
-use jsonschema::{Draft, JSONSchema};
+use jsonschema::Draft;
 use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::Path;
@@ -52,9 +52,9 @@ pub type ValidationResult<T> = Result<T, RatchetError>;
 /// validate_json(&data, &schema)?;
 /// ```
 pub fn validate_json(data: &JsonValue, schema: &JsonValue) -> ValidationResult<()> {
-    let compiled_schema = JSONSchema::options()
+    let validator = jsonschema::options()
         .with_draft(Draft::Draft7)
-        .compile(schema)
+        .build(schema)
         .map_err(|e| {
             RatchetError::Validation(ValidationError::SchemaValidation(format!(
                 "Failed to compile schema: {}",
@@ -62,11 +62,10 @@ pub fn validate_json(data: &JsonValue, schema: &JsonValue) -> ValidationResult<(
             )))
         })?;
 
-    compiled_schema.validate(data).map_err(|errs| {
-        let error_msgs: Vec<String> = errs.map(|e| e.to_string()).collect();
+    validator.validate(data).map_err(|err| {
         RatchetError::Validation(ValidationError::SchemaValidation(format!(
             "Schema validation failed: {}",
-            error_msgs.join(", ")
+            err
         )))
     })?;
 

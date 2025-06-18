@@ -23,9 +23,13 @@ chrono.workspace = true
 # GraphQL support (optional for lighter builds)
 async-graphql = { workspace = true, optional = true }
 
+# OpenAPI support (optional)
+utoipa = { version = "5.4", features = ["chrono", "uuid"], optional = true }
+
 # Error handling
 thiserror.workspace = true
 
 [features]
-default = ["graphql"]
+default = ["graphql", "openapi"]
 graphql = ["async-graphql"]
+openapi = ["utoipa"]

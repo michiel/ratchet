@@ -47,6 +47,8 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.17", features = ["v4", "serde"] }
 # Latest SQLx version
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"], default-features = false }
+# Update getrandom for better performance and security
+getrandom = "0.3"
 # Upgrade to latest tower and axum for enhanced middleware support
 tower = { version = "0.5", default-features = false, features = ["util", "timeout", "limit", "load-shed", "steer"] }
 # Upgrade to axum 0.8 for latest features and performance improvements

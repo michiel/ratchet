@@ -14,6 +14,7 @@ use ratchet_web::{
 use ratchet_api_types::ApiId;
 // Removed unused trait imports - using repositories via context
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use tracing::{info, warn, error};
 use uuid::Uuid;
 
@@ -23,7 +24,7 @@ use crate::{
 };
 
 /// Login request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     /// Username or email
@@ -35,7 +36,7 @@ pub struct LoginRequest {
 }
 
 /// Login response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     /// JWT access token
@@ -49,7 +50,7 @@ pub struct LoginResponse {
 }
 
 /// User information
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     /// User ID
@@ -67,7 +68,7 @@ pub struct UserInfo {
 }
 
 /// User registration request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     /// Username (must be unique)
@@ -81,7 +82,7 @@ pub struct RegisterRequest {
 }
 
 /// Password change request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangePasswordRequest {
     /// Current password

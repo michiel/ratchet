@@ -4,8 +4,12 @@ use uuid::Uuid;
 #[cfg(feature = "graphql")]
 use async_graphql::scalar;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Unified ID type that works consistently across both APIs
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct ApiId(pub String);
 
 impl ApiId {

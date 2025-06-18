@@ -47,6 +47,6 @@ http.workspace = true
 hyper.workspace = true
 
 [dev-dependencies]
-axum-test = "13.0"
+axum-test = "17.0"
 tokio-test = "0.4"
 serde_urlencoded = "0.7"

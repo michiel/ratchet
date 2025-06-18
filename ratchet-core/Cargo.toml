@@ -17,7 +17,7 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 async-trait = "0.1"
-jsonschema = "0.18"
+jsonschema = "0.30"
 humantime-serde = "1.1"
 envy = "0.4"
 log = { workspace = true }

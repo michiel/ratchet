@@ -111,10 +111,8 @@ impl TaskValidator {
 
     #[cfg(feature = "validation")]
     fn validate_json_schema(&self, schema: &serde_json::Value, field: &str, result: &mut ValidationResult) {
-        use jsonschema::JSONSchema;
-
         // Try to compile the schema to check if it's valid
-        match JSONSchema::compile(schema) {
+        match jsonschema::validator_for(schema) {
             Ok(_) => {
                 // Schema is valid
             }
