@@ -11,7 +11,7 @@ repository.workspace = true
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "2.0"
+thiserror = { workspace = true }
 tokio = { version = "1.42", features = ["sync", "rt", "fs", "time"] }
 uuid = { version = "1.11", features = ["v4", "serde"] }
 tracing = "0.1"

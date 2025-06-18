@@ -15,7 +15,7 @@ description = "Ratchet CLI app"
 # Use workspace-level dependencies
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml = "0.9"
+serde_yaml = { workspace = true }
 thiserror.workspace = true
 anyhow.workspace = true
 log.workspace = true
@@ -52,14 +52,14 @@ ratchet-cli-tools = { path = "../ratchet-cli-tools", features = ["javascript", "
 # indicatif = "0.17"
 
 # Console-specific dependencies
-rustyline = "14.0"
+rustyline = { workspace = true }
 clap_complete = "4.5"
-colored = "2.1"
+colored = { workspace = true }
 futures = "0.3"
 tokio-stream = "0.1"
-dirs = "5.0"
+dirs = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
-regex = "1.10"
+regex = { workspace = true }
 
 # Feature flags for optional functionality
 [features]

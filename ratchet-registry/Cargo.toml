@@ -27,16 +27,16 @@ ratchet-config = { path = "../ratchet-config" }
 ratchet-caching = { path = "../ratchet-caching" }
 
 # Registry-specific dependencies
-notify = { version = "6.1", features = ["serde"], optional = true }  # File watching
-walkdir = { version = "2.4", optional = true }                       # Directory traversal
+notify = { workspace = true, features = ["serde"], optional = true }  # File watching
+walkdir = { workspace = true, optional = true }                       # Directory traversal
 zip = { version = "0.6", optional = true }                           # ZIP file handling
 jsonschema = { workspace = true, optional = true }                   # Schema validation
-regex = "1.10"                                                        # Pattern matching
+regex = { workspace = true }                                            # Pattern matching
 url = { workspace = true }                                            # URL handling
 
 # Git support dependencies  
 git2 = { version = "0.18", optional = true, default-features = false, features = ["https", "vendored-openssl"] } # Git operations with vendored HTTPS support (self-contained OpenSSL)
-dirs = { version = "5.0", optional = true }                          # Cross-platform directories
+dirs = { workspace = true, optional = true }                          # Cross-platform directories
 md5 = { version = "0.7", optional = true }                           # URL hashing for cache paths
 
 [features]
@@ -49,6 +49,6 @@ watcher = ["dep:notify"]
 validation = ["dep:jsonschema"]
 
 [dev-dependencies]
-tokio-test = "0.4"
-tempfile = "3.8"
+tokio-test = { workspace = true }
+tempfile = { workspace = true }
 git2 = { version = "0.18", default-features = false, features = ["https", "vendored-openssl"] }  # For creating test repositories with vendored HTTPS

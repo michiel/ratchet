@@ -26,7 +26,7 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 regex = "1.10"
 fastrand = "2.0"
-cron = "0.12"
+cron = { workspace = true }
 
 # Database dependencies (optional)
 sea-orm = { version = "1.1", optional = true, features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
@@ -35,9 +35,9 @@ sea-query = { version = "0.32", optional = true }
 sqlx = { workspace = true, optional = true }
 
 # Testing dependencies (optional)
-tempfile = { version = "3.8", optional = true }
-mockall = { version = "0.12", optional = true }
-serde_yaml = { version = "0.9", optional = true }
+tempfile = { workspace = true, optional = true }
+mockall = { workspace = true, optional = true }
+serde_yaml = { workspace = true, optional = true }
 clap = { version = "4.4", optional = true, features = ["derive"] }
 
 [features]

@@ -6,7 +6,7 @@ use anyhow::Result;
 use colored::*;
 use rustyline::Result as RustylineResult;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
-use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
+use rustyline::highlight::{Highlighter, MatchingBracketHighlighter, CmdKind};
 use rustyline::hint::{Hinter, HistoryHinter};
 use rustyline::validate::{Validator, MatchingBracketValidator};
 use rustyline::{Context, Helper, Editor};
@@ -59,8 +59,8 @@ impl Highlighter for RatchetHelper {
         self.highlighter.highlight(line, pos)
     }
 
-    fn highlight_char(&self, line: &str, pos: usize, forced: bool) -> bool {
-        self.highlighter.highlight_char(line, pos, forced)
+    fn highlight_char(&self, line: &str, pos: usize, kind: CmdKind) -> bool {
+        self.highlighter.highlight_char(line, pos, kind)
     }
 }
 

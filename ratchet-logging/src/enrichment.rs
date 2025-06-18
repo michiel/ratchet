@@ -1,6 +1,6 @@
 use super::LogEvent;
 use serde_json::json;
-use sysinfo::{ProcessExt, System, SystemExt};
+use sysinfo::{Pid, System};
 
 /// Trait for log enrichment
 pub trait Enricher: Send + Sync {
@@ -107,8 +107,8 @@ impl Enricher for ProcessEnricher {
 
         // Add memory usage if available
         let mut system = System::new_all();
-        system.refresh_process(sysinfo::Pid::from(self.process_id as usize));
-        if let Some(process) = system.process(sysinfo::Pid::from(self.process_id as usize)) {
+        system.refresh_processes_specifics(sysinfo::ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::everything());
+        if let Some(process) = system.process(Pid::from(self.process_id as usize)) {
             event.fields.insert(
                 "memory_usage_mb".to_string(),
                 json!(process.memory() / 1024 / 1024),
