@@ -830,7 +830,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad8646f98db542e39fc66e68a20b2144f6a732636df7c2354e74645faaa433ce"
 dependencies = [
  "borsh-derive",
- "cfg_aliases 0.2.1",
+ "cfg_aliases",
 ]
 
 [[package]]
@@ -993,12 +993,6 @@ name = "cfg-if"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268"
-
-[[package]]
-name = "cfg_aliases"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "cfg_aliases"
@@ -1429,17 +1423,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "derive_arbitrary"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1562,15 +1545,6 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
-]
-
-[[package]]
-name = "envy"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f47e0157f2cb54f5ae1bd371b30a2ae4311e1c028f575cd4e81de7353215965"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -4167,25 +4141,13 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
-dependencies = [
- "bitflags 2.9.1",
- "cfg-if 1.0.1",
- "cfg_aliases 0.1.1",
- "libc",
-]
-
-[[package]]
-name = "nix"
 version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
 dependencies = [
  "bitflags 2.9.1",
  "cfg-if 1.0.1",
- "cfg_aliases 0.2.1",
+ "cfg_aliases",
  "libc",
 ]
 
@@ -4948,7 +4910,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "626214629cda6781b6dc1d316ba307189c85ba657213ce642d9c77670f8202c8"
 dependencies = [
  "bytes 1.10.1",
- "cfg_aliases 0.2.1",
+ "cfg_aliases",
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
@@ -4988,7 +4950,7 @@ version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee4e529991f949c5e25755532370b8af5d114acae52326361d68d47af64aa842"
 dependencies = [
- "cfg_aliases 0.2.1",
+ "cfg_aliases",
  "libc",
  "once_cell",
  "socket2",
@@ -5132,15 +5094,12 @@ name = "ratchet"
 version = "0.4.7"
 dependencies = [
  "anyhow",
- "axum",
  "chrono",
  "clap",
  "clap_complete",
  "colored",
  "dirs",
- "env_logger",
  "futures 0.3.31",
- "log",
  "ratchet-caching",
  "ratchet-cli-tools",
  "ratchet-config",
@@ -5159,14 +5118,11 @@ dependencies = [
  "regex",
  "reqwest",
  "rustyline",
- "serde",
  "serde_json",
  "serde_yaml",
- "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-appender",
  "tracing-subscriber",
  "uuid",
 ]
@@ -5188,14 +5144,11 @@ dependencies = [
 name = "ratchet-caching"
 version = "0.4.7"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
- "log",
  "lru",
  "moka",
  "parking_lot 0.12.4",
- "ratchet-core",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -5224,8 +5177,6 @@ version = "0.4.7"
 dependencies = [
  "chrono",
  "clap",
- "derivative",
- "envy",
  "log",
  "serde",
  "serde_json",
@@ -5235,24 +5186,19 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "url",
- "validator",
 ]
 
 [[package]]
 name = "ratchet-core"
 version = "0.4.7"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
- "envy",
- "humantime-serde",
  "jsonschema",
  "log",
  "regex",
  "serde",
  "serde_json",
- "serde_yaml",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
@@ -5270,10 +5216,7 @@ dependencies = [
  "ratchet-config",
  "ratchet-interfaces",
  "ratchet-ipc",
- "ratchet-resilience",
  "ratchet-storage",
- "reqwest",
- "serde",
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
@@ -5314,7 +5257,9 @@ version = "0.4.7"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
+ "http 1.3.1",
  "lazy_static",
  "ratchet-config",
  "reqwest",
@@ -5322,6 +5267,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
+ "tower-http 0.5.2",
  "tracing",
 ]
 
@@ -5378,13 +5324,8 @@ dependencies = [
 name = "ratchet-ipc"
 version = "0.4.7"
 dependencies = [
- "anyhow",
  "async-trait",
- "bytes 1.10.1",
  "chrono",
- "futures 0.3.31",
- "log",
- "ratchet-core",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -5445,12 +5386,10 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
- "clap",
  "fastrand 2.3.0",
  "futures-util",
  "http 1.3.1",
  "humantime-serde",
- "hyper 1.6.0",
  "ratchet-api-types",
  "ratchet-config",
  "ratchet-core",
@@ -5458,7 +5397,6 @@ dependencies = [
  "ratchet-http",
  "ratchet-interfaces",
  "ratchet-ipc",
- "ratchet-js",
  "ratchet-runtime",
  "ratchet-storage",
  "reqwest",
@@ -5470,10 +5408,8 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-test",
- "tower",
  "tower-http 0.5.2",
  "tracing",
- "tracing-subscriber",
  "url",
  "uuid",
 ]
@@ -5529,16 +5465,11 @@ dependencies = [
 name = "ratchet-plugins"
 version = "0.4.7"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
- "inventory",
  "libloading",
- "log",
  "ratchet-config",
- "ratchet-core",
  "ratchet-plugin",
- "serde",
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
@@ -5581,16 +5512,14 @@ dependencies = [
 name = "ratchet-resilience"
 version = "0.4.7"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
  "futures 0.3.31",
  "humantime-serde",
  "log",
- "nix 0.28.0",
+ "nix",
  "parking_lot 0.12.4",
  "rand 0.8.5",
- "ratchet-core",
  "serde",
  "thiserror 2.0.12",
  "tokio",
@@ -5634,21 +5563,16 @@ dependencies = [
 name = "ratchet-runtime"
 version = "0.4.7"
 dependencies = [
- "anyhow",
  "async-trait",
  "boa_engine",
  "boa_runtime",
  "chrono",
  "env_logger",
- "jsonschema",
  "log",
  "num_cpus",
- "ratchet-caching",
  "ratchet-core",
  "ratchet-ipc",
- "ratchet-resilience",
  "regex",
- "serde",
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
@@ -5661,20 +5585,16 @@ name = "ratchet-server"
 version = "0.4.7"
 dependencies = [
  "anyhow",
- "async-graphql",
- "async-graphql-axum",
  "async-trait",
  "axum",
  "axum-server",
  "chrono",
- "clap",
  "cron",
  "ratchet-api-types",
  "ratchet-config",
  "ratchet-graphql-api",
  "ratchet-http",
  "ratchet-interfaces",
- "ratchet-logging",
  "ratchet-mcp",
  "ratchet-output",
  "ratchet-registry",
@@ -5686,13 +5606,9 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
- "serde_yaml",
- "thiserror 2.0.12",
  "tokio",
  "tokio-cron-scheduler",
  "tokio-test",
- "tower",
- "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -5702,7 +5618,6 @@ dependencies = [
 name = "ratchet-storage"
 version = "0.4.7"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
  "clap",
@@ -5711,7 +5626,6 @@ dependencies = [
  "log",
  "mockall",
  "ratchet-api-types",
- "ratchet-caching",
  "ratchet-core",
  "ratchet-interfaces",
  "regex",
@@ -6199,7 +6113,7 @@ dependencies = [
  "libc",
  "log",
  "memchr",
- "nix 0.30.1",
+ "nix",
  "radix_trie",
  "unicode-segmentation",
  "unicode-width",
@@ -7519,18 +7433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-appender"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3566e8ce28cc0a3fe42519fc80e6b4c943cc4c8cef275620eb8dac2d3d4e06cf"
-dependencies = [
- "crossbeam-channel",
- "thiserror 1.0.69",
- "time",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tracing-attributes"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7778,36 +7680,6 @@ dependencies = [
  "outref",
  "uuid",
  "vsimd",
-]
-
-[[package]]
-name = "validator"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43fb22e1a008ece370ce08a3e9e4447a910e92621bb49b85d6e48a45397e7cfa"
-dependencies = [
- "idna",
- "once_cell",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "url",
- "validator_derive",
-]
-
-[[package]]
-name = "validator_derive"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7df16e474ef958526d1205f6dda359fdfab79d9aa6d54bafcb92dcd07673dca"
-dependencies = [
- "darling",
- "once_cell",
- "proc-macro-error2",
- "proc-macro2",
- "quote",
- "syn 2.0.103",
 ]
 
 [[package]]

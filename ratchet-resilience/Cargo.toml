@@ -9,12 +9,9 @@ repository.workspace = true
 description = "Resilience patterns (retry, circuit breaker, graceful shutdown) for Ratchet"
 
 [dependencies]
-ratchet-core = { path = "../ratchet-core" }
-
 serde = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 async-trait = "0.1"
 log = { workspace = true }
 chrono = { workspace = true }
@@ -24,7 +21,7 @@ humantime-serde = "1.1"
 futures = "0.3"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.28", features = ["signal", "process"], optional = true }
+nix = { workspace = true, features = ["signal", "process"], optional = true }
 
 [features]
 default = ["retry", "circuit-breaker", "shutdown"]

@@ -11,15 +11,11 @@ description = "Core domain models and types for Ratchet"
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = "0.9"
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 async-trait = "0.1"
 jsonschema = "0.30"
-humantime-serde = "1.1"
-envy = "0.4"
 log = { workspace = true }
 regex = "1.10"
 url = "2.5"

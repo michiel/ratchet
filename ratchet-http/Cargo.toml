@@ -11,12 +11,12 @@ description = "HTTP client functionality for Ratchet"
 
 [dependencies]
 # Core dependencies
-anyhow.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+anyhow.workspace = true
 
 # HTTP client
 reqwest = { workspace = true, features = ["rustls-tls", "json"] }
@@ -29,6 +29,14 @@ lazy_static.workspace = true
 # Configuration
 ratchet-config = { path = "../ratchet-config" }
 
+# HTTP server utilities (optional)
+axum = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+
 [features]
-default = ["recording"]
+default = ["recording", "client"]
 recording = []
+client = []
+server = ["dep:axum", "dep:tower-http", "dep:http"]
+all = ["recording", "client", "server"]

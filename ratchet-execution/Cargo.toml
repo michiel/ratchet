@@ -10,7 +10,6 @@ repository = "https://github.com/example/ratchet"
 [dependencies]
 # Core dependencies
 tokio = { version = "1.0", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -23,11 +22,7 @@ num_cpus = "1.16"
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-storage = { path = "../ratchet-storage" }
-ratchet-resilience = { path = "../ratchet-resilience" }
 ratchet-ipc = { path = "../ratchet-ipc" }
-
-# HTTP client for task HTTP calls
-reqwest = { workspace = true, features = ["rustls-tls"] }
 
 # Process management
 tokio-process = { version = "0.2", optional = true }

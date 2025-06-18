@@ -20,16 +20,13 @@ uuid = { workspace = true }
 # HTTP client and server
 reqwest = { workspace = true }
 axum = { workspace = true }
-tower = { workspace = true }
 tower-http = { workspace = true }
-hyper = { workspace = true }
 http = { workspace = true }
 futures-util = "0.3"
 async-stream = "0.3"
 
 # Logging and tracing
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
@@ -43,7 +40,6 @@ url = { workspace = true }
 tokio-stream = { workspace = true }
 humantime-serde = "1.1"
 serde_yaml = "0.9"
-clap = { version = "4.4", features = ["derive"] }
 
 # Internal dependencies
 ratchet-interfaces = { path = "../ratchet-interfaces" }
@@ -55,7 +51,6 @@ ratchet-runtime = { path = "../ratchet-runtime" }
 ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-execution = { path = "../ratchet-execution" }
-ratchet-js = { path = "../ratchet-js" }
 ratchet-http = { path = "../ratchet-http" }
 # ratchet_lib = { path = "../ratchet-lib" }  # REMOVED - replaced by ratchet-interfaces
 
@@ -64,7 +59,7 @@ default = ["server", "client", "transport-stdio", "transport-sse"]
 server = []
 client = []
 transport-stdio = []
-transport-sse = ["reqwest/stream", "axum/tokio", "tower/timeout", "tower-http/cors"]
+transport-sse = ["ratchet-http/server"]
 
 [dev-dependencies]
 tokio-test = "0.4"

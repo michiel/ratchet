@@ -9,15 +9,11 @@ repository.workspace = true
 description = "Caching abstractions and implementations for Ratchet"
 
 [dependencies]
-ratchet-core = { path = "../ratchet-core" }
-
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 async-trait = "0.1"
-log = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 moka = { version = "0.12", features = ["future"], optional = true }

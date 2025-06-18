@@ -9,20 +9,15 @@ repository.workspace = true
 description = "Plugin system for extending Ratchet"
 
 [dependencies]
-ratchet-core = { path = "../ratchet-core" }
 ratchet-plugin = { path = "../ratchet-plugin" }
 
-serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 async-trait = "0.1"
-log = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
-inventory = "0.3"
 
 # Dynamic loading support
 libloading = { version = "0.8", optional = true }

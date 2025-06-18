@@ -16,14 +16,6 @@ url = "2.5"
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
 
-# For validation
-validator = { version = "0.20", features = ["derive"] }
-
-# For environment variable handling
-envy = "0.4"
-
-# For default macro
-derivative = "2.2"
 
 # For CLI (optional)
 clap = { version = "4.4", features = ["derive"], optional = true }
