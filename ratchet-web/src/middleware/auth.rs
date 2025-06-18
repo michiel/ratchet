@@ -202,11 +202,7 @@ impl JwtManager {
     fn extract_token(&self, headers: &HeaderMap) -> Option<String> {
         let auth_header = headers.get("Authorization")?.to_str().ok()?;
         
-        if let Some(token) = auth_header.strip_prefix("Bearer ") {
-            Some(token.to_string())
-        } else {
-            None
-        }
+        auth_header.strip_prefix("Bearer ").map(|token| token.to_string())
     }
 
     /// Extract API key from headers

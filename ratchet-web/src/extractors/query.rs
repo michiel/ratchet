@@ -8,6 +8,7 @@ use crate::errors::WebError;
 
 /// Pagination query parameters
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct PaginationQuery {
     /// Page number (1-based)
     pub page: Option<u32>,
@@ -21,16 +22,6 @@ pub struct PaginationQuery {
     pub end: Option<u64>,
 }
 
-impl Default for PaginationQuery {
-    fn default() -> Self {
-        Self {
-            page: None,
-            limit: None,
-            start: None,
-            end: None,
-        }
-    }
-}
 
 impl PaginationQuery {
     /// Convert to standard pagination input
@@ -90,6 +81,7 @@ impl PaginationQuery {
 
 /// Sort query parameters
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct SortQuery {
     /// Field to sort by
     #[serde(rename = "_sort")]
@@ -99,14 +91,6 @@ pub struct SortQuery {
     pub order: Option<String>,
 }
 
-impl Default for SortQuery {
-    fn default() -> Self {
-        Self {
-            sort: None,
-            order: None,
-        }
-    }
-}
 
 impl SortQuery {
     /// Convert to standard sort input
@@ -226,6 +210,7 @@ impl FilterQuery {
 
 /// Combined query parameters for list endpoints - Full Refine.dev Support
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ListQuery {
     /// Alternative: Refine.dev style start offset
     #[serde(rename = "_start")]
@@ -248,19 +233,6 @@ pub struct ListQuery {
     pub filters: std::collections::HashMap<String, String>,
 }
 
-impl Default for ListQuery {
-    fn default() -> Self {
-        Self {
-            start: None,
-            end: None,
-            page: None,
-            limit: None,
-            sort: None,
-            order: None,
-            filters: std::collections::HashMap::new(),
-        }
-    }
-}
 
 impl ListQuery {
     /// Convert to standard list input

@@ -40,10 +40,7 @@ async fn fetch_native(
         let params_str = params_json_str.to_string(context)?.to_std_string_escaped();
 
         // Parse the JSON string into a JsonValue
-        match serde_json::from_str::<JsonValue>(&params_str) {
-            Ok(json_val) => Some(json_val),
-            Err(_) => None,
-        }
+        serde_json::from_str::<JsonValue>(&params_str).ok()
     } else {
         None
     };
@@ -63,10 +60,7 @@ async fn fetch_native(
         let body_str = body_json_str.to_string(context)?.to_std_string_escaped();
 
         // Parse the JSON string into a JsonValue
-        match serde_json::from_str::<JsonValue>(&body_str) {
-            Ok(json_val) => Some(json_val),
-            Err(_) => None,
-        }
+        serde_json::from_str::<JsonValue>(&body_str).ok()
     } else {
         None
     };

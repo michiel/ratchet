@@ -77,7 +77,7 @@ impl ConsoleMcpClient {
         let response = timeout(
             Duration::from_secs(10),
             self.http_client
-                .post(&format!("{}/graphql", self.server_url))
+                .post(format!("{}/graphql", self.server_url))
                 .json(&serde_json::json!({
                     "query": health_query
                 }))
@@ -132,7 +132,7 @@ impl ConsoleMcpClient {
         let response = timeout(
             Duration::from_secs(30),
             self.http_client
-                .post(&format!("{}/graphql", self.server_url))
+                .post(format!("{}/graphql", self.server_url))
                 .json(&request_body)
                 .send()
         ).await??;

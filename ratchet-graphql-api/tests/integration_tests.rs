@@ -3,7 +3,7 @@
 //! This module provides comprehensive integration testing for the Ratchet GraphQL API,
 //! covering schema validation, query execution, mutations, subscriptions, and error handling.
 
-use async_graphql::{Request, Variables, Response, value, Value};
+use async_graphql::{Request, Variables, Response, value};
 use chrono::Utc;
 use ratchet_graphql_api::{
     schema::{create_schema, configure_schema, RatchetSchema},

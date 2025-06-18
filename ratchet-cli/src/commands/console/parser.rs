@@ -105,9 +105,9 @@ impl CommandParser {
         let mut quote_char = '"';
         let mut brace_depth = 0;
         let mut bracket_depth = 0;
-        let mut chars = input.chars().peekable();
+        let chars = input.chars().peekable();
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             match ch {
                 '"' | '\'' if !in_quotes => {
                     in_quotes = true;

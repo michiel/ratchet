@@ -25,7 +25,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
     // Step 1: Find the addition task by name
     println!("🔍 Step 1: Finding addition task...");
     let tasks_response = client
-        .get(&format!("{}/tasks", api_base))
+        .get(format!("{}/tasks", api_base))
         .send()
         .await?;
     
@@ -57,7 +57,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
     });
     
     let create_schedule_response = client
-        .post(&format!("{}/schedules", api_base))
+        .post(format!("{}/schedules", api_base))
         .json(&schedule_payload)
         .send()
         .await?;
@@ -78,7 +78,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
     println!("🔍 Step 3: Verifying schedule exists...");
     
     let get_schedule_response = client
-        .get(&format!("{}/schedules/{}", api_base, schedule_id))
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
         .send()
         .await?;
     
@@ -99,7 +99,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
     println!("🔍 Step 5: Checking jobs created by schedule...");
     
     let jobs_response = client
-        .get(&format!("{}/jobs?scheduleId={}", api_base, schedule_id))
+        .get(format!("{}/jobs?scheduleId={}", api_base, schedule_id))
         .send()
         .await?;
     
@@ -110,7 +110,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
         .expect("Jobs data should be an array");
     
     // Verify we have the expected number of jobs (should be 2 or approaching 2)
-    assert!(jobs.len() >= 1, "At least one job should have been created by the schedule");
+    assert!(!jobs.is_empty(), "At least one job should have been created by the schedule");
     println!("✅ Found {} job(s) created by schedule", jobs.len());
     
     // Verify job properties
@@ -133,7 +133,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
         
         // Get executions for this job
         let executions_response = client
-            .get(&format!("{}/executions?jobId={}", api_base, job_id))
+            .get(format!("{}/executions?jobId={}", api_base, job_id))
             .send()
             .await?;
         
@@ -172,7 +172,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
         
         // Check jobs again
         let jobs_response2 = client
-            .get(&format!("{}/jobs?scheduleId={}", api_base, schedule_id))
+            .get(format!("{}/jobs?scheduleId={}", api_base, schedule_id))
             .send()
             .await?;
         
@@ -187,7 +187,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
     println!("🗑️  Step 8: Deleting schedule...");
     
     let delete_response = client
-        .delete(&format!("{}/schedules/{}", api_base, schedule_id))
+        .delete(format!("{}/schedules/{}", api_base, schedule_id))
         .send()
         .await?;
     
@@ -202,7 +202,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
     println!("🔍 Step 9: Verifying schedule deletion...");
     
     let get_deleted_schedule_response = client
-        .get(&format!("{}/schedules/{}", api_base, schedule_id))
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
         .send()
         .await?;
     
@@ -218,7 +218,7 @@ async fn test_complete_schedule_workflow() -> Result<()> {
     println!("🔍 Step 10: Final verification - checking schedule list...");
     
     let all_schedules_response = client
-        .get(&format!("{}/schedules", api_base))
+        .get(format!("{}/schedules", api_base))
         .send()
         .await?;
     
@@ -257,7 +257,7 @@ async fn test_addition_task_prerequisite() -> Result<()> {
     println!("🧪 Prerequisite test: Verifying addition task exists and works...");
     
     // Get tasks
-    let response = client.get(&format!("{}/tasks", api_base)).send().await?;
+    let response = client.get(format!("{}/tasks", api_base)).send().await?;
     assert_eq!(response.status(), 200);
     
     let data: Value = response.json().await?;
@@ -285,7 +285,7 @@ async fn test_schedule_crud_operations() -> Result<()> {
     println!("🧪 Testing schedule CRUD operations...");
     
     // Find addition task first
-    let tasks_response = client.get(&format!("{}/tasks", api_base)).send().await?;
+    let tasks_response = client.get(format!("{}/tasks", api_base)).send().await?;
     let tasks_data: Value = tasks_response.json().await?;
     let tasks = tasks_data["data"].as_array().expect("Tasks data should be an array");
     let addition_task = tasks.iter()
@@ -302,7 +302,7 @@ async fn test_schedule_crud_operations() -> Result<()> {
     });
     
     let create_response = client
-        .post(&format!("{}/schedules", api_base))
+        .post(format!("{}/schedules", api_base))
         .json(&schedule_payload)
         .send()
         .await?;
@@ -315,7 +315,7 @@ async fn test_schedule_crud_operations() -> Result<()> {
     
     // Read schedule
     let read_response = client
-        .get(&format!("{}/schedules/{}", api_base, schedule_id))
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
         .send()
         .await?;
     
@@ -333,7 +333,7 @@ async fn test_schedule_crud_operations() -> Result<()> {
     });
     
     let update_response = client
-        .patch(&format!("{}/schedules/{}", api_base, schedule_id))
+        .patch(format!("{}/schedules/{}", api_base, schedule_id))
         .json(&update_payload)
         .send()
         .await?;
@@ -344,7 +344,7 @@ async fn test_schedule_crud_operations() -> Result<()> {
     
     // Verify update
     let verify_response = client
-        .get(&format!("{}/schedules/{}", api_base, schedule_id))
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
         .send()
         .await?;
     
@@ -356,7 +356,7 @@ async fn test_schedule_crud_operations() -> Result<()> {
     
     // Delete schedule
     let delete_response = client
-        .delete(&format!("{}/schedules/{}", api_base, schedule_id))
+        .delete(format!("{}/schedules/{}", api_base, schedule_id))
         .send()
         .await?;
     
@@ -366,7 +366,7 @@ async fn test_schedule_crud_operations() -> Result<()> {
     
     // Verify deletion
     let verify_delete_response = client
-        .get(&format!("{}/schedules/{}", api_base, schedule_id))
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
         .send()
         .await?;
     

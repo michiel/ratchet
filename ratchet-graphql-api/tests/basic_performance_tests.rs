@@ -3,7 +3,6 @@
 //! These tests focus on measuring basic GraphQL performance characteristics
 //! using simulation rather than complex mocking.
 
-use serde_json::{json, Value};
 use std::{
     sync::{Arc, atomic::{AtomicU64, Ordering}},
     time::{Duration, Instant},
@@ -119,6 +118,12 @@ pub struct GraphQLPerformanceTest {
     total_operations: usize,
 }
 
+impl Default for GraphQLPerformanceTest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GraphQLPerformanceTest {
     pub fn new() -> Self {
         Self {
@@ -141,12 +146,10 @@ impl GraphQLPerformanceTest {
         let tracker = GraphQLOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
         
-        let queries = vec![
-            ("simple_task_query", "query { tasks { id name } }", 5),
+        let queries = [("simple_task_query", "query { tasks { id name } }", 5),
             ("complex_task_query", "query { tasks { id name executions { id status } } }", 15),
             ("filtered_query", "query { tasks(filter: { enabled: true }) { id name } }", 8),
-            ("paginated_query", "query { tasks(pagination: { page: 1, page_size: 10 }) { id } }", 10),
-        ];
+            ("paginated_query", "query { tasks(pagination: { page: 1, page_size: 10 }) { id } }", 10)];
 
         let start_time = Instant::now();
         let mut handles = Vec::new();
@@ -205,12 +208,10 @@ impl GraphQLPerformanceTest {
         let tracker = GraphQLOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
         
-        let mutations = vec![
-            ("create_task", 20),
+        let mutations = [("create_task", 20),
             ("update_task", 15),
             ("delete_task", 10),
-            ("create_execution", 25),
-        ];
+            ("create_execution", 25)];
 
         let start_time = Instant::now();
         let mut handles = Vec::new();

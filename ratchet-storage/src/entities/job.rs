@@ -276,7 +276,7 @@ impl Job {
             JobStatus::Queued => true,
             JobStatus::Scheduled | JobStatus::Retrying => self
                 .process_at
-                .map_or(true, |process_time| Utc::now() >= process_time),
+                .is_none_or(|process_time| Utc::now() >= process_time),
             _ => false,
         }
     }

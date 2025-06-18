@@ -86,7 +86,7 @@ impl ServiceContainer {
     /// Create a test service container with mock implementations
     #[cfg(test)]
     pub fn new_test() -> Self {
-        use std::sync::Arc;
+        
         
         // Create mock implementations for testing
         // These would be defined in the testing modules of each interface crate
@@ -323,7 +323,7 @@ impl FilteredRepository<UnifiedTask, TaskFilters> for DirectTaskRepository {
                         has_previous: pagination.offset.unwrap_or(0) > 0,
                         total_pages: {
                             let limit = pagination.limit.unwrap_or(20) as u64;
-                            if limit > 0 { ((total + limit - 1) / limit) as u32 } else { 1 }
+                            if limit > 0 { total.div_ceil(limit) as u32 } else { 1 }
                         },
                     },
                 })
@@ -836,7 +836,7 @@ fn convert_unified_task_to_storage(task: UnifiedTask) -> ratchet_storage::seaorm
 fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> ratchet_storage::seaorm::entities::Schedule {
     ratchet_storage::seaorm::entities::Schedule {
         id: schedule.id.as_i32().unwrap_or(0),
-        uuid: schedule.id.as_uuid().unwrap_or_else(|| uuid::Uuid::new_v4()), // Use schedule id as UUID or generate new one
+        uuid: schedule.id.as_uuid().unwrap_or_else(uuid::Uuid::new_v4), // Use schedule id as UUID or generate new one
         task_id: schedule.task_id.as_i32().unwrap_or(0),
         name: schedule.name,
         cron_expression: schedule.cron_expression,
@@ -897,7 +897,7 @@ fn convert_storage_task_to_unified(task: ratchet_storage::seaorm::entities::Task
 fn convert_unified_job_to_storage(job: UnifiedJob) -> ratchet_storage::seaorm::entities::Job {
     ratchet_storage::seaorm::entities::Job {
         id: job.id.as_i32().unwrap_or(0),
-        uuid: job.id.as_uuid().unwrap_or_else(|| uuid::Uuid::new_v4()),
+        uuid: job.id.as_uuid().unwrap_or_else(uuid::Uuid::new_v4),
         task_id: job.task_id.as_i32().unwrap_or(0),
         execution_id: None, // Not set until execution starts
         schedule_id: None, // Would need to be provided if job is from a schedule
@@ -1157,6 +1157,12 @@ pub async fn init_logging(config: &ServerConfig) -> Result<()> {
 /// Stub repository factory that returns empty results
 pub struct StubRepositoryFactory;
 
+impl Default for StubRepositoryFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StubRepositoryFactory {
     pub fn new() -> Self {
         Self
@@ -1201,6 +1207,12 @@ impl RepositoryFactory for StubRepositoryFactory {
 /// Stub task registry
 pub struct StubTaskRegistry;
 
+impl Default for StubTaskRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StubTaskRegistry {
     pub fn new() -> Self {
         Self
@@ -1236,6 +1248,12 @@ impl TaskRegistry for StubTaskRegistry {
 
 /// Stub registry manager
 pub struct StubRegistryManager;
+
+impl Default for StubRegistryManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl StubRegistryManager {
     pub fn new() -> Self {
@@ -1281,6 +1299,12 @@ impl RegistryManager for StubRegistryManager {
 
 /// Stub task validator
 pub struct StubTaskValidator;
+
+impl Default for StubTaskValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl StubTaskValidator {
     pub fn new() -> Self {

@@ -116,7 +116,7 @@ impl MatchingRule {
             },
 
             Self::FieldEquals { field, value } => {
-                error.context.get(field).map_or(false, |v| v == value)
+                error.context.get(field) == Some(value)
             }
 
             Self::FieldPattern { field, pattern } => error

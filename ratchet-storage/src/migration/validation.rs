@@ -5,9 +5,8 @@
 
 use sea_orm::{DatabaseConnection, Statement, QueryResult, ConnectionTrait};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-use crate::migration::{MigrationError, MigrationReport};
+use crate::migration::MigrationError;
 
 /// Validation report for migration integrity
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -553,11 +552,9 @@ impl MigrationValidator {
                 let id: i32 = result.try_get("", "id").unwrap_or(0);
                 let json_str: String = result.try_get("", field).unwrap_or_default();
                 
-                if !json_str.is_empty() {
-                    if let Err(_) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                        invalid_count += 1;
-                        errors.push(format!("{}.{} record {} has invalid JSON", table, field, id));
-                    }
+                if !json_str.is_empty() && serde_json::from_str::<serde_json::Value>(&json_str).is_err() {
+                    invalid_count += 1;
+                    errors.push(format!("{}.{} record {} has invalid JSON", table, field, id));
                 }
             }
         }

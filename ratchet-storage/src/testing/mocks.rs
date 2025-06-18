@@ -12,12 +12,7 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(all(feature = "testing", feature = "seaorm"))]
 use crate::{
-    seaorm::{
-        entities::{
-            delivery_results::Model as DeliveryResult,
-        },
-        safe_errors::{SafeDatabaseResult, SafeDatabaseError},
-    },
+    seaorm::safe_errors::SafeDatabaseError,
     StorageError,
 };
 #[cfg(feature = "testing")]
@@ -433,7 +428,7 @@ pub mod mock_errors {
 #[cfg(all(test, feature = "testing", feature = "seaorm"))]
 mod tests {
     use super::*;
-    use crate::testing::builders::*;
+    
 
     #[tokio::test]
     async fn test_mock_factory_empty_repository() {

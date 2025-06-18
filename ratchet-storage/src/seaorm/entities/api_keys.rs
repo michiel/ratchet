@@ -53,10 +53,12 @@ impl ActiveModelBehavior for ActiveModel {}
 /// API key permissions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
+#[derive(Default)]
 pub enum ApiKeyPermissions {
     #[sea_orm(string_value = "full")]
     Full,
     #[sea_orm(string_value = "read")]
+    #[default]
     ReadOnly,
     #[sea_orm(string_value = "execute")]
     ExecuteOnly,
@@ -64,11 +66,6 @@ pub enum ApiKeyPermissions {
     Admin,
 }
 
-impl Default for ApiKeyPermissions {
-    fn default() -> Self {
-        ApiKeyPermissions::ReadOnly
-    }
-}
 
 impl ApiKeyPermissions {
     /// Check if this permission allows reading

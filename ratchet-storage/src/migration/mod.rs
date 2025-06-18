@@ -144,6 +144,12 @@ pub struct MigrationSummary {
     pub backup_path: Option<String>,
 }
 
+impl Default for MigrationSummary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MigrationSummary {
     pub fn new() -> Self {
         Self {

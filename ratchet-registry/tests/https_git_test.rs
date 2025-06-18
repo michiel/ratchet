@@ -1,7 +1,7 @@
 #[cfg(feature = "git")]
 mod https_git_tests {
     use tempfile::TempDir;
-    use std::path::PathBuf;
+    
     use ratchet_registry::config::{TaskSource, GitConfig};
     use ratchet_registry::loaders::git::GitLoader;
     use ratchet_registry::loaders::TaskLoader;

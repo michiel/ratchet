@@ -65,7 +65,7 @@ impl Mutation {
         // Create the task using the repository
         let task_repo = context.repositories.task_repository();
         let created_task = task_repo.create(unified_task).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to create task: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to create task: {}", e)))?;
         
         Ok(created_task)
     }
@@ -103,7 +103,7 @@ impl Mutation {
         let task_repo = context.repositories.task_repository();
         let mut existing_task = task_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch task: {}", e)))?
             .ok_or_else(|| ApiError::not_found("Task", &id.0.to_string()))?;
         
         // Apply updates
@@ -131,7 +131,7 @@ impl Mutation {
         
         // Update the task using the repository
         let updated_task = task_repo.update(existing_task).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to update task: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to update task: {}", e)))?;
         
         Ok(updated_task)
     }
@@ -148,7 +148,7 @@ impl Mutation {
         let task_repo = context.repositories.task_repository();
         let existing_task = task_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch task: {}", e)))?;
         
         if existing_task.is_none() {
             return Err(ApiError::not_found("Task", &id.0.to_string()).into());
@@ -156,7 +156,7 @@ impl Mutation {
         
         // Delete the task using the repository
         task_repo.delete(id.0.as_i32().unwrap_or(0)).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to delete task: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to delete task: {}", e)))?;
         
         Ok(true)
     }
@@ -173,13 +173,13 @@ impl Mutation {
         let task_repo = context.repositories.task_repository();
         let task = task_repo.find_by_id(input.task_id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch task: {}", e)))?
             .ok_or_else(|| ApiError::bad_request("Task not found"))?;
         
         // Validate input JSON
         let validator = InputValidator::new();
         let input_str = serde_json::to_string(&input.input)
-            .map_err(|e| ApiError::bad_request(&format!("Invalid input JSON: {}", e)))?;
+            .map_err(|e| ApiError::bad_request(format!("Invalid input JSON: {}", e)))?;
         if let Err(validation_err) = validator.validate_json(&input_str) {
             warn!("Invalid input JSON in GraphQL create_execution: {}", validation_err);
             let sanitizer = ErrorSanitizer::default();
@@ -211,7 +211,7 @@ impl Mutation {
         // Create the execution using the repository
         let execution_repo = context.repositories.execution_repository();
         let created_execution = execution_repo.create(unified_execution).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to create execution: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to create execution: {}", e)))?;
         
         Ok(created_execution)
     }
@@ -228,7 +228,7 @@ impl Mutation {
         let task_repo = context.repositories.task_repository();
         let _task = task_repo.find_by_id(input.task_id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch task: {}", e)))?
             .ok_or_else(|| ApiError::bad_request("Task not found"))?;
         
         // Create UnifiedJob from input
@@ -248,7 +248,7 @@ impl Mutation {
         // Create the job using the repository
         let job_repo = context.repositories.job_repository();
         let created_job = job_repo.create(unified_job).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to create job: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to create job: {}", e)))?;
         
         Ok(created_job.into())
     }
@@ -265,7 +265,7 @@ impl Mutation {
         let task_repo = context.repositories.task_repository();
         let _task = task_repo.find_by_id(input.task_id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch task: {}", e)))?
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch task: {}", e)))?
             .ok_or_else(|| ApiError::bad_request("Task not found"))?;
         
         // Validate input
@@ -310,7 +310,7 @@ impl Mutation {
         // Create the schedule using the repository
         let schedule_repo = context.repositories.schedule_repository();
         let created_schedule = schedule_repo.create(unified_schedule).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to create schedule: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to create schedule: {}", e)))?;
         
         Ok(created_schedule)
     }
@@ -354,7 +354,7 @@ impl Mutation {
         let schedule_repo = context.repositories.schedule_repository();
         let mut existing_schedule = schedule_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch schedule: {}", e)))?
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch schedule: {}", e)))?
             .ok_or_else(|| ApiError::not_found("Schedule", &id.0.to_string()))?;
         
         // Apply updates
@@ -378,7 +378,7 @@ impl Mutation {
         
         // Update the schedule using the repository
         let updated_schedule = schedule_repo.update(existing_schedule).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to update schedule: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to update schedule: {}", e)))?;
         
         Ok(updated_schedule)
     }
@@ -558,7 +558,7 @@ impl Mutation {
         let execution_repo = context.repositories.execution_repository();
         let mut existing_execution = execution_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch execution: {}", e)))?
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch execution: {}", e)))?
             .ok_or_else(|| ApiError::not_found("Execution", &id.0.to_string()))?;
         
         // Apply updates
@@ -585,7 +585,7 @@ impl Mutation {
         
         // Update the execution using the repository
         let updated_execution = execution_repo.update(existing_execution).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to update execution: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to update execution: {}", e)))?;
         
         Ok(updated_execution)
     }
@@ -602,7 +602,7 @@ impl Mutation {
         let execution_repo = context.repositories.execution_repository();
         let existing_execution = execution_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch execution: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch execution: {}", e)))?;
         
         if existing_execution.is_none() {
             return Err(ApiError::not_found("Execution", &id.0.to_string()).into());
@@ -610,7 +610,7 @@ impl Mutation {
         
         // Delete the execution using the repository
         execution_repo.delete(id.0.as_i32().unwrap_or(0)).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to delete execution: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to delete execution: {}", e)))?;
         
         Ok(true)
     }
@@ -628,7 +628,7 @@ impl Mutation {
         let job_repo = context.repositories.job_repository();
         let mut existing_job = job_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch job: {}", e)))?
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch job: {}", e)))?
             .ok_or_else(|| ApiError::not_found("Job", &id.0.to_string()))?;
         
         // Apply updates
@@ -650,7 +650,7 @@ impl Mutation {
         
         // Update the job using the repository
         let updated_job = job_repo.update(existing_job).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to update job: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to update job: {}", e)))?;
         
         Ok(updated_job.into())
     }
@@ -667,7 +667,7 @@ impl Mutation {
         let job_repo = context.repositories.job_repository();
         let existing_job = job_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch job: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch job: {}", e)))?;
         
         if existing_job.is_none() {
             return Err(ApiError::not_found("Job", &id.0.to_string()).into());
@@ -675,7 +675,7 @@ impl Mutation {
         
         // Delete the job using the repository
         job_repo.delete(id.0.as_i32().unwrap_or(0)).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to delete job: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to delete job: {}", e)))?;
         
         Ok(true)
     }
@@ -692,7 +692,7 @@ impl Mutation {
         let schedule_repo = context.repositories.schedule_repository();
         let existing_schedule = schedule_repo.find_by_id(id.0.as_i32().unwrap_or(0))
             .await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to fetch schedule: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to fetch schedule: {}", e)))?;
         
         if existing_schedule.is_none() {
             return Err(ApiError::not_found("Schedule", &id.0.to_string()).into());
@@ -700,7 +700,7 @@ impl Mutation {
         
         // Delete the schedule using the repository
         schedule_repo.delete(id.0.as_i32().unwrap_or(0)).await
-            .map_err(|e| ApiError::internal_error(&format!("Failed to delete schedule: {}", e)))?;
+            .map_err(|e| ApiError::internal_error(format!("Failed to delete schedule: {}", e)))?;
         
         Ok(true)
     }
@@ -744,7 +744,7 @@ impl Mutation {
         // Create a job from the input
         let unified_job = ratchet_api_types::UnifiedJob {
             id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
-            task_id: input.task_id.0.into(),
+            task_id: input.task_id.0,
             priority: input.priority.unwrap_or(ratchet_api_types::JobPriority::Normal),
             status: ratchet_api_types::JobStatus::Queued,
             retry_count: 0,

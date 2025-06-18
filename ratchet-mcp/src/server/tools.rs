@@ -12,9 +12,8 @@ use crate::{McpError, McpResult};
 
 // Import Ratchet's execution types
 use ratchet_interfaces::logging::StructuredLogger;
-use ratchet_interfaces::{RepositoryFactory, ExecutionRepository, JobRepository, ScheduleRepository, TaskRepository, ExecutionFilters, JobFilters, ScheduleFilters};
-use ratchet_api_types::{ApiId, PaginationInput, ExecutionStatus as ApiExecutionStatus, JobStatus, JobPriority};
-use ratchet_api_types::pagination::ListInput;
+use ratchet_interfaces::{RepositoryFactory, ExecutionFilters, JobFilters, ScheduleFilters};
+use ratchet_api_types::{ApiId, PaginationInput, ExecutionStatus as ApiExecutionStatus};
 
 /// MCP tool definition with execution capability
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1357,7 +1356,7 @@ impl RatchetToolRegistry {
 
                 // Calculate pagination
                 let total_count = tasks.len();
-                let total_pages = (total_count + limit - 1) / limit; // ceiling division
+                let total_pages = total_count.div_ceil(limit); // ceiling division
                 let start_index = page * limit;
                 let end_index = std::cmp::min(start_index + limit, total_count);
                 
@@ -1640,10 +1639,7 @@ impl RatchetToolRegistry {
         };
 
         // Try to get related logs for additional context
-        let log_context = match executor.get_execution_logs(execution_id, "error", 10).await {
-            Ok(logs) => Some(logs),
-            Err(_) => None,
-        };
+        let log_context = (executor.get_execution_logs(execution_id, "error", 10).await).ok();
 
         Ok(serde_json::json!({
             "execution_id": execution_id,

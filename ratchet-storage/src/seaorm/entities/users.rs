@@ -62,10 +62,12 @@ impl ActiveModelBehavior for ActiveModel {}
 /// User roles for role-based access control
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
+#[derive(Default)]
 pub enum UserRole {
     #[sea_orm(string_value = "admin")]
     Admin,
     #[sea_orm(string_value = "user")]
+    #[default]
     User,
     #[sea_orm(string_value = "readonly")]
     ReadOnly,
@@ -73,11 +75,6 @@ pub enum UserRole {
     Service,
 }
 
-impl Default for UserRole {
-    fn default() -> Self {
-        UserRole::User
-    }
-}
 
 impl UserRole {
     /// Check if this role can perform admin operations

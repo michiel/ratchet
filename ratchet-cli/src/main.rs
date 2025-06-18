@@ -1,39 +1,26 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use ratchet_config::{ConfigLoader, RatchetConfig};
-use chrono::Utc;
 
 // LibRatchetConfig removed - using RatchetConfig directly
 
-#[cfg(feature = "server")]
-use ratchet_execution::{
-    CoordinatorMessage, MessageEnvelope, ProcessExecutorConfig, ProcessTaskExecutor,
-    TaskExecutionResult, TaskValidationResult, WorkerMessage, WorkerStatus,
-    ExecutionBridge,
-};
 
 // Use modern alternatives - Task loading handled by ratchet-js and ratchet-cli-tools
 
 #[cfg(feature = "http")]
 use ratchet_http::{HttpManager, HttpClient};
 
-#[cfg(feature = "database")]
-use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
 use ratchet_storage::repositories::{BaseRepository, Repository};
 
 use ratchet_registry::RegistryService;
 
 #[cfg(feature = "server")]
-use ratchet_server;
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
-use std::fs;
 use std::path::{Path, PathBuf};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::io::AsyncBufReadExt;
 use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
-use uuid::Uuid;
 use std::sync::Arc;
-use std::collections::HashMap;
 
 #[cfg(feature = "core")]
 use ratchet_core::task::Task as CoreTask;
@@ -43,7 +30,7 @@ use ratchet_runtime::{InMemoryTaskExecutor, TaskExecutor};
 
 
 #[cfg(feature = "javascript")]
-use ratchet_js::{FileSystemTask, load_and_execute_task};
+use ratchet_js::load_and_execute_task;
 
 mod cli;
 mod commands;
@@ -189,16 +176,14 @@ fn set_nested_value(
         } else {
             return Err(anyhow::anyhow!("Cannot set key on non-object value"));
         }
+    } else if let serde_yaml::Value::Mapping(ref mut map) = yaml {
+        let key = serde_yaml::Value::String(keys[0].to_string());
+        let entry = map
+            .entry(key.clone())
+            .or_insert_with(|| serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
+        set_nested_value(entry, &keys[1..], value)?;
     } else {
-        if let serde_yaml::Value::Mapping(ref mut map) = yaml {
-            let key = serde_yaml::Value::String(keys[0].to_string());
-            let entry = map
-                .entry(key.clone())
-                .or_insert_with(|| serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
-            set_nested_value(entry, &keys[1..], value)?;
-        } else {
-            return Err(anyhow::anyhow!("Cannot traverse non-object value"));
-        }
+        return Err(anyhow::anyhow!("Cannot traverse non-object value"));
     }
 
     Ok(())
@@ -594,7 +579,7 @@ async fn server_command(
 async fn generate_completions(shell: clap_complete::Shell, output_dir: Option<&PathBuf>) -> Result<()> {
     use clap::CommandFactory;
     use clap_complete::generate_to;
-    use clap_complete::Shell;
+    
 
     let mut cmd = Cli::command();
     let bin_name = "ratchet";
@@ -825,7 +810,7 @@ async fn validate_task_file(task_path: &Path, _fix: bool) -> Result<()> {
     // Validate required fields
     let required_fields = ["name", "version", "path"];
     for field in &required_fields {
-        if !task_json.get(field).is_some() {
+        if task_json.get(field).is_none() {
             return Err(anyhow::anyhow!("Missing required field: {}", field));
         }
     }
@@ -855,7 +840,7 @@ fn generate_metadata_stub(metadata_path: &Path, task_dir: &Path) -> Result<()> {
         "name": task_name,
         "uuid": uuid::Uuid::new_v4().to_string(),
         "version": "1.0.0",
-        "label": format!("{} Task", task_name.replace('_', " ").replace('-', " ")),
+        "label": format!("{} Task", task_name.replace(['_', '-'], " ")),
         "description": format!("TODO: Add description for {} task", task_name),
         "tags": ["stub", "TODO"],
         "category": "TODO",
@@ -983,7 +968,7 @@ describe('Task Tests', () => {
 
 /// Validate metadata.json file
 fn validate_metadata_file(metadata_path: &Path, fix: bool) -> Result<()> {
-    use chrono::Utc;
+    
     
     let content = std::fs::read_to_string(metadata_path)?;
     let mut metadata: JsonValue = serde_json::from_str(&content)
@@ -994,7 +979,7 @@ fn validate_metadata_file(metadata_path: &Path, fix: bool) -> Result<()> {
     let mut fixed_fields = Vec::new();
     
     for field in &required_fields {
-        if !metadata.get(field).is_some() {
+        if metadata.get(field).is_none() {
             missing_fields.push(*field);
         }
     }
@@ -1007,7 +992,7 @@ fn validate_metadata_file(metadata_path: &Path, fix: bool) -> Result<()> {
                 .and_then(|name| name.to_str())
                 .unwrap_or("unnamed_task");
             
-            let mut metadata_obj = metadata.as_object_mut()
+            let metadata_obj = metadata.as_object_mut()
                 .ok_or_else(|| anyhow::anyhow!("metadata.json is not a valid JSON object"))?;
             
             for field in &missing_fields {
@@ -1021,7 +1006,7 @@ fn validate_metadata_file(metadata_path: &Path, fix: bool) -> Result<()> {
                         fixed_fields.push("version");
                     }
                     "label" => {
-                        let label = format!("{} Task", task_name.replace('_', " ").replace('-', " "));
+                        let label = format!("{} Task", task_name.replace(['_', '-'], " "));
                         metadata_obj.insert("label".to_string(), serde_json::Value::String(label));
                         fixed_fields.push("label");
                     }
@@ -1222,11 +1207,8 @@ async fn status_command(config_path: Option<&PathBuf>) -> Result<()> {
     println!("  Level: {:?}", logging_config.level);
     println!("  Format: {:?}", logging_config.format);
     for target in &logging_config.targets {
-        match target {
-            ratchet_config::domains::logging::LogTarget::File { path, .. } => {
-                println!("  File: {}", path);
-            }
-            _ => {}
+        if let ratchet_config::domains::logging::LogTarget::File { path, .. } = target {
+            println!("  File: {}", path);
         }
     }
     

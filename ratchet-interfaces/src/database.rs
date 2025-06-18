@@ -10,8 +10,7 @@ use ratchet_api_types::{
     ApiId, PaginationInput, ListResponse,
     UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
     UnifiedUser, UnifiedSession, UnifiedApiKey,
-    ExecutionStatus, JobStatus, JobPriority,
-    pagination::ListInput
+    ExecutionStatus, JobStatus, JobPriority
 };
 // ApiResult not needed in trait definitions - using DatabaseError instead
 use serde::{Deserialize, Serialize};

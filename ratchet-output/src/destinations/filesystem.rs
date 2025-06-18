@@ -45,7 +45,7 @@ impl FilesystemDestination {
     fn normalize_path(path: &str) -> PathBuf {
         // Replace forward slashes with platform-specific separators
         let normalized = if cfg!(windows) {
-            path.replace('/', &std::path::MAIN_SEPARATOR.to_string())
+            path.replace('/', std::path::MAIN_SEPARATOR_STR)
         } else {
             path.to_string()
         };

@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 
 /// Complete server configuration combining all subsystems
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ServerConfig {
     pub server: HttpServerConfig,
     pub rest_api: RestApiConfig,
@@ -106,20 +107,6 @@ pub struct HeartbeatConfig {
 }
 
 
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            server: HttpServerConfig::default(),
-            rest_api: RestApiConfig::default(),
-            graphql_api: GraphQLApiConfig::default(),
-            mcp_api: McpApiConfig::default(),
-            logging: LoggingConfig::default(),
-            database: DatabaseConfig::default(),
-            registry: RegistryConfig::default(),
-            heartbeat: HeartbeatConfig::default(),
-        }
-    }
-}
 
 impl Default for HttpServerConfig {
     fn default() -> Self {
@@ -265,8 +252,8 @@ impl ServerConfig {
                 enable_apollo_tracing: false,
             },
             mcp_api: McpApiConfig {
-                enabled: config.mcp.as_ref().map_or(true, |mcp| mcp.enabled), // Default enabled unless explicitly disabled
-                sse_enabled: config.mcp.as_ref().map_or(true, |mcp| mcp.transport == "sse"), // Default SSE enabled
+                enabled: config.mcp.as_ref().is_none_or(|mcp| mcp.enabled), // Default enabled unless explicitly disabled
+                sse_enabled: config.mcp.as_ref().is_none_or(|mcp| mcp.transport == "sse"), // Default SSE enabled
                 host: config.mcp.as_ref().map_or("127.0.0.1".to_string(), |mcp| mcp.host.clone()),
                 port: config.mcp.as_ref().map_or(8090, |mcp| mcp.port),
                 endpoint: "/mcp".to_string(), // Default endpoint
@@ -280,7 +267,7 @@ impl ServerConfig {
             },
             database: DatabaseConfig {
                 url: server_config.database.url,
-                max_connections: server_config.database.max_connections as u32,
+                max_connections: server_config.database.max_connections,
                 min_connections: 1,
                 connection_timeout_seconds: server_config.database.connection_timeout.as_secs(),
                 enable_migrations: true,

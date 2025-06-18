@@ -446,7 +446,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     // Verify we have at least one task
     let tasks = &tasks_response["data"]["tasks"]["items"];
     assert!(
-        tasks.as_array().unwrap().len() > 0,
+        !tasks.as_array().unwrap().is_empty(),
         "Should have at least one task available"
     );
 

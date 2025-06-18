@@ -41,6 +41,12 @@ impl Default for McpTestConfig {
 /// Mock task development service for testing
 pub struct MockTaskDevelopmentService;
 
+impl Default for MockTaskDevelopmentService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockTaskDevelopmentService {
     pub fn new() -> Self {
         Self
@@ -512,7 +518,7 @@ async fn test_mcp_task_delete() -> Result<(), Box<dyn std::error::Error>> {
     
     let result = delete_response.result.unwrap();
     assert_eq!(result["task_id"].as_str().unwrap(), task_id);
-    assert_eq!(result["deleted"].as_bool().unwrap(), true);
+    assert!(result["deleted"].as_bool().unwrap());
     assert!(result.get("backup_location").is_some());
     
     Ok(())

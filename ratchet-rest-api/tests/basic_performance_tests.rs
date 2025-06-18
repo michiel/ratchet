@@ -3,16 +3,9 @@
 //! These tests focus on measuring basic performance characteristics
 //! without complex mocking dependencies.
 
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-    response::Response,
-};
-use serde_json::{json, Value};
 use std::{
     sync::{Arc, atomic::{AtomicU64, Ordering}},
     time::{Duration, Instant},
-    collections::HashMap,
 };
 use tokio::{time::sleep, sync::Semaphore};
 
@@ -101,6 +94,12 @@ impl BasicLatencyTracker {
 pub struct BasicPerformanceTest {
     concurrent_requests: usize,
     total_requests: usize,
+}
+
+impl Default for BasicPerformanceTest {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BasicPerformanceTest {

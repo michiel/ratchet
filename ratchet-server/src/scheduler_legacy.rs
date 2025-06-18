@@ -6,11 +6,10 @@ use anyhow::Result;
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{info, warn, error, debug};
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
 
 use ratchet_interfaces::{RepositoryFactory, TaskRegistry};
 use ratchet_api_types::{ApiId, UnifiedJob, JobStatus, JobPriority};
-use ratchet_storage::seaorm::repositories::{RepositoryFactory as SeaOrmRepositoryFactory, schedule_repository::ScheduleRepository};
+use ratchet_storage::seaorm::repositories::RepositoryFactory as SeaOrmRepositoryFactory;
 use ratchet_output::OutputDeliveryManager;
 
 /// Configuration for the scheduler service

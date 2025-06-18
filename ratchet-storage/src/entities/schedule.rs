@@ -86,6 +86,6 @@ impl Schedule {
             && self.next_run_at.is_some_and(|next| Utc::now() >= next)
             && self
                 .max_executions
-                .map_or(true, |max| self.execution_count < max)
+                .is_none_or(|max| self.execution_count < max)
     }
 }

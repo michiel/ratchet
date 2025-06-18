@@ -14,7 +14,6 @@ use std::sync::Arc;
 use crate::seaorm::{
     connection::DatabaseConnection as RatchetDatabaseConnection,
     config::DatabaseConfig,
-    safe_errors::SafeDatabaseError,
 };
 
 /// Test database for isolated testing
@@ -221,7 +220,7 @@ impl TestDatabase {
 
     /// Get a count of records in a table
     pub async fn count_records(&self, table: &str) -> Result<u64, TestDatabaseError> {
-        use sea_orm::{Statement, Value};
+        use sea_orm::Statement;
 
         let result = self
             .connection

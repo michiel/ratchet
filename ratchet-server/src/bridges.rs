@@ -294,6 +294,12 @@ impl ratchet_interfaces::RegistryManager for BridgeRegistryManager {
 /// Basic task validator implementation
 pub struct BridgeTaskValidator;
 
+impl Default for BridgeTaskValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BridgeTaskValidator {
     pub fn new() -> Self {
         Self

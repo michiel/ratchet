@@ -1,7 +1,6 @@
 use ratchet_registry::prelude::*;
 use ratchet_registry::TaskLoader;
 use tempfile::TempDir;
-use tokio;
 
 #[tokio::test]
 async fn test_filesystem_loader() {

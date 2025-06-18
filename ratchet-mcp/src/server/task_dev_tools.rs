@@ -24,6 +24,12 @@ pub struct TaskValidator {
     _private: (),
 }
 
+impl Default for TaskValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TaskValidator {
     /// Create a new task validator
     pub fn new() -> Self {
@@ -1033,10 +1039,8 @@ impl TaskDevelopmentService {
                     if let Err(e) = std::fs::remove_dir_all(task_path) {
                         log::warn!("Failed to delete task directory {}: {}", task_path.display(), e);
                     }
-                } else {
-                    if let Err(e) = std::fs::remove_file(task_path) {
-                        log::warn!("Failed to delete task file {}: {}", task_path.display(), e);
-                    }
+                } else if let Err(e) = std::fs::remove_file(task_path) {
+                    log::warn!("Failed to delete task file {}: {}", task_path.display(), e);
                 }
             }
         }

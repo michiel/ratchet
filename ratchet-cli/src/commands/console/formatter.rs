@@ -139,7 +139,7 @@ impl OutputFormatter {
         } else if trimmed.starts_with('"') {
             // String value
             return format!("{}{}", indent, trimmed.bright_green());
-        } else if trimmed.chars().next().map_or(false, |c| c.is_ascii_digit()) || trimmed.starts_with("true") || trimmed.starts_with("false") || trimmed.starts_with("null") {
+        } else if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) || trimmed.starts_with("true") || trimmed.starts_with("false") || trimmed.starts_with("null") {
             // Number, boolean, or null
             return format!("{}{}", indent, trimmed.bright_yellow());
         }

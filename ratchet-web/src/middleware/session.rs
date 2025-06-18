@@ -391,8 +391,7 @@ impl SessionManager {
     pub async fn invalidate_user_sessions(&self, user_id: &str) -> Result<usize, SessionError> {
         let session_ids: Vec<String> = {
             let user_sessions = self.user_sessions.read().await;
-            user_sessions.get(user_id)
-                .map(|ids| ids.clone())
+            user_sessions.get(user_id).cloned()
                 .unwrap_or_default()
         };
         

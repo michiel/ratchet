@@ -47,7 +47,7 @@ impl RepositoryBridge {
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
             .map_err(|e| SchedulerError::Repository(e.to_string()))?
-            .ok_or_else(|| SchedulerError::ScheduleNotFound(schedule_id))?;
+            .ok_or(SchedulerError::ScheduleNotFound(schedule_id))?;
 
         // Extract values before moving schedule
         let task_id = schedule.task_id.clone();
@@ -94,7 +94,7 @@ impl RepositoryBridge {
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
             .map_err(|e| SchedulerError::Repository(e.to_string()))?
-            .ok_or_else(|| SchedulerError::ScheduleNotFound(schedule_id))?;
+            .ok_or(SchedulerError::ScheduleNotFound(schedule_id))?;
 
         // Update execution metadata
         schedule.last_run = Some(last_run);

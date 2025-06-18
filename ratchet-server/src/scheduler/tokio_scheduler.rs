@@ -139,7 +139,7 @@ impl TokioCronSchedulerService {
             })?;
             
             // Add job to scheduler
-            let mut scheduler = self.scheduler.lock().await;
+            let scheduler = self.scheduler.lock().await;
             scheduler.add(job).await
                 .map_err(|e| {
                     error!("Failed to add job to scheduler: {}", e);
@@ -254,7 +254,7 @@ impl SchedulerService for TokioCronSchedulerService {
         })?;
         
         // Add job to scheduler
-        let mut scheduler = self.scheduler.lock().await;
+        let scheduler = self.scheduler.lock().await;
         scheduler.add(job).await
             .map_err(|e| {
                 error!("Failed to add job to scheduler: {}", e);
@@ -273,7 +273,7 @@ impl SchedulerService for TokioCronSchedulerService {
             SchedulerError::Internal(format!("Cannot convert schedule_id to UUID: {}", schedule_id))
         })?;
         
-        let mut scheduler = self.scheduler.lock().await;
+        let scheduler = self.scheduler.lock().await;
         scheduler.remove(&job_uuid).await
             .map_err(|e| {
                 error!("Failed to remove job from scheduler: {}", e);
@@ -304,7 +304,7 @@ impl SchedulerService for TokioCronSchedulerService {
         let schedule_id_clone = schedule_id.clone();
         // Get schedule from repository
         let schedule = self.repository_bridge.find_schedule(schedule_id).await?
-            .ok_or_else(|| SchedulerError::ScheduleNotFound(schedule_id_clone))?;
+            .ok_or(SchedulerError::ScheduleNotFound(schedule_id_clone))?;
             
         // TODO: Get more detailed status from tokio-cron-scheduler if available
         // For now, we'll return basic status from the repository

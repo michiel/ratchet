@@ -4,11 +4,10 @@
 //! managing migration state, and ensuring compatibility between different
 //! versions of the database schema.
 
-use sea_orm::{DatabaseConnection, Statement, QueryResult, Value, ConnectionTrait};
+use sea_orm::{DatabaseConnection, Statement, ConnectionTrait};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-use crate::migration::{MigrationError, MigrationReport};
+use crate::migration::MigrationError;
 
 /// Database schema version information
 #[derive(Debug, Clone, Serialize, Deserialize)]

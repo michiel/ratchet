@@ -82,7 +82,7 @@ impl DatabaseSync {
             .task_repo
             .find_by_uuid(discovered.metadata.uuid)
             .await
-            .map_err(|e| RegistryError::Storage(e))?;
+            .map_err(RegistryError::Storage)?;
 
         match existing_task {
             Some(existing) => {
@@ -140,7 +140,7 @@ impl DatabaseSync {
         self.task_repo
             .create(&task_entity)
             .await
-            .map_err(|e| RegistryError::Storage(e))?;
+            .map_err(RegistryError::Storage)?;
 
         Ok(())
     }
@@ -152,7 +152,7 @@ impl DatabaseSync {
         self.task_repo
             .update(&task_entity)
             .await
-            .map_err(|e| RegistryError::Storage(e))?;
+            .map_err(RegistryError::Storage)?;
 
         Ok(())
     }

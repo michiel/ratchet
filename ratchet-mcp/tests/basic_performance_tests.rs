@@ -3,14 +3,12 @@
 //! These tests focus on measuring basic MCP performance characteristics
 //! using simulation rather than complex service dependencies.
 
-use serde_json::{json, Value};
 use std::{
     sync::{Arc, atomic::{AtomicU64, Ordering}},
     time::{Duration, Instant},
     collections::HashMap,
 };
 use tokio::{time::sleep, sync::Semaphore};
-use uuid::Uuid;
 
 /// MCP performance metrics
 #[derive(Debug, Clone)]
@@ -131,6 +129,12 @@ impl McpOperationTracker {
 pub struct McpPerformanceTest {
     concurrent_operations: usize,
     total_operations: usize,
+}
+
+impl Default for McpPerformanceTest {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl McpPerformanceTest {

@@ -252,7 +252,7 @@ impl FilteredRepository<UnifiedUser, UserFilters> for SeaOrmUserRepository {
                 page: (page_number + 1) as u32,
                 limit: limit as u32,
                 total,
-                total_pages: ((total + limit - 1) / limit) as u32,
+                total_pages: total.div_ceil(limit) as u32,
                 has_previous: page_number > 0,
                 has_next: (page_number + 1) * limit < total,
                 offset: offset as u32,

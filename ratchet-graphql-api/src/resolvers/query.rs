@@ -93,8 +93,8 @@ impl Query {
         };
         
         let result = task_repo.find_with_list_input(domain_filters, list_input).await?;
-        let items: Vec<Task> = result.items.into_iter().map(|task| task.into()).collect();
-        let meta = result.meta.into();
+        let items: Vec<Task> = result.items.into_iter().collect();
+        let meta = result.meta;
         Ok(TaskList { items, meta })
     }
 
@@ -105,7 +105,7 @@ impl Query {
         
         let api_id: ApiId = id.into();
         match task_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await? {
-            Some(task) => Ok(Some(task.into())),
+            Some(task) => Ok(Some(task)),
             None => Ok(None),
         }
     }
@@ -142,7 +142,7 @@ impl Query {
         let domain_filters = filters.map(|f| ExecutionFilters {
             // Basic filters (existing)
             task_id: f.task_id.map(|id| id.into()),
-            status: f.status.map(|s| s.into()),
+            status: f.status,
             queued_after: f.queued_after,
             completed_after: f.completed_after,
             
@@ -151,8 +151,8 @@ impl Query {
             id_in: f.id_in.map(|ids| ids.into_iter().map(|id| id.into()).collect()),
             
             // Advanced status filtering
-            status_in: f.status_in.map(|statuses| statuses.into_iter().map(|s| s.into()).collect()),
-            status_not: f.status_not.map(|s| s.into()),
+            status_in: f.status_in.map(|statuses| statuses.into_iter().collect()),
+            status_not: f.status_not,
             
             // Extended date filtering
             queued_before: f.queued_before,
@@ -212,8 +212,8 @@ impl Query {
         };
         
         let result = execution_repo.find_with_list_input(domain_filters, list_input).await?;
-        let items: Vec<Execution> = result.items.into_iter().map(|exec| exec.into()).collect();
-        let meta = result.meta.into();
+        let items: Vec<Execution> = result.items.into_iter().collect();
+        let meta = result.meta;
         Ok(ExecutionList { items, meta })
     }
 
@@ -224,7 +224,7 @@ impl Query {
         
         let api_id: ApiId = id.into();
         match execution_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await? {
-            Some(execution) => Ok(Some(execution.into())),
+            Some(execution) => Ok(Some(execution)),
             None => Ok(None),
         }
     }
@@ -244,8 +244,8 @@ impl Query {
         let domain_filters = filters.map(|f| JobFilters {
             // Basic filters (existing)
             task_id: f.task_id.map(|id| id.into()),
-            status: f.status.map(|s| s.into()),
-            priority: f.priority.map(|p| p.into()),
+            status: f.status,
+            priority: f.priority,
             queued_after: f.queued_after,
             scheduled_before: f.scheduled_before,
             
@@ -254,12 +254,12 @@ impl Query {
             id_in: f.id_in.map(|ids| ids.into_iter().map(|id| id.into()).collect()),
             
             // Advanced status filtering
-            status_in: f.status_in.map(|statuses| statuses.into_iter().map(|s| s.into()).collect()),
-            status_not: f.status_not.map(|s| s.into()),
+            status_in: f.status_in.map(|statuses| statuses.into_iter().collect()),
+            status_not: f.status_not,
             
             // Advanced priority filtering
-            priority_in: f.priority_in.map(|priorities| priorities.into_iter().map(|p| p.into()).collect()),
-            priority_min: f.priority_min.map(|p| p.into()),
+            priority_in: f.priority_in.map(|priorities| priorities.into_iter().collect()),
+            priority_min: f.priority_min,
             
             // Extended date filtering
             queued_before: f.queued_before,
@@ -317,7 +317,7 @@ impl Query {
         
         let result = job_repo.find_with_list_input(domain_filters, list_input).await?;
         let items: Vec<Job> = result.items.into_iter().map(|job| job.into()).collect();
-        let meta = result.meta.into();
+        let meta = result.meta;
         Ok(JobList { items, meta })
     }
 
@@ -418,8 +418,8 @@ impl Query {
         };
         
         let result = schedule_repo.find_with_list_input(domain_filters, list_input).await?;
-        let items: Vec<Schedule> = result.items.into_iter().map(|schedule| schedule.into()).collect();
-        let meta = result.meta.into();
+        let items: Vec<Schedule> = result.items.into_iter().collect();
+        let meta = result.meta;
         Ok(ScheduleList { items, meta })
     }
 
@@ -430,7 +430,7 @@ impl Query {
         
         let api_id: ApiId = id.into();
         match schedule_repo.find_by_id(api_id.as_i32().unwrap_or(0)).await? {
-            Some(schedule) => Ok(Some(schedule.into())),
+            Some(schedule) => Ok(Some(schedule)),
             None => Ok(None),
         }
     }
@@ -454,7 +454,7 @@ impl Query {
         let meta = ratchet_api_types::pagination::PaginationMeta::new(&pagination, 0);
         Ok(WorkerList { 
             items: vec![], 
-            meta: meta.into() 
+            meta 
         })
     }
 

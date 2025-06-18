@@ -3,11 +3,8 @@
 //! This module provides comprehensive security testing scenarios for GraphQL including
 //! authentication, authorization, query complexity limits, and introspection security.
 
-use serde_json::{json, Value};
-use std::{
-    time::{Duration, Instant},
-    collections::HashMap,
-};
+use serde_json::Value;
+use std::time::Duration;
 use tokio::time::sleep;
 
 /// GraphQL security test configuration
@@ -81,6 +78,12 @@ pub enum Severity {
 /// GraphQL API security test runner
 pub struct GraphqlApiSecurityTest {
     config: GraphqlSecurityTestConfig,
+}
+
+impl Default for GraphqlApiSecurityTest {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GraphqlApiSecurityTest {

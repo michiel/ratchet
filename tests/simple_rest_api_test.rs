@@ -4,7 +4,6 @@ use anyhow::Result;
 use reqwest::Client;
 use serde_json::Value;
 use std::time::Duration;
-use tokio::time::timeout;
 
 /// Test basic REST API endpoint availability
 #[tokio::test]
@@ -25,12 +24,12 @@ async fn test_basic_rest_api_endpoints() -> Result<()> {
     let base_url = "http://localhost:8080";
     
     // Try to connect to see if anything is running
-    match client.get(&format!("{}/health", base_url)).send().await {
+    match client.get(format!("{}/health", base_url)).send().await {
         Ok(response) => {
             println!("✅ Found running server on localhost:8080");
             
             // Test OpenAPI documentation endpoint
-            let openapi_response = client.get(&format!("{}/api-docs/openapi.json", base_url)).send().await?;
+            let openapi_response = client.get(format!("{}/api-docs/openapi.json", base_url)).send().await?;
             if openapi_response.status().is_success() {
                 let spec: Value = openapi_response.json().await?;
                 
@@ -60,7 +59,7 @@ async fn test_basic_rest_api_endpoints() -> Result<()> {
                 println!("✅ OpenAPI specification is properly structured");
                 
                 // Test Swagger UI
-                let swagger_response = client.get(&format!("{}/docs", base_url)).send().await?;
+                let swagger_response = client.get(format!("{}/docs", base_url)).send().await?;
                 if swagger_response.status().is_success() {
                     let html = swagger_response.text().await?;
                     assert!(html.contains("swagger-ui"), "Should contain Swagger UI");
@@ -89,26 +88,26 @@ async fn test_api_endpoints(client: &Client, base_url: &str) -> Result<()> {
     println!("🔍 Testing API endpoints...");
     
     // Test tasks endpoint
-    let tasks_response = client.get(&format!("{}/api/v1/tasks", base_url)).send().await?;
+    let tasks_response = client.get(format!("{}/api/v1/tasks", base_url)).send().await?;
     println!("Tasks endpoint status: {}", tasks_response.status());
     
     // Test executions endpoint  
-    let executions_response = client.get(&format!("{}/api/v1/executions", base_url)).send().await?;
+    let executions_response = client.get(format!("{}/api/v1/executions", base_url)).send().await?;
     println!("Executions endpoint status: {}", executions_response.status());
     
     // Test jobs endpoint
-    let jobs_response = client.get(&format!("{}/api/v1/jobs", base_url)).send().await?;
+    let jobs_response = client.get(format!("{}/api/v1/jobs", base_url)).send().await?;
     println!("Jobs endpoint status: {}", jobs_response.status());
     
     // Test schedules endpoint
-    let schedules_response = client.get(&format!("{}/api/v1/schedules", base_url)).send().await?;
+    let schedules_response = client.get(format!("{}/api/v1/schedules", base_url)).send().await?;
     println!("Schedules endpoint status: {}", schedules_response.status());
     
     // Test statistics endpoints
-    let task_stats_response = client.get(&format!("{}/api/v1/tasks/stats", base_url)).send().await?;
+    let task_stats_response = client.get(format!("{}/api/v1/tasks/stats", base_url)).send().await?;
     println!("Task stats endpoint status: {}", task_stats_response.status());
     
-    let execution_stats_response = client.get(&format!("{}/api/v1/executions/stats", base_url)).send().await?;
+    let execution_stats_response = client.get(format!("{}/api/v1/executions/stats", base_url)).send().await?;
     println!("Execution stats endpoint status: {}", execution_stats_response.status());
     
     println!("✅ API endpoints tested");

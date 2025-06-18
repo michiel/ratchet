@@ -1,7 +1,6 @@
 //! User session entity for JWT token management
 
 use sea_orm::entity::prelude::*;
-use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]

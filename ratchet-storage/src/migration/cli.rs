@@ -359,7 +359,7 @@ mod tests {
     #[test]
     fn test_cli_parsing() {
         // Test detect command
-        let cli = MigrationCli::try_parse_from(&[
+        let cli = MigrationCli::try_parse_from([
             "ratchet-migrate", 
             "detect", 
             "--database-url", 
@@ -374,7 +374,7 @@ mod tests {
         }
 
         // Test migrate command with flags
-        let cli = MigrationCli::try_parse_from(&[
+        let cli = MigrationCli::try_parse_from([
             "ratchet-migrate", 
             "migrate",
             "--source", "sqlite://legacy.db",

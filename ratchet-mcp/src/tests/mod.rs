@@ -1,6 +1,5 @@
 //! Integration tests for MCP server
 
-use anyhow::Result;
 use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;

@@ -154,7 +154,7 @@ impl TaskRepository {
     pub async fn set_in_sync(&self, id: i32, in_sync: bool) -> Result<(), DatabaseError> {
         // Note: This would ideally require an 'in_sync' column in the tasks table
         // For now, we'll store the sync status in the metadata JSON field
-        if let Ok(Some(mut task)) = self.find_by_id(id).await {
+        if let Ok(Some(task)) = self.find_by_id(id).await {
             let mut metadata = task.metadata;
             if let Some(metadata_obj) = metadata.as_object_mut() {
                 metadata_obj.insert("in_sync".to_string(), serde_json::Value::Bool(in_sync));

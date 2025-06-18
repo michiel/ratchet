@@ -3,14 +3,12 @@
 //! This module provides a compatibility layer for CLI tools to execute JavaScript tasks
 //! using modern ratchet-js while maintaining compatibility with legacy ratchet_lib API.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_json::Value as JsonValue;
 use tracing::{debug, info};
 
-#[cfg(feature = "http")]
-use ratchet_http::HttpManager;
 #[cfg(feature = "javascript")]
-use ratchet_js::{load_and_execute_task, FileSystemTask};
+use ratchet_js::load_and_execute_task;
 
 /// Execution mode for task execution
 #[derive(Debug, Clone)]

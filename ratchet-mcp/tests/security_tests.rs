@@ -3,11 +3,8 @@
 //! This module provides comprehensive security testing scenarios for MCP including
 //! protocol security, message validation, authentication, and resource protection.
 
-use serde_json::{json, Value};
-use std::{
-    time::{Duration, Instant},
-    collections::HashMap,
-};
+use serde_json::Value;
+use std::time::Duration;
 use tokio::time::sleep;
 
 /// MCP security test configuration
@@ -81,6 +78,12 @@ pub enum Severity {
 /// MCP protocol security test runner
 pub struct McpProtocolSecurityTest {
     config: McpSecurityTestConfig,
+}
+
+impl Default for McpProtocolSecurityTest {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl McpProtocolSecurityTest {

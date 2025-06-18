@@ -511,9 +511,12 @@ mod tests {
     async fn test_rate_limit_allows_requests_within_limit() {
         let config = RateLimitConfig::permissive();
 
-        let app = Router::new()
+        let app = {
+            rate_limit_layer(config);
+            Router::new()
             .route("/test", get(test_handler))
-            .layer(rate_limit_layer(config));
+            .layer(())
+        };
 
         // First request should succeed
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);

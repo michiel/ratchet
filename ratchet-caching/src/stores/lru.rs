@@ -101,7 +101,7 @@ impl<K: CacheKey + 'static, V: CacheValue + 'static> Cache<K, V> for LruCache<K,
                     let queue = self.queue.read();
                     queue
                         .get(index)
-                        .map_or(true, |node| node.entry.is_expired())
+                        .is_none_or(|node| node.entry.is_expired())
                 };
 
                 if is_expired {

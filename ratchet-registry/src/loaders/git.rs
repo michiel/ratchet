@@ -399,6 +399,12 @@ pub struct GitRepositoryCache {
 }
 
 #[cfg(feature = "git")]
+impl Default for GitRepositoryCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GitRepositoryCache {
     pub fn new() -> Self {
         let cache_root = dirs::cache_dir()
@@ -418,7 +424,7 @@ impl GitRepositoryCache {
         let url_hash = format!("{:x}", md5::compute(url.as_bytes()));
         let repo_name = url
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or("unknown")
             .replace(".git", "");
         
@@ -453,6 +459,12 @@ pub struct GitAuthManager {
 }
 
 #[cfg(feature = "git")]
+impl Default for GitAuthManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GitAuthManager {
     pub fn new() -> Self {
         Self {
@@ -598,7 +610,7 @@ impl GitoxideClient {
         })
         .await?;
 
-        result.map_err(|e| RegistryError::GitError(e))
+        result.map_err(RegistryError::GitError)
     }
 
     pub async fn sync_repository(
@@ -655,7 +667,7 @@ impl GitoxideClient {
         })
         .await?;
 
-        result.map_err(|e| RegistryError::GitError(e))
+        result.map_err(RegistryError::GitError)
     }
 
     fn setup_gix_auth(
@@ -678,7 +690,7 @@ impl GitoxideClient {
             }
             GitAuthType::GitHubApp { .. } => {
                 // GitHub App auth is complex and would need JWT token generation
-                return Err("GitHub App authentication not yet implemented - use token instead".to_string());
+                Err("GitHub App authentication not yet implemented - use token instead".to_string())
             }
         }
     }

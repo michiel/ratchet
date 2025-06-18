@@ -174,11 +174,7 @@ impl ExecutionRepository {
         // If duration not provided, calculate from started_at
         let final_duration = if duration_ms.is_none() {
             if let Ok(Some(execution)) = self.find_by_id(id).await {
-                if let Some(started_at) = execution.started_at {
-                    Some((completed_at - started_at).num_milliseconds() as i32)
-                } else {
-                    None
-                }
+                execution.started_at.map(|started_at| (completed_at - started_at).num_milliseconds() as i32)
             } else {
                 None
             }
@@ -255,7 +251,7 @@ impl ExecutionRepository {
     pub async fn update_progress(&self, id: i32, progress: f32) -> Result<(), DatabaseError> {
         // Note: Progress tracking would require adding a progress column to the execution table
         // For now, we'll store progress in the output JSON as a temporary solution
-        if let Ok(Some(mut execution)) = self.find_by_id(id).await {
+        if let Ok(Some(execution)) = self.find_by_id(id).await {
             let mut output = execution.output.unwrap_or_else(|| serde_json::json!({}));
             if let Some(output_obj) = output.as_object_mut() {
                 output_obj.insert("progress".to_string(), serde_json::Value::Number(

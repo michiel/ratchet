@@ -169,8 +169,8 @@ impl SseTransport {
                                 // Parse SSE event format
                                 for line in event_text.lines() {
                                     let line = line.trim();
-                                    if line.starts_with("data: ") {
-                                        let data = &line[6..]; // Remove "data: " prefix
+                                    if let Some(data) = line.strip_prefix("data: ") {
+                                        // Remove "data: " prefix
                                         if !data.trim().is_empty()
                                             && data != "keep-alive"
                                             && tx.send(data.to_string()).await.is_err()

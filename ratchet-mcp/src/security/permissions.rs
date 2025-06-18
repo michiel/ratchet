@@ -83,13 +83,11 @@ impl ClientPermissions {
             return true;
         }
 
-        if pattern.ends_with('*') {
-            let prefix = &pattern[..pattern.len() - 1];
+        if let Some(prefix) = pattern.strip_suffix('*') {
             return task_name.starts_with(prefix);
         }
 
-        if pattern.starts_with('*') {
-            let suffix = &pattern[1..];
+        if let Some(suffix) = pattern.strip_prefix('*') {
             return task_name.ends_with(suffix);
         }
 

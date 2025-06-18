@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::time::Duration;
 
 /// Base test configuration
@@ -14,7 +14,7 @@ const API_BASE: &str = "http://localhost:8080/api/v1";
 
 /// Test helper to check if server is running
 async fn is_server_running(client: &Client) -> bool {
-    match client.get(&format!("{}/health", BASE_URL)).send().await {
+    match client.get(format!("{}/health", BASE_URL)).send().await {
         Ok(response) => response.status().is_success(),
         Err(_) => false,
     }
@@ -68,7 +68,7 @@ async fn test_refine_pagination_start_end() -> Result<()> {
     
     // Test basic pagination with _start and _end
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=5", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=5", API_BASE))
         .send()
         .await?;
     
@@ -82,7 +82,7 @@ async fn test_refine_pagination_start_end() -> Result<()> {
     
     // Test larger range
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=10", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=10", API_BASE))
         .send()
         .await?;
     
@@ -112,7 +112,7 @@ async fn test_refine_sorting() -> Result<()> {
     
     // Test ascending sort
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=10&_sort=name&_order=ASC", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=10&_sort=name&_order=ASC", API_BASE))
         .send()
         .await?;
     
@@ -123,7 +123,7 @@ async fn test_refine_sorting() -> Result<()> {
     
     // Test descending sort
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=10&_sort=name&_order=DESC", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=10&_sort=name&_order=DESC", API_BASE))
         .send()
         .await?;
     
@@ -134,7 +134,7 @@ async fn test_refine_sorting() -> Result<()> {
     
     // Test sort by different fields
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=10&_sort=created_at&_order=DESC", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=10&_sort=created_at&_order=DESC", API_BASE))
         .send()
         .await?;
     
@@ -169,7 +169,7 @@ async fn test_refine_advanced_filtering() -> Result<()> {
     
     for (filter_key, filter_value) in filter_tests {
         let response = client
-            .get(&format!("{}/tasks?_start=0&_end=10&{}={}", API_BASE, filter_key, filter_value))
+            .get(format!("{}/tasks?_start=0&_end=10&{}={}", API_BASE, filter_key, filter_value))
             .send()
             .await?;
         
@@ -210,7 +210,7 @@ async fn test_all_endpoints_refine_compatibility() -> Result<()> {
         
         // Test basic Refine.dev query
         let response = client
-            .get(&format!("{}/{}?_start=0&_end=5", API_BASE, endpoint))
+            .get(format!("{}/{}?_start=0&_end=5", API_BASE, endpoint))
             .send()
             .await?;
         
@@ -222,7 +222,7 @@ async fn test_all_endpoints_refine_compatibility() -> Result<()> {
         
         // Test with sorting
         let response = client
-            .get(&format!("{}/{}?_start=0&_end=5&_sort=id&_order=ASC", API_BASE, endpoint))
+            .get(format!("{}/{}?_start=0&_end=5&_sort=id&_order=ASC", API_BASE, endpoint))
             .send()
             .await?;
         
@@ -253,7 +253,7 @@ async fn test_mixed_query_parameters() -> Result<()> {
     
     // Test mixing Refine.dev pagination with standard parameters
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=10&page=1&limit=5", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=10&page=1&limit=5", API_BASE))
         .send()
         .await?;
     
@@ -281,7 +281,7 @@ async fn test_refine_error_handling() -> Result<()> {
     
     // Test invalid pagination range (start >= end)
     let response = client
-        .get(&format!("{}/tasks?_start=10&_end=5", API_BASE))
+        .get(format!("{}/tasks?_start=10&_end=5", API_BASE))
         .send()
         .await?;
     
@@ -290,7 +290,7 @@ async fn test_refine_error_handling() -> Result<()> {
     
     // Test pagination range too large
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=200", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=200", API_BASE))
         .send()
         .await?;
     
@@ -299,7 +299,7 @@ async fn test_refine_error_handling() -> Result<()> {
     
     // Test invalid sort order
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=10&_sort=name&_order=INVALID", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=10&_sort=name&_order=INVALID", API_BASE))
         .send()
         .await?;
     
@@ -324,7 +324,7 @@ async fn test_pagination_metadata_accuracy() -> Result<()> {
     
     // Get first page
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=3", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=3", API_BASE))
         .send()
         .await?;
     
@@ -354,7 +354,7 @@ async fn test_pagination_metadata_accuracy() -> Result<()> {
     }
     
     // Calculate expected total pages
-    let expected_total_pages = if total == 0 { 1 } else { (total + limit - 1) / limit };
+    let expected_total_pages = if total == 0 { 1 } else { total.div_ceil(limit) };
     assert_eq!(total_pages, expected_total_pages, "Total pages calculation should be correct");
     
     println!("✅ Pagination metadata is accurate");
@@ -374,7 +374,7 @@ async fn test_response_format_compliance() -> Result<()> {
     println!("🧪 Testing response format compliance with Refine.dev...");
     
     let response = client
-        .get(&format!("{}/tasks?_start=0&_end=5", API_BASE))
+        .get(format!("{}/tasks?_start=0&_end=5", API_BASE))
         .send()
         .await?;
     
@@ -447,7 +447,7 @@ async fn test_original_issue_resolution() -> Result<()> {
     
     // This is the exact request that was failing before our fix
     let response = client
-        .get(&format!("{}/tasks?_end=10&_start=0", API_BASE))
+        .get(format!("{}/tasks?_end=10&_start=0", API_BASE))
         .send()
         .await?;
     
@@ -488,7 +488,7 @@ async fn test_refine_query_performance() -> Result<()> {
     // Execute multiple queries to test performance
     for i in 0..10 {
         let response = client
-            .get(&format!("{}/tasks?_start={}&_end={}", API_BASE, i * 5, (i + 1) * 5))
+            .get(format!("{}/tasks?_start={}&_end={}", API_BASE, i * 5, (i + 1) * 5))
             .send()
             .await?;
         

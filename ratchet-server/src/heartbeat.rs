@@ -6,10 +6,9 @@ use cron::Schedule;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{info, warn, error, debug};
-use uuid::Uuid;
 
 use ratchet_interfaces::database::{RepositoryFactory, ScheduleFilters};
-use ratchet_api_types::{PaginationInput, ApiId};
+use ratchet_api_types::PaginationInput;
 use ratchet_output::{OutputDeliveryManager, OutputDestinationConfig, OutputFormat};
 
 use crate::config::HeartbeatConfig;
@@ -80,7 +79,7 @@ impl HeartbeatService {
 
     /// Normalize cron schedule to the expected format
     fn normalize_cron_schedule(&self, cron_expr: &str) -> Result<String> {
-        let parts: Vec<&str> = cron_expr.trim().split_whitespace().collect();
+        let parts: Vec<&str> = cron_expr.split_whitespace().collect();
         
         match parts.len() {
             5 => {

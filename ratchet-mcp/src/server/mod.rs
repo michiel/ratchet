@@ -491,7 +491,7 @@ impl McpServer {
             extract::{Path, State},
             http::{HeaderMap, StatusCode},
             response::{sse::Event, Sse},
-            routing::{get, post, delete},
+            routing::get,
             Json, Router,
         };
         use serde_json::Value;

@@ -3,15 +3,7 @@
 //! This module provides comprehensive security testing scenarios including
 //! authentication, authorization, input validation, rate limiting, and security headers.
 
-use axum::{
-    body::Body,
-    http::{Request, StatusCode, HeaderMap},
-};
-use serde_json::{json, Value};
-use std::{
-    time::{Duration, Instant},
-    collections::HashMap,
-};
+use std::time::Duration;
 use tokio::time::sleep;
 
 /// Security test configuration
@@ -88,6 +80,12 @@ pub enum Severity {
 /// REST API security test runner
 pub struct RestApiSecurityTest {
     config: SecurityTestConfig,
+}
+
+impl Default for RestApiSecurityTest {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RestApiSecurityTest {

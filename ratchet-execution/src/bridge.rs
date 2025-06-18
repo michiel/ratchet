@@ -124,7 +124,7 @@ fn convert_execution_result(result: TaskExecutionResult) -> ExecutionResult {
     };
 
     ExecutionResult {
-        output: result.output.unwrap_or_else(|| JsonValue::Null),
+        output: result.output.unwrap_or(JsonValue::Null),
         execution_time_ms: result.duration_ms as u64,
         logs: vec![], // TaskExecutionResult doesn't provide logs
         trace: result.error_details, // Use error_details as trace data

@@ -4,4 +4,3 @@
 // Other command modules will be added when they are implemented
 pub mod console;
 
-pub use console::*;
