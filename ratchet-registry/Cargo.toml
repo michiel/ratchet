@@ -35,7 +35,7 @@ regex = { workspace = true }                                            # Patter
 url = { workspace = true }                                            # URL handling
 
 # Git support dependencies  
-git2 = { version = "0.18", optional = true, default-features = false, features = ["https", "vendored-openssl"] } # Git operations with vendored HTTPS support (self-contained OpenSSL)
+gix = { workspace = true, optional = true }                           # Pure Rust Git implementation with rustls support
 dirs = { workspace = true, optional = true }                          # Cross-platform directories
 md5 = { version = "0.7", optional = true }                           # URL hashing for cache paths
 
@@ -43,12 +43,11 @@ md5 = { version = "0.7", optional = true }                           # URL hashi
 default = ["filesystem", "http", "git", "watcher"]
 filesystem = ["dep:walkdir", "dep:zip"]
 http = []
-git = ["dep:git2", "dep:dirs", "dep:md5"]  # Default: vendored OpenSSL (self-contained, cross-platform)
-git-system = ["git", "git2/https"]  # Use system OpenSSL instead of vendored (faster builds, requires system deps)
+git = ["dep:gix", "dep:dirs", "dep:md5"]  # Pure Rust Git with rustls
+gitoxide = ["git"]  # Alias for compatibility (same as git)
 watcher = ["dep:notify"]
 validation = ["dep:jsonschema"]
 
 [dev-dependencies]
 tokio-test = { workspace = true }
 tempfile = { workspace = true }
-git2 = { version = "0.18", default-features = false, features = ["https", "vendored-openssl"] }  # For creating test repositories with vendored HTTPS

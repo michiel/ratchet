@@ -41,9 +41,6 @@ pub enum RegistryError {
     #[error("Git error: {0}")]
     GitError(String),
 
-    #[cfg(feature = "git")]
-    #[error("Git library error")]
-    Git(#[from] git2::Error),
 
     #[error("Task join error")]
     TaskJoin(#[from] tokio::task::JoinError),

@@ -73,9 +73,8 @@ server = ["rest-api", "graphql-api", "dep:ratchet-execution", "dep:ratchet-serve
 rest-api = []
 graphql-api = []
 
-# Git repository support
+# Git repository support (using gitoxide with pure Rust and rustls)
 git = ["dep:ratchet-registry", "ratchet-registry/git"]
-git-system = ["git", "ratchet-registry/git-system"]
 
 # Database backends
 database = ["sqlite", "dep:ratchet-storage"]

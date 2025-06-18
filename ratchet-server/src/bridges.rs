@@ -351,7 +351,6 @@ fn convert_registry_error(err: ratchet_registry::RegistryError) -> ratchet_inter
         ratchet_registry::RegistryError::TaskJoin(e) => ratchet_interfaces::RegistryError::Unavailable { message: e.to_string() },
         ratchet_registry::RegistryError::Other(msg) => ratchet_interfaces::RegistryError::Unavailable { message: msg },
         ratchet_registry::RegistryError::GitError(msg) => ratchet_interfaces::RegistryError::Unavailable { message: msg },
-        ratchet_registry::RegistryError::Git(e) => ratchet_interfaces::RegistryError::Unavailable { message: e.to_string() },
     }
 }
 
