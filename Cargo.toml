@@ -63,7 +63,7 @@ url = "2.5"
 async-trait = "0.1"
 tokio-stream = "0.1"
 # Consolidate dependency versions
-jsonschema = "0.30"
+jsonschema = { version = "0.30", default-features = false, features = ["resolve-file"] }
 base64 = "0.22"
 http = "1.0"
 http-body = "1.0"
@@ -72,7 +72,6 @@ lru = "0.10"
 ahash = "0.8"
 fastrand = "2.0"
 # HTTP stack dependencies
-hyper-tls = "0.6"
 # Utility packages
 unicode-width = "0.2.1"
 # Cron/scheduling packages  
