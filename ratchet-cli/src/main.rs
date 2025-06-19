@@ -13,7 +13,7 @@ use ratchet_http::{HttpManager, HttpClient};
 // Legacy repository imports removed - functionality temporarily disabled
 // use ratchet_storage::repositories::{BaseRepository, Repository};
 
-use ratchet_registry::RegistryService;
+// use ratchet_registry::service::DefaultRegistryService; // Temporarily disabled
 
 #[cfg(feature = "server")]
 use serde_json::{from_str, json, to_string_pretty, Value as JsonValue};
@@ -209,16 +209,47 @@ async fn list_repositories(config_path: Option<&PathBuf>) -> Result<()> {
 }
 
 /// Synchronize repositories to database
-async fn sync_repositories(_config_path: Option<&PathBuf>) -> Result<()> {
-    // TEMPORARILY DISABLED: Legacy repository synchronization functionality has been removed
-    // during the SeaORM migration. This feature will be re-implemented using SeaORM repositories
-    // in a future release.
+async fn sync_repositories(config_path: Option<&PathBuf>) -> Result<()> {
+    use ratchet_storage::seaorm::connection::DatabaseConnection;
+    use ratchet_storage::seaorm::repositories::RepositoryFactory;
     
-    return Err(anyhow::anyhow!(
-        "Repository synchronization is temporarily disabled during the SeaORM migration.\n\
-         This feature will be re-implemented in a future release.\n\
-         For now, use 'ratchet serve' to run the main server with full repository functionality."
-    ));
+    info!("Starting repository synchronization");
+    
+    // Load configuration
+    let config = load_config(config_path)?;
+    
+    // Ensure we have server configuration with database
+    let server_config = config.server.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No server configuration found. Database connection required for repository sync."))?;
+    
+    // Create database connection using SeaORM
+    info!("Connecting to database at: {}", server_config.database.url);
+    let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
+        url: server_config.database.url.clone(),
+        max_connections: server_config.database.max_connections,
+        connection_timeout: server_config.database.connection_timeout,
+    };
+    
+    let connection = DatabaseConnection::new(storage_db_config).await
+        .context("Failed to connect to database")?;
+    let factory = RepositoryFactory::new(connection);
+    
+    // Create registry service if we have registry configuration
+    if let Some(_registry_config) = &config.registry {
+        info!("Registry sync functionality temporarily disabled while SeaORM integration is completed");
+        
+        // TODO: Fix config mapping between ratchet_config::RegistryConfig and ratchet_registry::RegistryConfig
+        // The two config types have incompatible structures that need proper conversion
+        
+        println!("Repository synchronization is temporarily disabled.");
+        println!("The feature is being updated to work with the new SeaORM backend.");
+        println!("Use 'ratchet serve' to access full repository functionality via the server.");
+    } else {
+        warn!("No registry configuration found. Nothing to synchronize.");
+        println!("No registry sources configured. Add registry sources to your configuration file to sync tasks.");
+    }
+    
+    Ok(())
 }
 
 /// Start the MCP (Model Context Protocol) server (legacy wrapper function)
@@ -923,16 +954,68 @@ async fn validate_config_file(config_path: &Path) -> Result<()> {
 }
 
 /// List available tasks
-async fn list_tasks(_config_path: Option<&PathBuf>, _format: &str) -> Result<()> {
-    // TEMPORARILY DISABLED: Legacy repository task listing functionality has been removed
-    // during the SeaORM migration. This feature will be re-implemented using SeaORM repositories
-    // in a future release.
+async fn list_tasks(config_path: Option<&PathBuf>, format: &str) -> Result<()> {
+    use ratchet_storage::seaorm::connection::DatabaseConnection;
+    use ratchet_storage::seaorm::repositories::RepositoryFactory;
     
-    return Err(anyhow::anyhow!(
-        "Task listing from database is temporarily disabled during the SeaORM migration.\n\
-         This feature will be re-implemented in a future release.\n\
-         For now, use 'ratchet serve' to run the main server and access tasks via the REST API."
-    ));
+    info!("Listing tasks from database");
+    
+    // Load configuration
+    let config = load_config(config_path)?;
+    
+    // Ensure we have server configuration with database
+    let server_config = config.server.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No server configuration found. Database connection required for task listing."))?;
+    
+    // Create database connection using SeaORM
+    let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
+        url: server_config.database.url.clone(),
+        max_connections: server_config.database.max_connections,
+        connection_timeout: server_config.database.connection_timeout,
+    };
+    
+    let connection = DatabaseConnection::new(storage_db_config).await
+        .context("Failed to connect to database")?;
+    let factory = RepositoryFactory::new(connection);
+    let task_repo = factory.task_repository();
+    
+    // List all tasks from the database
+    let tasks = task_repo.find_all().await
+        .context("Failed to list tasks from database")?;
+    
+    // Format and display tasks
+    match format.to_lowercase().as_str() {
+        "json" => {
+            println!("{}", serde_json::to_string_pretty(&tasks)?);
+        }
+        "yaml" => {
+            println!("{}", serde_yaml::to_string(&tasks)?);
+        }
+        "table" | "pretty" => {
+            if tasks.is_empty() {
+                println!("No tasks found in database.");
+            } else {
+                println!("Tasks in database ({} total):", tasks.len());
+                println!("{:<20} {:<10} {:<15} {:<10} {}", "Name", "Version", "Status", "Enabled", "Path");
+                println!("{}", "=".repeat(80));
+                for task in &tasks {
+                    let status = if task.validated_at.is_some() { "Validated" } else { "Pending" };
+                    let enabled = if task.enabled { "Yes" } else { "No" };
+                    println!("{:<20} {:<10} {:<15} {:<10} {}", 
+                        task.name, task.version, status, enabled, task.path);
+                }
+            }
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unsupported format: {}. Use json, yaml, or table",
+                format
+            ));
+        }
+    }
+    
+    info!("Listed {} tasks", tasks.len());
+    Ok(())
 }
 
 /// Display status information
@@ -985,16 +1068,27 @@ async fn status_command(config_path: Option<&PathBuf>) -> Result<()> {
 }
 
 /// Test database connection
-async fn test_database_connection(_database_url: &str) -> Result<()> {
-    // TEMPORARILY DISABLED: Legacy database connection testing has been removed
-    // during the SeaORM migration. This feature will be re-implemented using SeaORM
-    // in a future release.
+async fn test_database_connection(database_url: &str) -> Result<()> {
+    use ratchet_storage::seaorm::connection::DatabaseConnection;
+    use ratchet_storage::seaorm::repositories::RepositoryFactory;
     
-    return Err(anyhow::anyhow!(
-        "Database connection testing is temporarily disabled during the SeaORM migration.\n\
-         This feature will be re-implemented in a future release.\n\
-         For now, use 'ratchet serve' to test the database connection."
-    ));
+    // Create database connection using SeaORM
+    let storage_db_config = ratchet_storage::seaorm::config::DatabaseConfig {
+        url: database_url.to_string(),
+        max_connections: 1,
+        connection_timeout: std::time::Duration::from_secs(5),
+    };
+    
+    let connection = DatabaseConnection::new(storage_db_config).await
+        .context("Failed to connect to database")?;
+    let factory = RepositoryFactory::new(connection);
+    let task_repo = factory.task_repository();
+    
+    // Test the connection by performing a health check
+    task_repo.health_check_send().await
+        .context("Database health check failed")?;
+    
+    Ok(())
 }
 
 /// Create shell command completions

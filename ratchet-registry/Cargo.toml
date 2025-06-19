@@ -21,7 +21,7 @@ uuid = { workspace = true }
 
 # Ratchet dependencies
 ratchet-core = { path = "../ratchet-core" }
-ratchet-storage = { path = "../ratchet-storage" }
+ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-http = { path = "../ratchet-http" }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-caching = { path = "../ratchet-caching" }
