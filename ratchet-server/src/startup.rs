@@ -546,7 +546,13 @@ async fn root_handler() -> axum::response::Json<serde_json::Value> {
 
 /// Admin UI handler - serves the frontend application with CDN assets
 async fn admin_handler() -> Html<String> {
-    let html = r##"<!DOCTYPE html>
+    // Generate cache busting timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    
+    let html = format!(r##"<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -559,19 +565,19 @@ async fn admin_handler() -> Html<String> {
     />
     <title>Ratchet Admin Dashboard</title>
     
-    <!-- CDN Assets -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/style.css">
+    <!-- CDN Assets with cache busting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/style.css?t={}">
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     
-    <!-- CDN JavaScript -->
-    <script src="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/script.js"></script>
+    <!-- CDN JavaScript with cache busting -->
+    <script src="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/script.js?t={}"></script>
   </body>
-</html>"##;
+</html>"##, timestamp, timestamp);
 
-    Html(html.to_string())
+    Html(html)
 }
 
 
