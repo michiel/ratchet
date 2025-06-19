@@ -10,7 +10,8 @@ use ratchet_config::{ConfigLoader, RatchetConfig};
 #[cfg(feature = "http")]
 use ratchet_http::{HttpManager, HttpClient};
 
-use ratchet_storage::repositories::{BaseRepository, Repository};
+// Legacy repository imports removed - functionality temporarily disabled
+// use ratchet_storage::repositories::{BaseRepository, Repository};
 
 use ratchet_registry::RegistryService;
 
@@ -208,197 +209,16 @@ async fn list_repositories(config_path: Option<&PathBuf>) -> Result<()> {
 }
 
 /// Synchronize repositories to database
-async fn sync_repositories(config_path: Option<&PathBuf>) -> Result<()> {
-    let config = load_config(config_path)?;
+async fn sync_repositories(_config_path: Option<&PathBuf>) -> Result<()> {
+    // TEMPORARILY DISABLED: Legacy repository synchronization functionality has been removed
+    // during the SeaORM migration. This feature will be re-implemented using SeaORM repositories
+    // in a future release.
     
-    let registry_config = config.registry
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("No registry configuration found"))?;
-    
-    if registry_config.sources.is_empty() {
-        info!("No repositories configured for synchronization");
-        return Ok(());
-    }
-    
-    info!("Starting repository synchronization...");
-    
-    // Convert config sources to registry task sources
-    let mut sources = Vec::new();
-    for source_config in &registry_config.sources {
-        let task_source = match source_config.source_type {
-            ratchet_config::domains::registry::RegistrySourceType::Filesystem => {
-                ratchet_registry::config::TaskSource::Filesystem {
-                    path: source_config.uri.clone(),
-                    recursive: true, // Default value
-                    watch: source_config.config.filesystem.watch_changes,
-                }
-            }
-            ratchet_config::domains::registry::RegistrySourceType::Http => {
-                ratchet_registry::config::TaskSource::Http {
-                    url: source_config.uri.clone(),
-                    auth: None, // TODO: Map authentication from config
-                    polling_interval: source_config.polling_interval
-                        .unwrap_or(registry_config.default_polling_interval),
-                }
-            }
-            ratchet_config::domains::registry::RegistrySourceType::Git => {
-                ratchet_registry::config::TaskSource::Git {
-                    url: source_config.uri.clone(),
-                    auth: None, // TODO: Map authentication from config
-                    config: ratchet_registry::config::GitConfig {
-                        branch: source_config.config.git.branch.clone(),
-                        subdirectory: source_config.config.git.subdirectory.clone(),
-                        shallow: source_config.config.git.shallow,
-                        depth: source_config.config.git.depth,
-                        sync_strategy: match source_config.config.git.sync_strategy {
-                            ratchet_config::domains::registry::GitSyncStrategy::Clone => 
-                                ratchet_registry::config::GitSyncStrategy::Clone,
-                            ratchet_config::domains::registry::GitSyncStrategy::Fetch => 
-                                ratchet_registry::config::GitSyncStrategy::Fetch,
-                            ratchet_config::domains::registry::GitSyncStrategy::Pull => 
-                                ratchet_registry::config::GitSyncStrategy::Pull,
-                        },
-                        cleanup_on_error: source_config.config.git.cleanup_on_error,
-                        verify_signatures: source_config.config.git.verify_signatures,
-                        allowed_refs: source_config.config.git.allowed_refs.clone(),
-                        timeout: source_config.config.git.timeout,
-                        max_repo_size: source_config.config.git.max_repo_size.clone(),
-                        local_cache_path: source_config.config.git.local_cache_path.clone(),
-                        cache_ttl: source_config.config.git.cache_ttl,
-                        keep_history: source_config.config.git.keep_history,
-                    },
-                }
-            }
-            ratchet_config::domains::registry::RegistrySourceType::S3 => {
-                warn!("S3 repositories not yet supported for synchronization: {}", source_config.name);
-                continue;
-            }
-        };
-        sources.push(task_source);
-    }
-
-    if sources.is_empty() {
-        info!("No supported repositories found for synchronization");
-        return Ok(());
-    }
-
-    // Create registry service configuration
-    let registry_service_config = ratchet_registry::config::RegistryConfig {
-        sources,
-        sync_interval: registry_config.default_polling_interval,
-        enable_auto_sync: true,
-        enable_validation: true,
-        cache_config: ratchet_registry::config::CacheConfig {
-            enabled: registry_config.cache.enabled,
-            max_size: registry_config.cache.max_entries,
-            ttl: registry_config.cache.ttl,
-        },
-    };
-
-    // Create database connection for sync service using storage-based repository
-    let database_url = config.server.as_ref()
-        .map(|s| s.database.url.clone())
-        .unwrap_or_else(|| "sqlite::memory:".to_string());
-    
-    // Use the same storage configuration as the main application
-    let storage_config = if database_url.starts_with("sqlite:") {
-        // Extract the path from the URL
-        let path = if database_url == "sqlite::memory:" {
-            ":memory:".to_string()
-        } else if database_url.starts_with("sqlite://") {
-            // Remove sqlite:// prefix
-            database_url.strip_prefix("sqlite://").unwrap().to_string()
-        } else if database_url.starts_with("sqlite:") {
-            // Remove sqlite: prefix and handle relative paths
-            let path_part = database_url.strip_prefix("sqlite:").unwrap();
-            if path_part.starts_with("//") {
-                // Absolute path: sqlite://path -> path
-                path_part.strip_prefix("//").unwrap().to_string()
-            } else {
-                // Relative path or special case: sqlite:path -> path
-                path_part.to_string()
-            }
-        } else {
-            // Assume it's already a path
-            database_url.clone()
-        };
-        debug!("Parsed SQLite path for sync: {}", path);
-        ratchet_storage::config::StorageConfig::sqlite(path)
-    } else {
-        return Err(anyhow::anyhow!("Only SQLite databases are currently supported for repository synchronization"));
-    };
-
-    // Override connection settings from config
-    let mut storage_config = storage_config;
-    storage_config.connection.max_connections = config.server.as_ref()
-        .map(|s| s.database.max_connections)
-        .unwrap_or(10);
-    storage_config.connection.connect_timeout = config.server.as_ref()
-        .map(|s| s.database.connection_timeout)
-        .unwrap_or_else(|| std::time::Duration::from_secs(30));
-
-    // Use the standard storage repository factory instead of SeaORM directly
-    
-    // For now, use the regular storage repository instead of the adapter to get the build working
-    let connection_manager = ratchet_storage::connection::create_connection_manager(&storage_config)
-        .await
-        .context("Failed to create connection manager for repository synchronization")?;
-    let repository_factory = ratchet_storage::repositories::RepositoryFactory::new(connection_manager.clone());
-    let task_repo = Arc::new(repository_factory.task_repository());
-    let task_repo_for_verification = task_repo.clone();
-    
-    let sync_service = Arc::new(ratchet_registry::sync::DatabaseSync::new(task_repo));
-
-    // Create registry service with sync capability
-    let registry_service = ratchet_registry::service::DefaultRegistryService::new(registry_service_config)
-        .with_sync_service(sync_service);
-
-    // Perform synchronization
-    info!("🔄 Discovering tasks from repositories...");
-    let sync_result = registry_service.sync_to_database().await
-        .context("Failed to synchronize repositories to database")?;
-
-    info!("✅ Repository synchronization completed successfully");
-    info!("   ➕ Tasks added: {}", sync_result.tasks_added);
-    info!("   🔄 Tasks updated: {}", sync_result.tasks_updated);
-    
-    if !sync_result.errors.is_empty() {
-        warn!("   ⚠️  Errors encountered: {}", sync_result.errors.len());
-        for error in &sync_result.errors {
-            warn!("     - {}: {}", error.task_ref.name, error.error);
-        }
-    }
-
-    // Add a simple verification: try to count tasks in the actual database
-    info!("🔍 Verifying repository synchronization...");
-    match task_repo_for_verification.health_check().await {
-        Ok(true) => {
-            info!("   📊 Repository health check: true");
-        }
-        Ok(false) => {
-            warn!("   ⚠️  Repository health check returned false");
-        }
-        Err(e) => {
-            warn!("   ⚠️  Repository health check failed: {}", e);
-        }
-    }
-    
-    // Also verify that tasks were actually persisted to the database
-    let query = ratchet_storage::entities::Query::new();
-    match task_repo_for_verification.count(&query).await {
-        Ok(count) => {
-            info!("   📈 Actual tasks in database: {}", count);
-            if count == 0 {
-                warn!("   ⚠️  No tasks found in database despite sync claiming success");
-                warn!("   💡 This suggests the sync process is using a different database or failed to persist");
-            }
-        }
-        Err(e) => {
-            warn!("   ⚠️  Failed to count tasks in database: {}", e);
-        }
-    }
-
-    Ok(())
+    return Err(anyhow::anyhow!(
+        "Repository synchronization is temporarily disabled during the SeaORM migration.\n\
+         This feature will be re-implemented in a future release.\n\
+         For now, use 'ratchet serve' to run the main server with full repository functionality."
+    ));
 }
 
 /// Start the MCP (Model Context Protocol) server (legacy wrapper function)
@@ -1103,67 +923,16 @@ async fn validate_config_file(config_path: &Path) -> Result<()> {
 }
 
 /// List available tasks
-async fn list_tasks(config_path: Option<&PathBuf>, format: &str) -> Result<()> {
-    let config = load_config(config_path)?;
+async fn list_tasks(_config_path: Option<&PathBuf>, _format: &str) -> Result<()> {
+    // TEMPORARILY DISABLED: Legacy repository task listing functionality has been removed
+    // during the SeaORM migration. This feature will be re-implemented using SeaORM repositories
+    // in a future release.
     
-    // Check if we have storage configuration
-    if let Some(server_config) = &config.server {
-        info!("Listing tasks from database...");
-        
-        // Create storage connection
-        let storage_config = ratchet_storage::config::StorageConfig::sqlite(&server_config.database.url);
-        let connection_manager = ratchet_storage::connection::create_connection_manager(&storage_config)
-            .await
-            .context("Failed to create connection manager")?;
-        let factory = ratchet_storage::repositories::RepositoryFactory::new(connection_manager);
-        let task_repo = factory.task_repository();
-        
-        // Load tasks
-        let query = ratchet_storage::entities::Query::new();
-        let tasks = task_repo.find_all(&query).await
-            .context("Failed to load tasks from database")?;
-        
-        // Format output
-        match format.to_lowercase().as_str() {
-            "json" => {
-                println!("{}", to_string_pretty(&tasks)?);
-            }
-            "yaml" => {
-                println!("{}", serde_yaml::to_string(&tasks)?);
-            }
-            "table" => {
-                println!("{:<20} {:<10} {:<30} {:<10}", "Name", "Version", "Path", "Enabled");
-                println!("{}", "-".repeat(80));
-                for task in tasks {
-                    println!("{:<20} {:<10} {:<30} {:<10}", 
-                        task.name, 
-                        task.version, 
-                        task.path,
-                        task.enabled
-                    );
-                }
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported format: {}. Use json, yaml, or table",
-                    format
-                ));
-            }
-        }
-    } else {
-        info!("No database configuration found. Listing from registry sources...");
-        
-        if let Some(registry_config) = &config.registry {
-            for source in &registry_config.sources {
-                println!("Source: {} ({})", source.name, source.uri);
-                // TODO: Actually scan the source for tasks
-            }
-        } else {
-            println!("No registry configuration found.");
-        }
-    }
-    
-    Ok(())
+    return Err(anyhow::anyhow!(
+        "Task listing from database is temporarily disabled during the SeaORM migration.\n\
+         This feature will be re-implemented in a future release.\n\
+         For now, use 'ratchet serve' to run the main server and access tasks via the REST API."
+    ));
 }
 
 /// Display status information
@@ -1216,16 +985,16 @@ async fn status_command(config_path: Option<&PathBuf>) -> Result<()> {
 }
 
 /// Test database connection
-async fn test_database_connection(database_url: &str) -> Result<()> {
-    let storage_config = ratchet_storage::config::StorageConfig::sqlite(database_url);
-    let connection_manager = ratchet_storage::connection::create_connection_manager(&storage_config)
-        .await
-        .context("Failed to create connection manager")?;
+async fn test_database_connection(_database_url: &str) -> Result<()> {
+    // TEMPORARILY DISABLED: Legacy database connection testing has been removed
+    // during the SeaORM migration. This feature will be re-implemented using SeaORM
+    // in a future release.
     
-    connection_manager.health_check().await
-        .context("Database health check failed")?;
-    
-    Ok(())
+    return Err(anyhow::anyhow!(
+        "Database connection testing is temporarily disabled during the SeaORM migration.\n\
+         This feature will be re-implemented in a future release.\n\
+         For now, use 'ratchet serve' to test the database connection."
+    ));
 }
 
 /// Create shell command completions

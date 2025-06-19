@@ -45,9 +45,10 @@ impl ConflictResolver {
 
     pub fn resolve_conflict(
         &self,
-        existing: &ratchet_storage::entities::task::Task,
+        _existing: &(),
         discovered: &DiscoveredTask,
     ) -> ConflictResolution {
+        // TEMPORARILY DISABLED: Legacy entity parameter removed during SeaORM migration
         match self.strategy {
             ConflictStrategy::PreferRegistry => {
                 info!(
@@ -65,7 +66,7 @@ impl ConflictResolver {
             }
             ConflictStrategy::PreferNewer => {
                 // Compare timestamps to determine which is newer
-                if self.is_registry_newer(existing, discovered) {
+                if self.is_registry_newer(&(), discovered) {
                     info!(
                         "Conflict resolution: registry version is newer for task {} {}",
                         discovered.metadata.name, discovered.metadata.version
@@ -92,14 +93,11 @@ impl ConflictResolver {
 
     fn is_registry_newer(
         &self,
-        existing: &ratchet_storage::entities::task::Task,
-        discovered: &DiscoveredTask,
+        _existing: &(),
+        _discovered: &DiscoveredTask,
     ) -> bool {
-        // Compare updated_at timestamps
-        // For now, this is a placeholder since we need to understand the actual
-        // storage entity structure better
-        
-        // Assuming the storage entity has an updated_at field
-        discovered.metadata.updated_at > existing.updated_at
+        // TEMPORARILY DISABLED: Legacy entity parameter removed during SeaORM migration
+        // Always assume registry is newer for now
+        true
     }
 }

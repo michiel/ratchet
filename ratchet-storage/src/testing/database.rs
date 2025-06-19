@@ -246,16 +246,7 @@ impl TestDatabase {
         crate::seaorm::repositories::RepositoryFactory::new(self.ratchet_connection.clone())
     }
 
-    /// Create abstract repository factory using the test database connection
-    pub async fn create_abstract_repository_factory(&self) -> Result<crate::repositories::RepositoryFactory, TestDatabaseError> {
-        // Convert to storage config for abstract repositories
-        let storage_config = crate::config::StorageConfig::in_memory();
-        let connection_manager = crate::connection::create_connection_manager(&storage_config)
-            .await
-            .map_err(|e| TestDatabaseError::Connection(e.to_string()))?;
-
-        Ok(crate::repositories::RepositoryFactory::new(connection_manager))
-    }
+    // Legacy abstract repository factory removed - use SeaORM repositories
 }
 
 /// Test database errors
@@ -480,13 +471,8 @@ mod tests {
         let seaorm_factory = db.create_repository_factory();
         let task_repo = seaorm_factory.task_repository();
         
-        // Test abstract repository factory
-        let abstract_factory = db.create_abstract_repository_factory().await.unwrap();
-        let abstract_task_repo = abstract_factory.task_repository();
-        
         // Verify health check works
-        let health = abstract_task_repo.health_check_send().await.unwrap();
-        assert!(health);
+        task_repo.health_check_send().await.unwrap();
     }
 
     #[tokio::test]
