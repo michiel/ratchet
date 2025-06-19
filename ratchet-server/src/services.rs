@@ -27,7 +27,6 @@ use crate::config::ServerConfig;
 use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
 use crate::scheduler::{SchedulerService, TokioCronSchedulerService, TokioCronSchedulerConfig};
 use crate::heartbeat::HeartbeatService;
-// use crate::scheduler_legacy::{SchedulerService as LegacySchedulerService, SchedulerConfig as LegacySchedulerConfig};
 use ratchet_output::OutputDeliveryManager;
 
 /// Service container holding all application services

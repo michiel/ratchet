@@ -10,5 +10,3 @@ pub use repository_bridge::RepositoryBridge;
 // pub use sqlite_storage::SqliteMetadataStore;
 pub use tokio_scheduler::{TokioCronSchedulerService, TokioCronSchedulerConfig};
 
-// Re-export the legacy implementation during migration
-pub use crate::scheduler_legacy::{SchedulerService as LegacySchedulerService, SchedulerConfig};
