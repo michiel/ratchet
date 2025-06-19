@@ -4,6 +4,7 @@ use anyhow::Result;
 use axum::{
     Router,
     routing::get,
+    response::Html,
 };
 // use tower_http::{
 //     trace::TraceLayer,
@@ -78,6 +79,9 @@ impl Server {
         
         // Add root handler
         app = app.route("/", get(root_handler));
+        
+        // Add admin UI handler
+        app = app.route("/admin", get(admin_handler));
 
         // Add GraphQL API if enabled
         if self.config.graphql_api.enabled {
@@ -435,6 +439,7 @@ impl Server {
         let protocol = if self.config.server.tls.is_some() { "https" } else { "http" };
         tracing::info!("📋 Available endpoints:");
         tracing::info!("   🏠 Root: {}://{}/", protocol, self.config.server.bind_address);
+        tracing::info!("   🎛️  Admin UI: {}://{}/admin", protocol, self.config.server.bind_address);
         
         // Health endpoints
         tracing::info!("   ❤️  Health Endpoints:");
@@ -533,9 +538,40 @@ async fn root_handler() -> axum::response::Json<serde_json::Value> {
             "graphql": "/graphql", 
             "playground": "/playground",
             "mcp_sse": "/mcp",
-            "health": "/health"
+            "health": "/health",
+            "admin": "/admin"
         }
     }))
+}
+
+/// Admin UI handler - serves the frontend application with CDN assets
+async fn admin_handler() -> Html<String> {
+    let html = r##"<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Ratchet - Task execution and automation system"
+    />
+    <title>Ratchet Admin Dashboard</title>
+    
+    <!-- CDN Assets -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/style.css">
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    
+    <!-- CDN JavaScript -->
+    <script src="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/script.js"></script>
+  </body>
+</html>"##;
+
+    Html(html.to_string())
 }
 
 
