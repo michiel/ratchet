@@ -2,6 +2,7 @@
 
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     response::IntoResponse,
     Json,
 };
@@ -201,7 +202,7 @@ pub async fn create_execution(
     let created_execution = execution_repo.create(unified_execution).await
         .map_err(|e| RestError::InternalError(format!("Failed to create execution: {}", e)))?;
     
-    Ok(Json(ApiResponse::new(created_execution)))
+    Ok((StatusCode::CREATED, Json(ApiResponse::new(created_execution))))
 }
 
 /// Update an existing execution
