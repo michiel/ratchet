@@ -258,6 +258,18 @@ impl ErrorSanitizer {
             return false;
         }
         
+        // Check for specific file operation patterns first
+        let file_operation_patterns = [
+            "failed to read file", "failed to write file", "failed to open file",
+            "failed to create file", "failed to delete file", "could not read file",
+            "could not write file", "could not open file", "unable to read file",
+            "unable to write file", "file not found", "cannot access file"
+        ];
+        
+        if file_operation_patterns.iter().any(|pattern| message.contains(pattern)) {
+            return true;
+        }
+        
         let fs_keywords = [
             "file system", "filesystem", "directory", "path", "permission denied",
             "file exists", "no such file", "read only", "write protected", 
