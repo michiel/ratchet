@@ -2,6 +2,7 @@
 
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     response::IntoResponse,
     Json,
 };
@@ -225,7 +226,7 @@ pub async fn create_schedule(
         }
     }
     
-    Ok(Json(ApiResponse::new(created_schedule)))
+    Ok((StatusCode::CREATED, Json(ApiResponse::new(created_schedule))))
 }
 
 /// Update an existing schedule

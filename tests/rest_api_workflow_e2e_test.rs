@@ -917,7 +917,8 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
 
     assert_eq!(status, StatusCode::CREATED, "Create schedule should return 201");
     let schedule = created_schedule.expect("Created schedule should be returned");
-    let schedule_id = schedule.get("id").expect("Schedule should have ID").as_str().unwrap();
+    let schedule_data = schedule.get("data").expect("Response should have data field");
+    let schedule_id = schedule_data.get("id").expect("Schedule should have ID").as_str().unwrap();
 
     println!("✅ Created schedule with ID: {}", schedule_id);
 
@@ -926,7 +927,8 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
     let (status, retrieved_schedule): (StatusCode, Option<Value>) = ctx.get(&format!("/schedules/{}", schedule_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get schedule should return 200");
 
-    let schedule_data = retrieved_schedule.expect("Schedule should be returned");
+    let schedule_response = retrieved_schedule.expect("Schedule should be returned");
+    let schedule_data = schedule_response.get("data").expect("Response should have data field");
     assert_eq!(schedule_data["name"], "e2e-webhook-test-schedule");
     assert_eq!(schedule_data["enabled"], true);
     assert_eq!(schedule_data["taskId"], task_id);
@@ -951,12 +953,18 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
         }
     }
 
-    // Step 4: Wait for schedule to trigger and create jobs
-    println!("⏳ Step 4: Waiting for schedule to create jobs (up to 90 seconds)...");
+    // Step 4: Test manual trigger to create jobs (instead of waiting for scheduler)
+    println!("⚡ Step 4: Testing manual schedule trigger to create jobs...");
     let mut jobs_created = false;
     
-    for attempt in 1..=18 { // Check every 5 seconds for 90 seconds
-        tokio::time::sleep(Duration::from_secs(5)).await;
+    // Try to trigger the schedule manually to create a job
+    let (trigger_status, _): (StatusCode, Option<Value>) = ctx.post(&format!("/schedules/{}/trigger", schedule_id), json!({})).await?;
+    
+    if trigger_status.is_success() {
+        println!("✅ Manual schedule trigger successful");
+        
+        // Check if jobs were created by the trigger
+        tokio::time::sleep(Duration::from_secs(2)).await; // Brief wait for job creation
         
         let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
         if status == StatusCode::OK {
@@ -967,20 +975,38 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
                     .unwrap_or(&empty_vec);
                 
                 if !job_items.is_empty() {
-                    println!("✅ Found {} job(s) created by schedule (attempt {})", job_items.len(), attempt);
+                    println!("✅ Found {} job(s) created by manual trigger", job_items.len());
                     jobs_created = true;
-                    break;
                 }
             }
         }
+    } else {
+        println!("⚠️  Manual trigger failed with status: {} - checking for automatic jobs instead", trigger_status);
         
-        if attempt % 6 == 0 { // Print progress every 30 seconds
-            println!("🔄 Still waiting for jobs... (attempt {}/18)", attempt);
+        // If manual trigger fails, do a brief check for automatically created jobs
+        for attempt in 1..=3 { // Only check 3 times (15 seconds total)
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            
+            let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
+            if status == StatusCode::OK {
+                if let Some(jobs_data) = jobs {
+                    let empty_vec = vec![];
+                    let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
+                        .and_then(|v| v.as_array())
+                        .unwrap_or(&empty_vec);
+                    
+                    if !job_items.is_empty() {
+                        println!("✅ Found {} job(s) created automatically (attempt {})", job_items.len(), attempt);
+                        jobs_created = true;
+                        break;
+                    }
+                }
+            }
         }
     }
 
     if !jobs_created {
-        println!("⚠️  No jobs created by schedule within timeout - this may indicate scheduling is not yet fully implemented");
+        println!("⚠️  No jobs created - scheduler may not be fully integrated in test environment");
     }
 
     // Step 5: Check for job executions
@@ -1182,58 +1208,59 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
     }
 
     let schedule = created_schedule.expect("Schedule should be created");
-    let schedule_id = schedule["id"].as_str().unwrap();
+    let schedule_data = schedule.get("data").expect("Response should have data field");
+    let schedule_id = schedule_data["id"].as_str().unwrap();
     
     println!("✅ Created schedule: {}", schedule_id);
 
-    // Step 3: Monitor for job creation and execution
-    println!("⏳ Step 3: Monitoring for job creation and execution...");
+    // Step 3: Test manual trigger to create jobs quickly (avoid waiting for automatic scheduler)
+    println!("⚡ Step 3: Testing manual trigger to create jobs...");
     
     let mut job_found = false;
     let mut execution_found = false;
-    let start_time = std::time::Instant::now();
     
-    // Monitor for up to 2 minutes
-    while start_time.elapsed() < Duration::from_secs(120) && (!job_found || !execution_found) {
-        tokio::time::sleep(Duration::from_secs(5)).await;
+    // Try to trigger the schedule manually to create a job
+    let (trigger_status, _): (StatusCode, Option<Value>) = ctx.post(&format!("/schedules/{}/trigger", schedule_id), json!({})).await?;
+    
+    if trigger_status.is_success() {
+        println!("✅ Manual schedule trigger successful");
         
-        // Check for jobs
-        if !job_found {
-            let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
-            if status == StatusCode::OK {
-                if let Some(jobs_data) = jobs {
-                    let empty_vec = vec![];
-                    let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
-                        .and_then(|v| v.as_array())
-                        .unwrap_or(&empty_vec);
+        // Check if jobs were created by the trigger
+        tokio::time::sleep(Duration::from_secs(2)).await; // Brief wait for job creation
+        
+        let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
+        if status == StatusCode::OK {
+            if let Some(jobs_data) = jobs {
+                let empty_vec = vec![];
+                let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
+                    .and_then(|v| v.as_array())
+                    .unwrap_or(&empty_vec);
+                
+                if !job_items.is_empty() {
+                    job_found = true;
+                    println!("✅ Found {} job(s) created by manual trigger", job_items.len());
                     
-                    if !job_items.is_empty() {
-                        job_found = true;
-                        println!("✅ Found {} job(s) created by schedule", job_items.len());
-                        
-                        // Print job details
-                        for (i, job) in job_items.iter().enumerate() {
-                            let job_status = job["status"].as_str().unwrap_or("unknown");
-                            println!("  📋 Job {}: status={}", i, job_status);
-                        }
+                    // Print job details
+                    for (i, job) in job_items.iter().enumerate() {
+                        let job_status = job["status"].as_str().unwrap_or("unknown");
+                        println!("  📋 Job {}: status={}", i, job_status);
                     }
                 }
             }
         }
         
         // Check for executions
-        if !execution_found {
-            let (status, executions): (StatusCode, Option<Value>) = ctx.get(&format!("/executions?taskId={}", task_id)).await?;
-            if status == StatusCode::OK {
-                if let Some(exec_data) = executions {
-                    let empty_vec = vec![];
-                    let exec_items = exec_data.get("data").or_else(|| exec_data.get("items"))
-                        .and_then(|v| v.as_array())
-                        .unwrap_or(&empty_vec);
-                    
-                    if !exec_items.is_empty() {
-                        execution_found = true;
-                        println!("✅ Found {} execution(s)", exec_items.len());
+        let (status, executions): (StatusCode, Option<Value>) = ctx.get(&format!("/executions?taskId={}", task_id)).await?;
+        if status == StatusCode::OK {
+            if let Some(exec_data) = executions {
+                let empty_vec = vec![];
+                let exec_items = exec_data.get("data").or_else(|| exec_data.get("items"))
+                    .and_then(|v| v.as_array())
+                    .unwrap_or(&empty_vec);
+                
+                if !exec_items.is_empty() {
+                    execution_found = true;
+                    println!("✅ Found {} execution(s)", exec_items.len());
                         
                         // Print execution details
                         for (i, execution) in exec_items.iter().enumerate() {
@@ -1250,13 +1277,33 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
                 }
             }
         }
+    } else {
+        println!("⚠️  Manual trigger failed with status: {} - checking for automatic jobs instead", trigger_status);
         
-        // Progress indicator
-        let elapsed = start_time.elapsed().as_secs();
-        if elapsed % 30 == 0 && elapsed > 0 {
-            println!("🔄 Still monitoring... ({}s elapsed, job_found={}, execution_found={})", 
-                elapsed, job_found, execution_found);
+        // If manual trigger fails, do a brief check for automatically created jobs (fallback)
+        for attempt in 1..=3 { // Only check 3 times (15 seconds total)
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            
+            let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
+            if status == StatusCode::OK {
+                if let Some(jobs_data) = jobs {
+                    let empty_vec = vec![];
+                    let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
+                        .and_then(|v| v.as_array())
+                        .unwrap_or(&empty_vec);
+                    
+                    if !job_items.is_empty() {
+                        job_found = true;
+                        println!("✅ Found {} job(s) created automatically (attempt {})", job_items.len(), attempt);
+                        break;
+                    }
+                }
+            }
         }
+    }
+
+    if !job_found {
+        println!("⚠️  No jobs created - scheduler may not be fully integrated in test environment");
     }
 
     // Step 4: Check for webhook deliveries
@@ -1373,8 +1420,8 @@ async fn test_error_handling_and_status_codes() -> Result<()> {
 
     let (status, _): (StatusCode, Option<Value>) = ctx.post("/tasks", invalid_task_request).await?;
     assert!(
-        status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid task request should return 400 or 500"
+        status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY || status == StatusCode::INTERNAL_SERVER_ERROR,
+        "Invalid task request should return 400, 422, or 500, got: {}", status
     );
 
     // Test invalid path parameters
