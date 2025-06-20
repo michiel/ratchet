@@ -2,7 +2,7 @@ use super::config::DatabaseConfig;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection as SeaConnection, DbErr};
 use std::time::Duration;
 use thiserror::Error;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// Database connection wrapper with configuration
 #[derive(Clone)]
@@ -39,14 +39,32 @@ impl DatabaseConnection {
         Self::ensure_sqlite_file_exists(&config.url)?;
 
         let mut opts = ConnectOptions::new(&config.url);
-        opts.max_connections(config.max_connections)
-            .min_connections(1)
-            .connect_timeout(config.connection_timeout)
-            .acquire_timeout(config.connection_timeout)
-            .idle_timeout(Duration::from_secs(300)) // 5 minutes idle timeout
-            .max_lifetime(Duration::from_secs(3600)) // 1 hour max lifetime
-            .sqlx_logging(true) // Enable SQLx query logging
-            .sqlx_logging_level(log::LevelFilter::Debug); // Set SQLx logging to DEBUG level instead of INFO
+        
+        // Special handling for in-memory databases to prevent connection pool issues
+        if config.url.contains(":memory:") || config.url.contains("sqlite::memory:") {
+            // For in-memory databases, use a single persistent connection
+            // to prevent database loss when connections are recycled
+            warn!("Detected in-memory database - configuring single persistent connection to prevent data loss");
+            opts.max_connections(1)
+                .min_connections(1)
+                .connect_timeout(config.connection_timeout)
+                .acquire_timeout(config.connection_timeout)
+                // Use very long timeouts for in-memory DBs to prevent connection loss
+                .idle_timeout(Duration::from_secs(86400)) // 24 hours 
+                .max_lifetime(Duration::from_secs(86400)) // 24 hours
+                .sqlx_logging(true)
+                .sqlx_logging_level(log::LevelFilter::Debug);
+        } else {
+            // For file-based databases, use normal connection pooling
+            opts.max_connections(config.max_connections)
+                .min_connections(1)
+                .connect_timeout(config.connection_timeout)
+                .acquire_timeout(config.connection_timeout)
+                .idle_timeout(Duration::from_secs(300)) // 5 minutes idle timeout
+                .max_lifetime(Duration::from_secs(3600)) // 1 hour max lifetime
+                .sqlx_logging(true) // Enable SQLx query logging
+                .sqlx_logging_level(log::LevelFilter::Debug); // Set SQLx logging to DEBUG level instead of INFO
+        }
 
         debug!("Attempting to connect to database with URL: {}", config.url);
         let connection = Database::connect(opts).await.map_err(|e| {

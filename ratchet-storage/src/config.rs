@@ -241,6 +241,16 @@ impl StorageConfig {
     pub fn in_memory() -> Self {
         Self {
             backend: StorageBackend::InMemory,
+            connection: ConnectionConfig {
+                max_connections: 1,        // Single connection for in-memory
+                min_connections: 1,
+                connect_timeout: Duration::from_secs(30),
+                query_timeout: Duration::from_secs(60),
+                idle_timeout: Some(Duration::from_secs(86400)),  // 24 hours for in-memory
+                max_lifetime: Some(Duration::from_secs(86400)), // 24 hours for in-memory
+                health_check_enabled: false, // Disable health checks for in-memory
+                health_check_interval: Duration::from_secs(30),
+            },
             ..Default::default()
         }
     }
