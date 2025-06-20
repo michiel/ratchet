@@ -7,7 +7,7 @@ use axum::{
     Json,
 };
 use ratchet_api_types::ApiId;
-use ratchet_interfaces::TaskFilters;
+use ratchet_interfaces::{TaskFilters, DatabaseError};
 use ratchet_web::{QueryParams, ApiResponse, extract_task_filters};
 use ratchet_core::validation::{InputValidator, ErrorSanitizer};
 use ratchet_mcp::server::task_dev_tools::{
@@ -120,9 +120,19 @@ pub async fn get_task(
         .find_by_id(api_id.as_i32().unwrap_or(0))
         .await
         .map_err(|db_err| {
-            let sanitizer = ErrorSanitizer::default();
-            let sanitized_error = sanitizer.sanitize_error(&db_err);
-            RestError::InternalError(sanitized_error.message)
+            // Handle specific database error types appropriately
+            match &db_err {
+                DatabaseError::NotFound { .. } => RestError::not_found("Task", &task_id),
+                DatabaseError::Connection { .. } 
+                | DatabaseError::Internal { .. }
+                | DatabaseError::Validation { .. }
+                | DatabaseError::Constraint { .. }
+                | DatabaseError::Transaction { .. } => {
+                    let sanitizer = ErrorSanitizer::default();
+                    let sanitized_error = sanitizer.sanitize_error(&db_err);
+                    RestError::InternalError(sanitized_error.message)
+                }
+            }
         })?
         .ok_or_else(|| RestError::not_found("Task", &task_id))?;
     

@@ -184,6 +184,12 @@ impl ErrorSanitizer {
                 .with_context("hint", "Please check your input format");
         }
 
+        // Database errors (check before filesystem errors to avoid misclassification)
+        if self.is_database_error(&lower_message) {
+            return SanitizedError::new("Database operation failed")
+                .with_code("DATABASE_ERROR");
+        }
+
         // File system errors
         if self.is_filesystem_error(&lower_message) {
             return SanitizedError::new("File operation failed")
@@ -258,6 +264,7 @@ impl ErrorSanitizer {
 
         fs_keywords.iter().any(|keyword| message.contains(keyword))
     }
+
 
     /// Check if error is network-related
     fn is_network_error(&self, message: &str) -> bool {
