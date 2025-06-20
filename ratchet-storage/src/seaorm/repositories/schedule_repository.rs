@@ -33,6 +33,7 @@ impl ScheduleRepository {
             execution_count: Set(schedule.execution_count),
             max_executions: Set(schedule.max_executions),
             metadata: Set(schedule.metadata),
+            output_destinations: Set(schedule.output_destinations),
             created_at: Set(schedule.created_at),
             updated_at: Set(schedule.updated_at),
             ..Default::default()

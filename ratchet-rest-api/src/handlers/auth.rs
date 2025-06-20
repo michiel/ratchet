@@ -14,7 +14,7 @@ use ratchet_web::{
 use ratchet_api_types::ApiId;
 // Removed unused trait imports - using repositories via context
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+// use utoipa::ToSchema; // temporarily disabled
 use tracing::{info, warn, error};
 use uuid::Uuid;
 
@@ -24,7 +24,7 @@ use crate::{
 };
 
 /// Login request
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     /// Username or email
@@ -36,7 +36,7 @@ pub struct LoginRequest {
 }
 
 /// Login response
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     /// JWT access token
@@ -50,7 +50,7 @@ pub struct LoginResponse {
 }
 
 /// User information
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     /// User ID
@@ -68,7 +68,7 @@ pub struct UserInfo {
 }
 
 /// User registration request
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     /// Username (must be unique)
@@ -82,7 +82,7 @@ pub struct RegisterRequest {
 }
 
 /// Password change request
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangePasswordRequest {
     /// Current password
@@ -92,19 +92,7 @@ pub struct ChangePasswordRequest {
 }
 
 /// User login endpoint
-#[utoipa::path(
-    post,
-    path = "/auth/login",
-    tag = "auth",
-    operation_id = "login",
-    request_body = LoginRequest,
-    responses(
-        (status = 200, description = "Login successful"),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Invalid credentials"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn login(
     State(ctx): State<TasksContext>,
     Json(request): Json<LoginRequest>,
@@ -211,18 +199,7 @@ pub async fn login(
 }
 
 /// User registration endpoint
-#[utoipa::path(
-    post,
-    path = "/auth/register",
-    tag = "auth",
-    operation_id = "register",
-    request_body = RegisterRequest,
-    responses(
-        (status = 201, description = "User registered successfully"),
-        (status = 400, description = "Invalid request or user already exists"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn register(
     State(ctx): State<TasksContext>,
     Json(request): Json<RegisterRequest>,
@@ -322,17 +299,7 @@ pub async fn register(
 }
 
 /// Get current user info
-#[utoipa::path(
-    get,
-    path = "/auth/me",
-    tag = "auth",
-    operation_id = "getCurrentUser",
-    responses(
-        (status = 200, description = "Current user information"),
-        (status = 401, description = "Not authenticated"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_current_user(
     State(ctx): State<TasksContext>,
     Extension(auth_context): Extension<AuthContext>,
@@ -383,17 +350,7 @@ pub async fn get_current_user(
 }
 
 /// Logout endpoint
-#[utoipa::path(
-    post,
-    path = "/auth/logout",
-    tag = "auth",
-    operation_id = "logout",
-    responses(
-        (status = 200, description = "Logout successful"),
-        (status = 401, description = "Not authenticated"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn logout(
     State(ctx): State<TasksContext>,
     Extension(auth_context): Extension<AuthContext>,
@@ -418,19 +375,7 @@ pub async fn logout(
 }
 
 /// Change password endpoint
-#[utoipa::path(
-    post,
-    path = "/auth/change-password",
-    tag = "auth",
-    operation_id = "changePassword",
-    request_body = ChangePasswordRequest,
-    responses(
-        (status = 200, description = "Password changed successfully"),
-        (status = 400, description = "Invalid current password"),
-        (status = 401, description = "Not authenticated"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn change_password(
     State(ctx): State<TasksContext>,
     Extension(auth_context): Extension<AuthContext>,

@@ -305,6 +305,7 @@ impl Mutation {
             last_run: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            output_destinations: None, // GraphQL doesn't support output destinations yet
         };
         
         // Create the schedule using the repository

@@ -944,6 +944,10 @@ fn convert_unified_task_to_storage(task: UnifiedTask) -> ratchet_storage::seaorm
 }
 
 fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> ratchet_storage::seaorm::entities::Schedule {
+    let output_destinations_json = schedule.output_destinations
+        .as_ref()
+        .map(|destinations| serde_json::to_value(destinations).unwrap_or(serde_json::Value::Null));
+
     ratchet_storage::seaorm::entities::Schedule {
         id: schedule.id.as_i32().unwrap_or(0),
         uuid: schedule.id.as_uuid().unwrap_or_else(uuid::Uuid::new_v4), // Use schedule id as UUID or generate new one
@@ -959,13 +963,23 @@ fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> ratchet_sto
         metadata: Some(serde_json::json!({
             "description": schedule.description
         })),
-        output_destinations: Some(serde_json::Value::Null), // Default empty output destinations
+        output_destinations: output_destinations_json,
         created_at: schedule.created_at,
         updated_at: schedule.updated_at,
     }
 }
 
 fn convert_storage_schedule_to_unified(schedule: ratchet_storage::seaorm::entities::Schedule) -> UnifiedSchedule {
+    let output_destinations = schedule.output_destinations
+        .as_ref()
+        .and_then(|json| {
+            if json.is_null() {
+                None
+            } else {
+                serde_json::from_value(json.clone()).ok()
+            }
+        });
+
     UnifiedSchedule {
         id: ApiId::from_i32(schedule.id),
         task_id: ApiId::from_i32(schedule.task_id),
@@ -981,6 +995,7 @@ fn convert_storage_schedule_to_unified(schedule: ratchet_storage::seaorm::entiti
         last_run: schedule.last_run_at,
         created_at: schedule.created_at,
         updated_at: schedule.updated_at,
+        output_destinations,
     }
 }
 

@@ -15,21 +15,7 @@ use crate::{
 };
 
 /// List all active workers
-#[utoipa::path(
-    get,
-    path = "/workers",
-    tag = "workers",
-    operation_id = "listWorkers",
-    params(
-        ("page" = Option<u32>, Query, description = "Page number (0-based)"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page"),
-        ("status" = Option<String>, Query, description = "Filter by worker status")
-    ),
-    responses(
-        (status = 200, description = "List of workers retrieved successfully"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn list_workers(
     State(_ctx): State<TasksContext>,
     query: QueryParams,
@@ -74,16 +60,7 @@ pub async fn list_workers(
 }
 
 /// Get worker statistics
-#[utoipa::path(
-    get,
-    path = "/workers/stats",
-    tag = "workers",
-    operation_id = "getWorkerStats",
-    responses(
-        (status = 200, description = "Worker statistics retrieved successfully"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_worker_stats(
     State(_ctx): State<TasksContext>,
 ) -> RestResult<impl IntoResponse> {

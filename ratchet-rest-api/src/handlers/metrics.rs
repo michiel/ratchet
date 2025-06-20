@@ -3,7 +3,7 @@
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use tracing::info;
-use utoipa::ToSchema;
+// use utoipa::ToSchema; // temporarily disabled
 
 use crate::{
     context::TasksContext,
@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// System metrics response
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemMetrics {
     // System information
@@ -26,7 +26,7 @@ pub struct SystemMetrics {
 }
 
 /// System information
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemInfo {
     pub version: String,
@@ -38,7 +38,7 @@ pub struct SystemInfo {
 }
 
 /// Performance metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PerformanceMetrics {
     pub requests_per_second: f64,
@@ -50,7 +50,7 @@ pub struct PerformanceMetrics {
 }
 
 /// Resource utilization metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceMetrics {
     pub memory_usage_mb: u64,
@@ -64,7 +64,7 @@ pub struct ResourceMetrics {
 }
 
 /// Application-specific metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationMetrics {
     pub database: DatabaseMetrics,
@@ -75,7 +75,7 @@ pub struct ApplicationMetrics {
 }
 
 /// Database metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseMetrics {
     pub connection_pool_size: u32,
@@ -88,7 +88,7 @@ pub struct DatabaseMetrics {
 }
 
 /// Task metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskMetrics {
     pub total_tasks: u64,
@@ -100,7 +100,7 @@ pub struct TaskMetrics {
 }
 
 /// Execution metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionMetrics {
     pub total_executions: u64,
@@ -113,7 +113,7 @@ pub struct ExecutionMetrics {
 }
 
 /// Job metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobMetrics {
     pub total_jobs: u64,
@@ -126,7 +126,7 @@ pub struct JobMetrics {
 }
 
 /// Schedule metrics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleMetrics {
     pub total_schedules: u64,
@@ -140,16 +140,7 @@ pub struct ScheduleMetrics {
 /// Get comprehensive system metrics
 /// 
 /// Returns detailed system and application metrics for monitoring and observability.
-#[utoipa::path(
-    get,
-    path = "/metrics",
-    tag = "monitoring",
-    operation_id = "getMetrics",
-    responses(
-        (status = 200, description = "System metrics retrieved successfully", body = SystemMetrics),
-        (status = 500, description = "Failed to collect metrics")
-    )
-)]
+
 pub async fn get_metrics(
     State(ctx): State<TasksContext>,
 ) -> RestResult<impl IntoResponse> {
@@ -185,16 +176,7 @@ pub async fn get_metrics(
 /// Get Prometheus-formatted metrics
 /// 
 /// Returns metrics in Prometheus exposition format for integration with monitoring systems.
-#[utoipa::path(
-    get,
-    path = "/metrics/prometheus",
-    tag = "monitoring",
-    operation_id = "getPrometheusMetrics",
-    responses(
-        (status = 200, description = "Prometheus metrics", content_type = "text/plain"),
-        (status = 500, description = "Failed to collect metrics")
-    )
-)]
+
 pub async fn get_prometheus_metrics(
     State(ctx): State<TasksContext>,
 ) -> RestResult<impl IntoResponse> {

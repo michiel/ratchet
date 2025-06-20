@@ -24,44 +24,7 @@ use crate::{
 };
 
 /// List all tasks with optional filtering and pagination
-#[utoipa::path(
-    get,
-    path = "/tasks",
-    tag = "tasks",
-    operation_id = "listTasks",
-    params(
-        // Refine.dev pagination
-        ("_start" = Option<u64>, Query, description = "Starting index (0-based) - Refine.dev style"),
-        ("_end" = Option<u64>, Query, description = "Ending index (exclusive) - Refine.dev style"),
-        // Standard pagination (alternative)
-        ("page" = Option<u32>, Query, description = "Page number (1-based) - standard style"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page (max 100)"),
-        // Refine.dev sorting
-        ("_sort" = Option<String>, Query, description = "Field to sort by - Refine.dev style"),
-        ("_order" = Option<String>, Query, description = "Sort order: ASC or DESC - Refine.dev style"),
-        // Task-specific filters
-        ("name" = Option<String>, Query, description = "Filter by task name (exact match)"),
-        ("name_like" = Option<String>, Query, description = "Filter by task name (contains text)"),
-        ("enabled" = Option<bool>, Query, description = "Filter by enabled status"),
-        ("version" = Option<String>, Query, description = "Filter by version"),
-        ("registry_source" = Option<bool>, Query, description = "Filter by registry source"),
-        ("uuid" = Option<String>, Query, description = "Filter by UUID"),
-        ("in_sync" = Option<bool>, Query, description = "Filter by sync status"),
-        ("has_validation" = Option<bool>, Query, description = "Filter by validation status"),
-        // Date filters (ISO 8601 format)
-        ("created_after" = Option<String>, Query, description = "Filter by creation date (after this date)"),
-        ("created_before" = Option<String>, Query, description = "Filter by creation date (before this date)"),
-        ("updated_after" = Option<String>, Query, description = "Filter by update date (after this date)"),
-        ("updated_before" = Option<String>, Query, description = "Filter by update date (before this date)"),
-        ("validated_after" = Option<String>, Query, description = "Filter by validation date (after this date)"),
-        ("validated_before" = Option<String>, Query, description = "Filter by validation date (before this date)")
-    ),
-    responses(
-        (status = 200, description = "List of tasks retrieved successfully"),
-        (status = 400, description = "Invalid query parameters"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn list_tasks(
     State(ctx): State<TasksContext>,
     query: QueryParams,
@@ -83,21 +46,7 @@ pub async fn list_tasks(
 }
 
 /// Get a specific task by ID
-#[utoipa::path(
-    get,
-    path = "/tasks/{task_id}",
-    tag = "tasks",
-    operation_id = "getTask",
-    params(
-        ("task_id" = String, Path, description = "Unique task identifier")
-    ),
-    responses(
-        (status = 200, description = "Task retrieved successfully"),
-        (status = 400, description = "Invalid task ID"),
-        (status = 404, description = "Task not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_task(
     State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
@@ -144,19 +93,7 @@ pub async fn get_task(
 }
 
 /// Create a new task
-#[utoipa::path(
-    post,
-    path = "/tasks",
-    tag = "tasks",
-    operation_id = "createTask",
-    request_body = CreateTaskRequest,
-    responses(
-        (status = 201, description = "Task created successfully"),
-        (status = 400, description = "Invalid task data"),
-        (status = 409, description = "Task with same name already exists"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn create_task(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateTaskRequest>,
@@ -241,22 +178,7 @@ pub async fn create_task(
 }
 
 /// Update an existing task
-#[utoipa::path(
-    put,
-    path = "/tasks/{task_id}",
-    tag = "tasks",
-    operation_id = "updateTask",
-    params(
-        ("task_id" = String, Path, description = "Unique task identifier")
-    ),
-    request_body = UpdateTaskRequest,
-    responses(
-        (status = 200, description = "Task updated successfully"),
-        (status = 400, description = "Invalid task data"),
-        (status = 404, description = "Task not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn update_task(
     State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
@@ -371,21 +293,7 @@ pub async fn update_task(
 }
 
 /// Delete a task
-#[utoipa::path(
-    delete,
-    path = "/tasks/{task_id}",
-    tag = "tasks",
-    operation_id = "deleteTask",
-    params(
-        ("task_id" = String, Path, description = "Unique task identifier")
-    ),
-    responses(
-        (status = 200, description = "Task deleted successfully"),
-        (status = 400, description = "Invalid task ID"),
-        (status = 404, description = "Task not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn delete_task(
     State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
@@ -483,16 +391,7 @@ pub async fn sync_tasks(
 }
 
 /// Get task statistics
-#[utoipa::path(
-    get,
-    path = "/tasks/stats",
-    tag = "tasks",
-    operation_id = "getTaskStats",
-    responses(
-        (status = 200, description = "Task statistics retrieved successfully"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_task_stats(
     State(ctx): State<TasksContext>,
 ) -> RestResult<impl IntoResponse> {

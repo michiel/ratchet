@@ -20,50 +20,176 @@ use crate::{
         common::StatsResponse
     },
 };
+use ratchet_api_types::UnifiedOutputDestination;
+
+/// Validate output destinations configuration
+fn validate_output_destinations(destinations: &[UnifiedOutputDestination]) -> Result<(), RestError> {
+    if destinations.is_empty() {
+        return Err(RestError::BadRequest("Output destinations array cannot be empty".to_string()));
+    }
+    
+    if destinations.len() > 10 {
+        return Err(RestError::BadRequest("Maximum of 10 output destinations allowed per schedule".to_string()));
+    }
+    
+    for (index, dest) in destinations.iter().enumerate() {
+        let context = format!("destination[{}]", index);
+        
+        match dest.destination_type.as_str() {
+            "webhook" => {
+                if let Some(webhook) = &dest.webhook {
+                    // Validate URL format
+                    if webhook.url.is_empty() {
+                        return Err(RestError::BadRequest(format!("{}: Webhook URL cannot be empty", context)));
+                    }
+                    
+                    // Enhanced URL validation
+                    if !webhook.url.starts_with("http://") && !webhook.url.starts_with("https://") {
+                        return Err(RestError::BadRequest(format!("{}: Webhook URL must be a valid HTTP/HTTPS URL", context)));
+                    }
+                    
+                    // Validate URL length
+                    if webhook.url.len() > 2048 {
+                        return Err(RestError::BadRequest(format!("{}: Webhook URL too long (max 2048 characters)", context)));
+                    }
+                    
+                    // Prevent localhost and private IPs in production
+                    if webhook.url.contains("localhost") || webhook.url.contains("127.0.0.1") || webhook.url.contains("::1") {
+                        return Err(RestError::BadRequest(format!("{}: Localhost URLs not allowed for webhooks", context)));
+                    }
+                    
+                    // Validate timeout
+                    if webhook.timeout_seconds <= 0 {
+                        return Err(RestError::BadRequest(format!("{}: Webhook timeout must be greater than 0", context)));
+                    }
+                    
+                    if webhook.timeout_seconds > 300 {
+                        return Err(RestError::BadRequest(format!("{}: Webhook timeout too long (max 300 seconds)", context)));
+                    }
+                    
+                    // Validate HTTP method
+                    match webhook.method {
+                        ratchet_api_types::HttpMethod::Get |
+                        ratchet_api_types::HttpMethod::Post |
+                        ratchet_api_types::HttpMethod::Put |
+                        ratchet_api_types::HttpMethod::Patch => {
+                            // Valid methods
+                        }
+                        _ => {
+                            return Err(RestError::BadRequest(format!("{}: Unsupported HTTP method for webhook", context)));
+                        }
+                    }
+                    
+                    // Validate content type if present
+                    if let Some(ref content_type) = webhook.content_type {
+                        if content_type.is_empty() || content_type.len() > 100 {
+                            return Err(RestError::BadRequest(format!("{}: Invalid content type", context)));
+                        }
+                    }
+                    
+                    // Validate retry policy if present
+                    if let Some(ref retry_policy) = webhook.retry_policy {
+                        if retry_policy.max_attempts == 0 || retry_policy.max_attempts > 10 {
+                            return Err(RestError::BadRequest(format!("{}: Retry max_attempts must be between 1 and 10", context)));
+                        }
+                        
+                        if retry_policy.initial_delay_seconds > retry_policy.max_delay_seconds {
+                            return Err(RestError::BadRequest(format!("{}: Initial delay cannot be greater than max delay", context)));
+                        }
+                        
+                        if retry_policy.backoff_multiplier < 1.0 || retry_policy.backoff_multiplier > 10.0 {
+                            return Err(RestError::BadRequest(format!("{}: Backoff multiplier must be between 1.0 and 10.0", context)));
+                        }
+                    }
+                    
+                    // Validate authentication if present
+                    if let Some(ref auth) = webhook.authentication {
+                        match auth.auth_type.as_str() {
+                            "bearer" => {
+                                if let Some(ref bearer) = auth.bearer {
+                                    if bearer.token.is_empty() || bearer.token.len() > 1024 {
+                                        return Err(RestError::BadRequest(format!("{}: Bearer token invalid length", context)));
+                                    }
+                                } else {
+                                    return Err(RestError::BadRequest(format!("{}: Bearer authentication requires bearer configuration", context)));
+                                }
+                            }
+                            "basic" => {
+                                if let Some(ref basic) = auth.basic {
+                                    if basic.username.is_empty() || basic.password.is_empty() {
+                                        return Err(RestError::BadRequest(format!("{}: Basic authentication credentials cannot be empty", context)));
+                                    }
+                                    if basic.username.len() > 255 || basic.password.len() > 255 {
+                                        return Err(RestError::BadRequest(format!("{}: Basic authentication credentials too long", context)));
+                                    }
+                                } else {
+                                    return Err(RestError::BadRequest(format!("{}: Basic authentication requires basic configuration", context)));
+                                }
+                            }
+                            "api_key" => {
+                                if let Some(ref api_key) = auth.api_key {
+                                    if api_key.key.is_empty() || api_key.key.len() > 1024 {
+                                        return Err(RestError::BadRequest(format!("{}: API key invalid length", context)));
+                                    }
+                                    if api_key.header_name.is_empty() || api_key.header_name.len() > 100 {
+                                        return Err(RestError::BadRequest(format!("{}: API key header name invalid", context)));
+                                    }
+                                } else {
+                                    return Err(RestError::BadRequest(format!("{}: API key authentication requires api_key configuration", context)));
+                                }
+                            }
+                            _ => {
+                                return Err(RestError::BadRequest(format!("{}: Unsupported authentication type", context)));
+                            }
+                        }
+                    }
+                } else {
+                    return Err(RestError::BadRequest(format!("{}: Webhook destination must include webhook configuration", context)));
+                }
+            }
+            "filesystem" => {
+                if let Some(fs) = &dest.filesystem {
+                    if fs.path.is_empty() {
+                        return Err(RestError::BadRequest(format!("{}: Filesystem path cannot be empty", context)));
+                    }
+                    
+                    // Validate path length
+                    if fs.path.len() > 4096 {
+                        return Err(RestError::BadRequest(format!("{}: Filesystem path too long (max 4096 characters)", context)));
+                    }
+                    
+                    // Basic path security validation
+                    if fs.path.contains("..") {
+                        return Err(RestError::BadRequest(format!("{}: Path traversal not allowed in filesystem paths", context)));
+                    }
+                    
+                    // Validate format (always present)
+                    match fs.format {
+                        ratchet_api_types::OutputFormat::Json |
+                        ratchet_api_types::OutputFormat::Yaml |
+                        ratchet_api_types::OutputFormat::Csv |
+                        ratchet_api_types::OutputFormat::Xml => {
+                            // Valid formats
+                        }
+                    }
+                } else {
+                    return Err(RestError::BadRequest(format!("{}: Filesystem destination must include filesystem configuration", context)));
+                }
+            }
+            "database" => {
+                // Basic validation for database destinations
+                return Err(RestError::BadRequest(format!("{}: Database destinations not yet supported", context)));
+            }
+            _ => {
+                return Err(RestError::BadRequest(format!("{}: Unsupported destination type: {}", context, dest.destination_type)));
+            }
+        }
+    }
+    Ok(())
+}
 
 /// List all schedules with optional filtering and pagination
-#[utoipa::path(
-    get,
-    path = "/schedules",
-    tag = "schedules",
-    operation_id = "listSchedules",
-    params(
-        // Refine.dev pagination
-        ("_start" = Option<u64>, Query, description = "Starting index (0-based) - Refine.dev style"),
-        ("_end" = Option<u64>, Query, description = "Ending index (exclusive) - Refine.dev style"),
-        // Standard pagination (alternative)
-        ("page" = Option<u32>, Query, description = "Page number (1-based) - standard style"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page (max 100)"),
-        // Refine.dev sorting
-        ("_sort" = Option<String>, Query, description = "Field to sort by - Refine.dev style"),
-        ("_order" = Option<String>, Query, description = "Sort order: ASC or DESC - Refine.dev style"),
-        // Schedule-specific filters
-        ("task_id" = Option<String>, Query, description = "Filter by task ID"),
-        ("enabled" = Option<bool>, Query, description = "Filter by enabled status"),
-        ("name" = Option<String>, Query, description = "Filter by schedule name (exact match)"),
-        ("name_like" = Option<String>, Query, description = "Filter by schedule name (contains text)"),
-        ("cron_expression" = Option<String>, Query, description = "Filter by cron expression (exact match)"),
-        ("cron_expression_like" = Option<String>, Query, description = "Filter by cron expression (contains text)"),
-        ("is_due" = Option<bool>, Query, description = "Filter by schedules that are due now"),
-        ("overdue" = Option<bool>, Query, description = "Filter by overdue schedules"),
-        ("has_next_run" = Option<bool>, Query, description = "Filter by schedules with next run date"),
-        ("has_last_run" = Option<bool>, Query, description = "Filter by schedules with last run date"),
-        // Date filters (ISO 8601 format)
-        ("next_run_after" = Option<String>, Query, description = "Filter by next run date (after this date)"),
-        ("next_run_before" = Option<String>, Query, description = "Filter by next run date (before this date)"),
-        ("last_run_after" = Option<String>, Query, description = "Filter by last run date (after this date)"),
-        ("last_run_before" = Option<String>, Query, description = "Filter by last run date (before this date)"),
-        ("created_after" = Option<String>, Query, description = "Filter by creation date (after this date)"),
-        ("created_before" = Option<String>, Query, description = "Filter by creation date (before this date)"),
-        ("updated_after" = Option<String>, Query, description = "Filter by update date (after this date)"),
-        ("updated_before" = Option<String>, Query, description = "Filter by update date (before this date)")
-    ),
-    responses(
-        (status = 200, description = "List of schedules retrieved successfully"),
-        (status = 400, description = "Invalid query parameters"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn list_schedules(
     State(ctx): State<TasksContext>,
     query: QueryParams,
@@ -85,21 +211,7 @@ pub async fn list_schedules(
 }
 
 /// Get a specific schedule by ID
-#[utoipa::path(
-    get,
-    path = "/schedules/{schedule_id}",
-    tag = "schedules",
-    operation_id = "getSchedule",
-    params(
-        ("schedule_id" = String, Path, description = "Unique schedule identifier")
-    ),
-    responses(
-        (status = 200, description = "Schedule retrieved successfully"),
-        (status = 400, description = "Invalid schedule ID"),
-        (status = 404, description = "Schedule not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -132,19 +244,7 @@ pub async fn get_schedule(
 }
 
 /// Create a new schedule
-#[utoipa::path(
-    post,
-    path = "/schedules",
-    tag = "schedules",
-    operation_id = "createSchedule",
-    request_body = CreateScheduleRequest,
-    responses(
-        (status = 201, description = "Schedule created successfully"),
-        (status = 400, description = "Invalid schedule data"),
-        (status = 404, description = "Task not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn create_schedule(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateScheduleRequest>,
@@ -183,6 +283,14 @@ pub async fn create_schedule(
         }
     }
     
+    // Validate output destinations if provided
+    if let Some(ref destinations) = request.output_destinations {
+        if let Err(validation_err) = validate_output_destinations(destinations) {
+            warn!("Invalid output destinations provided: {}", validation_err);
+            return Err(validation_err);
+        }
+    }
+    
     // Validate that task exists
     let task_repo = ctx.repositories.task_repository();
     let _task = task_repo
@@ -206,6 +314,7 @@ pub async fn create_schedule(
         last_run: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+        output_destinations: request.output_destinations,
     };
     
     // Create the schedule using the repository
@@ -230,22 +339,7 @@ pub async fn create_schedule(
 }
 
 /// Update an existing schedule
-#[utoipa::path(
-    patch,
-    path = "/schedules/{schedule_id}",
-    tag = "schedules",
-    operation_id = "updateSchedule",
-    params(
-        ("schedule_id" = String, Path, description = "Unique schedule identifier")
-    ),
-    request_body = UpdateScheduleRequest,
-    responses(
-        (status = 200, description = "Schedule updated successfully"),
-        (status = 400, description = "Invalid schedule data"),
-        (status = 404, description = "Schedule not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn update_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -321,6 +415,14 @@ pub async fn update_schedule(
     if let Some(enabled) = request.enabled {
         existing_schedule.enabled = enabled;
     }
+    if let Some(destinations) = request.output_destinations {
+        // Validate the new output destinations
+        if let Err(validation_err) = validate_output_destinations(&destinations) {
+            warn!("Invalid output destinations provided in update: {}", validation_err);
+            return Err(validation_err);
+        }
+        existing_schedule.output_destinations = Some(destinations);
+    }
     
     // Update timestamp
     existing_schedule.updated_at = chrono::Utc::now();
@@ -344,20 +446,7 @@ pub async fn update_schedule(
 }
 
 /// Delete a schedule
-#[utoipa::path(
-    delete,
-    path = "/schedules/{schedule_id}",
-    tag = "schedules",
-    operation_id = "deleteSchedule",
-    params(
-        ("schedule_id" = String, Path, description = "Unique schedule identifier")
-    ),
-    responses(
-        (status = 204, description = "Schedule deleted successfully"),
-        (status = 404, description = "Schedule not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn delete_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -390,20 +479,7 @@ pub async fn delete_schedule(
 }
 
 /// Enable a schedule
-#[utoipa::path(
-    post,
-    path = "/schedules/{schedule_id}/enable",
-    tag = "schedules",
-    operation_id = "enableSchedule",
-    params(
-        ("schedule_id" = String, Path, description = "Unique schedule identifier")
-    ),
-    responses(
-        (status = 200, description = "Schedule enabled successfully"),
-        (status = 404, description = "Schedule not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn enable_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -439,20 +515,7 @@ pub async fn enable_schedule(
 }
 
 /// Disable a schedule
-#[utoipa::path(
-    post,
-    path = "/schedules/{schedule_id}/disable",
-    tag = "schedules",
-    operation_id = "disableSchedule",
-    params(
-        ("schedule_id" = String, Path, description = "Unique schedule identifier")
-    ),
-    responses(
-        (status = 200, description = "Schedule disabled successfully"),
-        (status = 404, description = "Schedule not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn disable_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -485,21 +548,7 @@ pub async fn disable_schedule(
 }
 
 /// Trigger a schedule manually
-#[utoipa::path(
-    post,
-    path = "/schedules/{schedule_id}/trigger",
-    tag = "schedules",
-    operation_id = "triggerSchedule",
-    params(
-        ("schedule_id" = String, Path, description = "Unique schedule identifier")
-    ),
-    responses(
-        (status = 201, description = "Schedule triggered successfully"),
-        (status = 400, description = "Schedule cannot be triggered"),
-        (status = 404, description = "Schedule not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn trigger_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -551,6 +600,7 @@ pub async fn trigger_schedule(
     // Create a job for immediate execution
     let job_repo = ctx.repositories.job_repository();
     let task_id_clone = schedule.task_id.clone();
+    let output_destinations_clone = schedule.output_destinations.clone();
     let new_job = ratchet_api_types::UnifiedJob {
         id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
         task_id: task_id_clone,
@@ -561,7 +611,7 @@ pub async fn trigger_schedule(
         queued_at: chrono::Utc::now(),
         scheduled_for: None, // Immediate execution
         error_message: None,
-        output_destinations: None,
+        output_destinations: output_destinations_clone,
     };
     
     // Create the job
@@ -584,16 +634,7 @@ pub async fn trigger_schedule(
 }
 
 /// Get schedule statistics
-#[utoipa::path(
-    get,
-    path = "/schedules/stats",
-    tag = "schedules",
-    operation_id = "getScheduleStats",
-    responses(
-        (status = 200, description = "Schedule statistics retrieved successfully"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_schedule_stats(
     State(ctx): State<TasksContext>,
 ) -> RestResult<impl IntoResponse> {

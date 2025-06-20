@@ -250,6 +250,7 @@ impl Server {
             last_run: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            output_destinations: None,
         };
         
         // Create the schedule in the repository

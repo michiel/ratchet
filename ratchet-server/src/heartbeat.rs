@@ -251,6 +251,7 @@ impl HeartbeatService {
             last_run: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            output_destinations: None,
         };
 
         let created_schedule = schedule_repo.create(heartbeat_schedule).await

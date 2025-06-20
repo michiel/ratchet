@@ -22,55 +22,7 @@ use crate::{
 };
 
 /// List all jobs with optional filtering and pagination
-#[utoipa::path(
-    get,
-    path = "/jobs",
-    tag = "jobs",
-    operation_id = "listJobs",
-    params(
-        // Refine.dev pagination
-        ("_start" = Option<u64>, Query, description = "Starting index (0-based) - Refine.dev style"),
-        ("_end" = Option<u64>, Query, description = "Ending index (exclusive) - Refine.dev style"),
-        // Standard pagination (alternative)
-        ("page" = Option<u32>, Query, description = "Page number (1-based) - standard style"),
-        ("limit" = Option<u32>, Query, description = "Number of items per page (max 100)"),
-        // Refine.dev sorting
-        ("_sort" = Option<String>, Query, description = "Field to sort by - Refine.dev style"),
-        ("_order" = Option<String>, Query, description = "Sort order: ASC or DESC - Refine.dev style"),
-        // Job-specific filters
-        ("task_id" = Option<String>, Query, description = "Filter by task ID"),
-        ("status" = Option<String>, Query, description = "Filter by job status (QUEUED, PROCESSING, COMPLETED, FAILED, CANCELLED, RETRYING)"),
-        ("status_ne" = Option<String>, Query, description = "Filter by job status (not equal)"),
-        ("status_in" = Option<String>, Query, description = "Filter by job status (comma-separated list)"),
-        ("priority" = Option<String>, Query, description = "Filter by job priority (LOW, NORMAL, HIGH, CRITICAL)"),
-        ("priority_gte" = Option<String>, Query, description = "Filter by job priority (greater than or equal)"),
-        ("priority_in" = Option<String>, Query, description = "Filter by job priority (comma-separated list)"),
-        // Retry and execution filters
-        ("retry_count_gte" = Option<i32>, Query, description = "Filter by retry count (greater than or equal to value)"),
-        ("retry_count_lte" = Option<i32>, Query, description = "Filter by retry count (less than or equal to value)"),
-        ("max_retries_gte" = Option<i32>, Query, description = "Filter by max retries (greater than or equal to value)"),
-        ("max_retries_lte" = Option<i32>, Query, description = "Filter by max retries (less than or equal to value)"),
-        ("has_retries_remaining" = Option<bool>, Query, description = "Filter by jobs with retries remaining"),
-        ("has_error" = Option<bool>, Query, description = "Filter by jobs with errors"),
-        ("error_message_like" = Option<String>, Query, description = "Filter by error message (contains text)"),
-        // Scheduling filters
-        ("is_scheduled" = Option<bool>, Query, description = "Filter by scheduled jobs"),
-        ("due_now" = Option<bool>, Query, description = "Filter by jobs due for execution now"),
-        // Date filters (ISO 8601 format)
-        ("queued_after" = Option<String>, Query, description = "Filter by queue date (after this date)"),
-        ("queued_before" = Option<String>, Query, description = "Filter by queue date (before this date)"),
-        ("scheduled_after" = Option<String>, Query, description = "Filter by scheduled date (after this date)"),
-        ("scheduled_before" = Option<String>, Query, description = "Filter by scheduled date (before this date)"),
-        // Advanced filtering
-        ("task_id_in" = Option<String>, Query, description = "Filter by task IDs (comma-separated list)"),
-        ("id_in" = Option<String>, Query, description = "Filter by job IDs (comma-separated list)")
-    ),
-    responses(
-        (status = 200, description = "List of jobs retrieved successfully"),
-        (status = 400, description = "Invalid query parameters"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn list_jobs(
     State(ctx): State<TasksContext>,
     query: QueryParams,
@@ -92,21 +44,7 @@ pub async fn list_jobs(
 }
 
 /// Get a specific job by ID
-#[utoipa::path(
-    get,
-    path = "/jobs/{job_id}",
-    tag = "jobs",
-    operation_id = "getJob",
-    params(
-        ("job_id" = String, Path, description = "Unique job identifier")
-    ),
-    responses(
-        (status = 200, description = "Job retrieved successfully"),
-        (status = 400, description = "Invalid job ID"),
-        (status = 404, description = "Job not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_job(
     State(ctx): State<TasksContext>,
     Path(job_id): Path<String>,
@@ -139,19 +77,7 @@ pub async fn get_job(
 }
 
 /// Create a new job
-#[utoipa::path(
-    post,
-    path = "/jobs",
-    tag = "jobs",
-    operation_id = "createJob",
-    request_body = CreateJobRequest,
-    responses(
-        (status = 201, description = "Job created successfully"),
-        (status = 400, description = "Invalid job data"),
-        (status = 404, description = "Task not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn create_job(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateJobRequest>,
@@ -196,22 +122,7 @@ pub async fn create_job(
 }
 
 /// Update an existing job
-#[utoipa::path(
-    patch,
-    path = "/jobs/{job_id}",
-    tag = "jobs",
-    operation_id = "updateJob",
-    params(
-        ("job_id" = String, Path, description = "Unique job identifier")
-    ),
-    request_body = UpdateJobRequest,
-    responses(
-        (status = 200, description = "Job updated successfully"),
-        (status = 400, description = "Invalid job data"),
-        (status = 404, description = "Job not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn update_job(
     State(ctx): State<TasksContext>,
     Path(job_id): Path<String>,
@@ -276,20 +187,7 @@ pub async fn update_job(
 }
 
 /// Delete a job
-#[utoipa::path(
-    delete,
-    path = "/jobs/{job_id}",
-    tag = "jobs",
-    operation_id = "deleteJob",
-    params(
-        ("job_id" = String, Path, description = "Unique job identifier")
-    ),
-    responses(
-        (status = 200, description = "Job deleted successfully"),
-        (status = 404, description = "Job not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn delete_job(
     State(ctx): State<TasksContext>,
     Path(job_id): Path<String>,
@@ -336,21 +234,7 @@ pub async fn delete_job(
 }
 
 /// Cancel a queued job
-#[utoipa::path(
-    post,
-    path = "/jobs/{job_id}/cancel",
-    tag = "jobs",
-    operation_id = "cancelJob",
-    params(
-        ("job_id" = String, Path, description = "Unique job identifier")
-    ),
-    responses(
-        (status = 200, description = "Job cancelled successfully"),
-        (status = 400, description = "Job cannot be cancelled"),
-        (status = 404, description = "Job not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn cancel_job(
     State(ctx): State<TasksContext>,
     Path(job_id): Path<String>,
@@ -372,21 +256,7 @@ pub async fn cancel_job(
 }
 
 /// Retry a failed job
-#[utoipa::path(
-    post,
-    path = "/jobs/{job_id}/retry",
-    tag = "jobs",
-    operation_id = "retryJob",
-    params(
-        ("job_id" = String, Path, description = "Unique job identifier")
-    ),
-    responses(
-        (status = 200, description = "Job retry scheduled successfully"),
-        (status = 400, description = "Job cannot be retried"),
-        (status = 404, description = "Job not found"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn retry_job(
     State(ctx): State<TasksContext>,
     Path(job_id): Path<String>,
@@ -411,16 +281,7 @@ pub async fn retry_job(
 }
 
 /// Get job statistics
-#[utoipa::path(
-    get,
-    path = "/jobs/stats",
-    tag = "jobs",
-    operation_id = "getJobStats",
-    responses(
-        (status = 200, description = "Job statistics retrieved successfully"),
-        (status = 500, description = "Internal server error")
-    )
-)]
+
 pub async fn get_job_stats(
     State(ctx): State<TasksContext>,
 ) -> RestResult<impl IntoResponse> {

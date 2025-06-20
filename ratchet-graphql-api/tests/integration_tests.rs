@@ -626,6 +626,7 @@ fn create_test_schedule() -> UnifiedSchedule {
         last_run: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        output_destinations: None,
     }
 }
 

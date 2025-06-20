@@ -376,3 +376,283 @@ async fn test_schedule_crud_operations() -> Result<()> {
     
     Ok(())
 }
+
+/// End-to-end test for schedule webhook functionality
+/// 
+/// This test demonstrates webhook integration:
+/// 1. Create a schedule with webhook output destination
+/// 2. Verify webhook configuration is preserved
+/// 3. Trigger the schedule manually
+/// 4. Verify jobs inherit webhook configuration
+/// 5. Clean up
+#[tokio::test]
+#[ignore] // Integration test - requires running server
+async fn test_schedule_webhook_workflow() -> Result<()> {
+    let client = Client::new();
+    let api_base = "http://localhost:8080/api/v1";
+    
+    // Step 1: Find the addition task
+    println!("🔍 Step 1: Finding addition task...");
+    let tasks_response = client
+        .get(format!("{}/tasks", api_base))
+        .send()
+        .await?;
+    
+    assert_eq!(tasks_response.status(), 200, "Failed to fetch tasks");
+    
+    let tasks_data: Value = tasks_response.json().await?;
+    let tasks = tasks_data["data"].as_array()
+        .expect("Tasks data should be an array");
+    
+    let addition_task = tasks.iter()
+        .find(|task| task["name"].as_str() == Some("addition"))
+        .expect("Addition task should exist");
+    
+    let task_id = addition_task["id"].as_str()
+        .expect("Task should have an id")
+        .to_string();
+    
+    println!("✅ Found addition task with ID: {}", task_id);
+    
+    // Step 2: Create a schedule with webhook output destination
+    println!("📅 Step 2: Creating schedule with webhook configuration...");
+    
+    let schedule_payload = json!({
+        "taskId": task_id,
+        "name": "e2e-test-webhook-schedule",
+        "cronExpression": "0 0 * * *", // Daily at midnight (won't run during test)
+        "enabled": false, // Keep disabled to prevent automatic execution
+        "outputDestinations": [
+            {
+                "destinationType": "webhook",
+                "webhook": {
+                    "url": "https://webhook.site/test-endpoint",
+                    "method": "POST",
+                    "timeoutSeconds": 30,
+                    "contentType": "application/json",
+                    "retryPolicy": {
+                        "maxAttempts": 3,
+                        "initialDelaySeconds": 1,
+                        "maxDelaySeconds": 5,
+                        "backoffMultiplier": 2.0
+                    },
+                    "authentication": {
+                        "authType": "bearer",
+                        "bearer": {
+                            "token": "test-webhook-token-12345"
+                        }
+                    }
+                }
+            }
+        ]
+    });
+    
+    let create_schedule_response = client
+        .post(format!("{}/schedules", api_base))
+        .json(&schedule_payload)
+        .send()
+        .await?;
+    
+    if create_schedule_response.status() != 201 {
+        let error_text = create_schedule_response.text().await?;
+        panic!("Failed to create schedule with webhook: {}", error_text);
+    }
+    
+    let created_schedule: Value = create_schedule_response.json().await?;
+    let schedule_id = created_schedule["id"].as_str()
+        .expect("Schedule should have an id")
+        .to_string();
+    
+    println!("✅ Created schedule with webhook ID: {}", schedule_id);
+    
+    // Step 3: Verify webhook configuration is preserved
+    println!("🔍 Step 3: Verifying webhook configuration...");
+    
+    let get_schedule_response = client
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
+        .send()
+        .await?;
+    
+    assert_eq!(get_schedule_response.status(), 200, "Schedule should exist");
+    
+    let schedule_data: Value = get_schedule_response.json().await?;
+    assert_eq!(schedule_data["name"], "e2e-test-webhook-schedule");
+    assert_eq!(schedule_data["enabled"], false);
+    
+    // Verify webhook configuration
+    let output_destinations = schedule_data["outputDestinations"].as_array()
+        .expect("Should have output destinations");
+    assert_eq!(output_destinations.len(), 1, "Should have exactly one output destination");
+    
+    let webhook_dest = &output_destinations[0];
+    assert_eq!(webhook_dest["destinationType"], "webhook");
+    
+    let webhook_config = &webhook_dest["webhook"];
+    assert_eq!(webhook_config["url"], "https://webhook.site/test-endpoint");
+    assert_eq!(webhook_config["method"], "POST");
+    assert_eq!(webhook_config["timeoutSeconds"], 30);
+    assert_eq!(webhook_config["contentType"], "application/json");
+    
+    // Verify retry policy
+    let retry_policy = &webhook_config["retryPolicy"];
+    assert_eq!(retry_policy["maxAttempts"], 3);
+    assert_eq!(retry_policy["initialDelaySeconds"], 1);
+    assert_eq!(retry_policy["maxDelaySeconds"], 5);
+    assert_eq!(retry_policy["backoffMultiplier"], 2.0);
+    
+    // Verify authentication
+    let auth = &webhook_config["authentication"];
+    assert_eq!(auth["authType"], "bearer");
+    let bearer = &auth["bearer"];
+    assert_eq!(bearer["token"], "test-webhook-token-12345");
+    
+    println!("✅ Webhook configuration verified successfully");
+    
+    // Step 4: Trigger the schedule manually to create a job
+    println!("🚀 Step 4: Triggering schedule manually...");
+    
+    let trigger_response = client
+        .post(format!("{}/schedules/{}/trigger", api_base, schedule_id))
+        .send()
+        .await?;
+    
+    if trigger_response.status() != 200 {
+        let error_text = trigger_response.text().await?;
+        panic!("Failed to trigger schedule: {}", error_text);
+    }
+    
+    let trigger_result: Value = trigger_response.json().await?;
+    assert_eq!(trigger_result["success"], true);
+    
+    let created_job = &trigger_result["job"];
+    let job_id = created_job["id"].as_str()
+        .expect("Job should have an id")
+        .to_string();
+    
+    println!("✅ Schedule triggered, created job: {}", job_id);
+    
+    // Step 5: Verify job inherited webhook configuration
+    println!("🔍 Step 5: Verifying job inherited webhook configuration...");
+    
+    let get_job_response = client
+        .get(format!("{}/jobs/{}", api_base, job_id))
+        .send()
+        .await?;
+    
+    assert_eq!(get_job_response.status(), 200, "Job should exist");
+    
+    let job_data: Value = get_job_response.json().await?;
+    assert_eq!(job_data["taskId"], task_id);
+    
+    // Verify job has inherited webhook configuration
+    let job_output_destinations = job_data["outputDestinations"].as_array()
+        .expect("Job should have inherited output destinations");
+    assert_eq!(job_output_destinations.len(), 1, "Job should have exactly one output destination");
+    
+    let job_webhook_dest = &job_output_destinations[0];
+    assert_eq!(job_webhook_dest["destinationType"], "webhook");
+    
+    let job_webhook_config = &job_webhook_dest["webhook"];
+    assert_eq!(job_webhook_config["url"], "https://webhook.site/test-endpoint");
+    assert_eq!(job_webhook_config["method"], "POST");
+    assert_eq!(job_webhook_config["timeoutSeconds"], 30);
+    
+    println!("✅ Job webhook configuration inheritance verified");
+    
+    // Step 6: Test schedule update with different webhook
+    println!("🔄 Step 6: Testing schedule webhook update...");
+    
+    let update_payload = json!({
+        "outputDestinations": [
+            {
+                "destinationType": "webhook",
+                "webhook": {
+                    "url": "https://webhook.site/updated-endpoint",
+                    "method": "PUT",
+                    "timeoutSeconds": 60,
+                    "contentType": "application/json",
+                    "authentication": {
+                        "authType": "api_key",
+                        "apiKey": {
+                            "key": "updated-api-key-67890",
+                            "headerName": "X-API-Key"
+                        }
+                    }
+                }
+            }
+        ]
+    });
+    
+    let update_response = client
+        .patch(format!("{}/schedules/{}", api_base, schedule_id))
+        .json(&update_payload)
+        .send()
+        .await?;
+    
+    assert_eq!(update_response.status(), 200, "Schedule update should succeed");
+    
+    // Verify the update
+    let verify_update_response = client
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
+        .send()
+        .await?;
+    
+    let updated_schedule: Value = verify_update_response.json().await?;
+    let updated_destinations = updated_schedule["outputDestinations"].as_array()
+        .expect("Should have updated output destinations");
+    
+    let updated_webhook = &updated_destinations[0]["webhook"];
+    assert_eq!(updated_webhook["url"], "https://webhook.site/updated-endpoint");
+    assert_eq!(updated_webhook["method"], "PUT");
+    assert_eq!(updated_webhook["timeoutSeconds"], 60);
+    
+    let updated_auth = &updated_webhook["authentication"];
+    assert_eq!(updated_auth["authType"], "api_key");
+    let api_key_config = &updated_auth["apiKey"];
+    assert_eq!(api_key_config["key"], "updated-api-key-67890");
+    assert_eq!(api_key_config["headerName"], "X-API-Key");
+    
+    println!("✅ Schedule webhook update verified");
+    
+    // Step 7: Clean up - delete the schedule
+    println!("🗑️  Step 7: Cleaning up - deleting schedule...");
+    
+    let delete_response = client
+        .delete(format!("{}/schedules/{}", api_base, schedule_id))
+        .send()
+        .await?;
+    
+    assert!(
+        delete_response.status().is_success(),
+        "Schedule deletion should succeed"
+    );
+    
+    println!("✅ Schedule deleted successfully");
+    
+    // Step 8: Verify cleanup
+    println!("🔍 Step 8: Verifying cleanup...");
+    
+    let get_deleted_schedule_response = client
+        .get(format!("{}/schedules/{}", api_base, schedule_id))
+        .send()
+        .await?;
+    
+    assert_eq!(
+        get_deleted_schedule_response.status(), 
+        404, 
+        "Schedule should not exist after deletion"
+    );
+    
+    println!("✅ Cleanup verified");
+    
+    // Summary
+    println!("\n🎉 Webhook E2E Test Summary:");
+    println!("  📝 Task: addition ({})", task_id);
+    println!("  📅 Schedule: created with webhook config ({})", schedule_id);
+    println!("  🪝 Webhook: Bearer auth → API key auth (updated)");
+    println!("  💼 Job: created with inherited webhook config ({})", job_id);
+    println!("  🔄 Update: webhook configuration successfully modified");
+    println!("  ✅ All webhook functionality verified!");
+    
+    Ok(())
+}
