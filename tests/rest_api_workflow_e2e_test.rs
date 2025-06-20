@@ -1261,16 +1261,15 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
                 if !exec_items.is_empty() {
                     execution_found = true;
                     println!("✅ Found {} execution(s)", exec_items.len());
+                    
+                    // Print execution details
+                    for (i, execution) in exec_items.iter().enumerate() {
+                        let exec_status = execution["status"].as_str().unwrap_or("unknown");
+                        println!("  ⚡ Execution {}: status={}", i, exec_status);
                         
-                        // Print execution details
-                        for (i, execution) in exec_items.iter().enumerate() {
-                            let exec_status = execution["status"].as_str().unwrap_or("unknown");
-                            println!("  ⚡ Execution {}: status={}", i, exec_status);
-                            
-                            if exec_status == "COMPLETED" || exec_status == "completed" {
-                                if let Some(output) = execution.get("output") {
-                                    println!("    📤 Output: {}", output);
-                                }
+                        if exec_status == "COMPLETED" || exec_status == "completed" {
+                            if let Some(output) = execution.get("output") {
+                                println!("    📤 Output: {}", output);
                             }
                         }
                     }
