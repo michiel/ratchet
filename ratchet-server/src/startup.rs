@@ -305,6 +305,17 @@ impl Server {
             tracing::info!("Started background scheduler service");
         }
         
+        // Start job processor service as background task
+        if let Some(job_processor_service) = &self.services.job_processor_service {
+            let job_processor_clone = job_processor_service.clone();
+            tokio::spawn(async move {
+                if let Err(e) = job_processor_clone.start().await {
+                    tracing::error!("Job processor service failed: {}", e);
+                }
+            });
+            tracing::info!("Started background job processor service");
+        }
+        
         // Print configuration summary
         self.log_config_summary();
 

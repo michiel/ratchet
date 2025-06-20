@@ -10,6 +10,7 @@ pub mod bridges;
 pub mod embedded;
 pub mod scheduler;
 pub mod heartbeat;
+pub mod job_processor;
 
 // Re-export main components
 pub use config::*;

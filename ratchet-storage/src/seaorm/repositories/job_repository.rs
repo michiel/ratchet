@@ -74,6 +74,15 @@ impl JobRepository {
         Ok(job)
     }
 
+    /// Find job by UUID
+    pub async fn find_by_uuid(&self, uuid: uuid::Uuid) -> Result<Option<Job>, DatabaseError> {
+        let job = Jobs::find()
+            .filter(jobs::Column::Uuid.eq(uuid))
+            .one(self.db.get_connection())
+            .await?;
+        Ok(job)
+    }
+
     /// Find jobs ready for processing (prioritized queue)
     pub async fn find_ready_for_processing(&self, limit: u64) -> Result<Vec<Job>, DatabaseError> {
         let now = chrono::Utc::now();
