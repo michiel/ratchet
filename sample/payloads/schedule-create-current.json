@@ -1,0 +1,7 @@
+{
+  "taskId": "task_12345",
+  "name": "daily-analytics-report",
+  "description": "Generate daily analytics report and email to stakeholders",
+  "cronExpression": "0 9 * * 1-5",
+  "enabled": true
+}

@@ -1,0 +1,46 @@
+{
+  "taskId": "task_12345",
+  "name": "daily-analytics-report-webhook",
+  "description": "Generate daily analytics report with webhook notification",
+  "cronExpression": "0 9 * * 1-5",
+  "enabled": true,
+  "outputDestinations": [
+    {
+      "destinationType": "webhook",
+      "webhook": {
+        "url": "https://your-webhook-endpoint.com/api/notifications",
+        "method": "POST",
+        "contentType": "application/json",
+        "timeoutSeconds": 30,
+        "headers": {
+          "Authorization": "Bearer your-auth-token",
+          "X-Source": "ratchet-scheduler",
+          "X-Environment": "production"
+        },
+        "retryPolicy": {
+          "maxAttempts": 3,
+          "initialDelaySeconds": 1,
+          "maxDelaySeconds": 5,
+          "backoffMultiplier": 2.0
+        },
+        "authentication": {
+          "authType": "bearer",
+          "bearer": {
+            "token": "your-webhook-auth-token"
+          }
+        }
+      }
+    },
+    {
+      "destinationType": "filesystem",
+      "filesystem": {
+        "path": "/var/log/ratchet/daily-reports/{date}/analytics-{execution_id}.json",
+        "format": "json",
+        "permissions": "644",
+        "createDirs": true,
+        "overwrite": false,
+        "backupExisting": true
+      }
+    }
+  ]
+}
