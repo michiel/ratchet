@@ -183,7 +183,7 @@ impl InputValidator {
         Ok(())
     }
 
-    /// Validate string input
+    /// Validate string input with field-specific rules
     pub fn validate_string(&self, input: &str, field_name: &str) -> Result<(), ValidationError> {
         // Check length
         if input.len() > self.max_string_length {
@@ -199,6 +199,44 @@ impl InputValidator {
                 field: field_name.to_string(),
                 reason: "Null bytes not allowed".to_string(),
             });
+        }
+
+        // Apply field-specific validation
+        match field_name {
+            "cron_expression" | "cronExpression" => {
+                // Validate cron expression using proper cron parsing
+                if input.trim().is_empty() {
+                    return Err(ValidationError::InvalidFormat {
+                        field: "cron_expression".to_string(),
+                        reason: "Cron expression cannot be empty".to_string(),
+                    });
+                }
+
+                // Use the cron library for proper validation
+                use std::str::FromStr;
+                
+                // Try to parse with cron library (same one used in storage)
+                match cron::Schedule::from_str(input) {
+                    Ok(_) => return Ok(()),
+                    Err(e) => return Err(ValidationError::InvalidFormat {
+                        field: "cron_expression".to_string(),
+                        reason: format!("Invalid cron expression: {}", e),
+                    }),
+                }
+            },
+            "email" | "email_address" | "emailAddress" => {
+                // Use existing email validation but with field-specific error
+                return self.validate_email(input).map_err(|e| match e {
+                    ValidationError::InvalidFormat { reason, .. } => ValidationError::InvalidFormat {
+                        field: "email".to_string(),
+                        reason,
+                    },
+                    other => other,
+                });
+            },
+            _ => {
+                // Apply standard validation for other fields
+            }
         }
 
         // Check for control characters (except common whitespace)
@@ -392,6 +430,34 @@ impl InputValidator {
         }
 
         Ok(())
+    }
+
+    /// Check if input looks like a cron expression
+    fn is_likely_cron_expression(&self, input: &str) -> bool {
+        let trimmed = input.trim();
+        
+        // Basic cron expression patterns - 5 or 6 space-separated fields
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() < 5 || parts.len() > 6 {
+            return false;
+        }
+        
+        // Check if all parts match cron field patterns
+        for part in &parts {
+            if !self.is_valid_cron_field(part) {
+                return false;
+            }
+        }
+        
+        true
+    }
+
+    /// Check if a single field matches cron syntax
+    fn is_valid_cron_field(&self, field: &str) -> bool {
+        // Cron field can contain: numbers, *, /, -, ,
+        // Examples: *, */5, 1-10, 1,3,5, 15, */2
+        let cron_field_regex = regex::Regex::new(r"^[0-9*,/\-]+$").unwrap();
+        cron_field_regex.is_match(field)
     }
 
     /// Check if IP address is blocked

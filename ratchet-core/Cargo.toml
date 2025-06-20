@@ -19,6 +19,7 @@ jsonschema = "0.30"
 log = { workspace = true }
 regex = "1.10"
 url = "2.5"
+cron = "0.15"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

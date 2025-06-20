@@ -5102,6 +5102,7 @@ version = "0.4.8"
 dependencies = [
  "async-trait",
  "chrono",
+ "cron",
  "jsonschema",
  "log",
  "regex",
