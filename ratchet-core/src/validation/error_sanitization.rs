@@ -165,7 +165,7 @@ impl ErrorSanitizer {
             message.to_string()
         };
 
-        // Database errors
+        // Database errors (check before filesystem errors to avoid misclassification)
         if self.is_database_error(&lower_message) {
             return SanitizedError::new("Database operation failed")
                 .with_code("DATABASE_ERROR");
@@ -182,12 +182,6 @@ impl ErrorSanitizer {
             return SanitizedError::new("Input validation failed")
                 .with_code("VALIDATION_ERROR")
                 .with_context("hint", "Please check your input format");
-        }
-
-        // Database errors (check before filesystem errors to avoid misclassification)
-        if self.is_database_error(&lower_message) {
-            return SanitizedError::new("Database operation failed")
-                .with_code("DATABASE_ERROR");
         }
 
         // File system errors
@@ -228,7 +222,9 @@ impl ErrorSanitizer {
         let db_keywords = [
             "database", "sql", "connection", "sqlite", "postgresql", "mysql",
             "table", "column", "constraint", "foreign key", "primary key",
-            "deadlock", "timeout", "transaction", "rollback", "commit"
+            "deadlock", "timeout", "transaction", "rollback", "commit",
+            "seaorm", "sqlx", "no rows returned", "record not found",
+            "find_by_id", "entity", "model", "repository", "query failed"
         ];
 
         db_keywords.iter().any(|keyword| message.contains(keyword))
@@ -257,9 +253,15 @@ impl ErrorSanitizer {
 
     /// Check if error is filesystem-related
     fn is_filesystem_error(&self, message: &str) -> bool {
+        // Don't classify as filesystem error if it's clearly database-related
+        if self.is_database_error(message) {
+            return false;
+        }
+        
         let fs_keywords = [
-            "file", "directory", "path", "permission", "not found",
-            "exists", "read", "write", "create", "delete", "io error"
+            "file system", "filesystem", "directory", "path", "permission denied",
+            "file exists", "no such file", "read only", "write protected", 
+            "io error", "disk full", "invalid filename"
         ];
 
         fs_keywords.iter().any(|keyword| message.contains(keyword))
@@ -288,8 +290,13 @@ impl ErrorSanitizer {
 
     /// Check if error is task-related
     fn is_task_error(&self, message: &str) -> bool {
+        // Don't classify as task error if it's clearly database-related
+        if self.is_database_error(message) {
+            return false;
+        }
+        
         let task_keywords = [
-            "task", "execution", "runtime", "script", "javascript",
+            "execution", "runtime", "script", "javascript",
             "eval", "syntax", "reference", "undefined", "null"
         ];
 

@@ -163,11 +163,11 @@ fn init_quiet_logging() {
     static INIT: Once = Once::new();
     
     INIT.call_once(|| {
-        std::env::set_var("RUST_LOG", "warn,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet=warn");
+        std::env::set_var("RUST_LOG", "info,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet_rest_api=warn");
         std::env::set_var("RUST_LOG_STYLE", "never");
         
         let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::WARN)
+            .with_max_level(tracing::Level::INFO)
             .with_target(false)
             .with_thread_ids(false)
             .with_thread_names(false)

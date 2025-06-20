@@ -79,30 +79,39 @@ impl IntoResponse for RestError {
 impl RestError {
     /// Convert to unified API error with sanitization
     pub fn to_unified_error(&self) -> ApiError {
-        // Apply error sanitization to prevent sensitive data leakage
-        let sanitizer = ErrorSanitizer::default();
-        let sanitized = sanitizer.sanitize_error(self);
-        
-        // Use sanitized error message and determine appropriate error code
-        let error_code = sanitized.error_code.unwrap_or_else(|| {
-            match self {
-                RestError::NotFound(_) => "NOT_FOUND".to_string(),
-                RestError::BadRequest(_) => "BAD_REQUEST".to_string(),
-                RestError::Unauthorized(_) => "UNAUTHORIZED".to_string(),
-                RestError::Forbidden(_) => "FORBIDDEN".to_string(),
-                RestError::InternalError(_) => "INTERNAL_ERROR".to_string(),
-                RestError::MethodNotAllowed(_) => "METHOD_NOT_ALLOWED".to_string(),
-                RestError::ServiceUnavailable(_) => "SERVICE_UNAVAILABLE".to_string(),
-                RestError::Conflict(_) => "CONFLICT".to_string(),
-                RestError::Timeout(_) => "TIMEOUT".to_string(),
-                RestError::Database(_) => "DATABASE_ERROR".to_string(),
-                RestError::Web(_) => "WEB_ERROR".to_string(),
-                RestError::Validation { .. } => "VALIDATION_ERROR".to_string(),
-                RestError::InputValidation(_) => "BAD_REQUEST".to_string(),
+        // Apply selective sanitization - some errors are safe and shouldn't be sanitized
+        let (error_code, message) = match self {
+            // These error types are safe user-facing errors that don't need sanitization
+            RestError::NotFound(msg) => ("NOT_FOUND".to_string(), msg.clone()),
+            RestError::BadRequest(msg) => ("BAD_REQUEST".to_string(), msg.clone()),
+            RestError::Unauthorized(msg) => ("UNAUTHORIZED".to_string(), msg.clone()),
+            RestError::Forbidden(msg) => ("FORBIDDEN".to_string(), msg.clone()),
+            RestError::MethodNotAllowed(msg) => ("METHOD_NOT_ALLOWED".to_string(), msg.clone()),
+            RestError::Conflict(msg) => ("CONFLICT".to_string(), msg.clone()),
+            RestError::Timeout(msg) => ("TIMEOUT".to_string(), msg.clone()),
+            RestError::ServiceUnavailable(msg) => ("SERVICE_UNAVAILABLE".to_string(), msg.clone()),
+            RestError::Validation { message } => ("VALIDATION_ERROR".to_string(), message.clone()),
+            
+            // These error types may contain sensitive data and need sanitization
+            RestError::InternalError(_) | RestError::Database(_) | RestError::Web(_) | RestError::InputValidation(_) => {
+                let sanitizer = ErrorSanitizer::default();
+                let sanitized = sanitizer.sanitize_error(self);
+                
+                let error_code = sanitized.error_code.unwrap_or_else(|| {
+                    match self {
+                        RestError::InternalError(_) => "INTERNAL_ERROR".to_string(),
+                        RestError::Database(_) => "DATABASE_ERROR".to_string(),
+                        RestError::Web(_) => "WEB_ERROR".to_string(),
+                        RestError::InputValidation(_) => "BAD_REQUEST".to_string(),
+                        _ => "INTERNAL_ERROR".to_string(),
+                    }
+                });
+                
+                (error_code, sanitized.message)
             }
-        });
+        };
         
-        ApiError::new(error_code, sanitized.message)
+        ApiError::new(error_code, message)
     }
 
     // Common error constructors

@@ -120,6 +120,9 @@ pub async fn get_task(
         .find_by_id(api_id.as_i32().unwrap_or(0))
         .await
         .map_err(|db_err| {
+            // Debug: Log the actual database error to understand what's happening
+            warn!("Database error in find_by_id({}): {:?}", task_id, db_err);
+            
             // Handle specific database error types appropriately
             match &db_err {
                 DatabaseError::NotFound { .. } => RestError::not_found("Task", &task_id),
@@ -130,6 +133,7 @@ pub async fn get_task(
                 | DatabaseError::Transaction { .. } => {
                     let sanitizer = ErrorSanitizer::default();
                     let sanitized_error = sanitizer.sanitize_error(&db_err);
+                    warn!("Sanitized error: {} (original: {})", sanitized_error.message, db_err);
                     RestError::InternalError(sanitized_error.message)
                 }
             }
