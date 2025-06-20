@@ -2,6 +2,7 @@
 
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     response::IntoResponse,
     Json,
 };
@@ -191,7 +192,7 @@ pub async fn create_job(
     let created_job = job_repo.create(unified_job).await
         .map_err(|e| RestError::InternalError(format!("Failed to create job: {}", e)))?;
     
-    Ok(Json(ApiResponse::new(created_job)))
+    Ok((StatusCode::CREATED, Json(ApiResponse::new(created_job))))
 }
 
 /// Update an existing job
