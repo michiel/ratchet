@@ -80,31 +80,18 @@ impl std::error::Error for SafeDatabaseError {}
 impl From<DbErr> for SafeDatabaseError {
     fn from(err: DbErr) -> Self {
         let (code, safe_message) = match &err {
-            DbErr::ConnectionAcquire(_) => (
-                ErrorCode::ServiceUnavailable,
-                "Database connection unavailable",
-            ),
+            DbErr::ConnectionAcquire(_) => (ErrorCode::ServiceUnavailable, "Database connection unavailable"),
             DbErr::RecordNotFound(_) => (ErrorCode::NotFound, "Requested resource not found"),
             DbErr::RecordNotInserted => (ErrorCode::InternalError, "Failed to create resource"),
-            DbErr::RecordNotUpdated => {
-                (ErrorCode::NotFound, "Resource not found or no changes made")
+            DbErr::RecordNotUpdated => (ErrorCode::NotFound, "Resource not found or no changes made"),
+            DbErr::Custom(msg) if msg.contains("UNIQUE constraint") => (ErrorCode::Conflict, "Resource already exists"),
+            DbErr::Custom(msg) if msg.contains("FOREIGN KEY constraint") => {
+                (ErrorCode::ValidationError, "Invalid reference to related resource")
             }
-            DbErr::Custom(msg) if msg.contains("UNIQUE constraint") => {
-                (ErrorCode::Conflict, "Resource already exists")
-            }
-            DbErr::Custom(msg) if msg.contains("FOREIGN KEY constraint") => (
-                ErrorCode::ValidationError,
-                "Invalid reference to related resource",
-            ),
-            DbErr::Custom(msg) if msg.contains("timeout") => {
-                (ErrorCode::Timeout, "Database operation timed out")
-            }
+            DbErr::Custom(msg) if msg.contains("timeout") => (ErrorCode::Timeout, "Database operation timed out"),
             DbErr::Exec(_) => (ErrorCode::InternalError, "Database operation failed"),
             DbErr::Query(_) => (ErrorCode::ValidationError, "Invalid query parameters"),
-            _ => (
-                ErrorCode::InternalError,
-                "An unexpected database error occurred",
-            ),
+            _ => (ErrorCode::InternalError, "An unexpected database error occurred"),
         };
 
         // Log the full error internally with structured logging
@@ -136,21 +123,13 @@ impl From<crate::database::DatabaseError> for SafeDatabaseError {
             }
             crate::database::DatabaseError::MigrationError(msg) => {
                 tracing::error!(error = %msg, "Migration error");
-                SafeDatabaseError::new(
-                    ErrorCode::ServiceUnavailable,
-                    "Database migration in progress",
-                )
+                SafeDatabaseError::new(ErrorCode::ServiceUnavailable, "Database migration in progress")
             }
             crate::database::DatabaseError::ConfigError(msg) => {
                 tracing::error!(error = %msg, "Database configuration error");
-                SafeDatabaseError::new(
-                    ErrorCode::ServiceUnavailable,
-                    "Database configuration error",
-                )
+                SafeDatabaseError::new(ErrorCode::ServiceUnavailable, "Database configuration error")
             }
-            crate::database::DatabaseError::ValidationError(validation_err) => {
-                SafeDatabaseError::from(validation_err)
-            }
+            crate::database::DatabaseError::ValidationError(validation_err) => SafeDatabaseError::from(validation_err),
         }
     }
 }
@@ -186,27 +165,18 @@ impl<T> ToSafeResult<T> for Result<T, crate::database::DatabaseError> {
             }
             crate::database::DatabaseError::MigrationError(msg) => {
                 tracing::error!(error = %msg, "Migration error");
-                SafeDatabaseError::new(
-                    ErrorCode::ServiceUnavailable,
-                    "Database migration in progress",
-                )
+                SafeDatabaseError::new(ErrorCode::ServiceUnavailable, "Database migration in progress")
             }
             crate::database::DatabaseError::ConfigError(msg) => {
                 tracing::error!(error = %msg, "Database configuration error");
-                SafeDatabaseError::new(
-                    ErrorCode::ServiceUnavailable,
-                    "Database configuration error",
-                )
+                SafeDatabaseError::new(ErrorCode::ServiceUnavailable, "Database configuration error")
             }
-            crate::database::DatabaseError::ValidationError(validation_err) => {
-                SafeDatabaseError::from(validation_err)
-            }
+            crate::database::DatabaseError::ValidationError(validation_err) => SafeDatabaseError::from(validation_err),
         })
     }
 
     fn to_safe_result_with_request_id(self, request_id: String) -> SafeDatabaseResult<T> {
-        self.to_safe_result()
-            .map_err(|e| e.with_request_id(request_id))
+        self.to_safe_result().map_err(|e| e.with_request_id(request_id))
     }
 }
 

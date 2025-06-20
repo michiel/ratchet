@@ -4,15 +4,12 @@
 //! for each REST API endpoint group. This enables clean dependency injection
 //! and makes testing easier with mock implementations.
 
-use ratchet_interfaces::{
-    RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator,
-    SchedulerService,
-};
+use ratchet_interfaces::{RegistryManager, RepositoryFactory, SchedulerService, TaskRegistry, TaskValidator};
 use ratchet_mcp::server::task_dev_tools::TaskDevelopmentService;
 use std::sync::Arc;
 
 /// Context for task-related endpoints
-/// 
+///
 /// Provides access to task registry, validation, and repository operations.
 #[derive(Clone)]
 pub struct TasksContext {
@@ -46,7 +43,7 @@ impl TasksContext {
             scheduler_service: None,
         }
     }
-    
+
     /// Create a new TasksContext with MCP task development service
     pub fn with_mcp_service(
         repositories: Arc<dyn RepositoryFactory>,
@@ -64,7 +61,7 @@ impl TasksContext {
             scheduler_service: None,
         }
     }
-    
+
     /// Create a new TasksContext with scheduler service
     pub fn with_scheduler(
         repositories: Arc<dyn RepositoryFactory>,
@@ -82,7 +79,7 @@ impl TasksContext {
             scheduler_service: Some(scheduler_service),
         }
     }
-    
+
     /// Create a new TasksContext with both MCP and scheduler services
     pub fn with_all_services(
         repositories: Arc<dyn RepositoryFactory>,
@@ -104,7 +101,7 @@ impl TasksContext {
 }
 
 /// Context for execution-related endpoints
-/// 
+///
 /// Provides access to execution tracking and job queue management.
 #[derive(Clone)]
 pub struct ExecutionsContext {
@@ -119,7 +116,7 @@ impl ExecutionsContext {
 }
 
 /// Context for job-related endpoints
-/// 
+///
 /// Provides access to job queue operations and scheduling.
 #[derive(Clone)]
 pub struct JobsContext {
@@ -134,7 +131,7 @@ impl JobsContext {
 }
 
 /// Context for schedule-related endpoints
-/// 
+///
 /// Provides access to scheduling operations and cron management.
 #[derive(Clone)]
 pub struct SchedulesContext {
@@ -149,7 +146,7 @@ impl SchedulesContext {
 }
 
 /// Context for worker-related endpoints
-/// 
+///
 /// Provides access to worker status and monitoring.
 #[derive(Clone)]
 pub struct WorkersContext {

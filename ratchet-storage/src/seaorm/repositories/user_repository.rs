@@ -2,18 +2,18 @@
 
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set,
-    PaginatorTrait,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, Set};
 
-use ratchet_api_types::{ApiId, PaginationInput, ListResponse, UnifiedUser};
+use ratchet_api_types::{ApiId, ListResponse, PaginationInput, UnifiedUser};
 use ratchet_interfaces::{
-    DatabaseError, CrudRepository, FilteredRepository,
-    database::{UserRepository, UserFilters},
+    database::{UserFilters, UserRepository},
+    CrudRepository, DatabaseError, FilteredRepository,
 };
 
-use crate::seaorm::{entities::{users, Users}, connection::DatabaseConnection};
+use crate::seaorm::{
+    connection::DatabaseConnection,
+    entities::{users, Users},
+};
 
 /// SeaORM implementation of the UserRepository
 #[derive(Clone)]
@@ -237,12 +237,9 @@ impl FilteredRepository<UnifiedUser, UserFilters> for SeaOrmUserRepository {
                 message: format!("Failed to fetch users: {}", e),
             })?;
 
-        let total = paginator
-            .num_items()
-            .await
-            .map_err(|e| DatabaseError::Internal {
-                message: format!("Failed to count users: {}", e),
-            })?;
+        let total = paginator.num_items().await.map_err(|e| DatabaseError::Internal {
+            message: format!("Failed to count users: {}", e),
+        })?;
 
         let items: Vec<UnifiedUser> = users.into_iter().map(Self::to_unified_user).collect();
 

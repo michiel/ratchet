@@ -108,22 +108,14 @@ pub struct PluginContext {
 
 impl PluginContext {
     /// Create a new plugin context
-    pub fn new(
-        execution_id: Uuid,
-        config: serde_json::Value,
-        system_config: ratchet_config::RatchetConfig,
-    ) -> Self {
+    pub fn new(execution_id: Uuid, config: serde_json::Value, system_config: ratchet_config::RatchetConfig) -> Self {
         Self {
             execution_id,
             config,
             shared_data: HashMap::new(),
             system_config,
             status: PluginStatus::Loading,
-            logger: tracing::span!(
-                tracing::Level::INFO,
-                "plugin",
-                id = execution_id.to_string()
-            ),
+            logger: tracing::span!(tracing::Level::INFO, "plugin", id = execution_id.to_string()),
         }
     }
 
@@ -148,9 +140,7 @@ impl PluginContext {
     where
         T: Any + Send + Sync,
     {
-        self.shared_data
-            .get(key)
-            .and_then(|data| data.downcast_ref::<T>())
+        self.shared_data.get(key).and_then(|data| data.downcast_ref::<T>())
     }
 
     /// Update plugin status
@@ -204,11 +194,7 @@ pub trait Plugin: Send + Sync {
     }
 
     /// Handle plugin errors
-    async fn handle_error(
-        &mut self,
-        error: &PluginError,
-        context: &mut PluginContext,
-    ) -> PluginResult<()> {
+    async fn handle_error(&mut self, error: &PluginError, context: &mut PluginContext) -> PluginResult<()> {
         tracing::error!(
             target: "plugin",
             plugin = %self.metadata().name,
@@ -359,10 +345,7 @@ mod tests {
             &self.metadata
         }
 
-        async fn execute(
-            &mut self,
-            _context: &mut PluginContext,
-        ) -> PluginResult<serde_json::Value> {
+        async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
             Ok(serde_json::json!({"status": "success"}))
         }
 

@@ -3,12 +3,12 @@
 //! This module provides comprehensive input validation and error sanitization
 //! to prevent security vulnerabilities and information leakage.
 
-pub mod input;
 pub mod error_sanitization;
+pub mod input;
 
 // Re-export commonly used types
+pub use error_sanitization::{ErrorSanitizationConfig, ErrorSanitizer, SanitizedError};
 pub use input::{InputValidator, ValidationError as InputValidationError};
-pub use error_sanitization::{ErrorSanitizer, SanitizedError, ErrorSanitizationConfig};
 
 // JSON schema validation utilities
 //
@@ -117,10 +117,7 @@ pub fn parse_schema(schema_path: &Path) -> ValidationResult<JsonValue> {
 /// # Returns
 /// * `Ok(())` if validation passes
 /// * `Err(RatchetError)` if schema loading or validation fails
-pub fn validate_json_with_schema_file(
-    data: &JsonValue,
-    schema_path: &Path,
-) -> ValidationResult<()> {
+pub fn validate_json_with_schema_file(data: &JsonValue, schema_path: &Path) -> ValidationResult<()> {
     let schema = parse_schema(schema_path)?;
     validate_json(data, &schema)
 }
@@ -145,12 +142,10 @@ pub fn validate_json_type(data: &JsonValue, expected_type: &str) -> ValidationRe
     };
 
     if actual_type != expected_type {
-        return Err(RatchetError::Validation(ValidationError::InvalidFormat(
-            format!(
-                "Expected JSON type '{}', but got '{}'",
-                expected_type, actual_type
-            ),
-        )));
+        return Err(RatchetError::Validation(ValidationError::InvalidFormat(format!(
+            "Expected JSON type '{}', but got '{}'",
+            expected_type, actual_type
+        ))));
     }
 
     Ok(())
@@ -165,10 +160,7 @@ pub fn validate_json_type(data: &JsonValue, expected_type: &str) -> ValidationRe
 /// # Returns
 /// * `Ok(())` if all required fields are present
 /// * `Err(RatchetError::Validation)` if any required fields are missing
-pub fn validate_required_fields(
-    data: &JsonValue,
-    required_fields: &[&str],
-) -> ValidationResult<()> {
+pub fn validate_required_fields(data: &JsonValue, required_fields: &[&str]) -> ValidationResult<()> {
     let obj = data.as_object().ok_or_else(|| {
         RatchetError::Validation(ValidationError::InvalidFormat(
             "Expected JSON object for field validation".to_string(),
@@ -177,9 +169,9 @@ pub fn validate_required_fields(
 
     for field in required_fields {
         if !obj.contains_key(*field) {
-            return Err(RatchetError::Validation(
-                ValidationError::RequiredFieldMissing(field.to_string()),
-            ));
+            return Err(RatchetError::Validation(ValidationError::RequiredFieldMissing(
+                field.to_string(),
+            )));
         }
     }
 
@@ -238,11 +230,7 @@ mod tests {
         });
 
         let temp_file = NamedTempFile::new().unwrap();
-        fs::write(
-            temp_file.path(),
-            serde_json::to_string(&schema_content).unwrap(),
-        )
-        .unwrap();
+        fs::write(temp_file.path(), serde_json::to_string(&schema_content).unwrap()).unwrap();
 
         let parsed = parse_schema(temp_file.path()).unwrap();
         assert_eq!(parsed, schema_content);

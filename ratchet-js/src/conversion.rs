@@ -9,8 +9,8 @@ pub fn prepare_input_argument(
     input_data: &JsonValue,
 ) -> Result<boa_engine::JsValue, JsExecutionError> {
     trace!("Converting input data to JavaScript format");
-    let input_js_str = serde_json::to_string(input_data)
-        .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
+    let input_js_str =
+        serde_json::to_string(input_data).map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
 
     trace!("Parsing input JSON string into JavaScript object");
     context
@@ -37,16 +37,12 @@ pub fn convert_js_result_to_json(
             true,
             context,
         )
-        .map_err(|e| {
-            JsExecutionError::ExecutionError(format!("Failed to set temporary result: {}", e))
-        })?;
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set temporary result: {}", e)))?;
 
     // Convert to JSON string
     let result_json_str = context
         .eval(Source::from_bytes("JSON.stringify(__temp_result)"))
-        .map_err(|e| {
-            JsExecutionError::ExecutionError(format!("Failed to stringify result: {}", e))
-        })?;
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to stringify result: {}", e)))?;
 
     // Convert to Rust string
     let result_str = result_json_str
@@ -56,23 +52,17 @@ pub fn convert_js_result_to_json(
     let json_str = result_str.to_std_string_escaped();
 
     // Parse the JSON string into a JsonValue
-    serde_json::from_str(&json_str)
-        .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))
+    serde_json::from_str(&json_str).map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))
 }
 
 /// Set a JavaScript value in the global context
-pub fn set_js_value(
-    context: &mut BoaContext,
-    variable_name: &str,
-    value: &JsonValue,
-) -> Result<(), JsExecutionError> {
-    let value_str = serde_json::to_string(value)
-        .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
+pub fn set_js_value(context: &mut BoaContext, variable_name: &str, value: &JsonValue) -> Result<(), JsExecutionError> {
+    let value_str = serde_json::to_string(value).map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?;
 
     let js_code = format!("var {} = {};", variable_name, value_str);
-    context.eval(Source::from_bytes(&js_code)).map_err(|e| {
-        JsExecutionError::ExecutionError(format!("Failed to set variable {}: {}", variable_name, e))
-    })?;
+    context
+        .eval(Source::from_bytes(&js_code))
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set variable {}: {}", variable_name, e)))?;
 
     Ok(())
 }

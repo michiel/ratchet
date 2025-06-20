@@ -13,11 +13,11 @@ use crate::protocol::{ToolContent, ToolsCallResult};
 use crate::server::tools::{McpTool, ToolExecutionContext};
 use crate::{McpError, McpResult};
 
-use ratchet_storage::seaorm::repositories::task_repository::TaskRepository;
-use ratchet_storage::seaorm::repositories::execution_repository::ExecutionRepository;
-use ratchet_storage::seaorm::entities::tasks::Model as TaskModel;
-use ratchet_storage::seaorm::entities::executions::{Model as ExecutionModel, ExecutionStatus};
 use ratchet_http::HttpManager;
+use ratchet_storage::seaorm::entities::executions::{ExecutionStatus, Model as ExecutionModel};
+use ratchet_storage::seaorm::entities::tasks::Model as TaskModel;
+use ratchet_storage::seaorm::repositories::execution_repository::ExecutionRepository;
+use ratchet_storage::seaorm::repositories::task_repository::TaskRepository;
 
 /// Simple task validator for JavaScript syntax checking
 pub struct TaskValidator {
@@ -35,35 +35,35 @@ impl TaskValidator {
     pub fn new() -> Self {
         Self { _private: () }
     }
-    
+
     /// Validate JavaScript syntax
     pub fn validate_syntax(&self, code: &str) -> Result<(), String> {
         // Basic syntax validation without boa_engine dependency
         // In a real implementation, this would use the task validation from ratchet-lib
-        
+
         // Basic checks
         if code.trim().is_empty() {
             return Err("JavaScript code cannot be empty".to_string());
         }
-        
+
         // Check for function definition
         if !code.contains("function") && !code.contains("=>") {
             return Err("JavaScript code must contain at least one function definition".to_string());
         }
-        
+
         // Check for basic syntax patterns
         let open_braces = code.chars().filter(|&c| c == '{').count();
         let close_braces = code.chars().filter(|&c| c == '}').count();
         if open_braces != close_braces {
             return Err("Mismatched braces in JavaScript code".to_string());
         }
-        
+
         let open_parens = code.chars().filter(|&c| c == '(').count();
         let close_parens = code.chars().filter(|&c| c == ')').count();
         if open_parens != close_parens {
             return Err("Mismatched parentheses in JavaScript code".to_string());
         }
-        
+
         // Note: In production, this should use the actual JavaScript parser
         // from ratchet-lib with boa_engine feature enabled
         Ok(())
@@ -75,35 +75,35 @@ impl TaskValidator {
 pub struct CreateTaskRequest {
     /// Task name (must be unique)
     pub name: String,
-    
+
     /// Task description
     pub description: String,
-    
+
     /// JavaScript code for the task
     pub code: String,
-    
+
     /// Input schema (JSON Schema format)
     pub input_schema: Value,
-    
+
     /// Output schema (JSON Schema format)
     pub output_schema: Value,
-    
+
     /// Task tags/categories
     #[serde(default)]
     pub tags: Vec<String>,
-    
+
     /// Task version (defaults to "0.1.0")
     #[serde(default = "default_version")]
     pub version: String,
-    
+
     /// Whether to enable the task immediately
     #[serde(default = "default_enabled")]
     pub enabled: bool,
-    
+
     /// Optional test cases
     #[serde(default)]
     pub test_cases: Vec<TaskTestCase>,
-    
+
     /// Task metadata
     #[serde(default)]
     pub metadata: HashMap<String, Value>,
@@ -122,17 +122,17 @@ fn default_enabled() -> bool {
 pub struct TaskTestCase {
     /// Test name
     pub name: String,
-    
+
     /// Input data for the test
     pub input: Value,
-    
+
     /// Expected output (for validation)
     pub expected_output: Option<Value>,
-    
+
     /// Whether this test should fail
     #[serde(default)]
     pub should_fail: bool,
-    
+
     /// Test description
     pub description: Option<String>,
 }
@@ -142,20 +142,20 @@ pub struct TaskTestCase {
 pub struct ValidateTaskRequest {
     /// Task name or ID
     pub task_id: String,
-    
+
     /// Optional JavaScript code to validate (if not provided, validates existing)
     pub code: Option<String>,
-    
+
     /// Optional input schema to validate
     pub input_schema: Option<Value>,
-    
+
     /// Optional output schema to validate
     pub output_schema: Option<Value>,
-    
+
     /// Whether to run test cases
     #[serde(default = "default_run_tests")]
     pub run_tests: bool,
-    
+
     /// Whether to check for syntax errors only
     #[serde(default)]
     pub syntax_only: bool,
@@ -170,22 +170,22 @@ fn default_run_tests() -> bool {
 pub struct DebugTaskRequest {
     /// Task name or ID
     pub task_id: String,
-    
+
     /// Input data for debugging
     pub input: Value,
-    
+
     /// Breakpoints (line numbers)
     #[serde(default)]
     pub breakpoints: Vec<u32>,
-    
+
     /// Whether to enable step-by-step execution
     #[serde(default)]
     pub step_mode: bool,
-    
+
     /// Whether to capture all variable states
     #[serde(default = "default_capture_vars")]
     pub capture_variables: bool,
-    
+
     /// Maximum execution time in milliseconds
     #[serde(default = "default_debug_timeout")]
     pub timeout_ms: u64,
@@ -204,19 +204,19 @@ fn default_debug_timeout() -> u64 {
 pub struct RunTaskTestsRequest {
     /// Task name or ID
     pub task_id: String,
-    
+
     /// Specific test names to run (empty = all tests)
     #[serde(default)]
     pub test_names: Vec<String>,
-    
+
     /// Whether to stop on first failure
     #[serde(default)]
     pub stop_on_failure: bool,
-    
+
     /// Whether to include execution traces
     #[serde(default = "default_include_traces")]
     pub include_traces: bool,
-    
+
     /// Whether to run tests in parallel
     #[serde(default)]
     pub parallel: bool,
@@ -231,21 +231,21 @@ fn default_include_traces() -> bool {
 pub struct CreateTaskVersionRequest {
     /// Task name or ID
     pub task_id: String,
-    
+
     /// New version number (must be higher than current)
     pub new_version: String,
-    
+
     /// Version description/changelog
     pub description: String,
-    
+
     /// Whether this is a breaking change
     #[serde(default)]
     pub breaking_change: bool,
-    
+
     /// Whether to make this the active version
     #[serde(default = "default_make_active")]
     pub make_active: bool,
-    
+
     /// Optional migration script for breaking changes
     pub migration_script: Option<String>,
 }
@@ -259,15 +259,15 @@ fn default_make_active() -> bool {
 pub struct DeleteTaskRequest {
     /// Task name or ID
     pub task_id: String,
-    
+
     /// Whether to create a backup before deletion
     #[serde(default = "default_create_backup")]
     pub create_backup: bool,
-    
+
     /// Whether to force deletion even if task has executions
     #[serde(default)]
     pub force: bool,
-    
+
     /// Whether to also delete associated files
     #[serde(default = "default_delete_files")]
     pub delete_files: bool,
@@ -282,26 +282,26 @@ fn default_delete_files() -> bool {
 pub struct EditTaskRequest {
     /// Task name or ID
     pub task_id: String,
-    
+
     /// New JavaScript code (optional)
     pub code: Option<String>,
-    
+
     /// New input schema (optional)
     pub input_schema: Option<Value>,
-    
+
     /// New output schema (optional)
     pub output_schema: Option<Value>,
-    
+
     /// New description (optional)
     pub description: Option<String>,
-    
+
     /// New tags (optional)
     pub tags: Option<Vec<String>>,
-    
+
     /// Whether to validate changes before applying
     #[serde(default = "default_validate_changes")]
     pub validate_changes: bool,
-    
+
     /// Whether to create a backup before editing
     #[serde(default = "default_create_backup")]
     pub create_backup: bool,
@@ -320,15 +320,15 @@ fn default_create_backup() -> bool {
 pub struct ImportTaskRequest {
     /// Task data (JSON or ZIP format)
     pub data: Value,
-    
+
     /// Import format
     #[serde(default = "default_import_format")]
     pub format: ImportFormat,
-    
+
     /// Whether to overwrite existing tasks
     #[serde(default)]
     pub overwrite_existing: bool,
-    
+
     /// Import options
     #[serde(default)]
     pub options: ImportOptions,
@@ -353,11 +353,11 @@ pub struct ImportOptions {
     /// Include test cases
     #[serde(default = "default_include_import_tests")]
     pub include_tests: bool,
-    
+
     /// Validate imported tasks
     #[serde(default = "default_validate_imports")]
     pub validate_tasks: bool,
-    
+
     /// Prefix for imported task names
     pub name_prefix: Option<String>,
 }
@@ -375,11 +375,11 @@ fn default_validate_imports() -> bool {
 pub struct ExportTaskRequest {
     /// Task name or ID (optional, exports all if not provided)
     pub task_id: Option<String>,
-    
+
     /// Export format
     #[serde(default = "default_export_format")]
     pub format: ExportFormat,
-    
+
     /// Export options
     #[serde(default)]
     pub options: ExportOptions,
@@ -404,11 +404,11 @@ pub struct ExportOptions {
     /// Include test cases
     #[serde(default = "default_include_export_tests")]
     pub include_tests: bool,
-    
+
     /// Include metadata
     #[serde(default = "default_include_metadata")]
     pub include_metadata: bool,
-    
+
     /// Include version history
     #[serde(default)]
     pub include_versions: bool,
@@ -427,29 +427,29 @@ fn default_include_metadata() -> bool {
 pub struct StoreResultRequest {
     /// Task name or ID that was executed
     pub task_id: String,
-    
+
     /// Input that was provided to the task
     pub input: Value,
-    
+
     /// Output result from the task execution
     pub output: Value,
-    
+
     /// Execution status
     #[serde(default = "default_execution_status")]
     pub status: String,
-    
+
     /// Error message if execution failed
     pub error_message: Option<String>,
-    
+
     /// Error details if execution failed
     pub error_details: Option<Value>,
-    
+
     /// Duration in milliseconds
     pub duration_ms: Option<i32>,
-    
+
     /// HTTP requests made during execution
     pub http_requests: Option<Value>,
-    
+
     /// Recording path if recording was enabled
     pub recording_path: Option<String>,
 }
@@ -463,25 +463,25 @@ fn default_execution_status() -> String {
 pub struct GetResultsRequest {
     /// Task name or ID to get results for (optional - if not provided, gets all results)
     pub task_id: Option<String>,
-    
+
     /// Execution UUID to get specific result
     pub execution_id: Option<String>,
-    
+
     /// Filter by execution status
     pub status: Option<String>,
-    
+
     /// Maximum number of results to return
     #[serde(default = "default_results_limit")]
     pub limit: u64,
-    
+
     /// Number of results to skip (for pagination)
     #[serde(default)]
     pub offset: u64,
-    
+
     /// Whether to include error details in results
     #[serde(default = "default_include_errors")]
     pub include_errors: bool,
-    
+
     /// Whether to include full input/output data
     #[serde(default = "default_include_data")]
     pub include_data: bool,
@@ -504,13 +504,13 @@ fn default_include_data() -> bool {
 pub struct GenerateFromTemplateRequest {
     /// Template name
     pub template: String,
-    
+
     /// Task name
     pub name: String,
-    
+
     /// Template parameters
     pub parameters: HashMap<String, Value>,
-    
+
     /// Task description
     pub description: Option<String>,
 }
@@ -533,19 +533,19 @@ pub struct TaskTemplate {
 pub struct TaskDevelopmentService {
     /// Task repository for database operations
     task_repository: Arc<TaskRepository>,
-    
+
     /// Execution repository for result storage
     execution_repository: Arc<ExecutionRepository>,
-    
+
     /// Task validator for validation operations
     task_validator: Arc<TaskValidator>,
-    
+
     /// HTTP manager for task execution
     http_manager: HttpManager,
-    
+
     /// Base path for task storage
     task_base_path: PathBuf,
-    
+
     /// Whether to allow direct file system operations
     allow_fs_operations: bool,
 }
@@ -568,14 +568,14 @@ impl TaskDevelopmentService {
             allow_fs_operations,
         }
     }
-    
+
     /// Mock JavaScript execution for testing (temporary implementation)
     /// TODO: Replace with proper thread-safe JavaScript execution
     async fn mock_js_execution(&self, _code: &str, input: &Value) -> Result<Value, String> {
         // Simple mock that echoes the input with a success indicator
         // In a real implementation, this would execute the JavaScript code
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await; // Simulate execution time
-        
+
         Ok(json!({
             "result": "mock_execution_success",
             "input_received": input,
@@ -583,7 +583,7 @@ impl TaskDevelopmentService {
             "message": "This is a mock execution result. Real JavaScript execution is temporarily disabled due to thread-safety constraints."
         }))
     }
-    
+
     /// Create a new task
     pub async fn create_task(&self, request: CreateTaskRequest) -> McpResult<Value> {
         // Validate task name is unique
@@ -593,7 +593,7 @@ impl TaskDevelopmentService {
                 details: format!("Task with name '{}' already exists", request.name),
             });
         }
-        
+
         // Validate JavaScript syntax
         if let Err(e) = self.task_validator.validate_syntax(&request.code) {
             return Err(McpError::InvalidParams {
@@ -601,7 +601,7 @@ impl TaskDevelopmentService {
                 details: format!("JavaScript syntax error: {}", e),
             });
         }
-        
+
         // Validate schemas
         if let Err(e) = self.validate_json_schema(&request.input_schema) {
             return Err(McpError::InvalidParams {
@@ -609,14 +609,14 @@ impl TaskDevelopmentService {
                 details: format!("Invalid input schema: {}", e),
             });
         }
-        
+
         if let Err(e) = self.validate_json_schema(&request.output_schema) {
             return Err(McpError::InvalidParams {
                 method: "create_task".to_string(),
                 details: format!("Invalid output schema: {}", e),
             });
         }
-        
+
         // Create task directory structure if file system operations are allowed
         let task_path = if self.allow_fs_operations {
             let task_dir = self.task_base_path.join(&request.name);
@@ -625,18 +625,23 @@ impl TaskDevelopmentService {
         } else {
             None
         };
-        
+
         // Create database entry
         let task_uuid = uuid::Uuid::new_v4();
-        let task_id = self.create_database_entry(&request, task_uuid, task_path.as_deref()).await?;
-        
+        let task_id = self
+            .create_database_entry(&request, task_uuid, task_path.as_deref())
+            .await?;
+
         // Run initial tests if provided
         let test_results = if !request.test_cases.is_empty() {
-            Some(self.run_task_tests_internal(&request.name, &request.test_cases, &request.code).await?)
+            Some(
+                self.run_task_tests_internal(&request.name, &request.test_cases, &request.code)
+                    .await?,
+            )
         } else {
             None
         };
-        
+
         Ok(json!({
             "task_id": task_uuid.to_string(),
             "database_id": task_id,
@@ -648,14 +653,14 @@ impl TaskDevelopmentService {
             "message": "Task created successfully"
         }))
     }
-    
+
     /// Validate a task
     pub async fn validate_task(&self, request: ValidateTaskRequest) -> McpResult<Value> {
         // Find the task
         let task = self.find_task(&request.task_id).await?;
-        
+
         let mut validation_results = Vec::new();
-        
+
         // Validate JavaScript code
         let code_to_validate = request.code.as_deref().unwrap_or(&task.code);
         match self.task_validator.validate_syntax(code_to_validate) {
@@ -672,7 +677,7 @@ impl TaskDevelopmentService {
                     "status": "failed",
                     "error": e.to_string()
                 }));
-                
+
                 if request.syntax_only {
                     return Ok(json!({
                         "task_id": task.uuid.to_string(),
@@ -682,7 +687,7 @@ impl TaskDevelopmentService {
                 }
             }
         }
-        
+
         // Validate schemas if provided
         if let Some(input_schema) = &request.input_schema {
             match self.validate_json_schema(input_schema) {
@@ -702,7 +707,7 @@ impl TaskDevelopmentService {
                 }
             }
         }
-        
+
         if let Some(output_schema) = &request.output_schema {
             match self.validate_json_schema(output_schema) {
                 Ok(_) => {
@@ -721,22 +726,25 @@ impl TaskDevelopmentService {
                 }
             }
         }
-        
+
         // Run tests if requested
         let test_results = if request.run_tests && !request.syntax_only {
             // Load test cases from file system or database
             let test_cases = self.load_task_tests(&task.name).await?;
             if !test_cases.is_empty() {
-                Some(self.run_task_tests_internal(&task.name, &test_cases, code_to_validate).await?)
+                Some(
+                    self.run_task_tests_internal(&task.name, &test_cases, code_to_validate)
+                        .await?,
+                )
             } else {
                 None
             }
         } else {
             None
         };
-        
+
         let all_passed = validation_results.iter().all(|r| r["status"] == "passed");
-        
+
         Ok(json!({
             "task_id": task.uuid.to_string(),
             "task_name": task.name,
@@ -746,18 +754,18 @@ impl TaskDevelopmentService {
             "message": if all_passed { "Task validation passed" } else { "Task validation failed" }
         }))
     }
-    
+
     /// Debug task execution
     pub async fn debug_task(&self, request: DebugTaskRequest) -> McpResult<Value> {
         // Find the task
         let task = self.find_task(&request.task_id).await?;
-        
+
         // Create debug session
         let session_id = uuid::Uuid::new_v4().to_string();
-        
+
         // Note: Full debugging would require integration with a JavaScript debugger
         // This is a simplified implementation that provides execution traces
-        
+
         let debug_info = json!({
             "session_id": session_id,
             "task_id": task.uuid.to_string(),
@@ -777,27 +785,28 @@ impl TaskDevelopmentService {
                 "Use ratchet_analyze_execution_error for error debugging"
             ]
         });
-        
+
         Ok(debug_info)
     }
-    
+
     /// Run task tests
     pub async fn run_task_tests(&self, request: RunTaskTestsRequest) -> McpResult<Value> {
         // Find the task
         let task = self.find_task(&request.task_id).await?;
-        
+
         // Load test cases
         let all_test_cases = self.load_task_tests(&task.name).await?;
-        
+
         // Filter test cases if specific names provided
         let test_cases = if request.test_names.is_empty() {
             all_test_cases
         } else {
-            all_test_cases.into_iter()
+            all_test_cases
+                .into_iter()
                 .filter(|tc| request.test_names.contains(&tc.name))
                 .collect()
         };
-        
+
         if test_cases.is_empty() {
             return Ok(json!({
                 "task_id": task.uuid.to_string(),
@@ -808,17 +817,19 @@ impl TaskDevelopmentService {
                 "failed": 0
             }));
         }
-        
-        let results = self.run_task_tests_internal(&task.name, &test_cases, &task.code).await?;
-        
+
+        let results = self
+            .run_task_tests_internal(&task.name, &test_cases, &task.code)
+            .await?;
+
         Ok(results)
     }
-    
+
     /// Create a new task version
     pub async fn create_task_version(&self, request: CreateTaskVersionRequest) -> McpResult<Value> {
         // Find the task
         let current_task = self.find_task(&request.task_id).await?;
-        
+
         // Validate version is higher
         if !self.is_version_higher(&current_task.version, &request.new_version) {
             return Err(McpError::InvalidParams {
@@ -829,7 +840,7 @@ impl TaskDevelopmentService {
                 ),
             });
         }
-        
+
         // Create version info
         let version_info = json!({
             "task_id": current_task.uuid.to_string(),
@@ -847,24 +858,24 @@ impl TaskDevelopmentService {
                 "Create version rollback mechanism"
             ]
         });
-        
+
         Ok(version_info)
     }
-    
+
     /// Edit an existing task
     pub async fn edit_task(&self, request: EditTaskRequest) -> McpResult<Value> {
         // Find the task
         let task = self.find_task_model(&request.task_id).await?;
-        
+
         // Create backup if requested
         if request.create_backup {
             let _backup_id = format!("{}_backup_{}", task.name, chrono::Utc::now().format("%Y%m%d_%H%M%S"));
             // In production, this would create an actual backup
         }
-        
+
         let mut changes = Vec::new();
         let mut errors = Vec::new();
-        
+
         // Validate code changes if provided
         if let Some(ref code) = request.code {
             if request.validate_changes {
@@ -877,7 +888,7 @@ impl TaskDevelopmentService {
                 changes.push("code".to_string());
             }
         }
-        
+
         // Validate schema changes if provided
         if let Some(ref input_schema) = request.input_schema {
             if request.validate_changes {
@@ -890,7 +901,7 @@ impl TaskDevelopmentService {
                 changes.push("input_schema".to_string());
             }
         }
-        
+
         if let Some(ref output_schema) = request.output_schema {
             if request.validate_changes {
                 if let Err(e) = self.validate_json_schema(output_schema) {
@@ -902,15 +913,15 @@ impl TaskDevelopmentService {
                 changes.push("output_schema".to_string());
             }
         }
-        
+
         if let Some(ref _description) = request.description {
             changes.push("description".to_string());
         }
-        
+
         if let Some(ref _tags) = request.tags {
             changes.push("tags".to_string());
         }
-        
+
         if !errors.is_empty() {
             return Ok(json!({
                 "task_id": task.uuid.to_string(),
@@ -919,11 +930,11 @@ impl TaskDevelopmentService {
                 "message": "Validation failed"
             }));
         }
-        
+
         // Apply changes to task if validation passed
         if !changes.is_empty() {
             let mut updated_task = task.clone();
-            
+
             if let Some(code) = &request.code {
                 // Update filesystem if allowed
                 if self.allow_fs_operations && updated_task.path != "memory:inline" {
@@ -944,32 +955,33 @@ impl TaskDevelopmentService {
                     }
                 }
             }
-            
+
             if let Some(description) = &request.description {
                 updated_task.description = Some(description.clone());
             }
-            
+
             if let Some(input_schema) = &request.input_schema {
                 updated_task.input_schema = input_schema.clone();
             }
-            
+
             if let Some(output_schema) = &request.output_schema {
                 updated_task.output_schema = output_schema.clone();
             }
-            
+
             if let Some(tags) = &request.tags {
                 if let Some(metadata_obj) = updated_task.metadata.as_object_mut() {
-                    metadata_obj.insert("tags".to_string(), serde_json::Value::Array(
-                        tags.iter().map(|t| serde_json::Value::String(t.clone())).collect()
-                    ));
+                    metadata_obj.insert(
+                        "tags".to_string(),
+                        serde_json::Value::Array(tags.iter().map(|t| serde_json::Value::String(t.clone())).collect()),
+                    );
                 }
             }
-            
+
             // Update the database
             match self.task_repository.update(updated_task).await {
                 Ok(_) => {
                     // Successfully updated
-                },
+                }
                 Err(e) => {
                     return Ok(json!({
                         "task_id": task.uuid.to_string(),
@@ -991,15 +1003,15 @@ impl TaskDevelopmentService {
             "message": "Task edited successfully",
             "edited_at": chrono::Utc::now().to_rfc3339()
         });
-        
+
         Ok(edit_result)
     }
-    
+
     /// Delete an existing task
     pub async fn delete_task(&self, request: DeleteTaskRequest) -> McpResult<Value> {
         // Find the task first
         let task = self.find_task_model(&request.task_id).await?;
-        
+
         // Create backup if requested
         if request.create_backup {
             let backup_info = json!({
@@ -1020,17 +1032,17 @@ impl TaskDevelopmentService {
                 },
                 "backed_up_at": chrono::Utc::now().to_rfc3339()
             });
-            
+
             // TODO: Store backup in a backup table or file system
             log::info!("Task backup created: {}", backup_info);
         }
-        
+
         // Check if task has executions (if force is false)
         if !request.force {
             // TODO: Check for related executions, schedules, or jobs
             // For now, we'll allow deletion
         }
-        
+
         // Delete files if requested
         if request.delete_files && self.allow_fs_operations && task.path != "memory:inline" {
             let task_path = std::path::Path::new(&task.path);
@@ -1044,34 +1056,30 @@ impl TaskDevelopmentService {
                 }
             }
         }
-        
+
         // Delete from database
         match self.task_repository.delete_by_uuid(task.uuid).await {
-            Ok(_) => {
-                Ok(json!({
-                    "task_id": task.uuid.to_string(),
-                    "task_name": task.name,
-                    "success": true,
-                    "backup_created": request.create_backup,
-                    "files_deleted": request.delete_files,
-                    "force": request.force,
-                    "message": "Task deleted successfully",
-                    "deleted_at": chrono::Utc::now().to_rfc3339()
-                }))
-            },
-            Err(e) => {
-                Err(McpError::Internal {
-                    message: format!("Failed to delete task from database: {}", e),
-                })
-            }
+            Ok(_) => Ok(json!({
+                "task_id": task.uuid.to_string(),
+                "task_name": task.name,
+                "success": true,
+                "backup_created": request.create_backup,
+                "files_deleted": request.delete_files,
+                "force": request.force,
+                "message": "Task deleted successfully",
+                "deleted_at": chrono::Utc::now().to_rfc3339()
+            })),
+            Err(e) => Err(McpError::Internal {
+                message: format!("Failed to delete task from database: {}", e),
+            }),
         }
     }
-    
+
     /// Import tasks from external source
     pub async fn import_tasks(&self, request: ImportTaskRequest) -> McpResult<Value> {
         let mut imported_tasks = Vec::new();
         let mut errors = Vec::new();
-        
+
         match request.format {
             ImportFormat::Json => {
                 // Parse JSON data
@@ -1094,7 +1102,7 @@ impl TaskDevelopmentService {
                 errors.push("ZIP and Directory import not yet implemented".to_string());
             }
         }
-        
+
         let import_result = json!({
             "imported_count": imported_tasks.len(),
             "error_count": errors.len(),
@@ -1104,10 +1112,10 @@ impl TaskDevelopmentService {
             "overwrite_existing": request.overwrite_existing,
             "imported_at": chrono::Utc::now().to_rfc3339()
         });
-        
+
         Ok(import_result)
     }
-    
+
     /// Export tasks
     pub async fn export_tasks(&self, request: ExportTaskRequest) -> McpResult<Value> {
         let tasks = if let Some(task_id) = &request.task_id {
@@ -1117,9 +1125,9 @@ impl TaskDevelopmentService {
             // Export all tasks (placeholder - would need database integration)
             vec![]
         };
-        
+
         let mut exported_tasks = Vec::new();
-        
+
         for task in tasks {
             let mut task_export = json!({
                 "name": task.name,
@@ -1128,7 +1136,7 @@ impl TaskDevelopmentService {
                 "input_schema": task.input_schema,
                 "output_schema": task.output_schema
             });
-            
+
             if request.options.include_metadata {
                 task_export["metadata"] = json!({
                     "uuid": task.uuid.to_string(),
@@ -1136,16 +1144,16 @@ impl TaskDevelopmentService {
                     "exported_at": chrono::Utc::now().to_rfc3339()
                 });
             }
-            
+
             if request.options.include_tests {
                 // Load test cases
                 let test_cases = self.load_task_tests(&task.name).await?;
                 task_export["test_cases"] = json!(test_cases);
             }
-            
+
             exported_tasks.push(task_export);
         }
-        
+
         let export_result = match request.format {
             ExportFormat::Json => json!({
                 "tasks": exported_tasks,
@@ -1160,26 +1168,28 @@ impl TaskDevelopmentService {
                 "export_format": "zip"
             }),
             ExportFormat::Individual => json!({
-                "message": "Individual file export not yet implemented", 
+                "message": "Individual file export not yet implemented",
                 "tasks": exported_tasks,
                 "export_format": "individual"
             }),
         };
-        
+
         Ok(export_result)
     }
-    
+
     /// Generate task from template
     pub async fn generate_from_template(&self, request: GenerateFromTemplateRequest) -> McpResult<Value> {
         let templates = self.get_available_templates();
-        
-        let template = templates.iter()
-            .find(|t| t.name == request.template)
-            .ok_or_else(|| McpError::InvalidParams {
-                method: "generate_from_template".to_string(),
-                details: format!("Template '{}' not found", request.template),
-            })?;
-        
+
+        let template =
+            templates
+                .iter()
+                .find(|t| t.name == request.template)
+                .ok_or_else(|| McpError::InvalidParams {
+                    method: "generate_from_template".to_string(),
+                    details: format!("Template '{}' not found", request.template),
+                })?;
+
         // Check required parameters
         for param in &template.required_parameters {
             if !request.parameters.contains_key(param) {
@@ -1189,12 +1199,12 @@ impl TaskDevelopmentService {
                 });
             }
         }
-        
+
         // Generate code from template
         let code = self.apply_template_parameters(&template.code_template, &request.parameters)?;
         let input_schema = self.apply_template_to_schema(&template.input_schema_template, &request.parameters)?;
         let output_schema = self.apply_template_to_schema(&template.output_schema_template, &request.parameters)?;
-        
+
         let generated_task = json!({
             "name": request.name,
             "description": request.description.unwrap_or_else(|| template.description.clone()),
@@ -1206,15 +1216,15 @@ impl TaskDevelopmentService {
             "parameters": request.parameters,
             "generated_at": chrono::Utc::now().to_rfc3339()
         });
-        
+
         Ok(generated_task)
     }
-    
+
     /// Store task execution result
     pub async fn store_result(&self, request: StoreResultRequest) -> McpResult<Value> {
         // Find the task to get the task ID
         let task = self.find_task_model(&request.task_id).await?;
-        
+
         // Parse status
         let status = match request.status.to_lowercase().as_str() {
             "pending" => ExecutionStatus::Pending,
@@ -1222,25 +1232,34 @@ impl TaskDevelopmentService {
             "completed" => ExecutionStatus::Completed,
             "failed" => ExecutionStatus::Failed,
             "cancelled" => ExecutionStatus::Cancelled,
-            _ => return Err(McpError::InvalidParams {
-                method: "store_result".to_string(),
-                details: format!("Invalid execution status: {}", request.status),
-            }),
+            _ => {
+                return Err(McpError::InvalidParams {
+                    method: "store_result".to_string(),
+                    details: format!("Invalid execution status: {}", request.status),
+                })
+            }
         };
-        
+
         // Create execution record
         let execution = ExecutionModel {
             id: 0, // Will be set by database
             uuid: uuid::Uuid::new_v4(),
             task_id: task.id,
             input: request.input.clone(),
-            output: if status == ExecutionStatus::Completed { Some(request.output.clone()) } else { None },
+            output: if status == ExecutionStatus::Completed {
+                Some(request.output.clone())
+            } else {
+                None
+            },
             status,
             error_message: request.error_message.clone(),
             error_details: request.error_details.clone(),
             queued_at: chrono::Utc::now(),
             started_at: Some(chrono::Utc::now()), // Assume it started immediately for stored results
-            completed_at: if matches!(status, ExecutionStatus::Completed | ExecutionStatus::Failed | ExecutionStatus::Cancelled) {
+            completed_at: if matches!(
+                status,
+                ExecutionStatus::Completed | ExecutionStatus::Failed | ExecutionStatus::Cancelled
+            ) {
                 Some(chrono::Utc::now())
             } else {
                 None
@@ -1249,26 +1268,24 @@ impl TaskDevelopmentService {
             http_requests: request.http_requests,
             recording_path: request.recording_path,
         };
-        
+
         // Store in database
         match self.execution_repository.create(execution).await {
-            Ok(stored_execution) => {
-                Ok(json!({
-                    "execution_id": stored_execution.uuid.to_string(),
-                    "database_id": stored_execution.id,
-                    "task_id": task.uuid.to_string(),
-                    "task_name": task.name,
-                    "status": request.status,
-                    "stored_at": chrono::Utc::now().to_rfc3339(),
-                    "message": "Execution result stored successfully"
-                }))
-            },
+            Ok(stored_execution) => Ok(json!({
+                "execution_id": stored_execution.uuid.to_string(),
+                "database_id": stored_execution.id,
+                "task_id": task.uuid.to_string(),
+                "task_name": task.name,
+                "status": request.status,
+                "stored_at": chrono::Utc::now().to_rfc3339(),
+                "message": "Execution result stored successfully"
+            })),
             Err(e) => Err(McpError::Internal {
                 message: format!("Failed to store execution result: {}", e),
             }),
         }
     }
-    
+
     /// Retrieve task execution results
     pub async fn get_results(&self, request: GetResultsRequest) -> McpResult<Value> {
         let executions = if let Some(execution_id) = &request.execution_id {
@@ -1276,14 +1293,18 @@ impl TaskDevelopmentService {
             if let Ok(uuid) = uuid::Uuid::parse_str(execution_id) {
                 match self.execution_repository.find_by_uuid(uuid).await {
                     Ok(Some(execution)) => vec![execution],
-                    Ok(None) => return Ok(json!({
-                        "executions": [],
-                        "total_count": 0,
-                        "message": "Execution not found"
-                    })),
-                    Err(e) => return Err(McpError::Internal {
-                        message: format!("Failed to find execution: {}", e),
-                    }),
+                    Ok(None) => {
+                        return Ok(json!({
+                            "executions": [],
+                            "total_count": 0,
+                            "message": "Execution not found"
+                        }))
+                    }
+                    Err(e) => {
+                        return Err(McpError::Internal {
+                            message: format!("Failed to find execution: {}", e),
+                        })
+                    }
                 }
             } else {
                 return Err(McpError::InvalidParams {
@@ -1296,20 +1317,24 @@ impl TaskDevelopmentService {
             let task = self.find_task_model(task_id).await?;
             match self.execution_repository.find_by_task_id(task.id).await {
                 Ok(executions) => executions,
-                Err(e) => return Err(McpError::Internal {
-                    message: format!("Failed to find executions for task: {}", e),
-                }),
+                Err(e) => {
+                    return Err(McpError::Internal {
+                        message: format!("Failed to find executions for task: {}", e),
+                    })
+                }
             }
         } else {
             // Get recent executions (up to limit)
             match self.execution_repository.find_recent(request.limit).await {
                 Ok(executions) => executions,
-                Err(e) => return Err(McpError::Internal {
-                    message: format!("Failed to find recent executions: {}", e),
-                }),
+                Err(e) => {
+                    return Err(McpError::Internal {
+                        message: format!("Failed to find recent executions: {}", e),
+                    })
+                }
             }
         };
-        
+
         // Filter by status if requested
         let filtered_executions: Vec<_> = if let Some(status_filter) = &request.status {
             let filter_status = match status_filter.to_lowercase().as_str() {
@@ -1318,16 +1343,18 @@ impl TaskDevelopmentService {
                 "completed" => ExecutionStatus::Completed,
                 "failed" => ExecutionStatus::Failed,
                 "cancelled" => ExecutionStatus::Cancelled,
-                _ => return Err(McpError::InvalidParams {
-                    method: "get_results".to_string(),
-                    details: format!("Invalid status filter: {}", status_filter),
-                }),
+                _ => {
+                    return Err(McpError::InvalidParams {
+                        method: "get_results".to_string(),
+                        details: format!("Invalid status filter: {}", status_filter),
+                    })
+                }
             };
             executions.into_iter().filter(|e| e.status == filter_status).collect()
         } else {
             executions
         };
-        
+
         // Apply pagination
         let total_count = filtered_executions.len();
         let paginated_executions: Vec<_> = filtered_executions
@@ -1335,7 +1362,7 @@ impl TaskDevelopmentService {
             .skip(request.offset as usize)
             .take(request.limit as usize)
             .collect();
-        
+
         // Format results
         let result_list: Vec<Value> = paginated_executions
             .into_iter()
@@ -1349,7 +1376,7 @@ impl TaskDevelopmentService {
                     "completed_at": execution.completed_at.map(|t| t.to_rfc3339()),
                     "duration_ms": execution.duration_ms
                 });
-                
+
                 if request.include_data {
                     result["input"] = execution.input;
                     if let Some(output) = execution.output {
@@ -1362,7 +1389,7 @@ impl TaskDevelopmentService {
                         result["recording_path"] = Value::String(recording_path);
                     }
                 }
-                
+
                 if request.include_errors {
                     if let Some(error_message) = execution.error_message {
                         result["error_message"] = Value::String(error_message);
@@ -1371,11 +1398,11 @@ impl TaskDevelopmentService {
                         result["error_details"] = error_details;
                     }
                 }
-                
+
                 result
             })
             .collect();
-        
+
         Ok(json!({
             "executions": result_list,
             "total_count": total_count,
@@ -1386,41 +1413,48 @@ impl TaskDevelopmentService {
             "retrieved_at": chrono::Utc::now().to_rfc3339()
         }))
     }
-    
+
     /// List available templates
     pub async fn list_templates(&self) -> McpResult<Value> {
         let templates = self.get_available_templates();
-        
-        let template_list: Vec<Value> = templates.iter().map(|template| json!({
-            "name": template.name,
-            "description": template.description,
-            "category": template.category,
-            "tags": template.tags,
-            "required_parameters": template.required_parameters,
-            "optional_parameters": template.optional_parameters
-        })).collect();
-        
+
+        let template_list: Vec<Value> = templates
+            .iter()
+            .map(|template| {
+                json!({
+                    "name": template.name,
+                    "description": template.description,
+                    "category": template.category,
+                    "tags": template.tags,
+                    "required_parameters": template.required_parameters,
+                    "optional_parameters": template.optional_parameters
+                })
+            })
+            .collect();
+
         Ok(json!({
             "templates": template_list,
             "total_count": templates.len(),
             "categories": self.get_template_categories(&templates)
         }))
     }
-    
+
     // Helper methods
-    
+
     async fn create_task_directory(&self, task_dir: &Path, request: &CreateTaskRequest) -> McpResult<()> {
         // Create directory structure
         fs::create_dir_all(task_dir).await.map_err(|e| McpError::Internal {
             message: format!("Failed to create task directory: {}", e),
         })?;
-        
+
         // Write main.js
         let main_js_path = task_dir.join("main.js");
-        fs::write(&main_js_path, &request.code).await.map_err(|e| McpError::Internal {
-            message: format!("Failed to write main.js: {}", e),
-        })?;
-        
+        fs::write(&main_js_path, &request.code)
+            .await
+            .map_err(|e| McpError::Internal {
+                message: format!("Failed to write main.js: {}", e),
+            })?;
+
         // Write metadata.json
         let metadata = json!({
             "name": request.name,
@@ -1436,29 +1470,35 @@ impl TaskDevelopmentService {
             .map_err(|e| McpError::Internal {
                 message: format!("Failed to write metadata.json: {}", e),
             })?;
-        
+
         // Write schemas
         let input_schema_path = task_dir.join("input.schema.json");
-        fs::write(&input_schema_path, serde_json::to_string_pretty(&request.input_schema).unwrap())
-            .await
-            .map_err(|e| McpError::Internal {
-                message: format!("Failed to write input schema: {}", e),
-            })?;
-        
+        fs::write(
+            &input_schema_path,
+            serde_json::to_string_pretty(&request.input_schema).unwrap(),
+        )
+        .await
+        .map_err(|e| McpError::Internal {
+            message: format!("Failed to write input schema: {}", e),
+        })?;
+
         let output_schema_path = task_dir.join("output.schema.json");
-        fs::write(&output_schema_path, serde_json::to_string_pretty(&request.output_schema).unwrap())
-            .await
-            .map_err(|e| McpError::Internal {
-                message: format!("Failed to write output schema: {}", e),
-            })?;
-        
+        fs::write(
+            &output_schema_path,
+            serde_json::to_string_pretty(&request.output_schema).unwrap(),
+        )
+        .await
+        .map_err(|e| McpError::Internal {
+            message: format!("Failed to write output schema: {}", e),
+        })?;
+
         // Create tests directory and write test cases
         if !request.test_cases.is_empty() {
             let tests_dir = task_dir.join("tests");
             fs::create_dir_all(&tests_dir).await.map_err(|e| McpError::Internal {
                 message: format!("Failed to create tests directory: {}", e),
             })?;
-            
+
             for (idx, test_case) in request.test_cases.iter().enumerate() {
                 let test_file = tests_dir.join(format!("test-{:03}.json", idx + 1));
                 let test_data = json!({
@@ -1475,10 +1515,10 @@ impl TaskDevelopmentService {
                     })?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     async fn create_database_entry(
         &self,
         request: &CreateTaskRequest,
@@ -1518,20 +1558,20 @@ impl TaskDevelopmentService {
             }),
         }
     }
-    
+
     async fn find_task_model(&self, task_id: &str) -> McpResult<TaskModel> {
         // Try to find by name first
         if let Ok(Some(task)) = self.task_repository.find_by_name(task_id).await {
             return Ok(task);
         }
-        
+
         // Try as UUID
         if let Ok(uuid) = uuid::Uuid::parse_str(task_id) {
             if let Ok(Some(task)) = self.task_repository.find_by_uuid(uuid).await {
                 return Ok(task);
             }
         }
-        
+
         Err(McpError::InvalidParams {
             method: "find_task".to_string(),
             details: format!("Task not found: {}", task_id),
@@ -1551,7 +1591,7 @@ impl TaskDevelopmentService {
                 output_schema: task.output_schema,
             });
         }
-        
+
         // Try as UUID
         if let Ok(uuid) = uuid::Uuid::parse_str(task_id) {
             if let Ok(Some(task)) = self.task_repository.find_by_uuid(uuid).await {
@@ -1566,19 +1606,19 @@ impl TaskDevelopmentService {
                 });
             }
         }
-        
+
         Err(McpError::InvalidParams {
             method: "find_task".to_string(),
             details: format!("Task not found: {}", task_id),
         })
     }
-    
+
     /// Load task code from filesystem or return inline code
     async fn load_task_code(&self, task: &TaskModel) -> McpResult<String> {
         if !self.allow_fs_operations {
             return Ok("// File system operations disabled - code not available".to_string());
         }
-        
+
         // Check if this is an inline task
         if task.path == "memory:inline" {
             // For inline tasks, we could store the code in metadata
@@ -1587,7 +1627,7 @@ impl TaskDevelopmentService {
             }
             return Ok("// Inline task code not available".to_string());
         }
-        
+
         // Try to load from file system
         let task_dir = std::path::Path::new(&task.path);
         let main_js_path = if task_dir.is_dir() {
@@ -1596,7 +1636,7 @@ impl TaskDevelopmentService {
             // Assume the path itself is the file
             task_dir.to_path_buf()
         };
-        
+
         match fs::read_to_string(&main_js_path).await {
             Ok(code) => Ok(code),
             Err(e) => {
@@ -1605,23 +1645,23 @@ impl TaskDevelopmentService {
             }
         }
     }
-    
+
     async fn load_task_tests(&self, task_name: &str) -> McpResult<Vec<TaskTestCase>> {
         if !self.allow_fs_operations {
             return Ok(Vec::new());
         }
-        
+
         let tests_dir = self.task_base_path.join(task_name).join("tests");
         if !tests_dir.exists() {
             return Ok(Vec::new());
         }
-        
+
         let mut test_cases = Vec::new();
-        
+
         let mut entries = fs::read_dir(&tests_dir).await.map_err(|e| McpError::Internal {
             message: format!("Failed to read tests directory: {}", e),
         })?;
-        
+
         while let Some(entry) = entries.next_entry().await.map_err(|e| McpError::Internal {
             message: format!("Failed to read test entry: {}", e),
         })? {
@@ -1630,7 +1670,7 @@ impl TaskDevelopmentService {
                 let content = fs::read_to_string(&path).await.map_err(|e| McpError::Internal {
                     message: format!("Failed to read test file: {}", e),
                 })?;
-                
+
                 if let Ok(test_data) = serde_json::from_str::<Value>(&content) {
                     let test_case = TaskTestCase {
                         name: test_data["name"].as_str().unwrap_or("unnamed").to_string(),
@@ -1643,10 +1683,10 @@ impl TaskDevelopmentService {
                 }
             }
         }
-        
+
         Ok(test_cases)
     }
-    
+
     async fn run_task_tests_internal(
         &self,
         task_name: &str,
@@ -1657,12 +1697,12 @@ impl TaskDevelopmentService {
         let mut passed = 0;
         let mut failed = 0;
         let mut skipped = 0;
-        
+
         log::info!("Running {} test cases for task: {}", test_cases.len(), task_name);
-        
+
         for test_case in test_cases {
             log::debug!("Executing test case: {}", test_case.name);
-            
+
             // Skip tests that are expected to fail for now (we could enhance this later)
             if test_case.should_fail {
                 log::debug!("Skipping test case {} (marked as should_fail)", test_case.name);
@@ -1676,18 +1716,18 @@ impl TaskDevelopmentService {
                 skipped += 1;
                 continue;
             }
-            
+
             // Execute the JavaScript code with the test input
             let start_time = std::time::Instant::now();
-            
+
             // For now, use a simplified mock execution due to Boa engine thread-safety issues
             // TODO: Implement proper JavaScript execution in a thread-safe manner
             let execution_result = self.mock_js_execution(code, &test_case.input).await;
-            
+
             match execution_result {
                 Ok(actual_output) => {
                     let duration_ms = start_time.elapsed().as_millis() as u64;
-                    
+
                     // Check if the output matches expected output (if provided)
                     let test_passed = if let Some(expected) = &test_case.expected_output {
                         actual_output == *expected
@@ -1695,7 +1735,7 @@ impl TaskDevelopmentService {
                         // If no expected output is provided, just check that execution succeeded
                         true
                     };
-                    
+
                     if test_passed {
                         log::debug!("Test case {} passed", test_case.name);
                         test_results.push(json!({
@@ -1739,19 +1779,22 @@ impl TaskDevelopmentService {
                 }
             }
         }
-        
+
         let total_tests = test_cases.len();
         let success_rate = if total_tests > 0 {
             (passed as f64 / total_tests as f64) * 100.0
         } else {
             0.0
         };
-        
+
         log::info!(
             "Test execution completed for {}: {} passed, {} failed, {} skipped",
-            task_name, passed, failed, skipped
+            task_name,
+            passed,
+            failed,
+            skipped
         );
-        
+
         Ok(json!({
             "task_name": task_name,
             "total_tests": total_tests,
@@ -1760,35 +1803,35 @@ impl TaskDevelopmentService {
             "skipped": skipped,
             "success_rate": success_rate,
             "all_passed": failed == 0 && skipped == 0,
-            "message": format!("Executed {} tests with {} passed, {} failed, {} skipped", 
+            "message": format!("Executed {} tests with {} passed, {} failed, {} skipped",
                              total_tests, passed, failed, skipped),
             "tests": test_results,
             "executed_at": chrono::Utc::now().to_rfc3339()
         }))
     }
-    
+
     fn validate_json_schema(&self, schema: &Value) -> Result<(), String> {
         // Basic JSON Schema validation
         if !schema.is_object() {
             return Err("Schema must be an object".to_string());
         }
-        
+
         let obj = schema.as_object().unwrap();
-        
+
         // Check for required fields
         if !obj.contains_key("type") {
             return Err("Schema must have a 'type' field".to_string());
         }
-        
+
         // Additional validation could be added here
         Ok(())
     }
-    
+
     fn is_version_higher(&self, current: &str, new: &str) -> bool {
         // Simple semantic version comparison
         let current_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
         let new_parts: Vec<u32> = new.split('.').filter_map(|s| s.parse().ok()).collect();
-        
+
         for i in 0..current_parts.len().min(new_parts.len()) {
             if new_parts[i] > current_parts[i] {
                 return true;
@@ -1796,24 +1839,23 @@ impl TaskDevelopmentService {
                 return false;
             }
         }
-        
+
         new_parts.len() > current_parts.len()
     }
-    
+
     /// Import a single task from JSON data
     async fn import_single_task(&self, task_data: &Value, options: &ImportOptions) -> McpResult<Value> {
-        let name = task_data["name"].as_str()
-            .ok_or_else(|| McpError::InvalidParams {
-                method: "import_task".to_string(),
-                details: "Task name is required".to_string(),
-            })?;
-        
+        let name = task_data["name"].as_str().ok_or_else(|| McpError::InvalidParams {
+            method: "import_task".to_string(),
+            details: "Task name is required".to_string(),
+        })?;
+
         let final_name = if let Some(prefix) = &options.name_prefix {
             format!("{}{}", prefix, name)
         } else {
             name.to_string()
         };
-        
+
         if options.validate_tasks {
             if let Some(code) = task_data["code"].as_str() {
                 if let Err(e) = self.task_validator.validate_syntax(code) {
@@ -1824,7 +1866,7 @@ impl TaskDevelopmentService {
                 }
             }
         }
-        
+
         Ok(json!({
             "original_name": name,
             "imported_name": final_name,
@@ -1833,7 +1875,7 @@ impl TaskDevelopmentService {
             "message": "Task import successful (database integration pending)"
         }))
     }
-    
+
     /// Get available task templates
     fn get_available_templates(&self) -> Vec<TaskTemplate> {
         vec![
@@ -1859,7 +1901,8 @@ async function process(input, { fetch }) {
     
     const result = await response.json();
     return result;
-}"#.to_string(),
+}"#
+                .to_string(),
                 input_schema_template: json!({
                     "type": "object",
                     "properties": {
@@ -1895,12 +1938,13 @@ function process(input) {
 
 function getValueByPath(obj, path) {
     return path.split('.').reduce((acc, part) => acc && acc[part], obj);
-}"#.to_string(),
+}"#
+                .to_string(),
                 input_schema_template: json!({
                     "type": "object",
                     "properties": {
                         "data": { "type": "object" },
-                        "mapping": { 
+                        "mapping": {
                             "type": "object",
                             "additionalProperties": { "type": "string" }
                         }
@@ -1950,7 +1994,8 @@ function validateAgainstSchema(data, schema, strict) {
     }
     
     return errors;
-}"#.to_string(),
+}"#
+                .to_string(),
                 input_schema_template: json!({
                     "type": "object",
                     "properties": {
@@ -2008,7 +2053,8 @@ function processCsv(content, operation) {
 function processXml(content, operation) {
     // Basic XML parsing placeholder
     return { type: 'xml', content, operation, message: 'XML parsing not fully implemented' };
-}"#.to_string(),
+}"#
+                .to_string(),
                 input_schema_template: json!({
                     "type": "object",
                     "properties": {
@@ -2033,31 +2079,32 @@ function processXml(content, operation) {
             },
         ]
     }
-    
+
     /// Apply template parameters to code
     fn apply_template_parameters(&self, template: &str, parameters: &HashMap<String, Value>) -> McpResult<String> {
         let mut result = template.to_string();
-        
+
         for (key, value) in parameters {
             let placeholder = format!("{{{{{}}}}}", key);
             if let Some(str_value) = value.as_str() {
                 result = result.replace(&placeholder, str_value);
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Apply template parameters to schema
     fn apply_template_to_schema(&self, schema: &Value, _parameters: &HashMap<String, Value>) -> McpResult<Value> {
         // For now, return schema as-is
         // In a full implementation, this would support parameter substitution in schemas
         Ok(schema.clone())
     }
-    
+
     /// Get template categories
     fn get_template_categories(&self, templates: &[TaskTemplate]) -> Vec<String> {
-        let mut categories: Vec<String> = templates.iter()
+        let mut categories: Vec<String> = templates
+            .iter()
             .map(|t| t.category.clone())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
@@ -2145,7 +2192,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_create_task".to_string(), create_task_tool);
-    
+
     // Validate task tool
     let validate_task_tool = McpTool::new(
         "ratchet_validate_task",
@@ -2185,7 +2232,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_validate_task".to_string(), validate_task_tool);
-    
+
     // Debug task tool
     let debug_task_tool = McpTool::new(
         "ratchet_debug_task_execution",
@@ -2227,7 +2274,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_debug_task_execution".to_string(), debug_task_tool);
-    
+
     // Run tests tool
     let run_tests_tool = McpTool::new(
         "ratchet_run_task_tests",
@@ -2265,7 +2312,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_run_task_tests".to_string(), run_tests_tool);
-    
+
     // Create version tool
     let create_version_tool = McpTool::new(
         "ratchet_create_task_version",
@@ -2305,7 +2352,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_create_task_version".to_string(), create_version_tool);
-    
+
     // Edit task tool
     let edit_task_tool = McpTool::new(
         "ratchet_edit_task",
@@ -2354,7 +2401,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_edit_task".to_string(), edit_task_tool);
-    
+
     // Delete task tool
     let delete_task_tool = McpTool::new(
         "ratchet_delete_task",
@@ -2387,7 +2434,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_delete_task".to_string(), delete_task_tool);
-    
+
     // Import tasks tool
     let import_tasks_tool = McpTool::new(
         "ratchet_import_tasks",
@@ -2424,7 +2471,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_import_tasks".to_string(), import_tasks_tool);
-    
+
     // Export tasks tool
     let export_tasks_tool = McpTool::new(
         "ratchet_export_tasks",
@@ -2455,7 +2502,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_export_tasks".to_string(), export_tasks_tool);
-    
+
     // Generate from template tool
     let generate_template_tool = McpTool::new(
         "ratchet_generate_from_template",
@@ -2485,7 +2532,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_generate_from_template".to_string(), generate_template_tool);
-    
+
     // List templates tool
     let list_templates_tool = McpTool::new(
         "ratchet_list_templates",
@@ -2497,7 +2544,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_list_templates".to_string(), list_templates_tool);
-    
+
     // Store result tool
     let store_result_tool = McpTool::new(
         "ratchet_store_result",
@@ -2549,7 +2596,7 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_store_result".to_string(), store_result_tool);
-    
+
     // Get results tool
     let get_results_tool = McpTool::new(
         "ratchet_get_results",
@@ -2610,15 +2657,14 @@ pub async fn execute_task_dev_tool(
         method: tool_name.to_string(),
         details: "Missing arguments".to_string(),
     })?;
-    
+
     match tool_name {
         "ratchet_create_task" => {
-            let request: CreateTaskRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: CreateTaskRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.create_task(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2636,14 +2682,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_validate_task" => {
-            let request: ValidateTaskRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: ValidateTaskRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.validate_task(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2661,14 +2706,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_debug_task_execution" => {
-            let request: DebugTaskRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: DebugTaskRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.debug_task(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2686,14 +2730,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_run_task_tests" => {
-            let request: RunTaskTestsRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: RunTaskTestsRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.run_task_tests(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2711,14 +2754,14 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_create_task_version" => {
-            let request: CreateTaskVersionRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
+            let request: CreateTaskVersionRequest =
+                serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
                     details: format!("Invalid request: {}", e),
                 })?;
-            
+
             match service.create_task_version(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2736,14 +2779,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_edit_task" => {
-            let request: EditTaskRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: EditTaskRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.edit_task(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2761,14 +2803,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_import_tasks" => {
-            let request: ImportTaskRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: ImportTaskRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.import_tasks(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2786,14 +2827,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_export_tasks" => {
-            let request: ExportTaskRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: ExportTaskRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.export_tasks(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2811,14 +2851,14 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_generate_from_template" => {
-            let request: GenerateFromTemplateRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
+            let request: GenerateFromTemplateRequest =
+                serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
                     method: tool_name.to_string(),
                     details: format!("Invalid request: {}", e),
                 })?;
-            
+
             match service.generate_from_template(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2836,14 +2876,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_delete_task" => {
-            let request: DeleteTaskRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: DeleteTaskRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.delete_task(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2861,33 +2900,30 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
-        "ratchet_list_templates" => {
-            match service.list_templates().await {
-                Ok(result) => Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
-                    }],
-                    is_error: false,
-                    metadata: HashMap::new(),
-                }),
-                Err(e) => Ok(ToolsCallResult {
-                    content: vec![ToolContent::Text {
-                        text: format!("Failed to list templates: {}", e),
-                    }],
-                    is_error: true,
-                    metadata: HashMap::new(),
-                }),
-            }
-        }
-        
+
+        "ratchet_list_templates" => match service.list_templates().await {
+            Ok(result) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                }],
+                is_error: false,
+                metadata: HashMap::new(),
+            }),
+            Err(e) => Ok(ToolsCallResult {
+                content: vec![ToolContent::Text {
+                    text: format!("Failed to list templates: {}", e),
+                }],
+                is_error: true,
+                metadata: HashMap::new(),
+            }),
+        },
+
         "ratchet_store_result" => {
-            let request: StoreResultRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: StoreResultRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.store_result(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2905,14 +2941,13 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         "ratchet_get_results" => {
-            let request: GetResultsRequest = serde_json::from_value(args)
-                .map_err(|e| McpError::InvalidParams {
-                    method: tool_name.to_string(),
-                    details: format!("Invalid request: {}", e),
-                })?;
-            
+            let request: GetResultsRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
             match service.get_results(request).await {
                 Ok(result) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
@@ -2930,7 +2965,7 @@ pub async fn execute_task_dev_tool(
                 }),
             }
         }
-        
+
         _ => Err(McpError::ToolNotFound {
             tool_name: tool_name.to_string(),
         }),

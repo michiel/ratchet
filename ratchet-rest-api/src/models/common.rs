@@ -5,11 +5,9 @@ use serde::{Deserialize, Serialize};
 /// Standard API response wrapper
 pub use ratchet_web::ApiResponse;
 
-/// Query parameter types
-pub use ratchet_web::{
-    QueryParams, PaginationQuery, SortQuery, FilterQuery
-};
 pub use ratchet_web::extractors::{ListQuery, PaginationParams};
+/// Query parameter types
+pub use ratchet_web::{FilterQuery, PaginationQuery, QueryParams, SortQuery};
 
 /// Health check response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,19 +47,24 @@ impl HealthResponse {
 
     pub fn with_checks(mut self, checks: std::collections::HashMap<String, HealthCheckResult>) -> Self {
         // Update overall status based on individual checks
-        let has_unhealthy = checks.values().any(|check| matches!(check.status, HealthStatus::Unhealthy));
-        let has_degraded = checks.values().any(|check| matches!(check.status, HealthStatus::Degraded));
-        
+        let has_unhealthy = checks
+            .values()
+            .any(|check| matches!(check.status, HealthStatus::Unhealthy));
+        let has_degraded = checks
+            .values()
+            .any(|check| matches!(check.status, HealthStatus::Degraded));
+
         self.checks = Some(checks);
-        
+
         self.status = if has_unhealthy {
             "unhealthy"
         } else if has_degraded {
             "degraded"
         } else {
             "healthy"
-        }.to_string();
-        
+        }
+        .to_string();
+
         self
     }
 }

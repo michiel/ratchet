@@ -95,25 +95,25 @@ pub enum MigrationError {
 pub struct MigrationConfig {
     /// Source database URL (ratchet-lib)
     pub source_db_url: String,
-    
+
     /// Target database URL (ratchet-storage)
     pub target_db_url: String,
-    
+
     /// Batch size for processing records
     pub batch_size: u64,
-    
+
     /// Whether to force migration even if target is not empty
     pub force: bool,
-    
+
     /// Whether to validate data after migration
     pub validate: bool,
-    
+
     /// Whether to create backup before migration
     pub create_backup: bool,
-    
+
     /// Maximum number of retry attempts for failed records
     pub max_retries: u32,
-    
+
     /// Whether to continue on errors or fail fast
     pub continue_on_error: bool,
 }
@@ -165,7 +165,9 @@ impl MigrationSummary {
     pub fn complete(&mut self, success: bool) {
         self.completed_at = Some(chrono::Utc::now());
         self.success = success;
-        self.total_duration_ms = self.completed_at.unwrap()
+        self.total_duration_ms = self
+            .completed_at
+            .unwrap()
             .signed_duration_since(self.started_at)
             .num_milliseconds() as u64;
     }
@@ -206,15 +208,15 @@ mod tests {
     #[test]
     fn test_migration_summary() {
         let mut summary = MigrationSummary::new();
-        
+
         let mut report1 = MigrationReport::new("tasks".to_string());
         report1.migrated_count = 100;
         report1.failed_count = 5;
-        
+
         let mut report2 = MigrationReport::new("executions".to_string());
         report2.migrated_count = 200;
         report2.failed_count = 0;
-        
+
         summary.reports.push(report1);
         summary.reports.push(report2);
         summary.complete(true);

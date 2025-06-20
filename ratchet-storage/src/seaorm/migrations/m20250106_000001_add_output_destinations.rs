@@ -40,11 +40,7 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(DeliveryResults::JobId).integer().not_null())
-                    .col(
-                        ColumnDef::new(DeliveryResults::ExecutionId)
-                            .integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(DeliveryResults::ExecutionId).integer().not_null())
                     .col(
                         ColumnDef::new(DeliveryResults::DestinationType)
                             .string_len(50)
@@ -55,21 +51,9 @@ impl MigrationTrait for Migration {
                             .string_len(255)
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(DeliveryResults::Success)
-                            .boolean()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(DeliveryResults::DeliveryTimeMs)
-                            .integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(DeliveryResults::SizeBytes)
-                            .integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(DeliveryResults::Success).boolean().not_null())
+                    .col(ColumnDef::new(DeliveryResults::DeliveryTimeMs).integer().not_null())
+                    .col(ColumnDef::new(DeliveryResults::SizeBytes).integer().not_null())
                     .col(ColumnDef::new(DeliveryResults::ResponseInfo).text().null())
                     .col(ColumnDef::new(DeliveryResults::ErrorMessage).text().null())
                     .col(

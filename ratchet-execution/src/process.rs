@@ -10,9 +10,7 @@ use uuid::Uuid;
 
 use crate::error::{ExecutionError, ExecutionResult};
 use crate::executor::TaskExecutor;
-use crate::ipc::{
-    CoordinatorMessage, ExecutionContext as IpcExecutionContext, TaskExecutionResult, WorkerMessage,
-};
+use crate::ipc::{CoordinatorMessage, ExecutionContext as IpcExecutionContext, TaskExecutionResult, WorkerMessage};
 use crate::worker::{WorkerConfig, WorkerProcessManager};
 
 /// Process-based task executor that uses worker processes for task execution
@@ -57,10 +55,7 @@ impl ProcessTaskExecutor {
 
         let worker_manager = Arc::new(RwLock::new(WorkerProcessManager::new(worker_config)));
 
-        Self {
-            worker_manager,
-            config,
-        }
+        Self { worker_manager, config }
     }
 
     /// Create a new executor with default configuration
@@ -71,12 +66,13 @@ impl ProcessTaskExecutor {
     /// Start the worker processes
     pub async fn start(&self) -> Result<(), ExecutionError> {
         info!("Starting ProcessTaskExecutor with {} workers", self.config.worker_count);
-        
+
         let mut manager = self.worker_manager.write().await;
-        manager.start().await.map_err(|e| {
-            ExecutionError::WorkerError(format!("Failed to start worker processes: {}", e))
-        })?;
-        
+        manager
+            .start()
+            .await
+            .map_err(|e| ExecutionError::WorkerError(format!("Failed to start worker processes: {}", e)))?;
+
         info!("ProcessTaskExecutor started successfully");
         Ok(())
     }
@@ -84,12 +80,13 @@ impl ProcessTaskExecutor {
     /// Stop the worker processes
     pub async fn stop(&self) -> Result<(), ExecutionError> {
         info!("Stopping ProcessTaskExecutor");
-        
+
         let mut manager = self.worker_manager.write().await;
-        manager.stop().await.map_err(|e| {
-            ExecutionError::WorkerError(format!("Failed to stop worker processes: {}", e))
-        })?;
-        
+        manager
+            .stop()
+            .await
+            .map_err(|e| ExecutionError::WorkerError(format!("Failed to stop worker processes: {}", e)))?;
+
         info!("ProcessTaskExecutor stopped successfully");
         Ok(())
     }
@@ -105,14 +102,8 @@ impl ProcessTaskExecutor {
         debug!("Executing task {} directly at path: {}", task_id, task_path);
 
         let correlation_id = Uuid::new_v4();
-        let exec_context = execution_context.unwrap_or_else(|| {
-            IpcExecutionContext::new(
-                Uuid::new_v4(),
-                None,
-                Uuid::new_v4(),
-                "1.0.0".to_string(),
-            )
-        });
+        let exec_context = execution_context
+            .unwrap_or_else(|| IpcExecutionContext::new(Uuid::new_v4(), None, Uuid::new_v4(), "1.0.0".to_string()));
 
         let message = WorkerMessage::ExecuteTask {
             job_id: 0, // Direct execution has no job
@@ -135,10 +126,7 @@ impl ProcessTaskExecutor {
             }
             Ok(CoordinatorMessage::Error { error, .. }) => {
                 warn!("Task {} failed with worker error: {:?}", task_id, error);
-                Err(ExecutionError::TaskExecutionError(format!(
-                    "Worker error: {:?}",
-                    error
-                )))
+                Err(ExecutionError::TaskExecutionError(format!("Worker error: {:?}", error)))
             }
             Ok(_) => {
                 error!("Task {} received unexpected response from worker", task_id);
@@ -154,10 +142,7 @@ impl ProcessTaskExecutor {
     }
 
     /// Validate a task using worker processes
-    pub async fn validate_task(
-        &self,
-        task_path: String,
-    ) -> Result<bool, ExecutionError> {
+    pub async fn validate_task(&self, task_path: String) -> Result<bool, ExecutionError> {
         debug!("Validating task at path: {}", task_path);
 
         let correlation_id = Uuid::new_v4();
@@ -225,7 +210,7 @@ impl TaskExecutor for ProcessTaskExecutor {
         // For the simplified implementation, we need a task path
         // In a full implementation, this would be retrieved from the database
         let task_path = format!("/tasks/task-{}", task_id);
-        
+
         debug!("Executing task {} with simplified path: {}", task_id, task_path);
 
         let task_result = self
@@ -303,7 +288,7 @@ mod tests {
     async fn test_process_executor_creation() {
         let config = ProcessExecutorConfig::default();
         let executor = ProcessTaskExecutor::new(config);
-        
+
         assert_eq!(executor.worker_count().await, 0); // No workers started yet
         assert!(!executor.has_running_workers().await);
     }
@@ -321,7 +306,7 @@ mod tests {
         // Test start
         let start_result = executor.start().await;
         assert!(start_result.is_ok());
-        
+
         // Check workers are running
         assert!(executor.worker_count().await > 0);
         assert!(executor.has_running_workers().await);
@@ -329,7 +314,7 @@ mod tests {
         // Test stop
         let stop_result = executor.stop().await;
         assert!(stop_result.is_ok());
-        
+
         // Check workers are stopped
         assert_eq!(executor.worker_count().await, 0);
         assert!(!executor.has_running_workers().await);
@@ -354,7 +339,7 @@ mod tests {
         // Test execute_task (simplified - will fail without real worker processes)
         let input_data = json!({"test": "data"});
         let result = executor.execute_task(123, input_data, None).await;
-        
+
         // Should return a result (success or failure)
         assert!(result.is_ok());
         let execution_result = result.unwrap();
@@ -376,12 +361,10 @@ mod tests {
 
         let task_path = "/test/task".to_string();
         let input_data = json!({"num1": 5, "num2": 3});
-        
+
         // Test direct execution (will return a simulated result)
-        let result = executor
-            .execute_task_direct(789, task_path, input_data, None)
-            .await;
-        
+        let result = executor.execute_task_direct(789, task_path, input_data, None).await;
+
         assert!(result.is_ok());
         let task_result = result.unwrap();
         // In the simplified implementation, this should fail with a message
@@ -397,15 +380,15 @@ mod tests {
         executor.start().await.unwrap();
 
         let task_path = "/test/validation/task".to_string();
-        
+
         // Test validation (will return a simulated result)
         let result = executor.validate_task(task_path).await;
-        
+
         // Check what the actual result is for debugging
         match &result {
             Ok(is_valid) => {
                 // Should return false since no real worker is processing
-                assert!(!is_valid, "Expected validation to return false"); 
+                assert!(!is_valid, "Expected validation to return false");
             }
             Err(e) => {
                 // For the simplified implementation, expect an error since there are no real workers
@@ -424,7 +407,7 @@ mod tests {
 
         let stats = executor.get_worker_stats().await;
         assert!(!stats.is_empty());
-        
+
         // Should have workers based on CPU count
         assert_eq!(stats.len(), num_cpus::get());
 
@@ -439,7 +422,7 @@ mod tests {
             restart_on_crash: false,
             max_restart_attempts: 1,
         };
-        
+
         let executor = ProcessTaskExecutor::new(config);
         executor.start().await.unwrap();
 
@@ -455,22 +438,12 @@ mod tests {
         executor.start().await.unwrap();
 
         // Execute two tasks concurrently using direct method (which can be made Send)
-        let task1_future = executor.execute_task_direct(
-            1, 
-            "/test/task1".to_string(),
-            json!({"test": "data1"}), 
-            None
-        );
-        
-        let task2_future = executor.execute_task_direct(
-            2, 
-            "/test/task2".to_string(), 
-            json!({"test": "data2"}),
-            None
-        );
+        let task1_future = executor.execute_task_direct(1, "/test/task1".to_string(), json!({"test": "data1"}), None);
+
+        let task2_future = executor.execute_task_direct(2, "/test/task2".to_string(), json!({"test": "data2"}), None);
 
         let (result1, result2) = tokio::join!(task1_future, task2_future);
-        
+
         assert!(result1.is_ok());
         assert!(result2.is_ok());
 

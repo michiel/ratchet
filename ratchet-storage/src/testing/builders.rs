@@ -9,11 +9,11 @@ use uuid::Uuid;
 
 #[cfg(all(feature = "testing", feature = "seaorm"))]
 use crate::seaorm::entities::{
-    tasks::{Model as Task, ActiveModel as TaskActiveModel},
-    executions::{Model as Execution, ActiveModel as ExecutionActiveModel, ExecutionStatus},
-    jobs::{Model as Job, ActiveModel as JobActiveModel, JobStatus, JobPriority},
-    schedules::{Model as Schedule, ActiveModel as ScheduleActiveModel},
-    delivery_results::{Model as DeliveryResult, ActiveModel as DeliveryResultActiveModel},
+    delivery_results::{ActiveModel as DeliveryResultActiveModel, Model as DeliveryResult},
+    executions::{ActiveModel as ExecutionActiveModel, ExecutionStatus, Model as Execution},
+    jobs::{ActiveModel as JobActiveModel, JobPriority, JobStatus, Model as Job},
+    schedules::{ActiveModel as ScheduleActiveModel, Model as Schedule},
+    tasks::{ActiveModel as TaskActiveModel, Model as Task},
 };
 #[cfg(all(feature = "testing", feature = "seaorm"))]
 use sea_orm::Set;
@@ -42,7 +42,7 @@ impl TaskBuilder {
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
                 validated_at: Some(Utc::now()),
-            }
+            },
         }
     }
 
@@ -147,7 +147,7 @@ impl ExecutionBuilder {
                 duration_ms: None,
                 http_requests: None,
                 recording_path: None,
-            }
+            },
         }
     }
 
@@ -280,7 +280,7 @@ impl JobBuilder {
                 completed_at: None,
                 metadata: None,
                 output_destinations: None,
-            }
+            },
         }
     }
 
@@ -408,7 +408,7 @@ impl ScheduleBuilder {
                 output_destinations: None,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
-            }
+            },
         }
     }
 
@@ -538,7 +538,7 @@ impl DeliveryResultBuilder {
                 response_info: None,
                 error_message: None,
                 created_at: Utc::now(),
-            }
+            },
         }
     }
 
@@ -680,40 +680,27 @@ pub mod factories {
 
     /// Create a failed execution
     pub fn failed_execution() -> Execution {
-        ExecutionBuilder::new()
-            .failed("Task execution failed")
-            .build()
+        ExecutionBuilder::new().failed("Task execution failed").build()
     }
 
     /// Create a high priority job
     pub fn urgent_job() -> Job {
-        JobBuilder::new()
-            .high_priority()
-            .immediate()
-            .build()
+        JobBuilder::new().high_priority().immediate().build()
     }
 
     /// Create a scheduled job
     pub fn scheduled_job() -> Job {
-        JobBuilder::new()
-            .delayed(chrono::Duration::hours(1))
-            .build()
+        JobBuilder::new().delayed(chrono::Duration::hours(1)).build()
     }
 
     /// Create a daily schedule
     pub fn daily_schedule() -> Schedule {
-        ScheduleBuilder::new()
-            .with_name("daily-backup")
-            .daily()
-            .build()
+        ScheduleBuilder::new().with_name("daily-backup").daily().build()
     }
 
     /// Create a disabled schedule
     pub fn disabled_schedule() -> Schedule {
-        ScheduleBuilder::new()
-            .with_name("disabled-schedule")
-            .disabled()
-            .build()
+        ScheduleBuilder::new().with_name("disabled-schedule").disabled().build()
     }
 
     /// Create a successful delivery result
@@ -770,11 +757,7 @@ mod tests {
 
     #[test]
     fn test_job_builder() {
-        let job = JobBuilder::new()
-            .with_task_id(456)
-            .high_priority()
-            .immediate()
-            .build();
+        let job = JobBuilder::new().with_task_id(456).high_priority().immediate().build();
 
         assert_eq!(job.task_id, 456);
         assert_eq!(job.priority, JobPriority::High);

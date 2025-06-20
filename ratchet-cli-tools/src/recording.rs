@@ -1,5 +1,5 @@
 //! HTTP recording compatibility layer for CLI tools
-//! 
+//!
 //! This module provides a compatibility layer for CLI tools to use HTTP recording
 //! functionality from both ratchet_lib and ratchet-http.
 
@@ -11,24 +11,24 @@ use tracing::{debug, info};
 use ratchet_http::recording as http_recording;
 
 /// Set the recording directory for HTTP requests
-/// 
+///
 /// This function provides a unified API for setting the recording directory
 /// that works with both legacy ratchet_lib and modern ratchet-http.
 pub fn set_recording_dir(session_dir: PathBuf) -> Result<()> {
     info!("Setting recording directory: {:?}", session_dir);
-    
+
     #[cfg(feature = "recording")]
     {
         // Use modern ratchet-http recording
         http_recording::set_recording_dir(session_dir.clone())?;
         debug!("Set recording directory using ratchet-http");
     }
-    
+
     #[cfg(not(feature = "recording"))]
     {
         debug!("Recording not available - recording feature not enabled");
     }
-    
+
     Ok(())
 }
 

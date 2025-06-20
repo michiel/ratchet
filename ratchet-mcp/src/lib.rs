@@ -57,9 +57,7 @@ pub mod security;
 
 // Re-export commonly used types
 pub use error::{McpError, McpResult};
-pub use protocol::{
-    JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpCapabilities, McpMessage, McpMethod,
-};
+pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpCapabilities, McpMessage, McpMethod};
 
 #[cfg(feature = "server")]
 pub use server::{McpServer, McpServerConfig, McpTool, ToolRegistry};

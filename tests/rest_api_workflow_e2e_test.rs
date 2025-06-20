@@ -23,15 +23,15 @@ use axum::{
     Router,
 };
 use ratchet_config::{
-    RatchetConfig,
     domains::{
         database::DatabaseConfig,
-        server::ServerConfig,
-        registry::{RegistryConfig, RegistrySourceConfig, RegistrySourceType},
-        output::OutputConfig,
         http::HttpConfig,
-        logging::{LoggingConfig, LogLevel, LogFormat},
+        logging::{LogFormat, LogLevel, LoggingConfig},
+        output::OutputConfig,
+        registry::{RegistryConfig, RegistrySourceConfig, RegistrySourceType},
+        server::ServerConfig,
     },
+    RatchetConfig,
 };
 use ratchet_server::Server;
 use reqwest::{Client, Method};
@@ -79,7 +79,7 @@ struct CreateTaskRequest {
     enabled: bool,
     #[serde(rename = "inputSchema")]
     input_schema: Value,
-    #[serde(rename = "outputSchema")]  
+    #[serde(rename = "outputSchema")]
     output_schema: Option<Value>,
     code: String,
     #[serde(rename = "codeType")]
@@ -161,11 +161,14 @@ struct CreateScheduleRequest {
 fn init_quiet_logging() {
     use std::sync::Once;
     static INIT: Once = Once::new();
-    
+
     INIT.call_once(|| {
-        std::env::set_var("RUST_LOG", "info,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet_rest_api=warn");
+        std::env::set_var(
+            "RUST_LOG",
+            "info,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet_rest_api=warn",
+        );
         std::env::set_var("RUST_LOG_STYLE", "never");
-        
+
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::INFO)
             .with_target(false)
@@ -179,11 +182,11 @@ fn init_quiet_logging() {
 }
 
 /// Test webhook handler for capturing deliveries
-async fn test_webhook_handler(
-    State(state): State<TestWebhookState>,
-    Json(payload): Json<Value>,
-) -> StatusCode {
-    println!("🔗 Webhook received: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+async fn test_webhook_handler(State(state): State<TestWebhookState>, Json(payload): Json<Value>) -> StatusCode {
+    println!(
+        "🔗 Webhook received: {}",
+        serde_json::to_string_pretty(&payload).unwrap_or_default()
+    );
     state.received_payloads.lock().unwrap().push(payload);
     StatusCode::OK
 }
@@ -216,9 +219,9 @@ async fn start_test_webhook_server() -> Result<(SocketAddr, TestWebhookState)> {
 /// Create test configuration for the server
 async fn create_test_config(temp_dir: &TempDir, webhook_addr: SocketAddr) -> Result<RatchetConfig> {
     let db_path = temp_dir.path().join("test.db");
-    
+
     let mut config = RatchetConfig::default();
-    
+
     // Configure server settings
     if let Some(ref mut server) = config.server {
         server.bind_address = "127.0.0.1".to_string();
@@ -227,26 +230,24 @@ async fn create_test_config(temp_dir: &TempDir, webhook_addr: SocketAddr) -> Res
         server.database.max_connections = 5;
         server.database.connection_timeout = Duration::from_secs(30);
     }
-    
+
     // Configure registry settings
     if let Some(ref mut registry) = config.registry {
-        registry.sources = vec![
-            RegistrySourceConfig {
-                name: "test-tasks".to_string(),
-                uri: format!("file://{}", temp_dir.path().join("tasks").display()),
-                source_type: RegistrySourceType::Filesystem,
-                polling_interval: None,
-                enabled: true,
-                auth_name: None,
-                config: Default::default(),
-            }
-        ];
+        registry.sources = vec![RegistrySourceConfig {
+            name: "test-tasks".to_string(),
+            uri: format!("file://{}", temp_dir.path().join("tasks").display()),
+            source_type: RegistrySourceType::Filesystem,
+            polling_interval: None,
+            enabled: true,
+            auth_name: None,
+            config: Default::default(),
+        }];
         registry.default_polling_interval = Duration::from_secs(300);
     }
-    
+
     // Configure output settings
     config.output.default_timeout = Duration::from_secs(30);
-    
+
     // Configure logging
     config.logging.level = LogLevel::Warn;
     config.logging.format = LogFormat::Json;
@@ -283,10 +284,7 @@ async fn create_sample_tasks(temp_dir: &TempDir) -> Result<()> {
         }
     });
 
-    tokio::fs::write(
-        task_dir.join("task.json"),
-        serde_json::to_string_pretty(&task_json)?,
-    ).await?;
+    tokio::fs::write(task_dir.join("task.json"), serde_json::to_string_pretty(&task_json)?).await?;
 
     let task_js = r#"
 function execute(input) {
@@ -305,7 +303,7 @@ async fn setup_test_environment() -> Result<RestApiTestContext> {
     init_quiet_logging();
 
     let temp_dir = TempDir::new()?;
-    
+
     // Create sample tasks
     create_sample_tasks(&temp_dir).await?;
 
@@ -320,10 +318,10 @@ async fn setup_test_environment() -> Result<RestApiTestContext> {
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
     let app = server.build_app();
-    
+
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let server_addr = listener.local_addr()?;
-    
+
     tokio::spawn(async move {
         if let Err(e) = axum::serve(listener, app.into_make_service()).await {
             eprintln!("Server error: {}", e);
@@ -335,9 +333,7 @@ async fn setup_test_environment() -> Result<RestApiTestContext> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Create HTTP client
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()?;
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
     // Wait for server health check
     let mut ready = false;
@@ -385,18 +381,16 @@ impl RestApiTestContext {
         body: Option<Value>,
     ) -> Result<(StatusCode, Option<T>)> {
         let url = format!("http://{}/api/v1{}", self.server_addr, path);
-        
+
         let mut request = self.client.request(method.clone(), &url);
-        
+
         if let Some(body) = body {
-            request = request
-                .header("Content-Type", "application/json")
-                .json(&body);
+            request = request.header("Content-Type", "application/json").json(&body);
         }
 
         let response = request.send().await?;
         let status = response.status();
-        
+
         if status.is_success() && response.content_length().unwrap_or(0) > 0 {
             let json_response: T = response.json().await?;
             Ok((status, Some(json_response)))
@@ -435,18 +429,16 @@ impl RestApiTestContext {
         body: Option<Value>,
     ) -> Result<(StatusCode, Option<T>)> {
         let url = format!("http://{}{}", self.server_addr, path);
-        
+
         let mut request = self.client.request(method.clone(), &url);
-        
+
         if let Some(body) = body {
-            request = request
-                .header("Content-Type", "application/json")
-                .json(&body);
+            request = request.header("Content-Type", "application/json").json(&body);
         }
 
         let response = request.send().await?;
         let status = response.status();
-        
+
         if status.is_success() && response.content_length().unwrap_or(0) > 0 {
             let json_response: T = response.json().await?;
             Ok((status, Some(json_response)))
@@ -488,32 +480,41 @@ impl RestApiTestContext {
 #[tokio::test]
 async fn test_openapi_documentation_available() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing OpenAPI documentation availability...");
 
     // Test OpenAPI JSON specification endpoint
     let (status, spec): (StatusCode, Option<Value>) = ctx.get_raw("/api-docs/openapi.json").await?;
     assert_eq!(status, StatusCode::OK, "OpenAPI spec endpoint should return 200");
-    
+
     let spec = spec.expect("OpenAPI spec should be present");
     assert!(spec.get("openapi").is_some(), "OpenAPI spec should have openapi field");
     assert!(spec.get("info").is_some(), "OpenAPI spec should have info field");
     assert!(spec.get("paths").is_some(), "OpenAPI spec should have paths field");
-    
+
     // Verify key endpoints are documented
     let paths = spec.get("paths").unwrap().as_object().unwrap();
     assert!(paths.contains_key("/tasks"), "Tasks endpoint should be documented");
-    assert!(paths.contains_key("/executions"), "Executions endpoint should be documented");
+    assert!(
+        paths.contains_key("/executions"),
+        "Executions endpoint should be documented"
+    );
     assert!(paths.contains_key("/jobs"), "Jobs endpoint should be documented");
-    assert!(paths.contains_key("/schedules"), "Schedules endpoint should be documented");
+    assert!(
+        paths.contains_key("/schedules"),
+        "Schedules endpoint should be documented"
+    );
 
     // Test Swagger UI endpoint
     let swagger_url = format!("http://{}/docs", ctx.server_addr);
     let response = ctx.client.get(&swagger_url).send().await?;
     assert_eq!(response.status(), StatusCode::OK, "Swagger UI should be accessible");
-    
+
     let html = response.text().await?;
-    assert!(html.contains("Ratchet API Documentation"), "Swagger UI should contain title");
+    assert!(
+        html.contains("Ratchet API Documentation"),
+        "Swagger UI should contain title"
+    );
     assert!(html.contains("swagger-ui"), "Swagger UI should contain UI elements");
 
     println!("✅ OpenAPI documentation is available and properly configured");
@@ -524,13 +525,13 @@ async fn test_openapi_documentation_available() -> Result<()> {
 #[tokio::test]
 async fn test_health_and_status_endpoints() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing health and status endpoints...");
 
     // Test basic health endpoint
     let (status, health): (StatusCode, Option<Value>) = ctx.get_raw("/health").await?;
     assert_eq!(status, StatusCode::OK, "Health endpoint should return 200");
-    
+
     if let Some(health) = health {
         assert!(health.get("status").is_some(), "Health response should include status");
     }
@@ -551,13 +552,13 @@ async fn test_health_and_status_endpoints() -> Result<()> {
 #[tokio::test]
 async fn test_task_crud_operations() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing task CRUD operations...");
 
     // Step 1: List tasks (should be empty or contain sample tasks)
     let (status, tasks): (StatusCode, Option<Value>) = ctx.get("/tasks").await?;
     assert_eq!(status, StatusCode::OK, "List tasks should return 200");
-    
+
     // Step 2: Create a new task
     let create_request = json!({
         "name": "test-task",
@@ -582,13 +583,13 @@ async fn test_task_crud_operations() -> Result<()> {
     });
 
     let (status, created_task): (StatusCode, Option<Value>) = ctx.post("/tasks", create_request.clone()).await?;
-    
+
     // Handle different implementation states
     if status == StatusCode::NOT_IMPLEMENTED || status == StatusCode::INTERNAL_SERVER_ERROR {
         println!("⚠️  Task creation not yet implemented - skipping CRUD tests");
         return Ok(());
     }
-    
+
     assert_eq!(status, StatusCode::CREATED, "Create task should return 201");
     let task = created_task.expect("Created task should be returned");
     let task_data = task.get("data").expect("Response should have data field");
@@ -597,7 +598,7 @@ async fn test_task_crud_operations() -> Result<()> {
     // Step 3: Get the created task
     let (status, retrieved_task): (StatusCode, Option<Value>) = ctx.get(&format!("/tasks/{}", task_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get task should return 200");
-    
+
     let retrieved = retrieved_task.expect("Retrieved task should be present");
     let retrieved_data = retrieved.get("data").expect("Response should have data field");
     assert_eq!(
@@ -612,9 +613,10 @@ async fn test_task_crud_operations() -> Result<()> {
         "enabled": false
     });
 
-    let (status, updated_task): (StatusCode, Option<Value>) = ctx.patch(&format!("/tasks/{}", task_id), update_request).await?;
+    let (status, updated_task): (StatusCode, Option<Value>) =
+        ctx.patch(&format!("/tasks/{}", task_id), update_request).await?;
     assert_eq!(status, StatusCode::OK, "Update task should return 200");
-    
+
     let updated = updated_task.expect("Updated task should be returned");
     let updated_data = updated.get("data").expect("Response should have data field");
     assert_eq!(
@@ -639,7 +641,7 @@ async fn test_task_crud_operations() -> Result<()> {
 #[tokio::test]
 async fn test_execution_management_workflow() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing execution management workflow...");
 
     // Step 1: List executions (should be empty initially)
@@ -649,10 +651,13 @@ async fn test_execution_management_workflow() -> Result<()> {
     // Step 2: Get execution statistics
     let (status, stats): (StatusCode, Option<Value>) = ctx.get("/executions/stats").await?;
     assert_eq!(status, StatusCode::OK, "Execution stats should return 200");
-    
+
     if let Some(response) = stats {
         let stats = response.get("stats").expect("Response should have stats field");
-        assert!(stats.get("totalExecutions").is_some(), "Stats should include total executions");
+        assert!(
+            stats.get("totalExecutions").is_some(),
+            "Stats should include total executions"
+        );
     }
 
     // Step 3a: Create a task first (needed for execution creation)
@@ -673,14 +678,14 @@ async fn test_execution_management_workflow() -> Result<()> {
     });
 
     let (task_status, created_task): (StatusCode, Option<Value>) = ctx.post("/tasks", create_task_request).await?;
-    
+
     // If task creation is not implemented, skip execution creation
     if task_status == StatusCode::NOT_IMPLEMENTED || task_status == StatusCode::INTERNAL_SERVER_ERROR {
         println!("⚠️  Task creation not yet implemented - skipping execution creation");
         println!("✅ Execution read operations completed successfully");
         return Ok(());
     }
-    
+
     assert_eq!(task_status, StatusCode::CREATED, "Create task should return 201");
     let task = created_task.expect("Created task should be returned");
     let task_data = task.get("data").expect("Response should have data field");
@@ -695,8 +700,9 @@ async fn test_execution_management_workflow() -> Result<()> {
         "priority": "normal"
     });
 
-    let (status, created_execution): (StatusCode, Option<Value>) = ctx.post("/executions", create_execution_request).await?;
-    
+    let (status, created_execution): (StatusCode, Option<Value>) =
+        ctx.post("/executions", create_execution_request).await?;
+
     if status == StatusCode::NOT_IMPLEMENTED || status == StatusCode::INTERNAL_SERVER_ERROR {
         println!("⚠️  Execution creation not yet implemented - testing read operations only");
         println!("✅ Execution read operations completed successfully");
@@ -706,14 +712,21 @@ async fn test_execution_management_workflow() -> Result<()> {
     assert_eq!(status, StatusCode::CREATED, "Create execution should return 201");
     let execution = created_execution.expect("Created execution should be returned");
     let execution_data = execution.get("data").expect("Response should have data field");
-    let execution_id = execution_data.get("id").expect("Execution should have ID").as_str().unwrap();
+    let execution_id = execution_data
+        .get("id")
+        .expect("Execution should have ID")
+        .as_str()
+        .unwrap();
 
     // Step 4: Get the created execution
-    let (status, retrieved_execution): (StatusCode, Option<Value>) = ctx.get(&format!("/executions/{}", execution_id)).await?;
+    let (status, retrieved_execution): (StatusCode, Option<Value>) =
+        ctx.get(&format!("/executions/{}", execution_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get execution should return 200");
 
     // Step 5: Test execution control operations
-    let (status, _): (StatusCode, Option<Value>) = ctx.post(&format!("/executions/{}/cancel", execution_id), json!({})).await?;
+    let (status, _): (StatusCode, Option<Value>) = ctx
+        .post(&format!("/executions/{}/cancel", execution_id), json!({}))
+        .await?;
     assert!(
         status == StatusCode::OK || status == StatusCode::CONFLICT,
         "Cancel execution should return 200 or 409"
@@ -734,7 +747,7 @@ async fn test_execution_management_workflow() -> Result<()> {
 #[tokio::test]
 async fn test_job_queue_operations() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing job queue operations...");
 
     // Step 1: List jobs
@@ -763,14 +776,14 @@ async fn test_job_queue_operations() -> Result<()> {
     });
 
     let (task_status, created_task): (StatusCode, Option<Value>) = ctx.post("/tasks", create_task_request).await?;
-    
+
     // If task creation is not implemented, skip job creation
     if task_status == StatusCode::NOT_IMPLEMENTED || task_status == StatusCode::INTERNAL_SERVER_ERROR {
         println!("⚠️  Task creation not yet implemented - skipping job creation");
         println!("✅ Job read operations completed successfully");
         return Ok(());
     }
-    
+
     assert_eq!(task_status, StatusCode::CREATED, "Create task should return 201");
     let task = created_task.expect("Created task should be returned");
     let task_data = task.get("data").expect("Response should have data field");
@@ -787,7 +800,7 @@ async fn test_job_queue_operations() -> Result<()> {
     });
 
     let (status, created_job): (StatusCode, Option<Value>) = ctx.post("/jobs", create_job_request).await?;
-    
+
     if status == StatusCode::NOT_IMPLEMENTED || status == StatusCode::INTERNAL_SERVER_ERROR {
         println!("⚠️  Job creation not yet implemented - testing read operations only");
         println!("✅ Job read operations completed successfully");
@@ -827,7 +840,7 @@ async fn test_job_queue_operations() -> Result<()> {
 #[tokio::test]
 async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing complete schedule workflow with webhook integration...");
 
     // Step 1: First find or create a task to schedule
@@ -837,7 +850,9 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
 
     let tasks_data = tasks.expect("Tasks should be available");
     let empty_vec = vec![];
-    let task_items = tasks_data.get("data").or_else(|| tasks_data.get("items"))
+    let task_items = tasks_data
+        .get("data")
+        .or_else(|| tasks_data.get("items"))
         .and_then(|v| v.as_array())
         .unwrap_or(&empty_vec);
 
@@ -869,7 +884,7 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
         });
 
         let (status, created_task): (StatusCode, Option<Value>) = ctx.post("/tasks", create_task_request).await?;
-        
+
         if status == StatusCode::CREATED {
             created_task.unwrap()["id"].as_str().unwrap().to_string()
         } else {
@@ -884,7 +899,7 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
     // Step 2: Create a schedule with webhook output destination
     println!("📅 Step 2: Creating schedule with webhook output destination...");
     let webhook_url = ctx.webhook_url();
-    
+
     let create_schedule_request = json!({
         "taskId": task_id,
         "name": "e2e-webhook-test-schedule",
@@ -908,8 +923,9 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
         }]
     });
 
-    let (status, created_schedule): (StatusCode, Option<Value>) = ctx.post("/schedules", create_schedule_request).await?;
-    
+    let (status, created_schedule): (StatusCode, Option<Value>) =
+        ctx.post("/schedules", create_schedule_request).await?;
+
     if status == StatusCode::NOT_IMPLEMENTED || status == StatusCode::INTERNAL_SERVER_ERROR {
         println!("⚠️  Schedule creation not yet implemented - skipping webhook integration test");
         return Ok(());
@@ -918,13 +934,18 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
     assert_eq!(status, StatusCode::CREATED, "Create schedule should return 201");
     let schedule = created_schedule.expect("Created schedule should be returned");
     let schedule_data = schedule.get("data").expect("Response should have data field");
-    let schedule_id = schedule_data.get("id").expect("Schedule should have ID").as_str().unwrap();
+    let schedule_id = schedule_data
+        .get("id")
+        .expect("Schedule should have ID")
+        .as_str()
+        .unwrap();
 
     println!("✅ Created schedule with ID: {}", schedule_id);
 
     // Step 3: Verify schedule was created with webhook configuration
     println!("🔍 Step 3: Verifying schedule configuration...");
-    let (status, retrieved_schedule): (StatusCode, Option<Value>) = ctx.get(&format!("/schedules/{}", schedule_id)).await?;
+    let (status, retrieved_schedule): (StatusCode, Option<Value>) =
+        ctx.get(&format!("/schedules/{}", schedule_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get schedule should return 200");
 
     let schedule_response = retrieved_schedule.expect("Schedule should be returned");
@@ -938,15 +959,15 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
         if !destinations.is_null() {
             let dest_array = destinations.as_array().expect("Output destinations should be array");
             assert!(!dest_array.is_empty(), "Should have at least one output destination");
-            
+
             let webhook_dest = &dest_array[0];
             assert_eq!(webhook_dest["destinationType"], "webhook");
-            
+
             if let Some(webhook_config) = webhook_dest.get("webhook") {
                 assert_eq!(webhook_config["url"], webhook_url);
                 assert_eq!(webhook_config["method"], "POST");
             }
-            
+
             println!("✅ Webhook output destination verified");
         } else {
             println!("⚠️  Output destinations not fully implemented");
@@ -956,24 +977,28 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
     // Step 4: Test manual trigger to create jobs (instead of waiting for scheduler)
     println!("⚡ Step 4: Testing manual schedule trigger to create jobs...");
     let mut jobs_created = false;
-    
+
     // Try to trigger the schedule manually to create a job
-    let (trigger_status, _): (StatusCode, Option<Value>) = ctx.post(&format!("/schedules/{}/trigger", schedule_id), json!({})).await?;
-    
+    let (trigger_status, _): (StatusCode, Option<Value>) = ctx
+        .post(&format!("/schedules/{}/trigger", schedule_id), json!({}))
+        .await?;
+
     if trigger_status.is_success() {
         println!("✅ Manual schedule trigger successful");
-        
+
         // Check if jobs were created by the trigger
         tokio::time::sleep(Duration::from_secs(2)).await; // Brief wait for job creation
-        
+
         let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
         if status == StatusCode::OK {
             if let Some(jobs_data) = jobs {
                 let empty_vec = vec![];
-                let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
+                let job_items = jobs_data
+                    .get("data")
+                    .or_else(|| jobs_data.get("items"))
                     .and_then(|v| v.as_array())
                     .unwrap_or(&empty_vec);
-                
+
                 if !job_items.is_empty() {
                     println!("✅ Found {} job(s) created by manual trigger", job_items.len());
                     jobs_created = true;
@@ -981,22 +1006,32 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
             }
         }
     } else {
-        println!("⚠️  Manual trigger failed with status: {} - checking for automatic jobs instead", trigger_status);
-        
+        println!(
+            "⚠️  Manual trigger failed with status: {} - checking for automatic jobs instead",
+            trigger_status
+        );
+
         // If manual trigger fails, do a brief check for automatically created jobs
-        for attempt in 1..=3 { // Only check 3 times (15 seconds total)
+        for attempt in 1..=3 {
+            // Only check 3 times (15 seconds total)
             tokio::time::sleep(Duration::from_secs(5)).await;
-            
+
             let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
             if status == StatusCode::OK {
                 if let Some(jobs_data) = jobs {
                     let empty_vec = vec![];
-                    let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
+                    let job_items = jobs_data
+                        .get("data")
+                        .or_else(|| jobs_data.get("items"))
                         .and_then(|v| v.as_array())
                         .unwrap_or(&empty_vec);
-                    
+
                     if !job_items.is_empty() {
-                        println!("✅ Found {} job(s) created automatically (attempt {})", job_items.len(), attempt);
+                        println!(
+                            "✅ Found {} job(s) created automatically (attempt {})",
+                            job_items.len(),
+                            attempt
+                        );
                         jobs_created = true;
                         break;
                     }
@@ -1012,20 +1047,22 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
     // Step 5: Check for job executions
     println!("🔍 Step 5: Checking for executions...");
     let (status, executions): (StatusCode, Option<Value>) = ctx.get(&format!("/executions?taskId={}", task_id)).await?;
-    
+
     if status == StatusCode::OK {
         if let Some(exec_data) = executions {
             let empty_vec = vec![];
-            let exec_items = exec_data.get("data").or_else(|| exec_data.get("items"))
+            let exec_items = exec_data
+                .get("data")
+                .or_else(|| exec_data.get("items"))
                 .and_then(|v| v.as_array())
                 .unwrap_or(&empty_vec);
-            
+
             println!("📊 Found {} execution(s)", exec_items.len());
-            
+
             for (i, execution) in exec_items.iter().enumerate() {
                 let status = execution["status"].as_str().unwrap_or("unknown");
                 println!("  📋 Execution {}: status={}", i, status);
-                
+
                 if status == "COMPLETED" {
                     if let Some(output) = execution.get("output") {
                         println!("  ✅ Execution output: {}", output);
@@ -1038,23 +1075,29 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
     // Step 6: Wait for webhook deliveries
     println!("🔗 Step 6: Waiting for webhook deliveries...");
     let webhook_payloads = ctx.wait_for_webhooks(Duration::from_secs(30), 1).await;
-    
+
     if !webhook_payloads.is_empty() {
         println!("✅ Received {} webhook payload(s)!", webhook_payloads.len());
-        
+
         for (i, payload) in webhook_payloads.iter().enumerate() {
             println!("📨 Webhook payload {}: {}", i, serde_json::to_string_pretty(payload)?);
-            
+
             // Verify webhook payload structure
-            assert!(payload.get("task_id").is_some() || payload.get("taskId").is_some(), 
-                "Webhook payload should include task ID");
-            assert!(payload.get("status").is_some(), 
-                "Webhook payload should include execution status");
-            
+            assert!(
+                payload.get("task_id").is_some() || payload.get("taskId").is_some(),
+                "Webhook payload should include task ID"
+            );
+            assert!(
+                payload.get("status").is_some(),
+                "Webhook payload should include execution status"
+            );
+
             if let Some(status) = payload["status"].as_str() {
                 if status == "completed" || status == "COMPLETED" {
-                    assert!(payload.get("output").is_some(), 
-                        "Completed execution should include output");
+                    assert!(
+                        payload.get("output").is_some(),
+                        "Completed execution should include output"
+                    );
                     println!("✅ Webhook payload verified for completed execution");
                 }
             }
@@ -1068,24 +1111,34 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
 
     // Step 7: Trigger manual schedule execution to test immediate webhook delivery
     println!("⚡ Step 7: Triggering manual schedule execution...");
-    let (status, trigger_result): (StatusCode, Option<Value>) = ctx.post(&format!("/schedules/{}/trigger", schedule_id), json!({
-        "inputData": {"number": 42}
-    })).await?;
-    
+    let (status, trigger_result): (StatusCode, Option<Value>) = ctx
+        .post(
+            &format!("/schedules/{}/trigger", schedule_id),
+            json!({
+                "inputData": {"number": 42}
+            }),
+        )
+        .await?;
+
     if status.is_success() {
         println!("✅ Manual trigger successful");
-        
+
         if let Some(result) = trigger_result {
             println!("📋 Trigger result: {}", result);
-            
+
             // Wait for webhook from manual trigger
             println!("🔗 Waiting for webhook from manual trigger...");
-            let manual_payloads = ctx.wait_for_webhooks(Duration::from_secs(15), webhook_payloads.len() + 1).await;
-            
+            let manual_payloads = ctx
+                .wait_for_webhooks(Duration::from_secs(15), webhook_payloads.len() + 1)
+                .await;
+
             if manual_payloads.len() > webhook_payloads.len() {
                 let new_payload = &manual_payloads[manual_payloads.len() - 1];
-                println!("✅ Received webhook from manual trigger: {}", serde_json::to_string_pretty(new_payload)?);
-                
+                println!(
+                    "✅ Received webhook from manual trigger: {}",
+                    serde_json::to_string_pretty(new_payload)?
+                );
+
                 // Verify the manual trigger result
                 if let Some(output) = new_payload.get("output") {
                     if let Some(doubled) = output.get("doubled") {
@@ -1101,9 +1154,11 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
 
     // Step 8: Clean up - disable and delete the schedule
     println!("🧹 Step 8: Cleaning up test schedule...");
-    
+
     // Disable schedule first
-    let (status, _): (StatusCode, Option<Value>) = ctx.post(&format!("/schedules/{}/disable", schedule_id), json!({})).await?;
+    let (status, _): (StatusCode, Option<Value>) = ctx
+        .post(&format!("/schedules/{}/disable", schedule_id), json!({}))
+        .await?;
     if status.is_success() {
         println!("✅ Schedule disabled");
     }
@@ -1116,23 +1171,27 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
 
     // Step 9: Verify schedule deletion
     let (status, _): (StatusCode, Option<Value>) = ctx.get(&format!("/schedules/{}", schedule_id)).await?;
-    assert_eq!(status, StatusCode::NOT_FOUND, "Schedule should not exist after deletion");
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "Schedule should not exist after deletion"
+    );
 
     // Final summary
     let final_payloads = ctx.wait_for_webhooks(Duration::from_secs(1), 0).await;
-    
+
     println!("\n🎉 Complete Schedule Workflow with Webhook Integration Summary:");
     println!("  📝 Task ID: {}", task_id);
     println!("  📅 Schedule: created and deleted ({})", schedule_id);
     println!("  🔗 Webhook URL: {}", webhook_url);
     println!("  📨 Total webhooks received: {}", final_payloads.len());
-    
+
     if !final_payloads.is_empty() {
         println!("  ✅ Webhook integration working correctly!");
     } else {
         println!("  ⚠️  Webhook integration needs further implementation");
     }
-    
+
     println!("  ✅ All API endpoints functional");
     println!("  ✅ Schedule lifecycle management working");
     println!("  ✅ Error handling robust");
@@ -1145,18 +1204,18 @@ async fn test_complete_schedule_workflow_with_webhook() -> Result<()> {
 #[tokio::test]
 async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🎯 Testing core scenario: Schedule → Job → Execution → Webhook");
 
     // This test focuses specifically on the scenario you requested:
     // 1. Add a schedule via API
-    // 2. Have execution of the scheduled job run correctly  
+    // 2. Have execution of the scheduled job run correctly
     // 3. Have the return value HTTP posted back via a webhook
 
     // Step 1: Get available tasks (from sample tasks created in setup)
     println!("📋 Step 1: Getting available tasks...");
     let (status, tasks): (StatusCode, Option<Value>) = ctx.get("/tasks").await?;
-    
+
     if status != StatusCode::OK {
         println!("⚠️  Tasks API not available - skipping core scenario test");
         return Ok(());
@@ -1164,7 +1223,9 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
 
     let tasks_data = tasks.expect("Tasks should be available");
     let empty_vec = vec![];
-    let task_items = tasks_data.get("data").or_else(|| tasks_data.get("items"))
+    let task_items = tasks_data
+        .get("data")
+        .or_else(|| tasks_data.get("items"))
         .and_then(|v| v.as_array())
         .unwrap_or(&empty_vec);
 
@@ -1176,13 +1237,13 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
     let task = &task_items[0];
     let task_id = task["id"].as_str().unwrap();
     let task_name = task["name"].as_str().unwrap_or("unknown");
-    
+
     println!("✅ Using task: {} ({})", task_name, task_id);
 
     // Step 2: Add a schedule via API with webhook output destination
     println!("📅 Step 2: Creating schedule with webhook output destination...");
     let webhook_url = ctx.webhook_url();
-    
+
     let schedule_request = json!({
         "taskId": task_id,
         "name": "core-scenario-schedule",
@@ -1201,45 +1262,52 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
     });
 
     let (status, created_schedule): (StatusCode, Option<Value>) = ctx.post("/schedules", schedule_request).await?;
-    
+
     if status != StatusCode::CREATED {
-        println!("⚠️  Schedule creation failed with status: {} - may not be implemented", status);
+        println!(
+            "⚠️  Schedule creation failed with status: {} - may not be implemented",
+            status
+        );
         return Ok(());
     }
 
     let schedule = created_schedule.expect("Schedule should be created");
     let schedule_data = schedule.get("data").expect("Response should have data field");
     let schedule_id = schedule_data["id"].as_str().unwrap();
-    
+
     println!("✅ Created schedule: {}", schedule_id);
 
     // Step 3: Test manual trigger to create jobs quickly (avoid waiting for automatic scheduler)
     println!("⚡ Step 3: Testing manual trigger to create jobs...");
-    
+
     let mut job_found = false;
     let mut execution_found = false;
-    
+
     // Try to trigger the schedule manually to create a job
-    let (trigger_status, _): (StatusCode, Option<Value>) = ctx.post(&format!("/schedules/{}/trigger", schedule_id), json!({})).await?;
-    
+    let (trigger_status, _): (StatusCode, Option<Value>) = ctx
+        .post(&format!("/schedules/{}/trigger", schedule_id), json!({}))
+        .await?;
+
     if trigger_status.is_success() {
         println!("✅ Manual schedule trigger successful");
-        
+
         // Check if jobs were created by the trigger
         tokio::time::sleep(Duration::from_secs(2)).await; // Brief wait for job creation
-        
+
         let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
         if status == StatusCode::OK {
             if let Some(jobs_data) = jobs {
                 let empty_vec = vec![];
-                let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
+                let job_items = jobs_data
+                    .get("data")
+                    .or_else(|| jobs_data.get("items"))
                     .and_then(|v| v.as_array())
                     .unwrap_or(&empty_vec);
-                
+
                 if !job_items.is_empty() {
                     job_found = true;
                     println!("✅ Found {} job(s) created by manual trigger", job_items.len());
-                    
+
                     // Print job details
                     for (i, job) in job_items.iter().enumerate() {
                         let job_status = job["status"].as_str().unwrap_or("unknown");
@@ -1248,25 +1316,28 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
                 }
             }
         }
-        
+
         // Check for executions
-        let (status, executions): (StatusCode, Option<Value>) = ctx.get(&format!("/executions?taskId={}", task_id)).await?;
+        let (status, executions): (StatusCode, Option<Value>) =
+            ctx.get(&format!("/executions?taskId={}", task_id)).await?;
         if status == StatusCode::OK {
             if let Some(exec_data) = executions {
                 let empty_vec = vec![];
-                let exec_items = exec_data.get("data").or_else(|| exec_data.get("items"))
+                let exec_items = exec_data
+                    .get("data")
+                    .or_else(|| exec_data.get("items"))
                     .and_then(|v| v.as_array())
                     .unwrap_or(&empty_vec);
-                
+
                 if !exec_items.is_empty() {
                     execution_found = true;
                     println!("✅ Found {} execution(s)", exec_items.len());
-                    
+
                     // Print execution details
                     for (i, execution) in exec_items.iter().enumerate() {
                         let exec_status = execution["status"].as_str().unwrap_or("unknown");
                         println!("  ⚡ Execution {}: status={}", i, exec_status);
-                        
+
                         if exec_status == "COMPLETED" || exec_status == "completed" {
                             if let Some(output) = execution.get("output") {
                                 println!("    📤 Output: {}", output);
@@ -1277,23 +1348,33 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
             }
         }
     } else {
-        println!("⚠️  Manual trigger failed with status: {} - checking for automatic jobs instead", trigger_status);
-        
+        println!(
+            "⚠️  Manual trigger failed with status: {} - checking for automatic jobs instead",
+            trigger_status
+        );
+
         // If manual trigger fails, do a brief check for automatically created jobs (fallback)
-        for attempt in 1..=3 { // Only check 3 times (15 seconds total)
+        for attempt in 1..=3 {
+            // Only check 3 times (15 seconds total)
             tokio::time::sleep(Duration::from_secs(5)).await;
-            
+
             let (status, jobs): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs?taskId={}", task_id)).await?;
             if status == StatusCode::OK {
                 if let Some(jobs_data) = jobs {
                     let empty_vec = vec![];
-                    let job_items = jobs_data.get("data").or_else(|| jobs_data.get("items"))
+                    let job_items = jobs_data
+                        .get("data")
+                        .or_else(|| jobs_data.get("items"))
                         .and_then(|v| v.as_array())
                         .unwrap_or(&empty_vec);
-                    
+
                     if !job_items.is_empty() {
                         job_found = true;
-                        println!("✅ Found {} job(s) created automatically (attempt {})", job_items.len(), attempt);
+                        println!(
+                            "✅ Found {} job(s) created automatically (attempt {})",
+                            job_items.len(),
+                            attempt
+                        );
                         break;
                     }
                 }
@@ -1308,23 +1389,23 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
     // Step 4: Check for webhook deliveries
     println!("🔗 Step 4: Checking for webhook deliveries...");
     let webhook_payloads = ctx.wait_for_webhooks(Duration::from_secs(30), 1).await;
-    
+
     if !webhook_payloads.is_empty() {
         println!("🎉 SUCCESS: Received {} webhook payload(s)!", webhook_payloads.len());
-        
+
         for (i, payload) in webhook_payloads.iter().enumerate() {
             println!("📨 Webhook payload {}: {}", i, serde_json::to_string_pretty(payload)?);
-            
+
             // Verify core webhook payload requirements
             let has_task_info = payload.get("task_id").is_some() || payload.get("taskId").is_some();
             let has_status = payload.get("status").is_some();
             let has_output = payload.get("output").is_some() || payload.get("result").is_some();
-            
+
             println!("  ✅ Webhook validation:");
             println!("    - Has task info: {}", has_task_info);
             println!("    - Has status: {}", has_status);
             println!("    - Has output: {}", has_output);
-            
+
             if has_task_info && has_status {
                 println!("  🎯 Core scenario SUCCESSFUL: Schedule → Job → Execution → Webhook ✅");
             }
@@ -1337,21 +1418,31 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
 
     // Step 5: Manual trigger test for immediate feedback
     println!("⚡ Step 5: Testing manual trigger for immediate webhook...");
-    let (status, _): (StatusCode, Option<Value>) = ctx.post(&format!("/schedules/{}/trigger", schedule_id), json!({
-        "inputData": {"a": 5, "b": 3}
-    })).await?;
-    
+    let (status, _): (StatusCode, Option<Value>) = ctx
+        .post(
+            &format!("/schedules/{}/trigger", schedule_id),
+            json!({
+                "inputData": {"a": 5, "b": 3}
+            }),
+        )
+        .await?;
+
     if status.is_success() {
         println!("✅ Manual trigger successful");
-        
+
         // Wait for webhook from manual trigger
-        let manual_webhooks = ctx.wait_for_webhooks(Duration::from_secs(20), webhook_payloads.len() + 1).await;
-        
+        let manual_webhooks = ctx
+            .wait_for_webhooks(Duration::from_secs(20), webhook_payloads.len() + 1)
+            .await;
+
         if manual_webhooks.len() > webhook_payloads.len() {
             println!("🎉 Received webhook from manual trigger!");
             let new_webhook = &manual_webhooks[manual_webhooks.len() - 1];
-            println!("📨 Manual trigger webhook: {}", serde_json::to_string_pretty(new_webhook)?);
-            
+            println!(
+                "📨 Manual trigger webhook: {}",
+                serde_json::to_string_pretty(new_webhook)?
+            );
+
             // Verify addition result if it's the addition task
             if task_name == "addition" {
                 if let Some(output) = new_webhook.get("output") {
@@ -1375,23 +1466,31 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
 
     // Final summary
     let total_webhooks = ctx.wait_for_webhooks(Duration::from_secs(1), 0).await.len();
-    
+
     println!("\n🎯 Core Scenario Summary:");
     println!("  📝 Task: {} ({})", task_name, task_id);
     println!("  📅 Schedule: {} (cleaned up)", schedule_id);
     println!("  💼 Jobs found: {}", if job_found { "✅" } else { "❌" });
     println!("  ⚡ Executions found: {}", if execution_found { "✅" } else { "❌" });
-    println!("  🔗 Webhooks received: {} {}", total_webhooks, if total_webhooks > 0 { "✅" } else { "❌" });
-    
+    println!(
+        "  🔗 Webhooks received: {} {}",
+        total_webhooks,
+        if total_webhooks > 0 { "✅" } else { "❌" }
+    );
+
     if total_webhooks > 0 {
         println!("\n🎉 CORE SCENARIO SUCCESSFUL!");
         println!("✅ Schedule created via API");
-        println!("✅ Jobs executed correctly");  
+        println!("✅ Jobs executed correctly");
         println!("✅ Return values posted to webhook");
     } else {
         println!("\n⚠️  Core scenario partially working:");
-        if job_found { println!("✅ Schedule and job creation working"); }
-        if execution_found { println!("✅ Job execution working"); }
+        if job_found {
+            println!("✅ Schedule and job creation working");
+        }
+        if execution_found {
+            println!("✅ Job execution working");
+        }
         println!("❌ Webhook delivery needs implementation");
     }
 
@@ -1402,7 +1501,7 @@ async fn test_schedule_webhook_integration_core_scenario() -> Result<()> {
 #[tokio::test]
 async fn test_error_handling_and_status_codes() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing error handling and HTTP status codes...");
 
     // Test 404 for non-existent resources
@@ -1410,7 +1509,11 @@ async fn test_error_handling_and_status_codes() -> Result<()> {
     assert_eq!(status, StatusCode::NOT_FOUND, "Non-existent task should return 404");
 
     let (status, _): (StatusCode, Option<Value>) = ctx.get("/executions/non-existent-id").await?;
-    assert_eq!(status, StatusCode::NOT_FOUND, "Non-existent execution should return 404");
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "Non-existent execution should return 404"
+    );
 
     // Test 400 for invalid request data
     let invalid_task_request = json!({
@@ -1419,8 +1522,11 @@ async fn test_error_handling_and_status_codes() -> Result<()> {
 
     let (status, _): (StatusCode, Option<Value>) = ctx.post("/tasks", invalid_task_request).await?;
     assert!(
-        status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY || status == StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid task request should return 400, 422, or 500, got: {}", status
+        status == StatusCode::BAD_REQUEST
+            || status == StatusCode::UNPROCESSABLE_ENTITY
+            || status == StatusCode::INTERNAL_SERVER_ERROR,
+        "Invalid task request should return 400, 422, or 500, got: {}",
+        status
     );
 
     // Test invalid path parameters
@@ -1447,7 +1553,7 @@ async fn test_error_handling_and_status_codes() -> Result<()> {
 #[tokio::test]
 async fn test_concurrent_request_handling() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing concurrent request handling...");
 
     // Create multiple concurrent requests
@@ -1485,7 +1591,10 @@ async fn test_concurrent_request_handling() -> Result<()> {
         "At least 8 out of 10 concurrent requests should succeed"
     );
 
-    println!("✅ Concurrent request handling completed successfully ({}/10 succeeded)", success_count);
+    println!(
+        "✅ Concurrent request handling completed successfully ({}/10 succeeded)",
+        success_count
+    );
     Ok(())
 }
 
@@ -1493,7 +1602,7 @@ async fn test_concurrent_request_handling() -> Result<()> {
 #[tokio::test]
 async fn test_payload_validation() -> Result<()> {
     let ctx = setup_test_environment().await?;
-    
+
     println!("🧪 Testing request/response payload validation...");
 
     // Test oversized payload (if limits are enforced)
@@ -1506,13 +1615,18 @@ async fn test_payload_validation() -> Result<()> {
     let (status, _): (StatusCode, Option<Value>) = ctx.post("/tasks", large_payload).await?;
     // Should either succeed or fail with 400 (Bad Request), 413 (Payload Too Large), or 500
     assert!(
-        status.is_success() || status == StatusCode::BAD_REQUEST || status == StatusCode::PAYLOAD_TOO_LARGE || status == StatusCode::INTERNAL_SERVER_ERROR,
-        "Large payload should be handled appropriately, got: {}", status
+        status.is_success()
+            || status == StatusCode::BAD_REQUEST
+            || status == StatusCode::PAYLOAD_TOO_LARGE
+            || status == StatusCode::INTERNAL_SERVER_ERROR,
+        "Large payload should be handled appropriately, got: {}",
+        status
     );
 
     // Test malformed JSON
     let url = format!("http://{}/api/v1/tasks", ctx.server_addr);
-    let response = ctx.client
+    let response = ctx
+        .client
         .post(&url)
         .header("Content-Type", "application/json")
         .body("{ invalid json }")
@@ -1526,17 +1640,13 @@ async fn test_payload_validation() -> Result<()> {
     );
 
     // Test missing Content-Type header for POST requests
-    let response = ctx.client
-        .post(&url)
-        .body(r#"{"name": "test"}"#)
-        .send()
-        .await?;
+    let response = ctx.client.post(&url).body(r#"{"name": "test"}"#).send().await?;
 
     // Should either work (assuming JSON) or fail with 415 (Unsupported Media Type)
     assert!(
-        response.status().is_success() || 
-        response.status() == StatusCode::UNSUPPORTED_MEDIA_TYPE ||
-        response.status() == StatusCode::BAD_REQUEST,
+        response.status().is_success()
+            || response.status() == StatusCode::UNSUPPORTED_MEDIA_TYPE
+            || response.status() == StatusCode::BAD_REQUEST,
         "Missing Content-Type should be handled appropriately"
     );
 
@@ -1548,7 +1658,7 @@ async fn test_payload_validation() -> Result<()> {
 #[tokio::test]
 async fn test_rest_api_functions_compile() -> Result<()> {
     println!("🧪 Testing that all REST API test functions compile correctly...");
-    
+
     // Just verify that the functions exist and are callable
     // This is a compilation test more than a functional test
     println!("✅ test_openapi_documentation_available - function exists");
@@ -1560,7 +1670,7 @@ async fn test_rest_api_functions_compile() -> Result<()> {
     println!("✅ test_error_handling_and_status_codes - function exists");
     println!("✅ test_concurrent_request_handling - function exists");
     println!("✅ test_payload_validation - function exists");
-    
+
     println!("✅ All REST API test functions compile successfully");
     Ok(())
 }

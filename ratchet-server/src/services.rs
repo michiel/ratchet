@@ -1,33 +1,30 @@
 //! Service implementations and dependency injection setup
 
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 use ratchet_interfaces::{
-    RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator,
-    TaskRepository, ExecutionRepository, JobRepository, ScheduleRepository,
-    Repository, CrudRepository, FilteredRepository,
-    TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
-    DatabaseError, TaskMetadata, RegistryError, ValidationResult, SyncResult
+    CrudRepository, DatabaseError, ExecutionFilters, ExecutionRepository, FilteredRepository, JobFilters,
+    JobRepository, RegistryError, RegistryManager, Repository, RepositoryFactory, ScheduleFilters, ScheduleRepository,
+    SyncResult, TaskFilters, TaskMetadata, TaskRegistry, TaskRepository, TaskValidator, ValidationResult,
 };
 // Import storage repository trait for health checks (unused for now)
 // use ratchet_storage::seaorm::repositories::Repository as StorageRepositoryTrait;
 use ratchet_api_types::{
-    ApiId, PaginationInput, ListResponse,
-    UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule
+    ApiId, ListResponse, PaginationInput, UnifiedExecution, UnifiedJob, UnifiedSchedule, UnifiedTask,
 };
-use uuid::Uuid;
-use ratchet_rest_api::context::TasksContext;
 use ratchet_graphql_api::context::GraphQLContext;
-use ratchet_mcp::server::task_dev_tools::TaskDevelopmentService;
 use ratchet_http::HttpManager;
+use ratchet_mcp::server::task_dev_tools::TaskDevelopmentService;
+use ratchet_rest_api::context::TasksContext;
+use uuid::Uuid;
 
+use crate::bridges::{BridgeRegistryManager, BridgeTaskRegistry, BridgeTaskValidator};
 use crate::config::ServerConfig;
-use crate::bridges::{BridgeTaskRegistry, BridgeRegistryManager, BridgeTaskValidator};
-use crate::scheduler::{SchedulerService, TokioCronSchedulerService, TokioCronSchedulerConfig};
 use crate::heartbeat::HeartbeatService;
-use crate::job_processor::{JobProcessorService, JobProcessorConfig, JobProcessor};
+use crate::job_processor::{JobProcessor, JobProcessorConfig, JobProcessorService};
+use crate::scheduler::{SchedulerService, TokioCronSchedulerConfig, TokioCronSchedulerService};
 use ratchet_output::OutputDeliveryManager;
 
 /// Service container holding all application services
@@ -49,7 +46,7 @@ impl ServiceContainer {
     pub async fn new(config: &ServerConfig) -> Result<Self> {
         // For now, we'll use the legacy ratchet-lib implementations
         // In the future, these would be replaced with the new modular implementations
-        
+
         // This is a bridge implementation during the migration
         let (repositories, mcp_task_service, _seaorm_factory) = create_repository_factory_with_mcp(config).await?;
         let registry = create_task_registry(config, repositories.clone()).await?;
@@ -62,14 +59,16 @@ impl ServiceContainer {
         // Create scheduler service (using new tokio-cron-scheduler implementation)
         let scheduler_config = TokioCronSchedulerConfig::default();
         let scheduler_service: Option<Arc<dyn SchedulerService>> = Some(Arc::new(
-            TokioCronSchedulerService::new(repositories.clone(), scheduler_config).await?
+            TokioCronSchedulerService::new(repositories.clone(), scheduler_config).await?,
         ));
 
         // Create job processor service
         let job_processor_config = JobProcessorConfig::default();
-        let job_processor_service: Option<Arc<dyn JobProcessor>> = Some(Arc::new(
-            JobProcessorService::new(repositories.clone(), job_processor_config)
-        ));
+        let job_processor_service: Option<Arc<dyn JobProcessor>> = Some(Arc::new(JobProcessorService::new(
+            repositories.clone(),
+            output_manager.clone(),
+            job_processor_config,
+        )));
 
         // Create heartbeat service
         let heartbeat_service = Arc::new(HeartbeatService::new(
@@ -94,8 +93,6 @@ impl ServiceContainer {
     /// Create a test service container with mock implementations
     #[cfg(test)]
     pub fn new_test() -> Self {
-        
-        
         // Create mock implementations for testing
         // These would be defined in the testing modules of each interface crate
         todo!("Implement mock service container for tests")
@@ -171,7 +168,7 @@ impl DirectRepositoryFactory {
         let user_repository = storage_factory.user_repository();
         let session_repository = storage_factory.session_repository();
         let api_key_repository = storage_factory.api_key_repository();
-        
+
         Self {
             storage_factory,
             task_repository,
@@ -183,7 +180,7 @@ impl DirectRepositoryFactory {
             api_key_repository,
         }
     }
-    
+
     /// Get access to the underlying storage factory (for MCP service creation)
     pub fn storage_factory(&self) -> &Arc<ratchet_storage::seaorm::repositories::RepositoryFactory> {
         &self.storage_factory
@@ -195,34 +192,37 @@ impl RepositoryFactory for DirectRepositoryFactory {
     fn task_repository(&self) -> &dyn TaskRepository {
         &self.task_repository
     }
-    
+
     fn execution_repository(&self) -> &dyn ExecutionRepository {
         &self.execution_repository
     }
-    
+
     fn job_repository(&self) -> &dyn JobRepository {
         &self.job_repository
     }
-    
+
     fn schedule_repository(&self) -> &dyn ScheduleRepository {
         &self.schedule_repository
     }
-    
+
     fn user_repository(&self) -> &dyn ratchet_interfaces::database::UserRepository {
         &self.user_repository
     }
-    
+
     fn session_repository(&self) -> &dyn ratchet_interfaces::database::SessionRepository {
         &self.session_repository
     }
-    
+
     fn api_key_repository(&self) -> &dyn ratchet_interfaces::database::ApiKeyRepository {
         &self.api_key_repository
     }
-    
+
     async fn health_check(&self) -> Result<(), DatabaseError> {
         // Delegate to storage health check
-        self.storage_factory.task_repository().health_check_send().await
+        self.storage_factory
+            .task_repository()
+            .health_check_send()
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -241,7 +241,9 @@ impl DirectTaskRepository {
 #[async_trait]
 impl Repository for DirectTaskRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
-        self.storage_repo.health_check_send().await
+        self.storage_repo
+            .health_check_send()
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -251,13 +253,13 @@ impl CrudRepository<UnifiedTask> for DirectTaskRepository {
     async fn create(&self, entity: UnifiedTask) -> Result<UnifiedTask, DatabaseError> {
         // Convert unified task to storage task
         let storage_task = convert_unified_task_to_storage(entity);
-        
+
         match self.storage_repo.create(storage_task).await {
             Ok(created_task) => Ok(convert_storage_task_to_unified(created_task)),
             Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn find_by_id(&self, id: i32) -> Result<Option<UnifiedTask>, DatabaseError> {
         match self.storage_repo.find_by_id(id).await {
             Ok(Some(task)) => Ok(Some(convert_storage_task_to_unified(task))),
@@ -265,7 +267,7 @@ impl CrudRepository<UnifiedTask> for DirectTaskRepository {
             Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn find_by_uuid(&self, uuid: Uuid) -> Result<Option<UnifiedTask>, DatabaseError> {
         match self.storage_repo.find_by_uuid(uuid).await {
             Ok(Some(task)) => Ok(Some(convert_storage_task_to_unified(task))),
@@ -273,50 +275,50 @@ impl CrudRepository<UnifiedTask> for DirectTaskRepository {
             Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn update(&self, entity: UnifiedTask) -> Result<UnifiedTask, DatabaseError> {
         let storage_task = convert_unified_task_to_storage(entity);
-        
+
         match self.storage_repo.update(storage_task).await {
             Ok(updated_task) => Ok(convert_storage_task_to_unified(updated_task)),
             Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        self.storage_repo.delete(id).await
-            .map_err(convert_storage_error)
+        self.storage_repo.delete(id).await.map_err(convert_storage_error)
     }
-    
+
     async fn count(&self) -> Result<u64, DatabaseError> {
-        self.storage_repo.count().await
-            .map_err(convert_storage_error)
+        self.storage_repo.count().await.map_err(convert_storage_error)
     }
 }
 
 #[async_trait]
 impl FilteredRepository<UnifiedTask, TaskFilters> for DirectTaskRepository {
     async fn find_with_filters(
-        &self, 
-        filters: TaskFilters, 
-        pagination: PaginationInput
+        &self,
+        filters: TaskFilters,
+        pagination: PaginationInput,
     ) -> Result<ListResponse<UnifiedTask>, DatabaseError> {
         // Convert interface filters to storage filters (clone to avoid move)
         let storage_filters = convert_interface_filters_to_storage(filters.clone());
         let storage_pagination = convert_interface_pagination_to_storage(pagination.clone());
-        
-        match self.storage_repo.find_with_filters(storage_filters, storage_pagination).await {
+
+        match self
+            .storage_repo
+            .find_with_filters(storage_filters, storage_pagination)
+            .await
+        {
             Ok(tasks) => {
-                let unified_tasks: Vec<UnifiedTask> = tasks.into_iter()
-                    .map(convert_storage_task_to_unified)
-                    .collect();
-                    
+                let unified_tasks: Vec<UnifiedTask> = tasks.into_iter().map(convert_storage_task_to_unified).collect();
+
                 // Store items count before getting total count
                 let items_count = unified_tasks.len() as u64;
-                    
+
                 // Get proper total count
                 let total = self.count_with_filters(filters).await?;
-                    
+
                 Ok(ListResponse {
                     items: unified_tasks,
                     meta: ratchet_api_types::pagination::PaginationMeta {
@@ -331,15 +333,19 @@ impl FilteredRepository<UnifiedTask, TaskFilters> for DirectTaskRepository {
                         has_previous: pagination.offset.unwrap_or(0) > 0,
                         total_pages: {
                             let limit = pagination.limit.unwrap_or(20) as u64;
-                            if limit > 0 { total.div_ceil(limit) as u32 } else { 1 }
+                            if limit > 0 {
+                                total.div_ceil(limit) as u32
+                            } else {
+                                1
+                            }
                         },
                     },
                 })
-            },
+            }
             Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn find_with_list_input(
         &self,
         filters: TaskFilters,
@@ -348,10 +354,12 @@ impl FilteredRepository<UnifiedTask, TaskFilters> for DirectTaskRepository {
         // For direct repositories, we can just delegate to the existing find_with_filters method
         self.find_with_filters(filters, list_input.get_pagination()).await
     }
-    
+
     async fn count_with_filters(&self, filters: TaskFilters) -> Result<u64, DatabaseError> {
         let storage_filters = convert_interface_filters_to_storage(filters);
-        self.storage_repo.count_with_filters(storage_filters).await
+        self.storage_repo
+            .count_with_filters(storage_filters)
+            .await
             .map_err(convert_storage_error)
     }
 }
@@ -364,7 +372,7 @@ impl TaskRepository for DirectTaskRepository {
             Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn find_by_name(&self, name: &str) -> Result<Option<UnifiedTask>, DatabaseError> {
         match self.storage_repo.find_by_name(name).await {
             Ok(Some(task)) => Ok(Some(convert_storage_task_to_unified(task))),
@@ -372,22 +380,28 @@ impl TaskRepository for DirectTaskRepository {
             Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn mark_validated(&self, id: ApiId) -> Result<(), DatabaseError> {
         let i32_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.mark_validated(i32_id).await
+        self.storage_repo
+            .mark_validated(i32_id)
+            .await
             .map_err(convert_storage_error)
     }
-    
+
     async fn set_enabled(&self, id: ApiId, enabled: bool) -> Result<(), DatabaseError> {
         let i32_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.set_enabled(i32_id, enabled).await
+        self.storage_repo
+            .set_enabled(i32_id, enabled)
+            .await
             .map_err(convert_storage_error)
     }
-    
+
     async fn set_in_sync(&self, id: ApiId, in_sync: bool) -> Result<(), DatabaseError> {
         let i32_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.set_in_sync(i32_id, in_sync).await
+        self.storage_repo
+            .set_in_sync(i32_id, in_sync)
+            .await
             .map_err(convert_storage_error)
     }
 }
@@ -407,7 +421,9 @@ impl DirectExecutionRepository {
 impl Repository for DirectExecutionRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         // Use count as a simple health check since direct health_check is ?Send
-        self.storage_repo.count().await
+        self.storage_repo
+            .count()
+            .await
             .map(|_| ())
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
@@ -433,27 +449,36 @@ impl CrudRepository<UnifiedExecution> for DirectExecutionRepository {
             http_requests: entity.http_requests,
             recording_path: entity.recording_path,
         };
-        
-        let created = self.storage_repo.create(storage_execution).await
+
+        let created = self
+            .storage_repo
+            .create(storage_execution)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
+
         Ok(convert_execution_from_storage(created))
     }
-    
+
     async fn find_by_id(&self, id: i32) -> Result<Option<UnifiedExecution>, DatabaseError> {
-        let execution = self.storage_repo.find_by_id(id).await
+        let execution = self
+            .storage_repo
+            .find_by_id(id)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
+
         Ok(execution.map(convert_execution_from_storage))
     }
-    
+
     async fn find_by_uuid(&self, uuid: Uuid) -> Result<Option<UnifiedExecution>, DatabaseError> {
-        let execution = self.storage_repo.find_by_uuid(uuid).await
+        let execution = self
+            .storage_repo
+            .find_by_uuid(uuid)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
+
         Ok(execution.map(convert_execution_from_storage))
     }
-    
+
     async fn update(&self, entity: UnifiedExecution) -> Result<UnifiedExecution, DatabaseError> {
         // Convert UnifiedExecution to storage Execution
         let storage_execution = ratchet_storage::seaorm::entities::executions::Model {
@@ -472,20 +497,27 @@ impl CrudRepository<UnifiedExecution> for DirectExecutionRepository {
             http_requests: entity.http_requests,
             recording_path: entity.recording_path,
         };
-        
-        let updated = self.storage_repo.update(storage_execution).await
+
+        let updated = self
+            .storage_repo
+            .update(storage_execution)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
+
         Ok(convert_execution_from_storage(updated))
     }
-    
+
     async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        self.storage_repo.delete(id).await
+        self.storage_repo
+            .delete(id)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
+
     async fn count(&self) -> Result<u64, DatabaseError> {
-        self.storage_repo.count().await
+        self.storage_repo
+            .count()
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -493,23 +525,28 @@ impl CrudRepository<UnifiedExecution> for DirectExecutionRepository {
 #[async_trait]
 impl FilteredRepository<UnifiedExecution, ExecutionFilters> for DirectExecutionRepository {
     async fn find_with_filters(
-        &self, 
-        filters: ExecutionFilters, 
-        pagination: PaginationInput
+        &self,
+        filters: ExecutionFilters,
+        pagination: PaginationInput,
     ) -> Result<ListResponse<UnifiedExecution>, DatabaseError> {
         let storage_filters = convert_interface_execution_filters_to_storage(filters.clone());
         let storage_pagination = convert_interface_execution_pagination_to_storage(pagination.clone());
-        
-        let executions = self.storage_repo.find_with_filters(storage_filters.clone(), storage_pagination).await
+
+        let executions = self
+            .storage_repo
+            .find_with_filters(storage_filters.clone(), storage_pagination)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
-        let total = self.storage_repo.count_with_filters(storage_filters).await
+
+        let total = self
+            .storage_repo
+            .count_with_filters(storage_filters)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
-        let unified_executions: Vec<UnifiedExecution> = executions.into_iter()
-            .map(convert_execution_from_storage)
-            .collect();
-        
+
+        let unified_executions: Vec<UnifiedExecution> =
+            executions.into_iter().map(convert_execution_from_storage).collect();
+
         let meta = ratchet_api_types::pagination::PaginationMeta {
             page: pagination.page.unwrap_or(1),
             limit: pagination.limit.unwrap_or(20),
@@ -519,13 +556,13 @@ impl FilteredRepository<UnifiedExecution, ExecutionFilters> for DirectExecutionR
             has_previous: pagination.get_offset() > 0,
             total_pages: ((total as f64) / (pagination.get_limit() as f64)).ceil() as u32,
         };
-        
+
         Ok(ListResponse {
             items: unified_executions,
             meta,
         })
     }
-    
+
     async fn find_with_list_input(
         &self,
         filters: ExecutionFilters,
@@ -533,10 +570,12 @@ impl FilteredRepository<UnifiedExecution, ExecutionFilters> for DirectExecutionR
     ) -> Result<ListResponse<UnifiedExecution>, DatabaseError> {
         self.find_with_filters(filters, list_input.get_pagination()).await
     }
-    
+
     async fn count_with_filters(&self, filters: ExecutionFilters) -> Result<u64, DatabaseError> {
         let storage_filters = convert_interface_execution_filters_to_storage(filters);
-        self.storage_repo.count_with_filters(storage_filters).await
+        self.storage_repo
+            .count_with_filters(storage_filters)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -545,56 +584,87 @@ impl FilteredRepository<UnifiedExecution, ExecutionFilters> for DirectExecutionR
 impl ExecutionRepository for DirectExecutionRepository {
     async fn find_by_task_id(&self, task_id: ApiId) -> Result<Vec<UnifiedExecution>, DatabaseError> {
         let storage_task_id = task_id.as_i32().unwrap_or(0);
-        let executions = self.storage_repo.find_by_task_id(storage_task_id).await
+        let executions = self
+            .storage_repo
+            .find_by_task_id(storage_task_id)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
+
         Ok(executions.into_iter().map(convert_execution_from_storage).collect())
     }
-    
-    async fn find_by_status(&self, status: ratchet_api_types::ExecutionStatus) -> Result<Vec<UnifiedExecution>, DatabaseError> {
+
+    async fn find_by_status(
+        &self,
+        status: ratchet_api_types::ExecutionStatus,
+    ) -> Result<Vec<UnifiedExecution>, DatabaseError> {
         let storage_status = convert_execution_status_to_storage(status);
-        let executions = self.storage_repo.find_by_status(storage_status).await
+        let executions = self
+            .storage_repo
+            .find_by_status(storage_status)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })?;
-        
+
         Ok(executions.into_iter().map(convert_execution_from_storage).collect())
     }
-    
+
     async fn update_status(&self, id: ApiId, status: ratchet_api_types::ExecutionStatus) -> Result<(), DatabaseError> {
         let storage_id = id.as_i32().unwrap_or(0);
         let storage_status = convert_execution_status_to_storage(status);
-        
-        self.storage_repo.update_status(storage_id, storage_status).await
+
+        self.storage_repo
+            .update_status(storage_id, storage_status)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
+
     async fn mark_started(&self, id: ApiId) -> Result<(), DatabaseError> {
         let storage_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.mark_started(storage_id).await
+        self.storage_repo
+            .mark_started(storage_id)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
-    async fn mark_completed(&self, id: ApiId, output: serde_json::Value, duration_ms: Option<i32>) -> Result<(), DatabaseError> {
+
+    async fn mark_completed(
+        &self,
+        id: ApiId,
+        output: serde_json::Value,
+        duration_ms: Option<i32>,
+    ) -> Result<(), DatabaseError> {
         let storage_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.mark_completed(storage_id, output, duration_ms).await
+        self.storage_repo
+            .mark_completed(storage_id, output, duration_ms)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
-    async fn mark_failed(&self, id: ApiId, error_message: String, error_details: Option<serde_json::Value>) -> Result<(), DatabaseError> {
+
+    async fn mark_failed(
+        &self,
+        id: ApiId,
+        error_message: String,
+        error_details: Option<serde_json::Value>,
+    ) -> Result<(), DatabaseError> {
         let storage_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.mark_failed(storage_id, error_message, error_details).await
+        self.storage_repo
+            .mark_failed(storage_id, error_message, error_details)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
+
     async fn mark_cancelled(&self, id: ApiId) -> Result<(), DatabaseError> {
         let storage_id = id.as_i32().unwrap_or(0);
         let storage_status = ratchet_storage::seaorm::entities::executions::ExecutionStatus::Cancelled;
-        self.storage_repo.update_status(storage_id, storage_status).await
+        self.storage_repo
+            .update_status(storage_id, storage_status)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
+
     async fn update_progress(&self, id: ApiId, progress: f32) -> Result<(), DatabaseError> {
         let storage_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.update_progress(storage_id, progress).await
+        self.storage_repo
+            .update_progress(storage_id, progress)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -613,7 +683,9 @@ impl DirectJobRepository {
 impl Repository for DirectJobRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         // Use count as a simple health check since direct health_check is ?Send
-        self.storage_repo.count().await
+        self.storage_repo
+            .count()
+            .await
             .map(|_| ())
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
@@ -625,41 +697,42 @@ impl CrudRepository<UnifiedJob> for DirectJobRepository {
         let storage_job = convert_unified_job_to_storage(entity);
         match self.storage_repo.create(storage_job).await {
             Ok(created_job) => Ok(convert_storage_job_to_unified(created_job)),
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn find_by_id(&self, id: i32) -> Result<Option<UnifiedJob>, DatabaseError> {
         match self.storage_repo.find_by_id(id).await {
             Ok(Some(job)) => Ok(Some(convert_storage_job_to_unified(job))),
             Ok(None) => Ok(None),
-            Err(e) => Err(convert_storage_error(e))
+            Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn find_by_uuid(&self, uuid: Uuid) -> Result<Option<UnifiedJob>, DatabaseError> {
         match self.storage_repo.find_by_uuid(uuid).await {
             Ok(Some(job)) => Ok(Some(convert_storage_job_to_unified(job))),
             Ok(None) => Ok(None),
-            Err(e) => Err(convert_storage_error(e))
+            Err(e) => Err(convert_storage_error(e)),
         }
     }
-    
+
     async fn update(&self, entity: UnifiedJob) -> Result<UnifiedJob, DatabaseError> {
         let storage_job = convert_unified_job_to_storage(entity);
         match self.storage_repo.update(storage_job).await {
             Ok(updated_job) => Ok(convert_storage_job_to_unified(updated_job)),
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        self.storage_repo.delete(id).await
-            .map_err(convert_storage_error)
+        self.storage_repo.delete(id).await.map_err(convert_storage_error)
     }
-    
+
     async fn count(&self) -> Result<u64, DatabaseError> {
-        self.storage_repo.count().await
+        self.storage_repo
+            .count()
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -667,23 +740,27 @@ impl CrudRepository<UnifiedJob> for DirectJobRepository {
 #[async_trait]
 impl FilteredRepository<UnifiedJob, JobFilters> for DirectJobRepository {
     async fn find_with_filters(
-        &self, 
-        filters: JobFilters, 
-        pagination: PaginationInput
+        &self,
+        filters: JobFilters,
+        pagination: PaginationInput,
     ) -> Result<ListResponse<UnifiedJob>, DatabaseError> {
         let storage_filters = convert_interface_job_filters_to_storage(filters.clone());
         let storage_pagination = convert_interface_job_pagination_to_storage(pagination.clone());
-        
-        let jobs = self.storage_repo.find_with_filters(storage_filters, storage_pagination).await
+
+        let jobs = self
+            .storage_repo
+            .find_with_filters(storage_filters, storage_pagination)
+            .await
             .map_err(convert_storage_error)?;
-        
-        let total = self.storage_repo.count_with_filters(convert_interface_job_filters_to_storage(filters)).await
+
+        let total = self
+            .storage_repo
+            .count_with_filters(convert_interface_job_filters_to_storage(filters))
+            .await
             .map_err(convert_storage_error)?;
-        
-        let unified_jobs: Vec<UnifiedJob> = jobs.into_iter()
-            .map(convert_storage_job_to_unified)
-            .collect();
-        
+
+        let unified_jobs: Vec<UnifiedJob> = jobs.into_iter().map(convert_storage_job_to_unified).collect();
+
         Ok(ListResponse {
             items: unified_jobs,
             meta: ratchet_api_types::pagination::PaginationMeta {
@@ -697,7 +774,7 @@ impl FilteredRepository<UnifiedJob, JobFilters> for DirectJobRepository {
             },
         })
     }
-    
+
     async fn find_with_list_input(
         &self,
         filters: JobFilters,
@@ -705,10 +782,12 @@ impl FilteredRepository<UnifiedJob, JobFilters> for DirectJobRepository {
     ) -> Result<ListResponse<UnifiedJob>, DatabaseError> {
         self.find_with_filters(filters, list_input.get_pagination()).await
     }
-    
+
     async fn count_with_filters(&self, filters: JobFilters) -> Result<u64, DatabaseError> {
         let storage_filters = convert_interface_job_filters_to_storage(filters);
-        self.storage_repo.count_with_filters(storage_filters).await
+        self.storage_repo
+            .count_with_filters(storage_filters)
+            .await
             .map_err(convert_storage_error)
     }
 }
@@ -716,46 +795,79 @@ impl FilteredRepository<UnifiedJob, JobFilters> for DirectJobRepository {
 #[async_trait]
 impl JobRepository for DirectJobRepository {
     async fn find_ready_for_processing(&self, limit: u64) -> Result<Vec<UnifiedJob>, DatabaseError> {
-        let jobs = self.storage_repo.find_ready_for_processing(limit).await
+        let jobs = self
+            .storage_repo
+            .find_ready_for_processing(limit)
+            .await
             .map_err(convert_storage_error)?;
         Ok(jobs.into_iter().map(convert_storage_job_to_unified).collect())
     }
-    
+
     async fn find_by_status(&self, status: ratchet_api_types::JobStatus) -> Result<Vec<UnifiedJob>, DatabaseError> {
         let storage_status = convert_api_job_status_to_storage(status);
-        let jobs = self.storage_repo.find_by_status(storage_status).await
+        let jobs = self
+            .storage_repo
+            .find_by_status(storage_status)
+            .await
             .map_err(convert_storage_error)?;
         Ok(jobs.into_iter().map(convert_storage_job_to_unified).collect())
     }
-    
+
     async fn mark_processing(&self, id: ApiId, execution_id: ApiId) -> Result<(), DatabaseError> {
-        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation { message: "Invalid job ID".to_string() })?;
-        let storage_execution_id = execution_id.as_i32().ok_or_else(|| DatabaseError::Validation { message: "Invalid execution ID".to_string() })?;
-        self.storage_repo.mark_processing(storage_id, storage_execution_id).await
+        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation {
+            message: "Invalid job ID".to_string(),
+        })?;
+        let storage_execution_id = execution_id.as_i32().ok_or_else(|| DatabaseError::Validation {
+            message: "Invalid execution ID".to_string(),
+        })?;
+        self.storage_repo
+            .mark_processing(storage_id, storage_execution_id)
+            .await
             .map_err(convert_storage_error)
     }
-    
+
     async fn mark_completed(&self, id: ApiId) -> Result<(), DatabaseError> {
-        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation { message: "Invalid job ID".to_string() })?;
-        self.storage_repo.mark_completed(storage_id).await
+        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation {
+            message: "Invalid job ID".to_string(),
+        })?;
+        self.storage_repo
+            .mark_completed(storage_id)
+            .await
             .map_err(convert_storage_error)
     }
-    
-    async fn mark_failed(&self, id: ApiId, error: String, details: Option<serde_json::Value>) -> Result<bool, DatabaseError> {
-        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation { message: "Invalid job ID".to_string() })?;
-        self.storage_repo.mark_failed(storage_id, error, details).await
+
+    async fn mark_failed(
+        &self,
+        id: ApiId,
+        error: String,
+        details: Option<serde_json::Value>,
+    ) -> Result<bool, DatabaseError> {
+        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation {
+            message: "Invalid job ID".to_string(),
+        })?;
+        self.storage_repo
+            .mark_failed(storage_id, error, details)
+            .await
             .map_err(convert_storage_error)
     }
-    
+
     async fn schedule_retry(&self, id: ApiId, retry_at: chrono::DateTime<chrono::Utc>) -> Result<(), DatabaseError> {
-        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation { message: "Invalid job ID".to_string() })?;
-        self.storage_repo.schedule_retry(storage_id, retry_at).await
+        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation {
+            message: "Invalid job ID".to_string(),
+        })?;
+        self.storage_repo
+            .schedule_retry(storage_id, retry_at)
+            .await
             .map_err(convert_storage_error)
     }
-    
+
     async fn cancel(&self, id: ApiId) -> Result<(), DatabaseError> {
-        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation { message: "Invalid job ID".to_string() })?;
-        self.storage_repo.cancel(storage_id).await
+        let storage_id = id.as_i32().ok_or_else(|| DatabaseError::Validation {
+            message: "Invalid job ID".to_string(),
+        })?;
+        self.storage_repo
+            .cancel(storage_id)
+            .await
             .map_err(convert_storage_error)
     }
 }
@@ -774,7 +886,9 @@ impl DirectScheduleRepository {
 impl Repository for DirectScheduleRepository {
     async fn health_check(&self) -> Result<(), DatabaseError> {
         // Use count as a simple health check since direct health_check is ?Send
-        self.storage_repo.count().await
+        self.storage_repo
+            .count()
+            .await
             .map(|_| ())
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
@@ -784,21 +898,21 @@ impl Repository for DirectScheduleRepository {
 impl CrudRepository<UnifiedSchedule> for DirectScheduleRepository {
     async fn create(&self, entity: UnifiedSchedule) -> Result<UnifiedSchedule, DatabaseError> {
         let storage_schedule = convert_unified_schedule_to_storage(entity);
-        
+
         match self.storage_repo.create(storage_schedule).await {
             Ok(created_schedule) => Ok(convert_storage_schedule_to_unified(created_schedule)),
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn find_by_id(&self, id: i32) -> Result<Option<UnifiedSchedule>, DatabaseError> {
         match self.storage_repo.find_by_id(id).await {
             Ok(Some(schedule)) => Ok(Some(convert_storage_schedule_to_unified(schedule))),
             Ok(None) => Ok(None),
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn find_by_uuid(&self, uuid: Uuid) -> Result<Option<UnifiedSchedule>, DatabaseError> {
         // For now, we don't have a direct UUID lookup in storage, so we'll need to search
         // This is a temporary implementation - ideally storage would support UUID lookup
@@ -810,27 +924,31 @@ impl CrudRepository<UnifiedSchedule> for DirectScheduleRepository {
                     }
                 }
                 Ok(None)
-            },
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            }
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn update(&self, entity: UnifiedSchedule) -> Result<UnifiedSchedule, DatabaseError> {
         let storage_schedule = convert_unified_schedule_to_storage(entity);
-        
+
         match self.storage_repo.update(storage_schedule).await {
             Ok(updated_schedule) => Ok(convert_storage_schedule_to_unified(updated_schedule)),
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        self.storage_repo.delete(id).await
+        self.storage_repo
+            .delete(id)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
+
     async fn count(&self) -> Result<u64, DatabaseError> {
-        self.storage_repo.count().await
+        self.storage_repo
+            .count()
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -838,26 +956,26 @@ impl CrudRepository<UnifiedSchedule> for DirectScheduleRepository {
 #[async_trait]
 impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for DirectScheduleRepository {
     async fn find_with_filters(
-        &self, 
-        filters: ScheduleFilters, 
-        pagination: PaginationInput
+        &self,
+        filters: ScheduleFilters,
+        pagination: PaginationInput,
     ) -> Result<ListResponse<UnifiedSchedule>, DatabaseError> {
         // For now, get enabled schedules (which should include our heartbeat schedule)
         match self.storage_repo.find_enabled().await {
             Ok(schedules) => {
                 let mut filtered_schedules = schedules;
-                
+
                 // Apply name filtering if provided
                 if let Some(ref name_exact) = filters.name_exact {
                     filtered_schedules.retain(|s| s.name == *name_exact);
                 }
-                
+
                 // Convert to unified schedules
                 let unified_schedules: Vec<UnifiedSchedule> = filtered_schedules
                     .into_iter()
                     .map(convert_storage_schedule_to_unified)
                     .collect();
-                
+
                 Ok(ListResponse {
                     items: unified_schedules,
                     meta: ratchet_api_types::pagination::PaginationMeta {
@@ -870,11 +988,11 @@ impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for DirectScheduleRepo
                         total_pages: 0,
                     },
                 })
-            },
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            }
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn find_with_list_input(
         &self,
         filters: ScheduleFilters,
@@ -882,7 +1000,7 @@ impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for DirectScheduleRepo
     ) -> Result<ListResponse<UnifiedSchedule>, DatabaseError> {
         self.find_with_filters(filters, list_input.get_pagination()).await
     }
-    
+
     async fn count_with_filters(&self, _filters: ScheduleFilters) -> Result<u64, DatabaseError> {
         // TODO: Implement schedule counting with filters
         Ok(0)
@@ -894,32 +1012,38 @@ impl ScheduleRepository for DirectScheduleRepository {
     async fn find_enabled(&self) -> Result<Vec<UnifiedSchedule>, DatabaseError> {
         match self.storage_repo.find_enabled().await {
             Ok(schedules) => Ok(schedules.into_iter().map(convert_storage_schedule_to_unified).collect()),
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn find_ready_to_run(&self) -> Result<Vec<UnifiedSchedule>, DatabaseError> {
         match self.storage_repo.find_ready_to_run().await {
             Ok(schedules) => Ok(schedules.into_iter().map(convert_storage_schedule_to_unified).collect()),
-            Err(e) => Err(DatabaseError::Internal { message: e.to_string() })
+            Err(e) => Err(DatabaseError::Internal { message: e.to_string() }),
         }
     }
-    
+
     async fn record_execution(&self, id: ApiId, _execution_id: ApiId) -> Result<(), DatabaseError> {
         let i32_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.record_execution(i32_id).await
+        self.storage_repo
+            .record_execution(i32_id)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
+
     async fn update_next_run(&self, id: ApiId, next_run: chrono::DateTime<chrono::Utc>) -> Result<(), DatabaseError> {
         let i32_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.update_next_run(i32_id, Some(next_run)).await
+        self.storage_repo
+            .update_next_run(i32_id, Some(next_run))
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
-    
+
     async fn set_enabled(&self, id: ApiId, enabled: bool) -> Result<(), DatabaseError> {
         let i32_id = id.as_i32().unwrap_or(0);
-        self.storage_repo.set_enabled(i32_id, enabled).await
+        self.storage_repo
+            .set_enabled(i32_id, enabled)
+            .await
             .map_err(|e| DatabaseError::Internal { message: e.to_string() })
     }
 }
@@ -944,7 +1068,8 @@ fn convert_unified_task_to_storage(task: UnifiedTask) -> ratchet_storage::seaorm
 }
 
 fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> ratchet_storage::seaorm::entities::Schedule {
-    let output_destinations_json = schedule.output_destinations
+    let output_destinations_json = schedule
+        .output_destinations
         .as_ref()
         .map(|destinations| serde_json::to_value(destinations).unwrap_or(serde_json::Value::Null));
 
@@ -958,7 +1083,7 @@ fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> ratchet_sto
         enabled: schedule.enabled,
         next_run_at: schedule.next_run,
         last_run_at: schedule.last_run,
-        execution_count: 0, // Default to 0
+        execution_count: 0,   // Default to 0
         max_executions: None, // No limit by default
         metadata: Some(serde_json::json!({
             "description": schedule.description
@@ -970,21 +1095,20 @@ fn convert_unified_schedule_to_storage(schedule: UnifiedSchedule) -> ratchet_sto
 }
 
 fn convert_storage_schedule_to_unified(schedule: ratchet_storage::seaorm::entities::Schedule) -> UnifiedSchedule {
-    let output_destinations = schedule.output_destinations
-        .as_ref()
-        .and_then(|json| {
-            if json.is_null() {
-                None
-            } else {
-                serde_json::from_value(json.clone()).ok()
-            }
-        });
+    let output_destinations = schedule.output_destinations.as_ref().and_then(|json| {
+        if json.is_null() {
+            None
+        } else {
+            serde_json::from_value(json.clone()).ok()
+        }
+    });
 
     UnifiedSchedule {
         id: ApiId::from_i32(schedule.id),
         task_id: ApiId::from_i32(schedule.task_id),
         name: schedule.name,
-        description: schedule.metadata
+        description: schedule
+            .metadata
             .as_ref()
             .and_then(|m| m.get("description"))
             .and_then(|v| v.as_str())
@@ -1007,7 +1131,7 @@ fn convert_storage_task_to_unified(task: ratchet_storage::seaorm::entities::Task
         description: task.description,
         version: task.version.clone(),
         enabled: task.enabled,
-        registry_source: false, // Default value, could be inferred from metadata
+        registry_source: false,                 // Default value, could be inferred from metadata
         available_versions: vec![task.version], // Default, could expand based on registry
         created_at: task.created_at,
         updated_at: task.updated_at,
@@ -1025,7 +1149,7 @@ fn convert_unified_job_to_storage(job: UnifiedJob) -> ratchet_storage::seaorm::e
         uuid: job.id.as_uuid().unwrap_or_else(uuid::Uuid::new_v4),
         task_id: job.task_id.as_i32().unwrap_or(0),
         execution_id: None, // Not set until execution starts
-        schedule_id: None, // Would need to be provided if job is from a schedule
+        schedule_id: None,  // Would need to be provided if job is from a schedule
         priority: convert_api_job_priority_to_storage(job.priority),
         status: convert_api_job_status_to_storage(job.status),
         input_data: serde_json::Value::Null, // Default empty input
@@ -1039,9 +1163,9 @@ fn convert_unified_job_to_storage(job: UnifiedJob) -> ratchet_storage::seaorm::e
         started_at: None,
         completed_at: None,
         metadata: None,
-        output_destinations: job.output_destinations.map(|destinations| {
-            serde_json::to_value(destinations).unwrap_or(serde_json::Value::Null)
-        }),
+        output_destinations: job
+            .output_destinations
+            .map(|destinations| serde_json::to_value(destinations).unwrap_or(serde_json::Value::Null)),
     }
 }
 
@@ -1056,13 +1180,13 @@ fn convert_storage_job_to_unified(job: ratchet_storage::seaorm::entities::Job) -
         queued_at: job.queued_at,
         scheduled_for: job.process_at,
         error_message: job.error_message,
-        output_destinations: job.output_destinations.and_then(|v| {
-            serde_json::from_value(v).ok()
-        }),
+        output_destinations: job.output_destinations.and_then(|v| serde_json::from_value(v).ok()),
     }
 }
 
-fn convert_api_job_priority_to_storage(priority: ratchet_api_types::JobPriority) -> ratchet_storage::seaorm::entities::jobs::JobPriority {
+fn convert_api_job_priority_to_storage(
+    priority: ratchet_api_types::JobPriority,
+) -> ratchet_storage::seaorm::entities::jobs::JobPriority {
     match priority {
         ratchet_api_types::JobPriority::Low => ratchet_storage::seaorm::entities::jobs::JobPriority::Low,
         ratchet_api_types::JobPriority::Normal => ratchet_storage::seaorm::entities::jobs::JobPriority::Normal,
@@ -1071,7 +1195,9 @@ fn convert_api_job_priority_to_storage(priority: ratchet_api_types::JobPriority)
     }
 }
 
-fn convert_storage_job_priority_to_api(priority: ratchet_storage::seaorm::entities::jobs::JobPriority) -> ratchet_api_types::JobPriority {
+fn convert_storage_job_priority_to_api(
+    priority: ratchet_storage::seaorm::entities::jobs::JobPriority,
+) -> ratchet_api_types::JobPriority {
     match priority {
         ratchet_storage::seaorm::entities::jobs::JobPriority::Low => ratchet_api_types::JobPriority::Low,
         ratchet_storage::seaorm::entities::jobs::JobPriority::Normal => ratchet_api_types::JobPriority::Normal,
@@ -1080,7 +1206,9 @@ fn convert_storage_job_priority_to_api(priority: ratchet_storage::seaorm::entiti
     }
 }
 
-fn convert_api_job_status_to_storage(status: ratchet_api_types::JobStatus) -> ratchet_storage::seaorm::entities::jobs::JobStatus {
+fn convert_api_job_status_to_storage(
+    status: ratchet_api_types::JobStatus,
+) -> ratchet_storage::seaorm::entities::jobs::JobStatus {
     match status {
         ratchet_api_types::JobStatus::Queued => ratchet_storage::seaorm::entities::jobs::JobStatus::Queued,
         ratchet_api_types::JobStatus::Processing => ratchet_storage::seaorm::entities::jobs::JobStatus::Processing,
@@ -1091,7 +1219,9 @@ fn convert_api_job_status_to_storage(status: ratchet_api_types::JobStatus) -> ra
     }
 }
 
-fn convert_storage_job_status_to_api(status: ratchet_storage::seaorm::entities::jobs::JobStatus) -> ratchet_api_types::JobStatus {
+fn convert_storage_job_status_to_api(
+    status: ratchet_storage::seaorm::entities::jobs::JobStatus,
+) -> ratchet_api_types::JobStatus {
     match status {
         ratchet_storage::seaorm::entities::jobs::JobStatus::Queued => ratchet_api_types::JobStatus::Queued,
         ratchet_storage::seaorm::entities::jobs::JobStatus::Processing => ratchet_api_types::JobStatus::Processing,
@@ -1108,19 +1238,21 @@ fn convert_storage_error(err: ratchet_storage::seaorm::connection::DatabaseError
         StorageError::DbError(db_err) => {
             // Convert SeaORM database errors to appropriate interface errors
             match db_err {
-                sea_orm::DbErr::RecordNotFound(_) => DatabaseError::NotFound { 
-                    entity: "unknown".to_string(), 
-                    id: "unknown".to_string() 
+                sea_orm::DbErr::RecordNotFound(_) => DatabaseError::NotFound {
+                    entity: "unknown".to_string(),
+                    id: "unknown".to_string(),
                 },
-                sea_orm::DbErr::ConnectionAcquire(_) => DatabaseError::Connection { 
-                    message: db_err.to_string() 
+                sea_orm::DbErr::ConnectionAcquire(_) => DatabaseError::Connection {
+                    message: db_err.to_string(),
                 },
-                sea_orm::DbErr::Exec(_) | sea_orm::DbErr::Query(_) => DatabaseError::Internal { 
-                    message: db_err.to_string() 
+                sea_orm::DbErr::Exec(_) | sea_orm::DbErr::Query(_) => DatabaseError::Internal {
+                    message: db_err.to_string(),
                 },
-                _ => DatabaseError::Internal { message: db_err.to_string() }
+                _ => DatabaseError::Internal {
+                    message: db_err.to_string(),
+                },
             }
-        },
+        }
         StorageError::MigrationError(msg) => DatabaseError::Internal { message: msg },
         StorageError::SerializationError(e) => DatabaseError::Internal { message: e.to_string() },
         StorageError::ConfigError(msg) => DatabaseError::Internal { message: msg },
@@ -1128,16 +1260,20 @@ fn convert_storage_error(err: ratchet_storage::seaorm::connection::DatabaseError
     }
 }
 
-fn convert_interface_filters_to_storage(filters: TaskFilters) -> ratchet_storage::seaorm::repositories::task_repository::TaskFilters {
+fn convert_interface_filters_to_storage(
+    filters: TaskFilters,
+) -> ratchet_storage::seaorm::repositories::task_repository::TaskFilters {
     ratchet_storage::seaorm::repositories::task_repository::TaskFilters {
         name: filters.name,
         enabled: filters.enabled,
         has_validation: filters.validated_after.map(|_| true), // Convert validated_after to has_validation
-        version: None, // Not supported in current interface
+        version: None,                                         // Not supported in current interface
     }
 }
 
-fn convert_interface_pagination_to_storage(pagination: PaginationInput) -> ratchet_storage::seaorm::repositories::task_repository::Pagination {
+fn convert_interface_pagination_to_storage(
+    pagination: PaginationInput,
+) -> ratchet_storage::seaorm::repositories::task_repository::Pagination {
     ratchet_storage::seaorm::repositories::task_repository::Pagination {
         limit: Some(pagination.get_limit() as u64),
         offset: Some(pagination.get_offset() as u64),
@@ -1146,7 +1282,9 @@ fn convert_interface_pagination_to_storage(pagination: PaginationInput) -> ratch
     }
 }
 
-fn convert_interface_job_filters_to_storage(filters: ratchet_interfaces::JobFilters) -> ratchet_storage::seaorm::repositories::job_repository::JobFilters {
+fn convert_interface_job_filters_to_storage(
+    filters: ratchet_interfaces::JobFilters,
+) -> ratchet_storage::seaorm::repositories::job_repository::JobFilters {
     ratchet_storage::seaorm::repositories::job_repository::JobFilters {
         task_id: filters.task_id.and_then(|id| id.as_i32()),
         status: filters.status.map(convert_api_job_status_to_storage),
@@ -1156,7 +1294,9 @@ fn convert_interface_job_filters_to_storage(filters: ratchet_interfaces::JobFilt
     }
 }
 
-fn convert_interface_job_pagination_to_storage(pagination: PaginationInput) -> ratchet_storage::seaorm::repositories::job_repository::JobPagination {
+fn convert_interface_job_pagination_to_storage(
+    pagination: PaginationInput,
+) -> ratchet_storage::seaorm::repositories::job_repository::JobPagination {
     ratchet_storage::seaorm::repositories::job_repository::JobPagination {
         limit: Some(pagination.get_limit() as u64),
         offset: Some(pagination.get_offset() as u64),
@@ -1165,7 +1305,9 @@ fn convert_interface_job_pagination_to_storage(pagination: PaginationInput) -> r
     }
 }
 
-fn convert_interface_execution_filters_to_storage(filters: ratchet_interfaces::ExecutionFilters) -> ratchet_storage::seaorm::repositories::execution_repository::ExecutionFilters {
+fn convert_interface_execution_filters_to_storage(
+    filters: ratchet_interfaces::ExecutionFilters,
+) -> ratchet_storage::seaorm::repositories::execution_repository::ExecutionFilters {
     ratchet_storage::seaorm::repositories::execution_repository::ExecutionFilters {
         task_id: filters.task_id.and_then(|id| id.as_i32()),
         status: filters.status.map(convert_execution_status_to_storage),
@@ -1174,7 +1316,9 @@ fn convert_interface_execution_filters_to_storage(filters: ratchet_interfaces::E
     }
 }
 
-fn convert_interface_execution_pagination_to_storage(pagination: PaginationInput) -> ratchet_storage::seaorm::repositories::execution_repository::ExecutionPagination {
+fn convert_interface_execution_pagination_to_storage(
+    pagination: PaginationInput,
+) -> ratchet_storage::seaorm::repositories::execution_repository::ExecutionPagination {
     ratchet_storage::seaorm::repositories::execution_repository::ExecutionPagination {
         limit: Some(pagination.get_limit() as u64),
         offset: Some(pagination.get_offset() as u64),
@@ -1186,9 +1330,9 @@ fn convert_interface_execution_pagination_to_storage(pagination: PaginationInput
 // Execution conversion functions
 fn convert_execution_from_storage(execution: ratchet_storage::seaorm::entities::executions::Model) -> UnifiedExecution {
     let (can_retry, can_cancel) = ratchet_api_types::conversions::compute_execution_capabilities(
-        convert_storage_execution_status_to_api(execution.status)
+        convert_storage_execution_status_to_api(execution.status),
     );
-    
+
     UnifiedExecution {
         id: ApiId::from_i32(execution.id),
         uuid: execution.uuid,
@@ -1210,23 +1354,47 @@ fn convert_execution_from_storage(execution: ratchet_storage::seaorm::entities::
     }
 }
 
-fn convert_execution_status_to_storage(status: ratchet_api_types::ExecutionStatus) -> ratchet_storage::seaorm::entities::executions::ExecutionStatus {
+fn convert_execution_status_to_storage(
+    status: ratchet_api_types::ExecutionStatus,
+) -> ratchet_storage::seaorm::entities::executions::ExecutionStatus {
     match status {
-        ratchet_api_types::ExecutionStatus::Pending => ratchet_storage::seaorm::entities::executions::ExecutionStatus::Pending,
-        ratchet_api_types::ExecutionStatus::Running => ratchet_storage::seaorm::entities::executions::ExecutionStatus::Running,
-        ratchet_api_types::ExecutionStatus::Completed => ratchet_storage::seaorm::entities::executions::ExecutionStatus::Completed,
-        ratchet_api_types::ExecutionStatus::Failed => ratchet_storage::seaorm::entities::executions::ExecutionStatus::Failed,
-        ratchet_api_types::ExecutionStatus::Cancelled => ratchet_storage::seaorm::entities::executions::ExecutionStatus::Cancelled,
+        ratchet_api_types::ExecutionStatus::Pending => {
+            ratchet_storage::seaorm::entities::executions::ExecutionStatus::Pending
+        }
+        ratchet_api_types::ExecutionStatus::Running => {
+            ratchet_storage::seaorm::entities::executions::ExecutionStatus::Running
+        }
+        ratchet_api_types::ExecutionStatus::Completed => {
+            ratchet_storage::seaorm::entities::executions::ExecutionStatus::Completed
+        }
+        ratchet_api_types::ExecutionStatus::Failed => {
+            ratchet_storage::seaorm::entities::executions::ExecutionStatus::Failed
+        }
+        ratchet_api_types::ExecutionStatus::Cancelled => {
+            ratchet_storage::seaorm::entities::executions::ExecutionStatus::Cancelled
+        }
     }
 }
 
-fn convert_storage_execution_status_to_api(status: ratchet_storage::seaorm::entities::executions::ExecutionStatus) -> ratchet_api_types::ExecutionStatus {
+fn convert_storage_execution_status_to_api(
+    status: ratchet_storage::seaorm::entities::executions::ExecutionStatus,
+) -> ratchet_api_types::ExecutionStatus {
     match status {
-        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Pending => ratchet_api_types::ExecutionStatus::Pending,
-        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Running => ratchet_api_types::ExecutionStatus::Running,
-        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Completed => ratchet_api_types::ExecutionStatus::Completed,
-        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Failed => ratchet_api_types::ExecutionStatus::Failed,
-        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Cancelled => ratchet_api_types::ExecutionStatus::Cancelled,
+        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Pending => {
+            ratchet_api_types::ExecutionStatus::Pending
+        }
+        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Running => {
+            ratchet_api_types::ExecutionStatus::Running
+        }
+        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Completed => {
+            ratchet_api_types::ExecutionStatus::Completed
+        }
+        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Failed => {
+            ratchet_api_types::ExecutionStatus::Failed
+        }
+        ratchet_storage::seaorm::entities::executions::ExecutionStatus::Cancelled => {
+            ratchet_api_types::ExecutionStatus::Cancelled
+        }
     }
 }
 
@@ -1236,39 +1404,46 @@ async fn create_repository_factory(config: &ServerConfig) -> Result<Arc<dyn Repo
     Ok(repos)
 }
 
-async fn create_repository_factory_with_mcp(config: &ServerConfig) -> Result<(Arc<dyn RepositoryFactory>, Option<Arc<TaskDevelopmentService>>, Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>)> {
+async fn create_repository_factory_with_mcp(
+    config: &ServerConfig,
+) -> Result<(
+    Arc<dyn RepositoryFactory>,
+    Option<Arc<TaskDevelopmentService>>,
+    Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>,
+)> {
     // Create storage database connection directly (no bridge pattern)
     let storage_config = ratchet_storage::seaorm::config::DatabaseConfig {
         url: config.database.url.clone(),
         max_connections: config.database.max_connections,
         connection_timeout: std::time::Duration::from_secs(config.database.connection_timeout_seconds),
     };
-    
+
     let db_connection = ratchet_storage::seaorm::connection::DatabaseConnection::new(storage_config).await?;
-    let storage_factory = Arc::new(ratchet_storage::seaorm::repositories::RepositoryFactory::new(db_connection));
-    
+    let storage_factory = Arc::new(ratchet_storage::seaorm::repositories::RepositoryFactory::new(
+        db_connection,
+    ));
+
     // Create the DirectRepositoryFactory
     let direct_factory = DirectRepositoryFactory::new(storage_factory.clone());
-    
+
     // Create MCP task development service if MCP is enabled
     let mcp_task_service = if config.mcp_api.enabled {
         // Create HTTP manager for task development service
         let http_manager = HttpManager::new();
-        
+
         // Get the database connection from storage factory
         let storage_db = storage_factory.database();
-        
+
         // Create concrete repository instances for TaskDevelopmentService
-        let task_repo_arc = Arc::new(ratchet_storage::seaorm::repositories::task_repository::TaskRepository::new(
-            storage_db.clone()
-        ));
-        let execution_repo_arc = Arc::new(ratchet_storage::seaorm::repositories::execution_repository::ExecutionRepository::new(
-            storage_db.clone()
-        ));
-        
+        let task_repo_arc =
+            Arc::new(ratchet_storage::seaorm::repositories::task_repository::TaskRepository::new(storage_db.clone()));
+        let execution_repo_arc = Arc::new(
+            ratchet_storage::seaorm::repositories::execution_repository::ExecutionRepository::new(storage_db.clone()),
+        );
+
         // Use a default task base path - this could be configurable
         let task_base_path = std::path::PathBuf::from("./tasks");
-        
+
         let service = TaskDevelopmentService::new(
             task_repo_arc,
             execution_repo_arc,
@@ -1276,25 +1451,28 @@ async fn create_repository_factory_with_mcp(config: &ServerConfig) -> Result<(Ar
             task_base_path,
             true, // allow_fs_operations
         );
-        
+
         Some(Arc::new(service))
     } else {
         None
     };
-    
+
     // Use the adapter factory that directly implements the interface
     Ok((Arc::new(direct_factory), mcp_task_service, storage_factory))
 }
 
 /// Create task registry from configuration
-async fn create_task_registry(config: &ServerConfig, repositories: Arc<dyn RepositoryFactory>) -> Result<Arc<dyn TaskRegistry>> {
+async fn create_task_registry(
+    config: &ServerConfig,
+    repositories: Arc<dyn RepositoryFactory>,
+) -> Result<Arc<dyn TaskRegistry>> {
     // Create functional task registry using ratchet-registry
     let mut bridge_registry = BridgeTaskRegistry::new(config).await?;
     bridge_registry.set_repositories(repositories);
-    
+
     // Sync discovered tasks to database
     bridge_registry.sync_tasks_to_database().await?;
-    
+
     Ok(Arc::new(bridge_registry))
 }
 
@@ -1322,21 +1500,16 @@ pub async fn init_logging(config: &ServerConfig) -> Result<()> {
         tracing_subscriber::fmt::layer()
             .with_target(false)
             .with_file(true)
-            .with_line_number(true)
+            .with_line_number(true),
     );
 
     // Add file layer if enabled
     if config.logging.enable_file_logging {
         if let Some(file_path) = &config.logging.file_path {
-            let file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(file_path)?;
-            
-            let file_layer = tracing_subscriber::fmt::layer()
-                .with_writer(file)
-                .with_ansi(false);
-                
+            let file = std::fs::OpenOptions::new().create(true).append(true).open(file_path)?;
+
+            let file_layer = tracing_subscriber::fmt::layer().with_writer(file).with_ansi(false);
+
             let subscriber = subscriber.with(file_layer);
             // Use try_init to avoid panic if global subscriber already set
             if let Err(_) = subscriber.try_init() {
@@ -1383,31 +1556,31 @@ impl RepositoryFactory for StubRepositoryFactory {
     fn task_repository(&self) -> &dyn TaskRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
-    
+
     fn execution_repository(&self) -> &dyn ExecutionRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
-    
+
     fn job_repository(&self) -> &dyn JobRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
-    
+
     fn schedule_repository(&self) -> &dyn ScheduleRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
-    
+
     fn user_repository(&self) -> &dyn ratchet_interfaces::database::UserRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
-    
+
     fn session_repository(&self) -> &dyn ratchet_interfaces::database::SessionRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
-    
+
     fn api_key_repository(&self) -> &dyn ratchet_interfaces::database::ApiKeyRepository {
         unimplemented!("Repository factory stubs not implemented yet")
     }
-    
+
     async fn health_check(&self) -> Result<(), DatabaseError> {
         Ok(())
     }
@@ -1433,23 +1606,27 @@ impl TaskRegistry for StubTaskRegistry {
     async fn discover_tasks(&self) -> Result<Vec<TaskMetadata>, RegistryError> {
         Ok(vec![])
     }
-    
+
     async fn get_task_metadata(&self, _name: &str) -> Result<TaskMetadata, RegistryError> {
-        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
+        Err(RegistryError::TaskNotFound {
+            name: "stub".to_string(),
+        })
     }
-    
+
     async fn load_task_content(&self, _name: &str) -> Result<String, RegistryError> {
-        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
+        Err(RegistryError::TaskNotFound {
+            name: "stub".to_string(),
+        })
     }
-    
+
     async fn task_exists(&self, _name: &str) -> Result<bool, RegistryError> {
         Ok(false)
     }
-    
+
     fn registry_id(&self) -> &str {
         "stub-registry"
     }
-    
+
     async fn health_check(&self) -> Result<(), RegistryError> {
         Ok(())
     }
@@ -1475,27 +1652,31 @@ impl RegistryManager for StubRegistryManager {
     async fn add_registry(&self, _registry: Box<dyn TaskRegistry>) -> Result<(), RegistryError> {
         Ok(())
     }
-    
+
     async fn remove_registry(&self, _registry_id: &str) -> Result<(), RegistryError> {
         Ok(())
     }
-    
+
     async fn list_registries(&self) -> Vec<&str> {
         vec![]
     }
-    
+
     async fn discover_all_tasks(&self) -> Result<Vec<(String, TaskMetadata)>, RegistryError> {
         Ok(vec![])
     }
-    
+
     async fn find_task(&self, _name: &str) -> Result<(String, TaskMetadata), RegistryError> {
-        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
+        Err(RegistryError::TaskNotFound {
+            name: "stub".to_string(),
+        })
     }
-    
+
     async fn load_task(&self, _name: &str) -> Result<String, RegistryError> {
-        Err(RegistryError::TaskNotFound { name: "stub".to_string() })
+        Err(RegistryError::TaskNotFound {
+            name: "stub".to_string(),
+        })
     }
-    
+
     async fn sync_with_database(&self) -> Result<SyncResult, RegistryError> {
         Ok(SyncResult {
             added: vec![],
@@ -1530,16 +1711,24 @@ impl TaskValidator for StubTaskValidator {
             warnings: vec![],
         })
     }
-    
-    async fn validate_content(&self, _content: &str, _metadata: &TaskMetadata) -> Result<ValidationResult, RegistryError> {
+
+    async fn validate_content(
+        &self,
+        _content: &str,
+        _metadata: &TaskMetadata,
+    ) -> Result<ValidationResult, RegistryError> {
         Ok(ValidationResult {
             valid: true,
             errors: vec![],
             warnings: vec![],
         })
     }
-    
-    async fn validate_input(&self, _input: &serde_json::Value, _metadata: &TaskMetadata) -> Result<ValidationResult, RegistryError> {
+
+    async fn validate_input(
+        &self,
+        _input: &serde_json::Value,
+        _metadata: &TaskMetadata,
+    ) -> Result<ValidationResult, RegistryError> {
         Ok(ValidationResult {
             valid: true,
             errors: vec![],

@@ -7,8 +7,7 @@ use std::io::{self, Write};
 use super::executor::CommandResult;
 
 /// Output formatter for console results
-pub struct OutputFormatter {
-}
+pub struct OutputFormatter {}
 
 impl OutputFormatter {
     pub fn new() -> Self {
@@ -82,7 +81,7 @@ impl OutputFormatter {
 
         // Calculate column widths
         let mut col_widths = headers.iter().map(|h| h.len()).collect::<Vec<_>>();
-        
+
         for row in rows {
             for (i, cell) in row.iter().enumerate() {
                 if i < col_widths.len() {
@@ -128,7 +127,7 @@ impl OutputFormatter {
     fn colorize_json_line(&self, line: &str) -> String {
         let trimmed = line.trim_start();
         let indent = " ".repeat(line.len() - trimmed.len());
-        
+
         if trimmed.starts_with('"') && trimmed.contains(':') {
             // Key-value pair
             if let Some(colon_pos) = trimmed.find(':') {
@@ -139,11 +138,15 @@ impl OutputFormatter {
         } else if trimmed.starts_with('"') {
             // String value
             return format!("{}{}", indent, trimmed.bright_green());
-        } else if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) || trimmed.starts_with("true") || trimmed.starts_with("false") || trimmed.starts_with("null") {
+        } else if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit())
+            || trimmed.starts_with("true")
+            || trimmed.starts_with("false")
+            || trimmed.starts_with("null")
+        {
             // Number, boolean, or null
             return format!("{}{}", indent, trimmed.bright_yellow());
         }
-        
+
         // Default formatting
         line.to_string()
     }

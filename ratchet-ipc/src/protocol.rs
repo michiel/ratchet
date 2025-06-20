@@ -20,12 +20,7 @@ pub struct ExecutionContext {
 
 impl ExecutionContext {
     /// Create a new execution context
-    pub fn new(
-        execution_uuid: Uuid,
-        job_uuid: Option<Uuid>,
-        task_uuid: Uuid,
-        task_version: String,
-    ) -> Self {
+    pub fn new(execution_uuid: Uuid, job_uuid: Option<Uuid>, task_uuid: Uuid, task_version: String) -> Self {
         Self {
             execution_id: execution_uuid.to_string(),
             job_id: job_uuid.map(|uuid| uuid.to_string()),
@@ -50,10 +45,7 @@ pub enum WorkerMessage {
     },
 
     /// Validate a task
-    ValidateTask {
-        task_path: String,
-        correlation_id: Uuid,
-    },
+    ValidateTask { task_path: String, correlation_id: Uuid },
 
     /// Health check ping
     Ping { correlation_id: Uuid },
@@ -110,11 +102,7 @@ pub struct TaskExecutionResult {
 
 impl TaskExecutionResult {
     /// Create a successful result
-    pub fn success(
-        output: JsonValue,
-        started_at: DateTime<Utc>,
-        completed_at: DateTime<Utc>,
-    ) -> Self {
+    pub fn success(output: JsonValue, started_at: DateTime<Utc>, completed_at: DateTime<Utc>) -> Self {
         let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
         Self {
             success: true,
@@ -244,10 +232,7 @@ pub enum WorkerError {
     CommunicationError { error: String },
 
     /// Worker panic/crash
-    WorkerPanic {
-        error: String,
-        backtrace: Option<String>,
-    },
+    WorkerPanic { error: String, backtrace: Option<String> },
 
     /// Message parse error
     MessageParseError { error: String },
@@ -259,9 +244,7 @@ impl fmt::Display for WorkerError {
             WorkerError::TaskExecutionFailed { job_id, error, .. } => {
                 write!(f, "Task execution failed (job_id: {}): {}", job_id, error)
             }
-            WorkerError::TaskValidationFailed {
-                task_path, error, ..
-            } => {
+            WorkerError::TaskValidationFailed { task_path, error, .. } => {
                 write!(f, "Task validation failed ({}): {}", task_path, error)
             }
             WorkerError::InitializationFailed { error } => {
@@ -329,8 +312,7 @@ mod tests {
         let start = Utc::now();
         let end = start + chrono::Duration::milliseconds(1500);
 
-        let success_result =
-            TaskExecutionResult::success(serde_json::json!({"result": "ok"}), start, end);
+        let success_result = TaskExecutionResult::success(serde_json::json!({"result": "ok"}), start, end);
 
         assert!(success_result.success);
         assert_eq!(success_result.duration_ms, 1500);
@@ -345,10 +327,7 @@ mod tests {
 
         assert!(!failure_result.success);
         assert_eq!(failure_result.duration_ms, 1500);
-        assert_eq!(
-            failure_result.error_message.as_deref(),
-            Some("Something went wrong")
-        );
+        assert_eq!(failure_result.error_message.as_deref(), Some("Something went wrong"));
     }
 
     #[test]

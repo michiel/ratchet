@@ -4,10 +4,13 @@
 //! using simulation rather than complex mocking.
 
 use std::{
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
-use tokio::{time::sleep, sync::Semaphore};
+use tokio::{sync::Semaphore, time::sleep};
 
 /// GraphQL performance metrics
 #[derive(Debug, Clone)]
@@ -59,10 +62,16 @@ impl GraphQLOperationTracker {
         }
 
         match operation_type {
-            "query" => { self.query_count.fetch_add(1, Ordering::Relaxed); },
-            "mutation" => { self.mutation_count.fetch_add(1, Ordering::Relaxed); },
-            "subscription" => { self.subscription_count.fetch_add(1, Ordering::Relaxed); },
-            _ => {},
+            "query" => {
+                self.query_count.fetch_add(1, Ordering::Relaxed);
+            }
+            "mutation" => {
+                self.mutation_count.fetch_add(1, Ordering::Relaxed);
+            }
+            "subscription" => {
+                self.subscription_count.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
         };
     }
 
@@ -140,16 +149,32 @@ impl GraphQLPerformanceTest {
     }
 
     /// Test GraphQL query performance simulation
-    pub async fn test_query_performance_simulation(&self) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_query_performance_simulation(
+        &self,
+    ) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing GraphQL query performance simulation");
 
         let tracker = GraphQLOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
-        
-        let queries = [("simple_task_query", "query { tasks { id name } }", 5),
-            ("complex_task_query", "query { tasks { id name executions { id status } } }", 15),
-            ("filtered_query", "query { tasks(filter: { enabled: true }) { id name } }", 8),
-            ("paginated_query", "query { tasks(pagination: { page: 1, page_size: 10 }) { id } }", 10)];
+
+        let queries = [
+            ("simple_task_query", "query { tasks { id name } }", 5),
+            (
+                "complex_task_query",
+                "query { tasks { id name executions { id status } } }",
+                15,
+            ),
+            (
+                "filtered_query",
+                "query { tasks(filter: { enabled: true }) { id name } }",
+                8,
+            ),
+            (
+                "paginated_query",
+                "query { tasks(pagination: { page: 1, page_size: 10 }) { id } }",
+                10,
+            ),
+        ];
 
         let start_time = Instant::now();
         let mut handles = Vec::new();
@@ -163,15 +188,15 @@ impl GraphQLPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let operation_start = Instant::now();
-                
+
                 // Simulate GraphQL query processing time
                 let processing_time = Duration::from_millis(base_time + (i % 20) as u64);
                 sleep(processing_time).await;
-                
+
                 let latency = operation_start.elapsed().as_millis() as u64;
-                
+
                 // Simulate success rate based on query complexity
                 let success_rate = match query_name.as_str() {
                     "simple_task_query" => 0.98,
@@ -180,9 +205,9 @@ impl GraphQLPerformanceTest {
                     "paginated_query" => 0.96,
                     _ => 0.93,
                 };
-                
+
                 let success = fastrand::f64() < success_rate;
-                
+
                 tracker_clone.record_operation(latency, success, "query").await;
             });
 
@@ -202,16 +227,20 @@ impl GraphQLPerformanceTest {
     }
 
     /// Test GraphQL mutation performance simulation
-    pub async fn test_mutation_performance_simulation(&self) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_mutation_performance_simulation(
+        &self,
+    ) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing GraphQL mutation performance simulation");
 
         let tracker = GraphQLOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
-        
-        let mutations = [("create_task", 20),
+
+        let mutations = [
+            ("create_task", 20),
             ("update_task", 15),
             ("delete_task", 10),
-            ("create_execution", 25)];
+            ("create_execution", 25),
+        ];
 
         let start_time = Instant::now();
         let mut handles = Vec::new();
@@ -225,15 +254,15 @@ impl GraphQLPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let operation_start = Instant::now();
-                
+
                 // Simulate GraphQL mutation processing time
                 let processing_time = Duration::from_millis(base_time + (i % 30) as u64);
                 sleep(processing_time).await;
-                
+
                 let latency = operation_start.elapsed().as_millis() as u64;
-                
+
                 // Simulate success rate based on mutation type
                 let success_rate = match mutation_name.as_str() {
                     "create_task" => 0.85,
@@ -242,9 +271,9 @@ impl GraphQLPerformanceTest {
                     "create_execution" => 0.88,
                     _ => 0.87,
                 };
-                
+
                 let success = fastrand::f64() < success_rate;
-                
+
                 tracker_clone.record_operation(latency, success, "mutation").await;
             });
 
@@ -264,12 +293,14 @@ impl GraphQLPerformanceTest {
     }
 
     /// Test GraphQL subscription performance simulation
-    pub async fn test_subscription_performance_simulation(&self) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_subscription_performance_simulation(
+        &self,
+    ) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing GraphQL subscription performance simulation");
 
         let tracker = GraphQLOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
-        
+
         let start_time = Instant::now();
         let mut handles = Vec::new();
 
@@ -279,18 +310,18 @@ impl GraphQLPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let operation_start = Instant::now();
-                
+
                 // Simulate subscription setup time
                 let setup_time = Duration::from_millis(5 + (i % 15) as u64);
                 sleep(setup_time).await;
-                
+
                 let latency = operation_start.elapsed().as_millis() as u64;
-                
+
                 // Subscriptions should have high success rate for setup
                 let success = fastrand::f64() < 0.97;
-                
+
                 tracker_clone.record_operation(latency, success, "subscription").await;
             });
 
@@ -310,18 +341,20 @@ impl GraphQLPerformanceTest {
     }
 
     /// Test mixed GraphQL operations
-    pub async fn test_mixed_operations_performance(&self) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_mixed_operations_performance(
+        &self,
+    ) -> Result<GraphQLPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing mixed GraphQL operations performance");
 
         let tracker = GraphQLOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
-        
+
         let operations = vec![
-            ("query", 8),     // 40% queries
+            ("query", 8), // 40% queries
             ("query", 10),
-            ("mutation", 20), // 30% mutations  
+            ("mutation", 20),    // 30% mutations
             ("subscription", 5), // 20% subscriptions
-            ("query", 12),    // 10% complex queries
+            ("query", 12),       // 10% complex queries
         ];
 
         let start_time = Instant::now();
@@ -336,15 +369,15 @@ impl GraphQLPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let operation_start = Instant::now();
-                
+
                 // Simulate operation processing time
                 let processing_time = Duration::from_millis(base_time + (i % 25) as u64);
                 sleep(processing_time).await;
-                
+
                 let latency = operation_start.elapsed().as_millis() as u64;
-                
+
                 // Simulate success rate based on operation type
                 let success_rate = match op_type.as_str() {
                     "query" => 0.94,
@@ -352,9 +385,9 @@ impl GraphQLPerformanceTest {
                     "subscription" => 0.96,
                     _ => 0.90,
                 };
-                
+
                 let success = fastrand::f64() < success_rate;
-                
+
                 tracker_clone.record_operation(latency, success, &op_type).await;
             });
 
@@ -377,12 +410,21 @@ impl GraphQLPerformanceTest {
     fn print_metrics(&self, operation_type: &str, metrics: &GraphQLPerformanceMetrics) {
         println!("\n=== GraphQL Performance Test Results: {} ===", operation_type);
         println!("Total Operations: {}", metrics.total_operations);
-        println!("Successful: {} ({:.2}%)", metrics.successful_operations, 
-                 (metrics.successful_operations as f64 / metrics.total_operations as f64) * 100.0);
-        println!("Failed: {} ({:.2}%)", metrics.failed_operations, metrics.error_rate * 100.0);
+        println!(
+            "Successful: {} ({:.2}%)",
+            metrics.successful_operations,
+            (metrics.successful_operations as f64 / metrics.total_operations as f64) * 100.0
+        );
+        println!(
+            "Failed: {} ({:.2}%)",
+            metrics.failed_operations,
+            metrics.error_rate * 100.0
+        );
         println!("Operation Breakdown:");
-        println!("  Queries: {}, Mutations: {}, Subscriptions: {}", 
-                 metrics.query_operations, metrics.mutation_operations, metrics.subscription_operations);
+        println!(
+            "  Queries: {}, Mutations: {}, Subscriptions: {}",
+            metrics.query_operations, metrics.mutation_operations, metrics.subscription_operations
+        );
         println!("Test Duration: {:.2}s", metrics.total_duration_ms as f64 / 1000.0);
         println!("Operations/Second: {:.2}", metrics.operations_per_second);
         println!("Average Latency: {:.2}ms", metrics.average_latency_ms);
@@ -394,7 +436,10 @@ impl GraphQLPerformanceTest {
         if metrics.error_rate <= 0.05 {
             println!("✅ Error rate within acceptable limits");
         } else {
-            println!("❌ Error rate exceeds acceptable limits ({:.2}%)", metrics.error_rate * 100.0);
+            println!(
+                "❌ Error rate exceeds acceptable limits ({:.2}%)",
+                metrics.error_rate * 100.0
+            );
         }
 
         if metrics.p95_latency_ms <= 200 {

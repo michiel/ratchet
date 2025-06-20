@@ -41,7 +41,6 @@ pub enum RegistryError {
     #[error("Git error: {0}")]
     GitError(String),
 
-
     #[error("Task join error")]
     TaskJoin(#[from] tokio::task::JoinError),
 

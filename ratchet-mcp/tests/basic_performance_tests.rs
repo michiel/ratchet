@@ -4,11 +4,14 @@
 //! using simulation rather than complex service dependencies.
 
 use std::{
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
-    time::{Duration, Instant},
     collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
 };
-use tokio::{time::sleep, sync::Semaphore};
+use tokio::{sync::Semaphore, time::sleep};
 
 /// MCP performance metrics
 #[derive(Debug, Clone)]
@@ -52,13 +55,7 @@ impl McpOperationTracker {
         }
     }
 
-    async fn record_operation(
-        &self,
-        latency_ms: u64,
-        success: bool,
-        operation_type: &str,
-        protocol_overhead_ms: u64,
-    ) {
+    async fn record_operation(&self, latency_ms: u64, success: bool, operation_type: &str, protocol_overhead_ms: u64) {
         if success {
             self.successful_operations.fetch_add(1, Ordering::Relaxed);
             self.latencies.lock().await.push(latency_ms);
@@ -110,7 +107,8 @@ impl McpOperationTracker {
         }
 
         if !protocol_overheads.is_empty() {
-            metrics.protocol_overhead_ms = protocol_overheads.iter().sum::<u64>() as f64 / protocol_overheads.len() as f64;
+            metrics.protocol_overhead_ms =
+                protocol_overheads.iter().sum::<u64>() as f64 / protocol_overheads.len() as f64;
         }
 
         if total > 0 {
@@ -153,12 +151,14 @@ impl McpPerformanceTest {
     }
 
     /// Test MCP task operations performance simulation
-    pub async fn test_task_operations_performance_simulation(&self) -> Result<McpPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_task_operations_performance_simulation(
+        &self,
+    ) -> Result<McpPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing MCP task operations performance simulation");
 
         let tracker = McpOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
-        
+
         let operations = vec![
             ("task_create", 8),   // Task creation
             ("task_edit", 6),     // Task editing
@@ -179,20 +179,20 @@ impl McpPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let operation_start = Instant::now();
-                
+
                 // Simulate protocol overhead (JSON-RPC parsing, validation)
                 let protocol_start = Instant::now();
                 sleep(Duration::from_millis(1 + (i % 3) as u64)).await;
                 let protocol_overhead = protocol_start.elapsed().as_millis() as u64;
-                
+
                 // Simulate operation processing time
                 let processing_time = Duration::from_millis(base_time + (i % 20) as u64);
                 sleep(processing_time).await;
-                
+
                 let total_latency = operation_start.elapsed().as_millis() as u64;
-                
+
                 // Simulate success rate based on operation type
                 let success_rate = match operation_type.as_str() {
                     "task_create" => 0.90,
@@ -202,15 +202,12 @@ impl McpPerformanceTest {
                     "task_delete" => 0.95,
                     _ => 0.90,
                 };
-                
+
                 let success = fastrand::f64() < success_rate;
-                
-                tracker_clone.record_operation(
-                    total_latency,
-                    success,
-                    &operation_type,
-                    protocol_overhead,
-                ).await;
+
+                tracker_clone
+                    .record_operation(total_latency, success, &operation_type, protocol_overhead)
+                    .await;
             });
 
             handles.push(handle);
@@ -229,12 +226,14 @@ impl McpPerformanceTest {
     }
 
     /// Test MCP concurrent execution performance
-    pub async fn test_concurrent_execution_performance_simulation(&self) -> Result<McpPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_concurrent_execution_performance_simulation(
+        &self,
+    ) -> Result<McpPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing MCP concurrent execution performance simulation");
 
         let tracker = McpOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
-        
+
         let start_time = Instant::now();
         let mut handles = Vec::new();
 
@@ -244,40 +243,37 @@ impl McpPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let operation_start = Instant::now();
-                
+
                 // Simulate protocol overhead
                 let protocol_overhead = 1 + (i % 2) as u64;
                 sleep(Duration::from_millis(protocol_overhead)).await;
-                
+
                 // Simulate task execution with varying complexity
                 let complexity = (i % 50) + 1;
                 let execution_time = match complexity {
-                    1..=10 => 10 + (i % 10) as u64,   // Simple tasks
-                    11..=30 => 20 + (i % 20) as u64,  // Medium tasks
-                    _ => 40 + (i % 30) as u64,        // Complex tasks
+                    1..=10 => 10 + (i % 10) as u64,  // Simple tasks
+                    11..=30 => 20 + (i % 20) as u64, // Medium tasks
+                    _ => 40 + (i % 30) as u64,       // Complex tasks
                 };
-                
+
                 sleep(Duration::from_millis(execution_time)).await;
-                
+
                 let total_latency = operation_start.elapsed().as_millis() as u64;
-                
+
                 // Success rate decreases with complexity
                 let success_rate = match complexity {
                     1..=10 => 0.95,
                     11..=30 => 0.90,
                     _ => 0.85,
                 };
-                
+
                 let success = fastrand::f64() < success_rate;
-                
-                tracker_clone.record_operation(
-                    total_latency,
-                    success,
-                    "task_execute",
-                    protocol_overhead,
-                ).await;
+
+                tracker_clone
+                    .record_operation(total_latency, success, "task_execute", protocol_overhead)
+                    .await;
             });
 
             handles.push(handle);
@@ -296,13 +292,15 @@ impl McpPerformanceTest {
     }
 
     /// Test MCP batch operations performance
-    pub async fn test_batch_operations_performance_simulation(&self) -> Result<McpPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_batch_operations_performance_simulation(
+        &self,
+    ) -> Result<McpPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing MCP batch operations performance simulation");
 
         let tracker = McpOperationTracker::new();
         let batch_size = 5;
         let batch_count = self.total_operations / batch_size;
-        
+
         let start_time = Instant::now();
 
         for batch_i in 0..batch_count {
@@ -314,26 +312,23 @@ impl McpPerformanceTest {
 
                 let handle = tokio::spawn(async move {
                     let operation_start = Instant::now();
-                    
+
                     // Batch operations have lower protocol overhead
                     let protocol_overhead = 1;
                     sleep(Duration::from_millis(protocol_overhead)).await;
-                    
+
                     // Simulate batch task creation
                     let processing_time = 5 + (operation_id % 10) as u64;
                     sleep(Duration::from_millis(processing_time)).await;
-                    
+
                     let total_latency = operation_start.elapsed().as_millis() as u64;
-                    
+
                     // Batch operations typically have good success rates
                     let success = fastrand::f64() < 0.93;
-                    
-                    tracker_clone.record_operation(
-                        total_latency,
-                        success,
-                        "task_create",
-                        protocol_overhead,
-                    ).await;
+
+                    tracker_clone
+                        .record_operation(total_latency, success, "task_create", protocol_overhead)
+                        .await;
                 });
 
                 batch_handles.push(handle);
@@ -362,7 +357,7 @@ impl McpPerformanceTest {
 
         let tracker = McpOperationTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_operations));
-        
+
         let start_time = Instant::now();
         let mut handles = Vec::new();
 
@@ -372,33 +367,30 @@ impl McpPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let operation_start = Instant::now();
-                
+
                 // Focus on protocol overhead (JSON-RPC processing)
                 let protocol_start = Instant::now();
-                
+
                 // Simulate JSON parsing, validation, and routing
                 sleep(Duration::from_millis(1)).await; // Parsing
                 sleep(Duration::from_millis(1)).await; // Validation
                 sleep(Duration::from_millis(1)).await; // Routing
-                
+
                 let protocol_overhead = protocol_start.elapsed().as_millis() as u64;
-                
+
                 // Minimal actual processing for protocol overhead test
                 sleep(Duration::from_millis(1)).await;
-                
+
                 let total_latency = operation_start.elapsed().as_millis() as u64;
-                
+
                 // Protocol processing should be very reliable
                 let success = fastrand::f64() < 0.99;
-                
-                tracker_clone.record_operation(
-                    total_latency,
-                    success,
-                    "protocol_test",
-                    protocol_overhead,
-                ).await;
+
+                tracker_clone
+                    .record_operation(total_latency, success, "protocol_test", protocol_overhead)
+                    .await;
             });
 
             handles.push(handle);
@@ -420,14 +412,25 @@ impl McpPerformanceTest {
     fn print_metrics(&self, operation_type: &str, metrics: &McpPerformanceMetrics) {
         println!("\n=== MCP Performance Test Results: {} ===", operation_type);
         println!("Total Operations: {}", metrics.total_operations);
-        println!("Successful: {} ({:.2}%)", metrics.successful_operations, 
-                 (metrics.successful_operations as f64 / metrics.total_operations as f64) * 100.0);
-        println!("Failed: {} ({:.2}%)", metrics.failed_operations, metrics.error_rate * 100.0);
+        println!(
+            "Successful: {} ({:.2}%)",
+            metrics.successful_operations,
+            (metrics.successful_operations as f64 / metrics.total_operations as f64) * 100.0
+        );
+        println!(
+            "Failed: {} ({:.2}%)",
+            metrics.failed_operations,
+            metrics.error_rate * 100.0
+        );
         println!("Operation Breakdown:");
-        println!("  Create: {}, Edit: {}, Test: {}, Execute: {}, Delete: {}", 
-                 metrics.task_create_operations, metrics.task_edit_operations, 
-                 metrics.task_test_operations, metrics.task_execute_operations, 
-                 metrics.task_delete_operations);
+        println!(
+            "  Create: {}, Edit: {}, Test: {}, Execute: {}, Delete: {}",
+            metrics.task_create_operations,
+            metrics.task_edit_operations,
+            metrics.task_test_operations,
+            metrics.task_execute_operations,
+            metrics.task_delete_operations
+        );
         println!("Test Duration: {:.2}s", metrics.total_duration_ms as f64 / 1000.0);
         println!("Operations/Second: {:.2}", metrics.operations_per_second);
         println!("Average Latency: {:.2}ms", metrics.average_latency_ms);
@@ -440,7 +443,10 @@ impl McpPerformanceTest {
         if metrics.error_rate <= 0.10 {
             println!("✅ Error rate within acceptable limits");
         } else {
-            println!("❌ Error rate exceeds acceptable limits ({:.2}%)", metrics.error_rate * 100.0);
+            println!(
+                "❌ Error rate exceeds acceptable limits ({:.2}%)",
+                metrics.error_rate * 100.0
+            );
         }
 
         if metrics.p95_latency_ms <= 100 {
@@ -452,7 +458,10 @@ impl McpPerformanceTest {
         if metrics.protocol_overhead_ms <= 10.0 {
             println!("✅ Protocol overhead within target (10ms)");
         } else {
-            println!("❌ Protocol overhead exceeds target ({:.2}ms > 10ms)", metrics.protocol_overhead_ms);
+            println!(
+                "❌ Protocol overhead exceeds target ({:.2}ms > 10ms)",
+                metrics.protocol_overhead_ms
+            );
         }
     }
 }
@@ -478,7 +487,9 @@ async fn test_mcp_task_operations_performance_simulation() -> Result<(), Box<dyn
 #[tokio::test]
 async fn test_mcp_concurrent_execution_performance_simulation() -> Result<(), Box<dyn std::error::Error>> {
     let performance_test = McpPerformanceTest::with_config(10, 100);
-    let metrics = performance_test.test_concurrent_execution_performance_simulation().await?;
+    let metrics = performance_test
+        .test_concurrent_execution_performance_simulation()
+        .await?;
 
     // Concurrent execution assertions
     assert!(metrics.total_operations >= 100);

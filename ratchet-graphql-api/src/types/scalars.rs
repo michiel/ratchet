@@ -18,7 +18,7 @@ impl ScalarType for GraphQLApiId {
     }
 
     fn to_value(&self) -> Value {
-        Value::String(self.0.0.clone())
+        Value::String(self.0 .0.clone())
     }
 }
 
@@ -42,6 +42,6 @@ impl From<String> for GraphQLApiId {
 
 impl From<GraphQLApiId> for String {
     fn from(id: GraphQLApiId) -> Self {
-        id.0.0
+        id.0 .0
     }
 }

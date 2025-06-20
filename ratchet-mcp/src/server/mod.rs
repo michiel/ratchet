@@ -23,8 +23,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::protocol::{
-    InitializeParams, InitializeResult, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
-    ServerCapabilities, ServerInfo,
+    InitializeParams, InitializeResult, JsonRpcError, JsonRpcRequest, JsonRpcResponse, ServerCapabilities, ServerInfo,
 };
 use crate::security::{AuditLogger, McpAuthManager, SecurityContext};
 use crate::{McpAuth, McpError, McpResult};
@@ -49,10 +48,10 @@ pub struct McpServer {
 
     /// Whether the server is initialized
     initialized: Arc<RwLock<bool>>,
-    
+
     /// Server-issued session IDs (for validation)
     server_issued_sessions: Arc<RwLock<HashSet<String>>>,
-    
+
     /// Message history for resumability (session_id -> Vec<(event_id, message)>)
     message_history: Arc<RwLock<HashMap<String, Vec<(String, String)>>>>,
 }
@@ -78,10 +77,7 @@ impl McpServer {
     }
 
     /// Create a new MCP server with adapter
-    pub async fn with_adapter(
-        config: crate::config::McpConfig,
-        adapter: RatchetMcpAdapter,
-    ) -> McpResult<Self> {
+    pub async fn with_adapter(config: crate::config::McpConfig, adapter: RatchetMcpAdapter) -> McpResult<Self> {
         // Create tool registry from adapter
         let mut tool_registry = RatchetToolRegistry::new();
         tool_registry.set_executor(Arc::new(adapter));
@@ -100,15 +96,8 @@ impl McpServer {
                     tls: false,
                     cors: config::CorsConfig {
                         allowed_origins: vec!["*".to_string()],
-                        allowed_methods: vec![
-                            "GET".to_string(),
-                            "POST".to_string(),
-                            "OPTIONS".to_string(),
-                        ],
-                        allowed_headers: vec![
-                            "Content-Type".to_string(),
-                            "Authorization".to_string(),
-                        ],
+                        allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
+                        allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
                         allow_credentials: false,
                     },
                     timeout: config.timeouts.request_timeout,
@@ -149,10 +138,7 @@ impl McpServer {
     }
 
     /// Run the server with a specific transport
-    pub async fn run(
-        &self,
-        mut transport: Box<dyn crate::transport::McpTransport>,
-    ) -> McpResult<()> {
+    pub async fn run(&self, mut transport: Box<dyn crate::transport::McpTransport>) -> McpResult<()> {
         tracing::info!("Starting MCP server");
 
         loop {
@@ -178,10 +164,8 @@ impl McpServer {
                         Err(e) => {
                             tracing::error!("Error handling MCP request: {}", e);
                             // Send error response
-                            let error_response = JsonRpcResponse::error(
-                                JsonRpcError::internal_error(e.to_string()),
-                                request.id.clone(),
-                            );
+                            let error_response =
+                                JsonRpcResponse::error(JsonRpcError::internal_error(e.to_string()), request.id.clone());
                             let error_request = JsonRpcRequest {
                                 jsonrpc: "2.0".to_string(),
                                 method: "error".to_string(),
@@ -251,34 +235,21 @@ impl McpServer {
                     match self.handle_message(line, None).await {
                         Ok(Some(response)) => {
                             let response_json = serde_json::to_string(&response)?;
-                            tracing::debug!(
-                                "Sending MCP response #{}: {}",
-                                request_count,
-                                response_json
-                            );
+                            tracing::debug!("Sending MCP response #{}: {}", request_count, response_json);
                             stdout.write_all(response_json.as_bytes()).await?;
                             stdout.write_all(b"\n").await?;
                             stdout.flush().await?;
                         }
                         Ok(None) => {
-                            tracing::debug!(
-                                "MCP request #{} was a notification, no response sent",
-                                request_count
-                            );
+                            tracing::debug!("MCP request #{} was a notification, no response sent", request_count);
                         }
                         Err(e) => {
                             tracing::error!("Error handling MCP request #{}: {}", request_count, e);
                             // Send error response if possible
-                            let error_response = JsonRpcResponse::error(
-                                JsonRpcError::internal_error(e.to_string()),
-                                None,
-                            );
+                            let error_response =
+                                JsonRpcResponse::error(JsonRpcError::internal_error(e.to_string()), None);
                             let response_json = serde_json::to_string(&error_response)?;
-                            tracing::debug!(
-                                "Sending MCP error response #{}: {}",
-                                request_count,
-                                response_json
-                            );
+                            tracing::debug!("Sending MCP error response #{}: {}", request_count, response_json);
                             stdout.write_all(response_json.as_bytes()).await?;
                             stdout.write_all(b"\n").await?;
                             stdout.flush().await?;
@@ -292,10 +263,7 @@ impl McpServer {
             }
         }
 
-        tracing::info!(
-            "MCP server stdio loop terminated after {} requests",
-            request_count
-        );
+        tracing::info!("MCP server stdio loop terminated after {} requests", request_count);
         Ok(())
     }
 
@@ -355,8 +323,7 @@ impl McpServer {
             }
 
             // Send initial connection event
-            let _ =
-                tx.send("data: {\"type\":\"connection\",\"status\":\"connected\"}\n\n".to_string());
+            let _ = tx.send("data: {\"type\":\"connection\",\"status\":\"connected\"}\n\n".to_string());
 
             let stream = async_stream::stream! {
                 while let Some(data) = rx.recv().await {
@@ -378,33 +345,25 @@ impl McpServer {
             headers: HeaderMap,
             Json(payload): Json<Value>,
         ) -> Result<Json<Value>, StatusCode> {
-            tracing::debug!(
-                "Received MCP message for session {}: {:?}",
-                session_id,
-                payload
-            );
+            tracing::debug!("Received MCP message for session {}: {:?}", session_id, payload);
 
             // Extract auth header
             let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
 
             // Process the MCP request
-            let message_str =
-                serde_json::to_string(&payload).map_err(|_| StatusCode::BAD_REQUEST)?;
+            let message_str = serde_json::to_string(&payload).map_err(|_| StatusCode::BAD_REQUEST)?;
 
             match state.server.handle_message(&message_str, auth_header).await {
                 Ok(Some(response)) => {
                     // Send response via SSE
-                    let response_data = serde_json::to_string(&response)
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    let response_data =
+                        serde_json::to_string(&response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
                     let connections = state.connections.read().await;
                     if let Some(tx) = connections.get(&session_id) {
                         let sse_data = format!("data: {}\n\n", response_data);
                         if tx.send(sse_data).is_err() {
-                            tracing::warn!(
-                                "Failed to send SSE response for session: {}",
-                                session_id
-                            );
+                            tracing::warn!("Failed to send SSE response for session: {}", session_id);
                         }
                     }
 
@@ -423,8 +382,8 @@ impl McpServer {
                         None,
                     );
 
-                    let error_data = serde_json::to_string(&error_response)
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    let error_data =
+                        serde_json::to_string(&error_response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
                     let connections = state.connections.read().await;
                     if let Some(tx) = connections.get(&session_id) {
@@ -476,11 +435,9 @@ impl McpServer {
             })?;
 
         // Axum 0.7 API for serving
-        axum::serve(listener, app)
-            .await
-            .map_err(|e| McpError::ServerError {
-                message: format!("SSE server error: {}", e),
-            })?;
+        axum::serve(listener, app).await.map_err(|e| McpError::ServerError {
+            message: format!("SSE server error: {}", e),
+        })?;
 
         Ok(())
     }
@@ -538,8 +495,7 @@ impl McpServer {
             }
 
             // Send initial connection event
-            let _ =
-                tx.send("data: {\"type\":\"connection\",\"status\":\"connected\"}\n\n".to_string());
+            let _ = tx.send("data: {\"type\":\"connection\",\"status\":\"connected\"}\n\n".to_string());
 
             let stream = async_stream::stream! {
                 while let Some(data) = rx.recv().await {
@@ -561,33 +517,25 @@ impl McpServer {
             headers: HeaderMap,
             Json(payload): Json<Value>,
         ) -> Result<Json<Value>, StatusCode> {
-            tracing::debug!(
-                "Received MCP message for session {}: {:?}",
-                session_id,
-                payload
-            );
+            tracing::debug!("Received MCP message for session {}: {:?}", session_id, payload);
 
             // Extract auth header
             let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
 
             // Process the MCP request
-            let message_str =
-                serde_json::to_string(&payload).map_err(|_| StatusCode::BAD_REQUEST)?;
+            let message_str = serde_json::to_string(&payload).map_err(|_| StatusCode::BAD_REQUEST)?;
 
             match state.server.handle_message(&message_str, auth_header).await {
                 Ok(Some(response)) => {
                     // Send response via SSE
-                    let response_data = serde_json::to_string(&response)
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    let response_data =
+                        serde_json::to_string(&response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
                     let connections = state.connections.read().await;
                     if let Some(tx) = connections.get(&session_id) {
                         let sse_data = format!("data: {}\n\n", response_data);
                         if tx.send(sse_data).is_err() {
-                            tracing::warn!(
-                                "Failed to send SSE response for session: {}",
-                                session_id
-                            );
+                            tracing::warn!("Failed to send SSE response for session: {}", session_id);
                         }
                     }
 
@@ -606,8 +554,8 @@ impl McpServer {
                         None,
                     );
 
-                    let error_data = serde_json::to_string(&error_response)
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    let error_data =
+                        serde_json::to_string(&error_response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
                     let connections = state.connections.read().await;
                     if let Some(tx) = connections.get(&session_id) {
@@ -634,7 +582,7 @@ impl McpServer {
         async fn create_session_handler() -> Json<Value> {
             let session_id = uuid::Uuid::new_v4().to_string();
             tracing::info!("Created new MCP session: {}", session_id);
-            
+
             Json(serde_json::json!({
                 "session_id": session_id,
                 "sse_url": format!("/mcp/sse/{}", session_id),
@@ -670,15 +618,19 @@ impl McpServer {
             State(state): State<SseServerState>,
             body: Option<String>,
         ) -> impl axum::response::IntoResponse {
-            use axum::response::IntoResponse;
             use axum::http::{header, StatusCode};
+            use axum::response::IntoResponse;
 
             // Validate Origin header for DNS rebinding protection
             if let Some(origin) = headers.get("origin").and_then(|h| h.to_str().ok()) {
                 // Only allow localhost origins for security
-                if !origin.starts_with("http://localhost") && !origin.starts_with("https://localhost") &&
-                   !origin.starts_with("http://127.0.0.1") && !origin.starts_with("https://127.0.0.1") &&
-                   !origin.starts_with("http://[::1]") && !origin.starts_with("https://[::1]") {
+                if !origin.starts_with("http://localhost")
+                    && !origin.starts_with("https://localhost")
+                    && !origin.starts_with("http://127.0.0.1")
+                    && !origin.starts_with("https://127.0.0.1")
+                    && !origin.starts_with("http://[::1]")
+                    && !origin.starts_with("https://[::1]")
+                {
                     tracing::warn!("Rejected request from disallowed origin: {}", origin);
                     return StatusCode::FORBIDDEN.into_response();
                 }
@@ -705,7 +657,7 @@ impl McpServer {
 
                     // Check for Last-Event-ID header for resumability
                     let last_event_id = headers.get("last-event-id").and_then(|h| h.to_str().ok());
-                    
+
                     let (tx, mut rx) = mpsc::unbounded_channel();
 
                     // Store connection
@@ -713,16 +665,20 @@ impl McpServer {
                         let mut connections = state.connections.write().await;
                         connections.insert(session_id.clone(), tx.clone());
                     }
-                    
+
                     // Handle resumability - replay messages after last event ID
                     let mut starting_event_id = 0u64;
                     if let Some(last_id) = last_event_id {
-                        tracing::debug!("Resuming MCP SSE connection from event ID: {} for session: {}", last_id, session_id);
-                        
+                        tracing::debug!(
+                            "Resuming MCP SSE connection from event ID: {} for session: {}",
+                            last_id,
+                            session_id
+                        );
+
                         // Parse the last event ID
                         if let Ok(last_id_num) = last_id.parse::<u64>() {
                             starting_event_id = last_id_num;
-                            
+
                             // Replay messages from history
                             let history = state.message_history.read().await;
                             if let Some(messages) = history.get(&session_id) {
@@ -742,25 +698,25 @@ impl McpServer {
 
                     let session_id_clone = session_id.clone();
                     let message_history = state.message_history.clone();
-                    
+
                     let stream = async_stream::stream! {
                         let mut event_counter = starting_event_id;
                         while let Some(data) = rx.recv().await {
                             event_counter += 1;
                             let event_id = event_counter.to_string();
-                            
+
                             // Store message in history for resumability
                             {
                                 let mut history = message_history.write().await;
                                 let session_history = history.entry(session_id_clone.clone()).or_insert_with(Vec::new);
                                 session_history.push((event_id.clone(), data.clone()));
-                                
+
                                 // Keep only last 1000 messages per session to prevent memory bloat
                                 if session_history.len() > 1000 {
                                     session_history.drain(0..100);
                                 }
                             }
-                            
+
                             // Add event ID for resumability support
                             let event = Event::default()
                                 .data(data)
@@ -784,7 +740,7 @@ impl McpServer {
                         Some(b) => b,
                         None => return StatusCode::BAD_REQUEST.into_response(),
                     };
-                    
+
                     // Check Accept header - both application/json and text/event-stream should be supported
                     let accept_header = headers.get("accept").and_then(|h| h.to_str().ok()).unwrap_or("");
                     let accepts_json = accept_header.contains("application/json");
@@ -807,9 +763,11 @@ impl McpServer {
 
                     // Check if this contains requests (vs only responses/notifications)
                     let contains_requests = if json_value.is_array() {
-                        json_value.as_array().unwrap().iter().any(|msg| {
-                            msg.get("method").is_some() && msg.get("id").is_some()
-                        })
+                        json_value
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|msg| msg.get("method").is_some() && msg.get("id").is_some())
                     } else {
                         json_value.get("method").is_some() && json_value.get("id").is_some()
                     };
@@ -819,12 +777,14 @@ impl McpServer {
                         json_value.as_array().unwrap().iter().all(|msg| {
                             // Response: has "result" or "error" field
                             // Notification: has "method" but no "id"
-                            msg.get("result").is_some() || msg.get("error").is_some() || 
-                            (msg.get("method").is_some() && msg.get("id").is_none())
+                            msg.get("result").is_some()
+                                || msg.get("error").is_some()
+                                || (msg.get("method").is_some() && msg.get("id").is_none())
                         })
                     } else {
-                        json_value.get("result").is_some() || json_value.get("error").is_some() ||
-                        (json_value.get("method").is_some() && json_value.get("id").is_none())
+                        json_value.get("result").is_some()
+                            || json_value.get("error").is_some()
+                            || (json_value.get("method").is_some() && json_value.get("id").is_none())
                     };
 
                     if only_responses_or_notifications && !contains_requests {
@@ -839,20 +799,22 @@ impl McpServer {
                     if requires_session {
                         let server_sessions = state.server_issued_sessions.read().await;
                         let has_session_header = headers.contains_key("mcp-session-id");
-                        
+
                         // If we have issued sessions and client doesn't provide one, that's an error
                         if !server_sessions.is_empty() && !has_session_header {
-                            tracing::warn!("Request requires session ID but none provided (server has issued sessions)");
+                            tracing::warn!(
+                                "Request requires session ID but none provided (server has issued sessions)"
+                            );
                             return StatusCode::BAD_REQUEST.into_response();
                         }
-                        
+
                         // If client provides session ID, verify it's one we issued
                         if has_session_header && !server_sessions.is_empty() {
                             let provided_session = headers
                                 .get("mcp-session-id")
                                 .and_then(|h| h.to_str().ok())
                                 .unwrap_or("");
-                            
+
                             if !server_sessions.contains(provided_session) {
                                 tracing::warn!("Invalid session ID provided: {}", provided_session);
                                 return StatusCode::NOT_FOUND.into_response();
@@ -906,12 +868,12 @@ impl McpServer {
                                 let mut response_builder = axum::response::Response::builder()
                                     .status(StatusCode::OK)
                                     .header(header::CONTENT_TYPE, "application/json");
-                                
+
                                 // Check if this was an initialize request to add session header
                                 if json_value.get("method").and_then(|m| m.as_str()) == Some("initialize") {
                                     response_builder = response_builder.header("mcp-session-id", &session_id);
                                     tracing::info!("Assigned session ID {} for initialize request", session_id);
-                                    
+
                                     // Track that we issued this session ID
                                     {
                                         let mut server_sessions = state.server_issued_sessions.write().await;
@@ -946,7 +908,8 @@ impl McpServer {
                                 StatusCode::BAD_REQUEST,
                                 [(header::CONTENT_TYPE, "application/json")],
                                 error_data,
-                            ).into_response()
+                            )
+                                .into_response()
                         }
                     }
                 }
@@ -958,7 +921,7 @@ impl McpServer {
                         .get("mcp-session-id")
                         .and_then(|h| h.to_str().ok())
                         .unwrap_or(&session_id);
-                        
+
                     tracing::info!("MCP session termination requested for: {}", session_to_delete);
 
                     // Remove connection
@@ -966,13 +929,13 @@ impl McpServer {
                         let mut connections = state.connections.write().await;
                         connections.remove(session_to_delete);
                     }
-                    
+
                     // Remove from server-issued sessions
                     {
                         let mut server_sessions = state.server_issued_sessions.write().await;
                         server_sessions.remove(session_to_delete);
                     }
-                    
+
                     // Clean up message history
                     {
                         let mut history = state.message_history.write().await;
@@ -982,9 +945,7 @@ impl McpServer {
                     StatusCode::NO_CONTENT.into_response()
                 }
 
-                _ => {
-                    StatusCode::METHOD_NOT_ALLOWED.into_response()
-                }
+                _ => StatusCode::METHOD_NOT_ALLOWED.into_response(),
             }
         }
 
@@ -1011,25 +972,23 @@ impl McpServer {
             mcp_endpoint_handler(axum::http::Method::DELETE, headers, State(state), None).await
         }
 
-        // Build the MCP routes - single endpoint as per protocol        
+        // Build the MCP routes - single endpoint as per protocol
         Router::new()
-            .route("/", get(mcp_get_handler).post(mcp_post_handler).delete(mcp_delete_handler))
-            .route("/health", get(mcp_health_handler))  // Keep health for debugging
-            .route("/info", get(connection_info_handler))  // Keep info for debugging
+            .route(
+                "/",
+                get(mcp_get_handler).post(mcp_post_handler).delete(mcp_delete_handler),
+            )
+            .route("/health", get(mcp_health_handler)) // Keep health for debugging
+            .route("/info", get(connection_info_handler)) // Keep info for debugging
             .with_state(state)
     }
 
     /// Handle an incoming message
-    pub async fn handle_message(
-        &self,
-        message: &str,
-        auth_header: Option<&str>,
-    ) -> McpResult<Option<JsonRpcResponse>> {
+    pub async fn handle_message(&self, message: &str, auth_header: Option<&str>) -> McpResult<Option<JsonRpcResponse>> {
         // Parse JSON-RPC request
-        let request: JsonRpcRequest =
-            serde_json::from_str(message).map_err(|e| McpError::InvalidJsonRpc {
-                details: format!("Failed to parse JSON-RPC request: {}", e),
-            })?;
+        let request: JsonRpcRequest = serde_json::from_str(message).map_err(|e| McpError::InvalidJsonRpc {
+            details: format!("Failed to parse JSON-RPC request: {}", e),
+        })?;
 
         // Handle the request
         self.handle_request(request, auth_header).await
@@ -1055,9 +1014,7 @@ impl McpServer {
             Err(e) => {
                 let json_rpc_error = match e {
                     McpError::MethodNotFound { method } => JsonRpcError::method_not_found(&method),
-                    McpError::InvalidParams { details, .. } => {
-                        JsonRpcError::invalid_params(details)
-                    }
+                    McpError::InvalidParams { details, .. } => JsonRpcError::invalid_params(details),
                     McpError::AuthenticationFailed { reason } => JsonRpcError::server_error(
                         -32001,
                         "Authentication failed",
@@ -1110,36 +1067,28 @@ impl McpServer {
                 let security_ctx = self
                     .authenticate_and_authorize(&request, auth_header, "tools/list")
                     .await?;
-                handler
-                    .handle_tools_list(request.params, &security_ctx)
-                    .await
+                handler.handle_tools_list(request.params, &security_ctx).await
             }
 
             "tools/call" => {
                 let security_ctx = self
                     .authenticate_and_authorize(&request, auth_header, "tools/call")
                     .await?;
-                handler
-                    .handle_tools_call(request.params, &security_ctx)
-                    .await
+                handler.handle_tools_call(request.params, &security_ctx).await
             }
 
             "resources/list" => {
                 let security_ctx = self
                     .authenticate_and_authorize(&request, auth_header, "resources/list")
                     .await?;
-                handler
-                    .handle_resources_list(request.params, &security_ctx)
-                    .await
+                handler.handle_resources_list(request.params, &security_ctx).await
             }
 
             "resources/read" => {
                 let security_ctx = self
                     .authenticate_and_authorize(&request, auth_header, "resources/read")
                     .await?;
-                handler
-                    .handle_resources_read(request.params, &security_ctx)
-                    .await
+                handler.handle_resources_read(request.params, &security_ctx).await
             }
 
             method => Err(McpError::MethodNotFound {
@@ -1149,11 +1098,7 @@ impl McpServer {
     }
 
     /// Handle a notification (no response expected)
-    async fn handle_notification(
-        &self,
-        request: JsonRpcRequest,
-        _auth_header: Option<&str>,
-    ) -> McpResult<()> {
+    async fn handle_notification(&self, request: JsonRpcRequest, _auth_header: Option<&str>) -> McpResult<()> {
         match request.method.as_str() {
             "initialized" => {
                 let mut initialized = self.initialized.write().await;
@@ -1161,9 +1106,7 @@ impl McpServer {
                     *initialized = true;
                     tracing::info!("MCP server initialized via notification");
                 } else {
-                    tracing::debug!(
-                        "Received initialized notification but server was already initialized"
-                    );
+                    tracing::debug!("Received initialized notification but server was already initialized");
                 }
                 Ok(())
             }
@@ -1186,7 +1129,7 @@ impl McpServer {
             .as_ref()
             .map(|info| info.name.as_str())
             .unwrap_or("Unknown Client");
-        
+
         tracing::info!(
             "Initializing MCP server with client: {} (protocol: {})",
             client_name,
@@ -1196,9 +1139,11 @@ impl McpServer {
         // Validate protocol version
         if !crate::protocol::validate_protocol_version(&params.protocol_version) {
             return Err(McpError::Protocol {
-                message: format!("Unsupported protocol version: {}. Supported versions: {:?}", 
-                    params.protocol_version, 
-                    crate::protocol::SUPPORTED_PROTOCOL_VERSIONS),
+                message: format!(
+                    "Unsupported protocol version: {}. Supported versions: {:?}",
+                    params.protocol_version,
+                    crate::protocol::SUPPORTED_PROTOCOL_VERSIONS
+                ),
             });
         }
 
@@ -1216,9 +1161,7 @@ impl McpServer {
             logging: None,   // TODO: Add logging capability
             prompts: None,   // TODO: Add prompts capability
             resources: None, // TODO: Add resources capability
-            tools: Some(crate::protocol::ToolsCapability {
-                list_changed: false,
-            }),
+            tools: Some(crate::protocol::ToolsCapability { list_changed: false }),
             batch: Some(crate::protocol::BatchCapability {
                 max_batch_size: 100,
                 max_parallel: 10,
@@ -1241,7 +1184,7 @@ impl McpServer {
 
         // Use the client's protocol version if supported, otherwise use our default
         let negotiated_version = crate::protocol::get_protocol_version_for_client(&params.protocol_version);
-        
+
         Ok(InitializeResult {
             protocol_version: negotiated_version,
             capabilities,
@@ -1352,16 +1295,9 @@ impl McpServerBuilder {
             .auth_manager
             .unwrap_or_else(|| Arc::new(McpAuthManager::new(McpAuth::None)));
 
-        let audit_logger = self
-            .audit_logger
-            .unwrap_or_else(|| Arc::new(AuditLogger::new(false)));
+        let audit_logger = self.audit_logger.unwrap_or_else(|| Arc::new(AuditLogger::new(false)));
 
-        Ok(McpServer::new(
-            config,
-            tool_registry,
-            auth_manager,
-            audit_logger,
-        ))
+        Ok(McpServer::new(config, tool_registry, auth_manager, audit_logger))
     }
 }
 

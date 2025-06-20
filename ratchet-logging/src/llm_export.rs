@@ -250,37 +250,21 @@ impl LLMExporter {
 
     fn extract_execution_context(&self, event: &LogEvent) -> ExecutionContext {
         ExecutionContext {
-            task_name: event
-                .fields
-                .get("task_name")
-                .and_then(|v| v.as_str())
-                .map(String::from),
+            task_name: event.fields.get("task_name").and_then(|v| v.as_str()).map(String::from),
             task_version: event
                 .fields
                 .get("task_version")
                 .and_then(|v| v.as_str())
                 .map(String::from),
-            job_id: event
-                .fields
-                .get("job_id")
-                .and_then(|v| v.as_i64())
-                .map(|n| n as i32),
+            job_id: event.fields.get("job_id").and_then(|v| v.as_i64()).map(|n| n as i32),
             execution_id: event
                 .fields
                 .get("execution_id")
                 .and_then(|v| v.as_i64())
                 .map(|n| n as i32),
-            input_data_summary: event
-                .fields
-                .get("input_data")
-                .cloned()
-                .map(|v| self.summarize_data(v)),
+            input_data_summary: event.fields.get("input_data").cloned().map(|v| self.summarize_data(v)),
             execution_duration_ms: event.fields.get("duration_ms").and_then(|v| v.as_u64()),
-            execution_phase: event
-                .fields
-                .get("phase")
-                .and_then(|v| v.as_str())
-                .map(String::from),
+            execution_phase: event.fields.get("phase").and_then(|v| v.as_str()).map(String::from),
         }
     }
 
@@ -292,11 +276,7 @@ impl LLMExporter {
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown")
                 .to_string(),
-            process_id: event
-                .fields
-                .get("process_id")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
+            process_id: event.fields.get("process_id").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
             memory_usage_mb: event
                 .fields
                 .get("memory_usage_mb")
@@ -345,25 +325,14 @@ impl LLMExporter {
             .collect()
     }
 
-    fn extract_relevant_context(
-        &self,
-        _event: &LogEvent,
-        _error: &ErrorInfo,
-    ) -> Option<RelevantContext> {
+    fn extract_relevant_context(&self, _event: &LogEvent, _error: &ErrorInfo) -> Option<RelevantContext> {
         // TODO: Implement when we have context extraction
         None
     }
 
-    fn generate_analysis_prompts(
-        &self,
-        error: &ErrorInfo,
-        patterns: &[MatchedPattern],
-    ) -> Vec<String> {
+    fn generate_analysis_prompts(&self, error: &ErrorInfo, patterns: &[MatchedPattern]) -> Vec<String> {
         let mut prompts = vec![
-            format!(
-                "Analyze this {} error in a task execution system",
-                error.error_type
-            ),
+            format!("Analyze this {} error in a task execution system", error.error_type),
             "What are the most likely root causes based on the error context?".to_string(),
         ];
 
@@ -378,28 +347,24 @@ impl LLMExporter {
 
             // Add specific prompts for known patterns
             if pattern.pattern_id == "db_connection_timeout" {
-                prompts.push("How should we handle database connection timeout errors in a distributed system?".to_string());
+                prompts.push(
+                    "How should we handle database connection timeout errors in a distributed system?".to_string(),
+                );
             }
         }
 
         // Add severity-specific prompts
         match error.severity {
             crate::severity::ErrorSeverity::Critical => {
-                prompts.push(
-                    "What immediate actions should be taken for this critical error?".to_string(),
-                );
+                prompts.push("What immediate actions should be taken for this critical error?".to_string());
             }
             crate::severity::ErrorSeverity::High => {
-                prompts.push(
-                    "How can we prevent this high-severity error from recurring?".to_string(),
-                );
+                prompts.push("How can we prevent this high-severity error from recurring?".to_string());
             }
             _ => {}
         }
 
-        prompts.push(
-            "Based on the execution context, is there a pattern or systemic issue?".to_string(),
-        );
+        prompts.push("Based on the execution context, is there a pattern or systemic issue?".to_string());
 
         prompts
     }
@@ -422,11 +387,7 @@ impl LLMExporter {
                 })
             }
             serde_json::Value::Object(obj) if obj.len() > 20 => {
-                let preview: HashMap<_, _> = obj
-                    .iter()
-                    .take(20)
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
+                let preview: HashMap<_, _> = obj.iter().take(20).map(|(k, v)| (k.clone(), v.clone())).collect();
                 serde_json::json!({
                     "_truncated": true,
                     "preview": preview,
@@ -458,35 +419,16 @@ pub fn format_markdown_report(report: &LLMErrorReport) -> String {
     ));
     output.push_str(&format!(
         "**Trace ID**: {}\n\n",
-        report
-            .error_summary
-            .trace_id
-            .as_ref()
-            .unwrap_or(&"N/A".to_string())
+        report.error_summary.trace_id.as_ref().unwrap_or(&"N/A".to_string())
     ));
 
     // Error Summary
     output.push_str("## Error Summary\n\n");
-    output.push_str(&format!(
-        "- **Type**: {}\n",
-        report.error_summary.error_type
-    ));
-    output.push_str(&format!(
-        "- **Code**: {}\n",
-        report.error_summary.error_code
-    ));
-    output.push_str(&format!(
-        "- **Message**: {}\n",
-        report.error_summary.message
-    ));
-    output.push_str(&format!(
-        "- **Severity**: {}\n",
-        report.error_summary.severity
-    ));
-    output.push_str(&format!(
-        "- **Retryable**: {}\n",
-        report.error_summary.is_retryable
-    ));
+    output.push_str(&format!("- **Type**: {}\n", report.error_summary.error_type));
+    output.push_str(&format!("- **Code**: {}\n", report.error_summary.error_code));
+    output.push_str(&format!("- **Message**: {}\n", report.error_summary.message));
+    output.push_str(&format!("- **Severity**: {}\n", report.error_summary.severity));
+    output.push_str(&format!("- **Retryable**: {}\n", report.error_summary.is_retryable));
 
     // Execution Context
     output.push_str("\n## Execution Context\n\n");
@@ -558,15 +500,11 @@ mod tests {
 
     #[test]
     fn test_llm_export() {
-        let error = ErrorInfo::new(
-            "TaskExecutionError",
-            "TASK_EXEC_001",
-            "Task failed after 3 retries",
-        )
-        .with_severity(ErrorSeverity::High)
-        .with_retryable(false)
-        .with_context_value("task_name", "weather-api")
-        .with_context_value("retry_count", 3);
+        let error = ErrorInfo::new("TaskExecutionError", "TASK_EXEC_001", "Task failed after 3 retries")
+            .with_severity(ErrorSeverity::High)
+            .with_retryable(false)
+            .with_context_value("task_name", "weather-api")
+            .with_context_value("retry_count", 3);
 
         let event = LogEvent::new(super::super::LogLevel::Error, "Task execution failed")
             .with_error(error)
@@ -581,10 +519,7 @@ mod tests {
         let report = report.unwrap();
 
         assert_eq!(report.error_summary.error_type, "TaskExecutionError");
-        assert_eq!(
-            report.execution_context.task_name,
-            Some("weather-api".to_string())
-        );
+        assert_eq!(report.execution_context.task_name, Some("weather-api".to_string()));
         assert!(!report.suggested_prompts.is_empty());
     }
 

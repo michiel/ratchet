@@ -1,6 +1,4 @@
-use super::enrichment::{
-    ExecutionContextEnricher, ProcessEnricher, SystemEnricher, TaskContextEnricher,
-};
+use super::enrichment::{ExecutionContextEnricher, ProcessEnricher, SystemEnricher, TaskContextEnricher};
 use super::sinks::{BufferedSink, ConsoleSink, FileSink};
 use super::{logger::LogSink, LogLevel, LoggerBuilder};
 use serde::{Deserialize, Serialize};
@@ -193,9 +191,8 @@ impl LoggingConfig {
                 rotation,
                 buffered,
             } => {
-                let mut file_sink = FileSink::new(path, *level).map_err(|e| {
-                    ConfigError::SinkCreation(format!("Failed to create file sink: {}", e))
-                })?;
+                let mut file_sink = FileSink::new(path, *level)
+                    .map_err(|e| ConfigError::SinkCreation(format!("Failed to create file sink: {}", e)))?;
 
                 if let Some(rotation_config) = rotation {
                     let max_size = parse_size(&rotation_config.max_size)?;
@@ -272,9 +269,7 @@ fn parse_size(size_str: &str) -> Result<u64, ConfigError> {
             .map(|n| n * 1024 * 1024 * 1024)
             .map_err(|_| ConfigError::InvalidSize(size_str))
     } else {
-        size_str
-            .parse::<u64>()
-            .map_err(|_| ConfigError::InvalidSize(size_str))
+        size_str.parse::<u64>().map_err(|_| ConfigError::InvalidSize(size_str))
     }
 }
 

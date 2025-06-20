@@ -28,11 +28,7 @@ pub struct DiscoveredPlugin {
 
 impl DiscoveredPlugin {
     /// Create a new discovered plugin
-    pub fn new(
-        manifest: PluginManifest,
-        source_path: PathBuf,
-        discovery_method: impl Into<String>,
-    ) -> Self {
+    pub fn new(manifest: PluginManifest, source_path: PathBuf, discovery_method: impl Into<String>) -> Self {
         Self {
             manifest,
             source_path,
@@ -50,21 +46,14 @@ impl DiscoveredPlugin {
     }
 
     /// Add checksum
-    pub fn with_checksum(
-        mut self,
-        algorithm: impl Into<String>,
-        checksum: impl Into<String>,
-    ) -> Self {
+    pub fn with_checksum(mut self, algorithm: impl Into<String>, checksum: impl Into<String>) -> Self {
         self.checksums.insert(algorithm.into(), checksum.into());
         self
     }
 
     /// Get plugin unique identifier for discovery
     pub fn discovery_id(&self) -> String {
-        format!(
-            "{}:{}",
-            self.manifest.plugin.id, self.manifest.plugin.version
-        )
+        format!("{}:{}", self.manifest.plugin.id, self.manifest.plugin.version)
     }
 }
 
@@ -121,10 +110,7 @@ pub struct PluginDiscovery {
 impl PluginDiscovery {
     /// Create a new plugin discovery service
     pub fn new(config: DiscoveryConfig, loader_config: LoaderConfig) -> Self {
-        Self {
-            config,
-            loader_config,
-        }
+        Self { config, loader_config }
     }
 
     /// Create with default configuration
@@ -220,10 +206,7 @@ impl PluginDiscovery {
     }
 
     /// Discover a plugin from a specific file
-    async fn discover_plugin_from_file(
-        &self,
-        path: &Path,
-    ) -> PluginResult<Option<DiscoveredPlugin>> {
+    async fn discover_plugin_from_file(&self, path: &Path) -> PluginResult<Option<DiscoveredPlugin>> {
         // Get file metadata
         let metadata = tokio::fs::metadata(path).await?;
         let size_bytes = metadata.len();
@@ -255,8 +238,7 @@ impl PluginDiscovery {
             manifest.validate()?;
         }
 
-        let mut discovered =
-            DiscoveredPlugin::new(manifest, path.to_path_buf(), "filesystem").with_size(size_bytes);
+        let mut discovered = DiscoveredPlugin::new(manifest, path.to_path_buf(), "filesystem").with_size(size_bytes);
 
         // Calculate checksums if required
         if self.config.calculate_checksums {
@@ -338,10 +320,7 @@ impl PluginDiscovery {
     }
 
     /// Remove duplicate plugins
-    fn deduplicate_plugins(
-        &self,
-        plugins: Vec<DiscoveredPlugin>,
-    ) -> PluginResult<Vec<DiscoveredPlugin>> {
+    fn deduplicate_plugins(&self, plugins: Vec<DiscoveredPlugin>) -> PluginResult<Vec<DiscoveredPlugin>> {
         let mut unique_plugins: HashMap<String, DiscoveredPlugin> = HashMap::new();
         let mut duplicates = Vec::new();
 
@@ -454,9 +433,7 @@ impl PluginCatalog {
 
     /// Get plugin by ID
     pub fn get_plugin(&self, plugin_id: &str) -> Option<&DiscoveredPlugin> {
-        self.plugins
-            .values()
-            .find(|p| p.manifest.plugin.id == plugin_id)
+        self.plugins.values().find(|p| p.manifest.plugin.id == plugin_id)
     }
 
     /// List all plugins
@@ -481,10 +458,7 @@ impl PluginCatalog {
             stats.total_size_bytes += plugin.size_bytes;
 
             let plugin_type = &plugin.manifest.plugin.plugin_type;
-            *stats
-                .plugins_by_type
-                .entry(plugin_type.to_string())
-                .or_insert(0) += 1;
+            *stats.plugins_by_type.entry(plugin_type.to_string()).or_insert(0) += 1;
         }
 
         stats
@@ -564,10 +538,7 @@ mod tests {
 
         assert_eq!(discovered.source_path, path);
         assert_eq!(discovered.size_bytes, 1024);
-        assert_eq!(
-            discovered.checksums.get("sha256"),
-            Some(&"abc123".to_string())
-        );
+        assert_eq!(discovered.checksums.get("sha256"), Some(&"abc123".to_string()));
         assert_eq!(discovered.discovery_id(), "test-plugin:1.0.0");
     }
 
@@ -590,9 +561,7 @@ mod tests {
         let manifest = create_test_manifest();
         let manifest_path = temp_dir.path().join("plugin.json");
         let manifest_json = serde_json::to_string_pretty(&manifest).unwrap();
-        tokio::fs::write(&manifest_path, manifest_json)
-            .await
-            .unwrap();
+        tokio::fs::write(&manifest_path, manifest_json).await.unwrap();
 
         // Discover plugins
         let plugins = discovery.discover_in_path(temp_dir.path()).await.unwrap();
@@ -627,13 +596,11 @@ mod tests {
 
         // Add plugins
         let manifest1 = create_test_manifest();
-        let plugin1 = DiscoveredPlugin::new(manifest1, PathBuf::from("/test/plugin1.so"), "test")
-            .with_size(1024);
+        let plugin1 = DiscoveredPlugin::new(manifest1, PathBuf::from("/test/plugin1.so"), "test").with_size(1024);
 
         let mut manifest2 = create_test_manifest();
         manifest2.plugin.id = "test-plugin-2".to_string();
-        let plugin2 = DiscoveredPlugin::new(manifest2, PathBuf::from("/test/plugin2.so"), "test")
-            .with_size(2048);
+        let plugin2 = DiscoveredPlugin::new(manifest2, PathBuf::from("/test/plugin2.so"), "test").with_size(2048);
 
         catalog.add_plugins(vec![plugin1, plugin2]);
 
@@ -652,14 +619,12 @@ mod tests {
         let mut catalog = PluginCatalog::new();
 
         let manifest = create_test_manifest();
-        let plugin = DiscoveredPlugin::new(manifest, PathBuf::from("/test/plugin.so"), "test")
-            .with_size(1024);
+        let plugin = DiscoveredPlugin::new(manifest, PathBuf::from("/test/plugin.so"), "test").with_size(1024);
 
         catalog.add_plugins(vec![plugin]);
 
         // Search by plugin type
-        let task_plugins =
-            catalog.search_plugins(|p| matches!(p.manifest.plugin.plugin_type, PluginType::Task));
+        let task_plugins = catalog.search_plugins(|p| matches!(p.manifest.plugin.plugin_type, PluginType::Task));
         assert_eq!(task_plugins.len(), 1);
 
         // Search by size
@@ -676,8 +641,7 @@ mod tests {
 
         // Create duplicate plugins (same ID and version)
         let manifest = create_test_manifest();
-        let plugin1 =
-            DiscoveredPlugin::new(manifest.clone(), PathBuf::from("/test/plugin1.so"), "test");
+        let plugin1 = DiscoveredPlugin::new(manifest.clone(), PathBuf::from("/test/plugin1.so"), "test");
         let plugin2 = DiscoveredPlugin::new(manifest, PathBuf::from("/test/plugin2.so"), "test");
 
         let plugins = vec![plugin1, plugin2];

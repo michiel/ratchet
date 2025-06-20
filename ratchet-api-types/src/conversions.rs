@@ -2,7 +2,7 @@
 //!
 //! This module provides placeholder conversion utilities that will be
 //! implemented when integrating with specific database and service types.
-//! 
+//!
 //! Note: The actual conversion implementations will depend on the specific
 //! database entities and service types available when this crate is integrated.
 

@@ -1,7 +1,11 @@
 //! Simplified JavaScript execution without Task dependencies
 
-use crate::{conversion::{convert_js_result_to_json, prepare_input_argument}, error_handling::{parse_js_error, register_error_types}, JsExecutionError};
-use boa_engine::{Context as BoaContext, Source, Script, property::PropertyKey, JsString};
+use crate::{
+    conversion::{convert_js_result_to_json, prepare_input_argument},
+    error_handling::{parse_js_error, register_error_types},
+    JsExecutionError,
+};
+use boa_engine::{property::PropertyKey, Context as BoaContext, JsString, Script, Source};
 use ratchet_core::validation::{parse_schema, validate_json};
 use serde_json::Value as JsonValue;
 use std::path::Path;
@@ -35,8 +39,10 @@ async fn call_js_function_with_code(
     })?;
 
     // Try to get the main function from the global context first
-    let main_function_result = context.global_object().get(PropertyKey::from(JsString::from("main")), context);
-    
+    let main_function_result = context
+        .global_object()
+        .get(PropertyKey::from(JsString::from("main")), context);
+
     let result = if let Ok(main_fn) = main_function_result {
         // Check if main function exists and is callable
         if main_fn.is_callable() {
@@ -92,9 +98,13 @@ async fn handle_anonymous_function_with_http(
     js_code: Option<&str>,
     http_manager: &impl ratchet_http::HttpClient,
 ) -> Result<JsonValue, JsExecutionError> {
-    debug!("Handling anonymous function with HTTP support. Script result type: {:?}, is_callable: {}, is_undefined: {}", 
-           script_result.type_of(), script_result.is_callable(), script_result.is_undefined());
-    
+    debug!(
+        "Handling anonymous function with HTTP support. Script result type: {:?}, is_callable: {}, is_undefined: {}",
+        script_result.type_of(),
+        script_result.is_callable(),
+        script_result.is_undefined()
+    );
+
     if script_result.is_callable() {
         debug!("Using anonymous function result");
         // Call the function first to allow it to set fetch variables
@@ -109,7 +119,10 @@ async fn handle_anonymous_function_with_http(
 
         // After function execution, check for HTTP fetch calls
         if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
-            debug!("Detected HTTP fetch call to: {} after anonymous function execution", url);
+            debug!(
+                "Detected HTTP fetch call to: {} after anonymous function execution",
+                url
+            );
             let js_result = crate::http_integration::handle_fetch_processing(
                 context,
                 &script_result,
@@ -143,10 +156,10 @@ async fn handle_function_expression_with_http(
     http_manager: &impl ratchet_http::HttpClient,
 ) -> Result<JsonValue, JsExecutionError> {
     debug!("Handling function expression with HTTP support");
-    
+
     if let Some(code) = js_code {
         let wrapped_code = format!("({})", code.trim());
-        
+
         // Try to parse and execute the wrapped code
         let wrapped_source = Source::from_bytes(&wrapped_code);
         match Script::parse(wrapped_source, None, context) {
@@ -155,7 +168,7 @@ async fn handle_function_expression_with_http(
                     let parsed_error = parse_js_error(&e.to_string());
                     JsExecutionError::TypedJsError(parsed_error)
                 })?;
-                
+
                 if wrapped_result.is_callable() {
                     debug!("Successfully extracted function from expression");
                     // Call the function first to allow it to set fetch variables
@@ -170,7 +183,10 @@ async fn handle_function_expression_with_http(
 
                     // After function execution, check for HTTP fetch calls
                     if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
-                        debug!("Detected HTTP fetch call to: {} after function expression execution", url);
+                        debug!(
+                            "Detected HTTP fetch call to: {} after function expression execution",
+                            url
+                        );
                         let js_result = crate::http_integration::handle_fetch_processing(
                             context,
                             &wrapped_result,
@@ -215,9 +231,13 @@ fn handle_anonymous_function(
     input_arg: boa_engine::JsValue,
     js_code: Option<&str>,
 ) -> Result<JsonValue, JsExecutionError> {
-    debug!("Handling anonymous function. Script result type: {:?}, is_callable: {}, is_undefined: {}", 
-           script_result.type_of(), script_result.is_callable(), script_result.is_undefined());
-    
+    debug!(
+        "Handling anonymous function. Script result type: {:?}, is_callable: {}, is_undefined: {}",
+        script_result.type_of(),
+        script_result.is_callable(),
+        script_result.is_undefined()
+    );
+
     if script_result.is_callable() {
         debug!("Using anonymous function result");
         // The script itself is a function, call it with input
@@ -238,11 +258,11 @@ fn handle_anonymous_function(
         // The script didn't return a function or value, which means it might be a function expression
         // that wasn't returned. Let's try to re-execute it as a function expression.
         debug!("Script returned undefined, trying to handle as function expression");
-        
+
         // For function expressions like (function(input) { ... }), we need to wrap them to return the function
         if let Some(code) = js_code {
             let wrapped_code = format!("({})", code.trim());
-            
+
             // Try to parse and execute the wrapped code
             let wrapped_source = Source::from_bytes(&wrapped_code);
             match Script::parse(wrapped_source, None, context) {
@@ -278,7 +298,7 @@ fn handle_anonymous_function(
             }
         } else {
             Err(JsExecutionError::RuntimeError(
-                "No main function found and script does not return a callable function or value".to_string()
+                "No main function found and script does not return a callable function or value".to_string(),
             ))
         }
     }
@@ -294,12 +314,15 @@ pub async fn call_js_function_with_context(
 ) -> Result<JsonValue, JsExecutionError> {
     // Prepare input and context arguments
     let input_arg = prepare_input_argument(context, input_data)?;
-    let context_arg = prepare_input_argument(context, &serde_json::json!({
-        "executionId": execution_context.execution_id,
-        "taskId": execution_context.task_id,
-        "taskVersion": execution_context.task_version,
-        "jobId": execution_context.job_id
-    }))?;
+    let context_arg = prepare_input_argument(
+        context,
+        &serde_json::json!({
+            "executionId": execution_context.execution_id,
+            "taskId": execution_context.task_id,
+            "taskVersion": execution_context.task_version,
+            "jobId": execution_context.job_id
+        }),
+    )?;
 
     // Execute the script first to define functions
     script.evaluate(context).map_err(|e| {
@@ -308,9 +331,10 @@ pub async fn call_js_function_with_context(
     })?;
 
     // Get the main function from the global context
-    let main_function = context.global_object().get(PropertyKey::from(JsString::from("main")), context).map_err(|e| {
-        JsExecutionError::RuntimeError(format!("Failed to get main function: {}", e))
-    })?;
+    let main_function = context
+        .global_object()
+        .get(PropertyKey::from(JsString::from("main")), context)
+        .map_err(|e| JsExecutionError::RuntimeError(format!("Failed to get main function: {}", e)))?;
 
     // Check for HTTP fetch calls
     let result = if let Some((url, params, body)) = crate::http_integration::check_fetch_call(context)? {
@@ -414,16 +438,14 @@ pub async fn execute_js_with_content(
     debug!("Registering fetch API");
     // Register the fetch API
     #[cfg(feature = "http")]
-    crate::fetch::register_fetch(&mut context).map_err(|e| {
-        JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e))
-    })?;
+    crate::fetch::register_fetch(&mut context)
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to register fetch API: {}", e)))?;
 
     debug!("Compiling JavaScript code");
     // Parse and compile the JavaScript code
     let source = Source::from_bytes(js_code);
-    let script = Script::parse(source, None, &mut context).map_err(|e| {
-        JsExecutionError::CompilationError(format!("Compilation failed: {}", e))
-    })?;
+    let script = Script::parse(source, None, &mut context)
+        .map_err(|e| JsExecutionError::CompilationError(format!("Compilation failed: {}", e)))?;
 
     debug!("Calling JavaScript function");
     // Call the JavaScript function with the input data and execution context

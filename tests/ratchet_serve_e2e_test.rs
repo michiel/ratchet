@@ -1,5 +1,5 @@
 //! End-to-end integration test for `ratchet serve` command
-//! 
+//!
 //! This test demonstrates comprehensive end-to-end testing of the ratchet serve functionality:
 //! 1. Loads a task from a repository
 //! 2. Starts a full ratchet server
@@ -27,26 +27,22 @@ use axum::{
     Router,
 };
 use ratchet_config::{
-    RatchetConfig,
     domains::{
         database::DatabaseConfig,
-        server::ServerConfig,
-        registry::{RegistryConfig, RegistrySourceConfig, RegistrySourceType},
-        output::OutputConfig,
         http::HttpConfig,
-        logging::{LoggingConfig, LogLevel, LogFormat},
+        logging::{LogFormat, LogLevel, LoggingConfig},
+        output::OutputConfig,
+        registry::{RegistryConfig, RegistrySourceConfig, RegistrySourceType},
+        server::ServerConfig,
     },
+    RatchetConfig,
 };
-use std::io::{self, Write};
-use std::sync::{Arc, Mutex};
 use ratchet_server::Server;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{
-    net::SocketAddr,
-    path::PathBuf,
-    time::Duration,
-};
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tempfile::TempDir;
 use tokio::{net::TcpListener, time::timeout};
 
@@ -91,13 +87,16 @@ impl Write for OutputCapture {
 fn init_quiet_logging() {
     use std::sync::Once;
     static INIT: Once = Once::new();
-    
+
     // Initialize logging to be less verbose for tests
     INIT.call_once(|| {
         // Set very restrictive logging - only show warnings and errors from our code
-        std::env::set_var("RUST_LOG", "warn,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet=warn");
+        std::env::set_var(
+            "RUST_LOG",
+            "warn,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet=warn",
+        );
         std::env::set_var("RUST_LOG_STYLE", "never"); // Disable colored output
-        
+
         // Try to initialize a minimal tracing subscriber if one isn't already set
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::WARN)
@@ -130,16 +129,9 @@ struct WebhookState {
 }
 
 /// Webhook handler that captures execution results
-async fn webhook_handler(
-    State(state): State<WebhookState>,
-    Json(payload): Json<WebhookPayload>,
-) -> StatusCode {
+async fn webhook_handler(State(state): State<WebhookState>, Json(payload): Json<WebhookPayload>) -> StatusCode {
     println!("📨 Webhook received: {:?}", payload);
-    state
-        .received_payloads
-        .lock()
-        .unwrap()
-        .push(payload);
+    state.received_payloads.lock().unwrap().push(payload);
     StatusCode::OK
 }
 
@@ -157,9 +149,7 @@ async fn start_webhook_server() -> Result<(SocketAddr, WebhookState)> {
     let addr = listener.local_addr()?;
 
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
 
     // Give the server a moment to start
@@ -169,13 +159,10 @@ async fn start_webhook_server() -> Result<(SocketAddr, WebhookState)> {
 }
 
 /// Create a test configuration for the ratchet server
-async fn create_test_config(
-    _webhook_url: &str,
-    repository_path: &str,
-) -> Result<(RatchetConfig, TempDir)> {
+async fn create_test_config(_webhook_url: &str, repository_path: &str) -> Result<(RatchetConfig, TempDir)> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("test.db");
-    
+
     let config = RatchetConfig {
         server: Some(ServerConfig {
             bind_address: "127.0.0.1".to_string(),
@@ -196,7 +183,7 @@ async fn create_test_config(
                 polling_interval: Some(Duration::from_secs(300)),
                 enabled: true,
                 auth_name: None,
-                config: Default::default()
+                config: Default::default(),
             }],
             default_polling_interval: Duration::from_secs(300),
             ..Default::default()
@@ -205,9 +192,7 @@ async fn create_test_config(
             default_timeout: Duration::from_secs(10),
             ..Default::default()
         },
-        http: HttpConfig {
-            ..Default::default()
-        },
+        http: HttpConfig { ..Default::default() },
         logging: LoggingConfig {
             level: LogLevel::Debug,
             format: LogFormat::Json,
@@ -245,8 +230,15 @@ impl GraphQLClient {
 
         if !response.status().is_success() {
             let status = response.status();
-            let text = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
-            return Err(anyhow::anyhow!("GraphQL request failed with status {}: {}", status, text));
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read response body".to_string());
+            return Err(anyhow::anyhow!(
+                "GraphQL request failed with status {}: {}",
+                status,
+                text
+            ));
         }
 
         let result: Value = response.json().await?;
@@ -266,8 +258,15 @@ impl GraphQLClient {
 
         if !response.status().is_success() {
             let status = response.status();
-            let text = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
-            return Err(anyhow::anyhow!("GraphQL request failed with status {}: {}", status, text));
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read response body".to_string());
+            return Err(anyhow::anyhow!(
+                "GraphQL request failed with status {}: {}",
+                status,
+                text
+            ));
         }
 
         let result: Value = response.json().await?;
@@ -278,15 +277,14 @@ impl GraphQLClient {
 #[tokio::test]
 async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     init_quiet_logging();
-    
+
     // Check if we should run a fast version of the test
-    let fast_mode = std::env::var("RATCHET_FAST_TESTS").unwrap_or_default() == "1" ||
-                   std::env::var("CI").is_ok();
-    
+    let fast_mode = std::env::var("RATCHET_FAST_TESTS").unwrap_or_default() == "1" || std::env::var("CI").is_ok();
+
     if fast_mode {
         println!("⚡ Running in fast mode - reduced timeouts and validation");
     }
-    
+
     println!("🚀 Starting ratchet serve end-to-end test");
 
     // Step 1: Start webhook server
@@ -297,9 +295,12 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
 
     // Step 2: Set up test repository with a sample task
     println!("📁 Step 2: Setting up test repository");
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
-    
+
     // Verify the sample task exists
     let addition_task_path = sample_tasks_path.join("tasks").join("addition");
     assert!(
@@ -311,30 +312,31 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
 
     // Step 3: Create test configuration
     println!("⚙️  Step 3: Creating test configuration");
-    let (config, _temp_dir) = create_test_config(
-        &webhook_url,
-        &sample_tasks_path.to_string_lossy(),
-    ).await.unwrap();
+    let (config, _temp_dir) = create_test_config(&webhook_url, &sample_tasks_path.to_string_lossy())
+        .await
+        .unwrap();
 
     // Step 4: Start ratchet server
     println!("🌐 Step 4: Starting ratchet server");
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config.clone())?;
     let server = Server::new(server_config).await?;
     let app = server.build_app();
-    
+
     // Start server on random port
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let server_addr = listener.local_addr().unwrap();
     let server_url = format!("http://{}", server_addr);
-    
+
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
-    
+
     // Give server time to start and sync repositories
-    let startup_delay = if fast_mode { Duration::from_millis(500) } else { Duration::from_secs(2) };
+    let startup_delay = if fast_mode {
+        Duration::from_millis(500)
+    } else {
+        Duration::from_secs(2)
+    };
     println!("⏳ Waiting for server to sync repositories ({:?})...", startup_delay);
     tokio::time::sleep(startup_delay).await;
     println!("✅ Ratchet server running on: {}", server_url);
@@ -342,19 +344,19 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     // Step 5: Wait for server to be ready with basic HTTP health check
     println!("🏥 Step 5: Waiting for server to be ready");
     let http_client = reqwest::Client::new();
-    
+
     // Try different health check endpoints
     let health_endpoints = vec![
         format!("{}/", server_url),
         format!("{}/health", server_url),
         format!("{}/api/v1/health", server_url),
     ];
-    
+
     // Retry health check up to 10 times with 500ms delays
     let mut ready = false;
     for attempt in 1..=10 {
         let mut found_endpoint = false;
-        
+
         for health_url in &health_endpoints {
             match http_client.get(health_url).send().await {
                 Ok(response) if response.status().is_success() => {
@@ -362,12 +364,17 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
                     ready = true;
                     found_endpoint = true;
                     break;
-                },
+                }
                 Ok(response) => {
                     if attempt == 1 {
-                        println!("🔍 Attempt {}: {} returned status {}", attempt, health_url, response.status());
+                        println!(
+                            "🔍 Attempt {}: {} returned status {}",
+                            attempt,
+                            health_url,
+                            response.status()
+                        );
                     }
-                },
+                }
                 Err(e) => {
                     if attempt == 1 {
                         println!("🔍 Attempt {}: {} connection failed: {}", attempt, health_url, e);
@@ -375,18 +382,18 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
                 }
             }
         }
-        
+
         if found_endpoint {
             break;
         }
-        
+
         if attempt == 1 {
             println!("🔄 No endpoints ready yet, will retry...");
         }
-        
+
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-    
+
     if !ready {
         panic!("Server failed to become ready after 10 attempts");
     }
@@ -406,12 +413,12 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
             }
         }
     "#;
-    
+
     let health_response = timeout(Duration::from_secs(10), graphql_client.query(health_query))
         .await
         .expect("Health check should not timeout")
         .expect("Health check should succeed");
-    
+
     println!("✅ Server health check: {:?}", health_response);
 
     // Step 7: Query for available tasks
@@ -484,10 +491,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
 
     let task_detail_response = timeout(
         Duration::from_secs(10),
-        graphql_client.query_with_variables(
-            task_detail_query,
-            json!({ "id": task_id })
-        )
+        graphql_client.query_with_variables(task_detail_query, json!({ "id": task_id })),
     )
     .await
     .expect("Task detail query should not timeout")
@@ -496,7 +500,10 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     println!("📊 Task details: {:?}", task_detail_response);
 
     let task_detail = &task_detail_response["data"]["task"];
-    assert!(task_detail["enabled"].as_bool().unwrap_or(false), "Task should be enabled");
+    assert!(
+        task_detail["enabled"].as_bool().unwrap_or(false),
+        "Task should be enabled"
+    );
 
     // Step 8: Schedule task execution with webhook output destination
     println!("⚡ Step 8: Scheduling task execution with webhook");
@@ -542,7 +549,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
 
     let execute_response = timeout(
         Duration::from_secs(10),
-        graphql_client.query_with_variables(execute_mutation, execution_input)
+        graphql_client.query_with_variables(execute_mutation, execution_input),
     )
     .await
     .expect("Execute mutation should not timeout");
@@ -551,10 +558,10 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     match execute_response {
         Ok(response) => {
             println!("📤 Execution scheduled: {:?}", response);
-            
+
             if let Some(errors) = response.get("errors") {
                 println!("⚠️  Execution errors (expected in test environment): {:?}", errors);
-                
+
                 // Check if errors are schema-related (which would be a real problem)
                 let error_messages: Vec<&str> = errors
                     .as_array()
@@ -562,19 +569,19 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
                     .iter()
                     .filter_map(|e| e["message"].as_str())
                     .collect();
-                
+
                 let has_schema_errors = error_messages.iter().any(|msg| {
-                    msg.contains("Unknown field") || 
-                    msg.contains("Cannot query field") ||
-                    msg.contains("Unknown argument")
+                    msg.contains("Unknown field")
+                        || msg.contains("Cannot query field")
+                        || msg.contains("Unknown argument")
                 });
-                
+
                 assert!(!has_schema_errors, "Should not have GraphQL schema errors");
             } else if let Some(data) = response.get("data") {
                 if let Some(job) = data.get("executeTask") {
                     let job_id = job["id"].as_str().unwrap();
                     println!("✅ Job created with ID: {}", job_id);
-                    
+
                     // Verify job has webhook output destination
                     if let Some(destinations) = job.get("outputDestinations") {
                         if !destinations.is_null() {
@@ -595,7 +602,10 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
             }
         }
         Err(e) => {
-            println!("⚠️  Execution request failed (may be expected in test environment): {:?}", e);
+            println!(
+                "⚠️  Execution request failed (may be expected in test environment): {:?}",
+                e
+            );
         }
     }
 
@@ -625,10 +635,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
 
     let executions_response = timeout(
         Duration::from_secs(10),
-        graphql_client.query_with_variables(
-            executions_query,
-            json!({ "taskId": task_id })
-        )
+        graphql_client.query_with_variables(executions_query, json!({ "taskId": task_id })),
     )
     .await
     .expect("Executions query should not timeout")
@@ -667,25 +674,32 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     println!("📋 Jobs in queue: {:?}", jobs_response);
 
     // Step 11: Wait for potential webhook delivery
-    let webhook_timeout = if fast_mode { Duration::from_secs(2) } else { Duration::from_secs(10) };
-    println!("⏳ Step 11: Waiting for webhook delivery (timeout after {:?})", webhook_timeout);
+    let webhook_timeout = if fast_mode {
+        Duration::from_secs(2)
+    } else {
+        Duration::from_secs(10)
+    };
+    println!(
+        "⏳ Step 11: Waiting for webhook delivery (timeout after {:?})",
+        webhook_timeout
+    );
     let start_time = std::time::Instant::now();
-    
+
     while start_time.elapsed() < webhook_timeout {
         let payloads = webhook_state.received_payloads.lock().unwrap();
         if !payloads.is_empty() {
             println!("🎯 Webhook payload received!");
             let payload = &payloads[0];
-            
+
             // Step 12: Verify webhook payload
             println!("✅ Step 12: Verifying webhook payload");
             assert_eq!(payload.status, "completed", "Task should complete successfully");
-            
+
             if let Some(output) = &payload.output {
                 assert_eq!(output["sum"], 100, "Addition result should be 100 (42 + 58)");
                 println!("🎉 Expected result verified: 42 + 58 = 100");
             }
-            
+
             println!("✅ Webhook verification completed successfully!");
             drop(payloads);
             break;
@@ -733,11 +747,16 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
         if fast_mode {
             println!("⚡ Fast mode: Skipping webhook validation - infrastructure test completed");
         } else {
-            println!("⚠️  No webhook payloads received - this may indicate the execution pipeline needs worker processes");
+            println!(
+                "⚠️  No webhook payloads received - this may indicate the execution pipeline needs worker processes"
+            );
             println!("   This is expected in the test environment without full infrastructure.");
         }
     } else {
-        println!("✅ Webhook integration working: {} payload(s) received", final_payloads.len());
+        println!(
+            "✅ Webhook integration working: {} payload(s) received",
+            final_payloads.len()
+        );
     }
 
     println!("🎉 End-to-end test completed successfully!");
@@ -746,7 +765,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     println!("✅ Job scheduling works");
     println!("✅ Webhook configuration works");
     println!("✅ Server startup and health monitoring works");
-    
+
     Ok(())
 }
 
@@ -757,28 +776,28 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
     println!("🧪 Testing GraphQL playground queries compatibility");
 
     // Set up minimal server
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let sample_tasks_path = project_root.join("sample").join("js-tasks");
-    
-    let (config, _temp_dir) = create_test_config(
-        "http://localhost:3000/webhook",
-        &sample_tasks_path.to_string_lossy(),
-    ).await.unwrap();
+
+    let (config, _temp_dir) = create_test_config("http://localhost:3000/webhook", &sample_tasks_path.to_string_lossy())
+        .await
+        .unwrap();
 
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
     let app = server.build_app();
-    
+
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let server_addr = listener.local_addr().unwrap();
     let server_url = format!("http://{}", server_addr);
-    
+
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
-    
+
     // Reduced startup time for compatibility test
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -786,7 +805,9 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
 
     // Test all the queries from the GraphQL playground
     let playground_queries = vec![
-        ("List All Tasks", r#"
+        (
+            "List All Tasks",
+            r#"
             query ListAllTasks {
                 tasks {
                     items {
@@ -813,8 +834,11 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
                     }
                 }
             }
-        "#),
-        ("Task Executions", r#"
+        "#,
+        ),
+        (
+            "Task Executions",
+            r#"
             query TaskExecutions($taskId: String) {
                 executions(filters: { taskId: $taskId }) {
                     items {
@@ -839,8 +863,11 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
                     }
                 }
             }
-        "#),
-        ("Task Statistics", r#"
+        "#,
+        ),
+        (
+            "Task Statistics",
+            r#"
             query TaskStatistics {
                 taskStats {
                     totalTasks
@@ -852,8 +879,11 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
                     averageExecutionTimeMs
                 }
             }
-        "#),
-        ("Jobs Queue", r#"
+        "#,
+        ),
+        (
+            "Jobs Queue",
+            r#"
             query JobsQueue($status: JobStatusGraphQL) {
                 jobs(filters: { status: $status }) {
                     items {
@@ -877,14 +907,15 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
                     }
                 }
             }
-        "#),
+        "#,
+        ),
     ];
 
     for (name, query) in playground_queries {
         println!("Testing playground query: {}", name);
-        
+
         let result = graphql_client.query(query).await;
-        
+
         match result {
             Ok(response) => {
                 if let Some(errors) = response.get("errors") {
@@ -894,25 +925,25 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
                         .iter()
                         .map(|e| e["message"].as_str().unwrap_or("Unknown error").to_string())
                         .collect();
-                    
+
                     // Check for schema errors (which are real problems)
                     let schema_errors: Vec<&String> = error_messages
                         .iter()
                         .filter(|msg| {
-                            msg.contains("Cannot query field") ||
-                            msg.contains("Unknown field") ||
-                            msg.contains("Unknown argument") ||
-                            msg.contains("Expected type")
+                            msg.contains("Cannot query field")
+                                || msg.contains("Unknown field")
+                                || msg.contains("Unknown argument")
+                                || msg.contains("Expected type")
                         })
                         .collect();
-                    
+
                     assert!(
                         schema_errors.is_empty(),
                         "Query '{}' has schema errors: {:?}",
                         name,
                         schema_errors
                     );
-                    
+
                     if !error_messages.is_empty() {
                         println!("  ⚠️  Non-schema errors (acceptable): {:?}", error_messages);
                     }
@@ -927,6 +958,6 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
     }
 
     println!("✅ All GraphQL playground queries are schema-compatible");
-    
+
     Ok(())
 }

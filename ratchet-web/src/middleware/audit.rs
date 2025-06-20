@@ -23,30 +23,30 @@ pub enum AuditEventType {
     AuthLogout,
     AuthFailed,
     AuthTokenRefresh,
-    
+
     /// Authorization events  
     AccessGranted,
     AccessDenied,
     PermissionEscalation,
-    
+
     /// Resource access events
     ResourceCreated,
     ResourceRead,
     ResourceUpdated,
     ResourceDeleted,
-    
+
     /// Security events
     SecurityViolation,
     RateLimitExceeded,
     SuspiciousActivity,
     DataExfiltration,
-    
+
     /// Administrative events
     ConfigChanged,
     UserCreated,
     UserDeleted,
     RoleChanged,
-    
+
     /// System events
     SystemStart,
     SystemShutdown,
@@ -98,11 +98,7 @@ pub struct AuditEvent {
 
 impl AuditEvent {
     /// Create a new audit event
-    pub fn new(
-        event_type: AuditEventType,
-        severity: AuditSeverity,
-        description: String,
-    ) -> Self {
+    pub fn new(event_type: AuditEventType, severity: AuditSeverity, description: String) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
@@ -120,14 +116,14 @@ impl AuditEvent {
             metadata: serde_json::Value::Object(serde_json::Map::new()),
         }
     }
-    
+
     /// Add user context to the event
     pub fn with_user(mut self, user_id: String, session_id: Option<String>) -> Self {
         self.user_id = Some(user_id);
         self.session_id = session_id;
         self
     }
-    
+
     /// Add request context to the event
     pub fn with_request(
         mut self,
@@ -142,14 +138,14 @@ impl AuditEvent {
         self.user_agent = user_agent.map(|ua| ua.to_string());
         self
     }
-    
+
     /// Add response context to the event
     pub fn with_response(mut self, status_code: u16, duration: Instant) -> Self {
         self.status_code = Some(status_code);
         self.duration_ms = Some(duration.elapsed().as_millis() as u64);
         self
     }
-    
+
     /// Add metadata to the event
     pub fn with_metadata(mut self, key: &str, value: serde_json::Value) -> Self {
         if let serde_json::Value::Object(ref mut map) = self.metadata {
@@ -202,10 +198,10 @@ impl AuditConfig {
             log_response_bodies: false,
             min_severity: AuditSeverity::Info,
             max_entry_size: 4096, // 4KB
-            retention_days: 365, // 1 year
+            retention_days: 365,  // 1 year
         }
     }
-    
+
     /// Create a development audit configuration
     pub fn development() -> Self {
         Self {
@@ -224,7 +220,7 @@ impl AuditConfig {
 pub trait AuditLogger: Send + Sync {
     /// Log an audit event
     fn log_event(&self, event: AuditEvent);
-    
+
     /// Log an authentication event
     fn log_auth_event(&self, event_type: AuditEventType, user_id: Option<&str>, description: &str) {
         let mut event = AuditEvent::new(event_type, AuditSeverity::Info, description.to_string());
@@ -233,14 +229,15 @@ pub trait AuditLogger: Send + Sync {
         }
         self.log_event(event);
     }
-    
+
     /// Log a security violation
     fn log_security_violation(&self, description: &str, metadata: serde_json::Value) {
         let event = AuditEvent::new(
             AuditEventType::SecurityViolation,
             AuditSeverity::Warning,
             description.to_string(),
-        ).with_metadata("violation_details", metadata);
+        )
+        .with_metadata("violation_details", metadata);
         self.log_event(event);
     }
 }
@@ -262,7 +259,7 @@ impl AuditLogger for TracingAuditLogger {
         if !self.config.enabled {
             return;
         }
-        
+
         // Filter by minimum severity
         let should_log = match (&event.severity, &self.config.min_severity) {
             (AuditSeverity::Critical, _) => true,
@@ -273,11 +270,11 @@ impl AuditLogger for TracingAuditLogger {
             (AuditSeverity::Info, AuditSeverity::Info) => true,
             (AuditSeverity::Info, _) => false,
         };
-        
+
         if !should_log {
             return;
         }
-        
+
         // Serialize event to JSON
         match serde_json::to_string(&event) {
             Ok(mut json) => {
@@ -286,7 +283,7 @@ impl AuditLogger for TracingAuditLogger {
                     json.truncate(self.config.max_entry_size - 3);
                     json.push_str("...");
                 }
-                
+
                 // Log at appropriate level
                 match event.severity {
                     AuditSeverity::Critical => error!(target: "audit", "{}", json),
@@ -309,46 +306,55 @@ pub async fn audit_middleware(
     next: Next,
 ) -> Response {
     let start_time = Instant::now();
-    
+
     // Extract request information
     let method = request.method().clone();
     let uri = request.uri().clone();
-    let user_agent = request.headers().get("user-agent")
+    let user_agent = request
+        .headers()
+        .get("user-agent")
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string());
     let client_ip = connect_info.map(|info| info.0);
-    
+
     // Get audit config and auth context
-    let config = request.extensions().get::<AuditConfig>().cloned()
-        .unwrap_or_default();
+    let config = request.extensions().get::<AuditConfig>().cloned().unwrap_or_default();
     let auth_context = request.extensions().get::<AuthContext>().cloned();
-    
+
     // Process request
     let response = next.run(request).await;
     let status = response.status();
-    
+
     // Log request if configured
     if config.enabled && (config.log_all_requests || is_security_relevant(&method, &uri, status.as_u16())) {
         let logger = TracingAuditLogger::new(config);
-        
+
         let mut event = AuditEvent::new(
-            if status.is_success() { AuditEventType::AccessGranted } else { AuditEventType::AccessDenied },
-            if status.is_client_error() || status.is_server_error() { AuditSeverity::Warning } else { AuditSeverity::Info },
+            if status.is_success() {
+                AuditEventType::AccessGranted
+            } else {
+                AuditEventType::AccessDenied
+            },
+            if status.is_client_error() || status.is_server_error() {
+                AuditSeverity::Warning
+            } else {
+                AuditSeverity::Info
+            },
             format!("{} {} - {}", method, uri, status),
         )
         .with_request(&method, &uri, client_ip, user_agent.as_deref())
         .with_response(status.as_u16(), start_time);
-        
+
         // Add user context if available
         if let Some(auth) = auth_context {
             if auth.is_authenticated {
                 event = event.with_user(auth.user_id, Some(auth.session_id));
             }
         }
-        
+
         logger.log_event(event);
     }
-    
+
     response
 }
 
@@ -358,22 +364,22 @@ fn is_security_relevant(method: &Method, uri: &Uri, status_code: u16) -> bool {
     if uri.path().starts_with("/auth/") {
         return true;
     }
-    
+
     // Admin endpoints
     if uri.path().starts_with("/admin/") {
         return true;
     }
-    
+
     // Mutating operations
     if matches!(method, &Method::POST | &Method::PUT | &Method::PATCH | &Method::DELETE) {
         return true;
     }
-    
+
     // Failed requests
     if status_code >= 400 {
         return true;
     }
-    
+
     false
 }
 
@@ -404,7 +410,7 @@ mod tests {
         )
         .with_user("user123".to_string(), Some("session456".to_string()))
         .with_metadata("ip", serde_json::json!("192.168.1.1"));
-        
+
         assert_eq!(event.event_type, AuditEventType::AuthLogin);
         assert_eq!(event.severity, AuditSeverity::Info);
         assert_eq!(event.user_id, Some("user123".to_string()));
@@ -416,9 +422,7 @@ mod tests {
     async fn test_audit_middleware() {
         let app = {
             audit_layer(AuditConfig::development());
-            Router::new()
-            .route("/test", get(test_handler))
-            .layer(())
+            Router::new().route("/test", get(test_handler)).layer(())
         };
 
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
@@ -434,9 +438,21 @@ mod tests {
 
     #[test]
     fn test_is_security_relevant() {
-        assert!(is_security_relevant(&Method::POST, &"/api/v1/tasks".parse().unwrap(), 200));
+        assert!(is_security_relevant(
+            &Method::POST,
+            &"/api/v1/tasks".parse().unwrap(),
+            200
+        ));
         assert!(is_security_relevant(&Method::GET, &"/auth/login".parse().unwrap(), 200));
-        assert!(is_security_relevant(&Method::GET, &"/api/v1/tasks".parse().unwrap(), 401));
-        assert!(!is_security_relevant(&Method::GET, &"/api/v1/tasks".parse().unwrap(), 200));
+        assert!(is_security_relevant(
+            &Method::GET,
+            &"/api/v1/tasks".parse().unwrap(),
+            401
+        ));
+        assert!(!is_security_relevant(
+            &Method::GET,
+            &"/api/v1/tasks".parse().unwrap(),
+            200
+        ));
     }
 }

@@ -3,19 +3,19 @@
 use async_graphql::SimpleObject;
 use ratchet_api_types::pagination::PaginationMeta;
 
-pub mod scalars;
-pub mod tasks;
 pub mod executions;
 pub mod jobs;
+pub mod scalars;
 pub mod schedules;
+pub mod tasks;
 pub mod workers;
 
 // Re-export all types
-pub use scalars::*;
-pub use tasks::*;
 pub use executions::*;
 pub use jobs::*;
+pub use scalars::*;
 pub use schedules::*;
+pub use tasks::*;
 pub use workers::*;
 
 /// Pagination metadata for GraphQL responses - using unified PaginationMeta directly

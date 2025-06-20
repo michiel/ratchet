@@ -40,12 +40,7 @@ pub struct BackoffCalculator {
 
 impl BackoffCalculator {
     /// Create a new backoff calculator
-    pub fn new(
-        strategy: BackoffStrategy,
-        initial_delay: Duration,
-        max_delay: Duration,
-        jitter: bool,
-    ) -> Self {
+    pub fn new(strategy: BackoffStrategy, initial_delay: Duration, max_delay: Duration, jitter: bool) -> Self {
         Self {
             strategy,
             initial_delay,
@@ -82,9 +77,7 @@ impl BackoffCalculator {
 
             BackoffStrategy::Fibonacci => {
                 let fib_number = fibonacci(attempt);
-                Duration::from_nanos(
-                    (self.initial_delay.as_nanos() as f64 * fib_number as f64) as u64,
-                )
+                Duration::from_nanos((self.initial_delay.as_nanos() as f64 * fib_number as f64) as u64)
             }
 
             BackoffStrategy::Custom { delays_ms } => {
@@ -165,9 +158,7 @@ impl DecorrelatedJitterCalculator {
                 } else {
                     let range = max_delay.as_nanos() - min_delay.as_nanos();
                     let jitter = rng.gen_range(0..=range);
-                    Duration::from_nanos(
-                        (min_delay.as_nanos() + jitter).min(u64::MAX as u128) as u64
-                    )
+                    Duration::from_nanos((min_delay.as_nanos() + jitter).min(u64::MAX as u128) as u64)
                 }
             }
         };
@@ -297,8 +288,7 @@ mod tests {
 
     #[test]
     fn test_decorrelated_jitter() {
-        let mut calc =
-            DecorrelatedJitterCalculator::new(Duration::from_millis(100), Duration::from_secs(10));
+        let mut calc = DecorrelatedJitterCalculator::new(Duration::from_millis(100), Duration::from_secs(10));
 
         // First delay should be base delay
         let delay1 = calc.next_delay();

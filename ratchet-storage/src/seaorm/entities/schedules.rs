@@ -73,12 +73,7 @@ impl ActiveModelBehavior for ActiveModel {}
 
 impl Model {
     /// Create a new schedule
-    pub fn new(
-        task_id: i32,
-        name: String,
-        cron_expression: String,
-        input_data: serde_json::Value,
-    ) -> Self {
+    pub fn new(task_id: i32, name: String, cron_expression: String, input_data: serde_json::Value) -> Self {
         Self {
             id: 0, // Will be set by database
             uuid: Uuid::new_v4(),
@@ -123,8 +118,8 @@ impl Model {
             return Ok(None);
         }
 
-        let schedule = Schedule::from_str(&self.cron_expression)
-            .map_err(|e| format!("Invalid cron expression: {}", e))?;
+        let schedule =
+            Schedule::from_str(&self.cron_expression).map_err(|e| format!("Invalid cron expression: {}", e))?;
 
         let next = schedule.upcoming(chrono::Utc).next();
         Ok(next)

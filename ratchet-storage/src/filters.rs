@@ -76,26 +76,14 @@ impl SafeFilterBuilder {
     }
 
     /// Add a LIKE filter
-    pub fn like(
-        mut self,
-        field: impl Into<String>,
-        pattern: impl Into<String>,
-    ) -> StorageResult<Self> {
+    pub fn like(mut self, field: impl Into<String>, pattern: impl Into<String>) -> StorageResult<Self> {
         let pattern = self.sanitize_like_pattern(pattern.into())?;
-        self.add_filter(
-            field.into(),
-            FilterOperator::Like,
-            FilterValue::String(pattern),
-        )?;
+        self.add_filter(field.into(), FilterOperator::Like, FilterValue::String(pattern))?;
         Ok(self)
     }
 
     /// Add an IN filter
-    pub fn in_values(
-        mut self,
-        field: impl Into<String>,
-        values: Vec<FilterValue>,
-    ) -> StorageResult<Self> {
+    pub fn in_values(mut self, field: impl Into<String>, values: Vec<FilterValue>) -> StorageResult<Self> {
         if values.is_empty() {
             return Err(StorageError::ValidationFailed(
                 "IN filter cannot have empty values".to_string(),
@@ -111,12 +99,7 @@ impl SafeFilterBuilder {
     }
 
     /// Add a range filter
-    pub fn between(
-        mut self,
-        field: impl Into<String>,
-        start: FilterValue,
-        end: FilterValue,
-    ) -> StorageResult<Self> {
+    pub fn between(mut self, field: impl Into<String>, start: FilterValue, end: FilterValue) -> StorageResult<Self> {
         self.add_filter(
             field.into(),
             FilterOperator::Between,
@@ -143,12 +126,7 @@ impl SafeFilterBuilder {
     }
 
     /// Add a filter with validation
-    fn add_filter(
-        &mut self,
-        field: String,
-        operator: FilterOperator,
-        value: FilterValue,
-    ) -> StorageResult<()> {
+    fn add_filter(&mut self, field: String, operator: FilterOperator, value: FilterValue) -> StorageResult<()> {
         // Check max conditions limit
         if self.filters.len() >= self.max_conditions {
             return Err(StorageError::ValidationFailed(format!(
@@ -171,11 +149,7 @@ impl SafeFilterBuilder {
         // Validate filter value
         self.validate_filter_value(&value)?;
 
-        self.filters.push(Filter {
-            field,
-            operator,
-            value,
-        });
+        self.filters.push(Filter { field, operator, value });
 
         Ok(())
     }
@@ -186,17 +160,13 @@ impl SafeFilterBuilder {
         let field_regex = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_\.]*$").unwrap();
 
         if !field_regex.is_match(field) {
-            return Err(StorageError::ValidationFailed(format!(
-                "Invalid field name: {}",
-                field
-            )));
+            return Err(StorageError::ValidationFailed(format!("Invalid field name: {}", field)));
         }
 
         // Prevent common SQL injection patterns
         let lower_field = field.to_lowercase();
         let dangerous_patterns = [
-            "select", "insert", "update", "delete", "drop", "union", "exec", "execute", "sp_",
-            "xp_", "alter", "create",
+            "select", "insert", "update", "delete", "drop", "union", "exec", "execute", "sp_", "xp_", "alter", "create",
         ];
 
         for pattern in &dangerous_patterns {
@@ -281,7 +251,7 @@ impl FilterValue {
             FilterValue::Float(f) => f.to_string(),
             FilterValue::Boolean(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
             FilterValue::Null => "NULL".to_string(),
-            FilterValue::Array(_) => "?".to_string(), // Handled specially
+            FilterValue::Array(_) => "?".to_string(),    // Handled specially
             FilterValue::Range(_, _) => "?".to_string(), // Handled specially
         }
     }
@@ -293,8 +263,7 @@ mod tests {
 
     #[test]
     fn test_safe_filter_builder() {
-        let builder = SafeFilterBuilder::new()
-            .with_allowed_fields(vec!["name".to_string(), "status".to_string()]);
+        let builder = SafeFilterBuilder::new().with_allowed_fields(vec!["name".to_string(), "status".to_string()]);
 
         let result = builder
             .equals("name", FilterValue::String("test".to_string()))
@@ -312,10 +281,7 @@ mod tests {
     fn test_invalid_field_name() {
         let builder = SafeFilterBuilder::new();
 
-        let result = builder.equals(
-            "'; DROP TABLE users; --",
-            FilterValue::String("test".to_string()),
-        );
+        let result = builder.equals("'; DROP TABLE users; --", FilterValue::String("test".to_string()));
         assert!(result.is_err());
     }
 
@@ -323,10 +289,7 @@ mod tests {
     fn test_dangerous_string_value() {
         let builder = SafeFilterBuilder::new();
 
-        let result = builder.equals(
-            "name",
-            FilterValue::String("'; DROP TABLE users; --".to_string()),
-        );
+        let result = builder.equals("name", FilterValue::String("'; DROP TABLE users; --".to_string()));
         assert!(result.is_err());
     }
 

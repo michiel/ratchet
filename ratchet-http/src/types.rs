@@ -104,10 +104,7 @@ mod tests {
         assert_eq!("delete".parse::<HttpMethod>().unwrap(), HttpMethod::Delete);
         assert_eq!("PATCH".parse::<HttpMethod>().unwrap(), HttpMethod::Patch);
         assert_eq!("head".parse::<HttpMethod>().unwrap(), HttpMethod::Head);
-        assert_eq!(
-            "OPTIONS".parse::<HttpMethod>().unwrap(),
-            HttpMethod::Options
-        );
+        assert_eq!("OPTIONS".parse::<HttpMethod>().unwrap(), HttpMethod::Options);
 
         assert!("INVALID".parse::<HttpMethod>().is_err());
     }
@@ -126,24 +123,12 @@ mod tests {
     #[test]
     fn test_http_method_to_reqwest() {
         assert_eq!(reqwest::Method::from(HttpMethod::Get), reqwest::Method::GET);
-        assert_eq!(
-            reqwest::Method::from(HttpMethod::Post),
-            reqwest::Method::POST
-        );
+        assert_eq!(reqwest::Method::from(HttpMethod::Post), reqwest::Method::POST);
         assert_eq!(reqwest::Method::from(HttpMethod::Put), reqwest::Method::PUT);
-        assert_eq!(
-            reqwest::Method::from(HttpMethod::Delete),
-            reqwest::Method::DELETE
-        );
-        assert_eq!(
-            reqwest::Method::from(HttpMethod::Patch),
-            reqwest::Method::PATCH
-        );
+        assert_eq!(reqwest::Method::from(HttpMethod::Delete), reqwest::Method::DELETE);
+        assert_eq!(reqwest::Method::from(HttpMethod::Patch), reqwest::Method::PATCH);
         assert_eq!(reqwest::Method::from(HttpMethod::Head), reqwest::Method::HEAD);
-        assert_eq!(
-            reqwest::Method::from(HttpMethod::Options),
-            reqwest::Method::OPTIONS
-        );
+        assert_eq!(reqwest::Method::from(HttpMethod::Options), reqwest::Method::OPTIONS);
     }
 
     #[test]

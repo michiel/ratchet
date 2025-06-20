@@ -1,5 +1,5 @@
 //! JavaScript task execution compatibility layer
-//! 
+//!
 //! This module provides a compatibility layer for CLI tools to execute JavaScript tasks
 //! using modern ratchet-js while maintaining compatibility with legacy ratchet_lib API.
 
@@ -51,14 +51,11 @@ impl TaskInput {
 }
 
 /// Execute a JavaScript task with compatibility layer for ratchet_lib API
-/// 
+///
 /// This function provides a bridge between the CLI tools and the underlying
 /// JavaScript execution engines, supporting both legacy and modern execution modes.
 #[cfg(feature = "javascript")]
-pub async fn execute_task_with_lib_compatibility(
-    task_path: &str,
-    input: TaskInput,
-) -> Result<JsonValue> {
+pub async fn execute_task_with_lib_compatibility(task_path: &str, input: TaskInput) -> Result<JsonValue> {
     match input.execution_mode {
         ExecutionMode::Modern => {
             info!("Executing task using modern ratchet-js engine: {}", task_path);
@@ -72,10 +69,7 @@ pub async fn execute_task_with_lib_compatibility(
 }
 
 #[cfg(not(feature = "javascript"))]
-pub async fn execute_task_with_lib_compatibility(
-    _task_path: &str,
-    _input: TaskInput,
-) -> Result<JsonValue> {
+pub async fn execute_task_with_lib_compatibility(_task_path: &str, _input: TaskInput) -> Result<JsonValue> {
     Err(anyhow::anyhow!(
         "JavaScript execution not available. Build with --features=javascript"
     ))
@@ -85,7 +79,7 @@ pub async fn execute_task_with_lib_compatibility(
 #[cfg(feature = "javascript")]
 async fn execute_task_modern(task_path: &str, input: &JsonValue) -> Result<JsonValue> {
     debug!("Loading and executing task with ratchet-js: {}", task_path);
-    
+
     let result = load_and_execute_task(task_path, input.clone())
         .await
         .map_err(|e| anyhow::anyhow!("Modern task execution failed: {}", e))?;
@@ -97,7 +91,7 @@ async fn execute_task_modern(task_path: &str, input: &JsonValue) -> Result<JsonV
 #[cfg(feature = "javascript")]
 async fn execute_task_legacy(task_path: &str, input: &JsonValue) -> Result<JsonValue> {
     debug!("Legacy ratchet_lib execution no longer available: {}", task_path);
-    
+
     // Legacy execution is no longer available - ratchet_lib has been removed
     Err(anyhow::anyhow!(
         "Legacy ratchet_lib execution is no longer available. Use modern execution instead."

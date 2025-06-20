@@ -10,7 +10,6 @@ pub mod worker;
 // Re-export commonly used types
 pub use executor::{ExecutionEngine, ExecutionStats, InMemoryTaskExecutor, TaskExecutor};
 pub use process::{
-    WorkerConfig, WorkerProcess, WorkerProcessError, WorkerProcessManager, WorkerProcessStatus,
-    WorkerToManagerMessage,
+    WorkerConfig, WorkerProcess, WorkerProcessError, WorkerProcessManager, WorkerProcessStatus, WorkerToManagerMessage,
 };
 pub use worker::{worker_main, Worker};

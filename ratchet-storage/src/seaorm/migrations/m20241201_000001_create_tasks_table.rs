@@ -26,12 +26,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Tasks::Metadata).json().not_null())
                     .col(ColumnDef::new(Tasks::InputSchema).json().not_null())
                     .col(ColumnDef::new(Tasks::OutputSchema).json().not_null())
-                    .col(
-                        ColumnDef::new(Tasks::Enabled)
-                            .boolean()
-                            .not_null()
-                            .default(true),
-                    )
+                    .col(ColumnDef::new(Tasks::Enabled).boolean().not_null().default(true))
                     .col(
                         ColumnDef::new(Tasks::CreatedAt)
                             .timestamp_with_time_zone()
@@ -51,9 +46,7 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_table(Table::drop().table(Tasks::Table).to_owned())
-            .await
+        manager.drop_table(Table::drop().table(Tasks::Table).to_owned()).await
     }
 }
 

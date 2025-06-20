@@ -180,7 +180,7 @@ impl Default for ConnectionConfig {
             min_connections: 1,
             connect_timeout: Duration::from_secs(30),
             query_timeout: Duration::from_secs(60),
-            idle_timeout: Some(Duration::from_secs(600)), // 10 minutes
+            idle_timeout: Some(Duration::from_secs(600)),  // 10 minutes
             max_lifetime: Some(Duration::from_secs(3600)), // 1 hour
             health_check_enabled: true,
             health_check_interval: Duration::from_secs(30),
@@ -280,8 +280,7 @@ impl StorageConfig {
         // Validate performance settings
         if self.performance.statement_cache_size == 0 && self.performance.statement_cache {
             return Err(crate::StorageError::ConfigError(
-                "statement_cache_size must be greater than 0 when statement_cache is enabled"
-                    .to_string(),
+                "statement_cache_size must be greater than 0 when statement_cache is enabled".to_string(),
             ));
         }
 

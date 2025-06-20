@@ -93,7 +93,6 @@ impl RatchetConfig {
     /// Generate a sample configuration file
     pub fn generate_sample() -> String {
         let config = RatchetConfig::default();
-        serde_yaml::to_string(&config)
-            .unwrap_or_else(|_| "# Failed to generate sample config".to_string())
+        serde_yaml::to_string(&config).unwrap_or_else(|_| "# Failed to generate sample config".to_string())
     }
 }

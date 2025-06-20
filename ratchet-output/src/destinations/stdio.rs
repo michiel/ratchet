@@ -75,18 +75,14 @@ impl StdioDestination {
         };
 
         let formatted_content = match &self.config.format {
-            OutputFormat::Json => {
-                serde_json::to_vec_pretty(&data).map_err(|e| DeliveryError::Serialization {
-                    format: "json".to_string(),
-                    error: e.to_string(),
-                })?
-            }
-            OutputFormat::JsonCompact => {
-                serde_json::to_vec(&data).map_err(|e| DeliveryError::Serialization {
-                    format: "json_compact".to_string(),
-                    error: e.to_string(),
-                })?
-            }
+            OutputFormat::Json => serde_json::to_vec_pretty(&data).map_err(|e| DeliveryError::Serialization {
+                format: "json".to_string(),
+                error: e.to_string(),
+            })?,
+            OutputFormat::JsonCompact => serde_json::to_vec(&data).map_err(|e| DeliveryError::Serialization {
+                format: "json_compact".to_string(),
+                error: e.to_string(),
+            })?,
             #[cfg(feature = "yaml")]
             OutputFormat::Yaml => {
                 serde_yaml::to_string(&data)
@@ -97,10 +93,12 @@ impl StdioDestination {
                     })?
             }
             #[cfg(not(feature = "yaml"))]
-            OutputFormat::Yaml => return Err(DeliveryError::Serialization {
-                format: "yaml".to_string(),
-                error: "YAML support not enabled".to_string(),
-            }),
+            OutputFormat::Yaml => {
+                return Err(DeliveryError::Serialization {
+                    format: "yaml".to_string(),
+                    error: "YAML support not enabled".to_string(),
+                })
+            }
             OutputFormat::Raw => {
                 if let serde_json::Value::String(s) = &data {
                     s.as_bytes().to_vec()
@@ -109,27 +107,30 @@ impl StdioDestination {
                 }
             }
             OutputFormat::Template(template) => {
-                let rendered = self
-                    .template_engine
-                    .render_json(template, &data)
-                    .map_err(|e| match e {
-                        DeliveryError::TemplateRender { template: t, error: err } => {
-                            DeliveryError::TemplateRender { template: t, error: err }
-                        }
-                        _ => DeliveryError::TemplateRender {
-                            template: template.clone(),
-                            error: e.to_string(),
-                        }
-                    })?;
+                let rendered = self.template_engine.render_json(template, &data).map_err(|e| match e {
+                    DeliveryError::TemplateRender {
+                        template: t,
+                        error: err,
+                    } => DeliveryError::TemplateRender {
+                        template: t,
+                        error: err,
+                    },
+                    _ => DeliveryError::TemplateRender {
+                        template: template.clone(),
+                        error: e.to_string(),
+                    },
+                })?;
                 rendered.into_bytes()
             }
             #[cfg(feature = "csv")]
             OutputFormat::Csv => self.convert_to_csv(&data)?,
             #[cfg(not(feature = "csv"))]
-            OutputFormat::Csv => return Err(DeliveryError::Serialization {
-                format: "csv".to_string(),
-                error: "CSV support not enabled".to_string(),
-            }),
+            OutputFormat::Csv => {
+                return Err(DeliveryError::Serialization {
+                    format: "csv".to_string(),
+                    error: "CSV support not enabled".to_string(),
+                })
+            }
         };
 
         // Add prefix if configured
@@ -155,28 +156,22 @@ impl StdioDestination {
                 // Extract headers from first object
                 if let Some(serde_json::Value::Object(first_obj)) = arr.first() {
                     let headers: Vec<&String> = first_obj.keys().collect();
-                    wtr.write_record(&headers)
-                        .map_err(|e| DeliveryError::Serialization {
-                            format: "csv".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    wtr.write_record(&headers).map_err(|e| DeliveryError::Serialization {
+                        format: "csv".to_string(),
+                        error: e.to_string(),
+                    })?;
 
                     // Write data rows
                     for item in arr {
                         if let serde_json::Value::Object(obj) = item {
                             let values: Vec<String> = headers
                                 .iter()
-                                .map(|h| {
-                                    obj.get(*h)
-                                        .unwrap_or(&serde_json::Value::Null)
-                                        .to_string()
-                                })
+                                .map(|h| obj.get(*h).unwrap_or(&serde_json::Value::Null).to_string())
                                 .collect();
-                            wtr.write_record(&values)
-                                .map_err(|e| DeliveryError::Serialization {
-                                    format: "csv".to_string(),
-                                    error: e.to_string(),
-                                })?;
+                            wtr.write_record(&values).map_err(|e| DeliveryError::Serialization {
+                                format: "csv".to_string(),
+                                error: e.to_string(),
+                            })?;
                         }
                     }
                 }
@@ -189,28 +184,22 @@ impl StdioDestination {
             serde_json::Value::Object(_) => {
                 // Single object - treat as one row
                 let mut wtr = csv::Writer::from_writer(Vec::new());
-                
+
                 if let serde_json::Value::Object(obj) = data {
                     let headers: Vec<&String> = obj.keys().collect();
-                    wtr.write_record(&headers)
-                        .map_err(|e| DeliveryError::Serialization {
-                            format: "csv".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    wtr.write_record(&headers).map_err(|e| DeliveryError::Serialization {
+                        format: "csv".to_string(),
+                        error: e.to_string(),
+                    })?;
 
                     let values: Vec<String> = headers
                         .iter()
-                        .map(|h| {
-                            obj.get(*h)
-                                .unwrap_or(&serde_json::Value::Null)
-                                .to_string()
-                        })
+                        .map(|h| obj.get(*h).unwrap_or(&serde_json::Value::Null).to_string())
                         .collect();
-                    wtr.write_record(&values)
-                        .map_err(|e| DeliveryError::Serialization {
-                            format: "csv".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    wtr.write_record(&values).map_err(|e| DeliveryError::Serialization {
+                        format: "csv".to_string(),
+                        error: e.to_string(),
+                    })?;
                 }
 
                 wtr.into_inner().map_err(|e| DeliveryError::Serialization {
@@ -232,74 +221,62 @@ impl StdioDestination {
                 let mut stdout = tokio::io::stdout();
                 if self.config.line_buffered {
                     let mut writer = BufWriter::new(&mut stdout);
-                    writer.write_all(data).await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stdout".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    writer.write_all(b"\n").await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stdout".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    writer.flush().await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stdout".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    writer.write_all(data).await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stdout".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    writer.write_all(b"\n").await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stdout".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    writer.flush().await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stdout".to_string(),
+                        error: e.to_string(),
+                    })?;
                 } else {
-                    stdout.write_all(data).await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stdout".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    stdout.write_all(b"\n").await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stdout".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    stdout.flush().await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stdout".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    stdout.write_all(data).await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stdout".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    stdout.write_all(b"\n").await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stdout".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    stdout.flush().await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stdout".to_string(),
+                        error: e.to_string(),
+                    })?;
                 }
             }
             StdStream::Stderr => {
                 let mut stderr = tokio::io::stderr();
                 if self.config.line_buffered {
                     let mut writer = BufWriter::new(&mut stderr);
-                    writer.write_all(data).await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stderr".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    writer.write_all(b"\n").await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stderr".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    writer.flush().await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stderr".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    writer.write_all(data).await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stderr".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    writer.write_all(b"\n").await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stderr".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    writer.flush().await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stderr".to_string(),
+                        error: e.to_string(),
+                    })?;
                 } else {
-                    stderr.write_all(data).await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stderr".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    stderr.write_all(b"\n").await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stderr".to_string(),
-                            error: e.to_string(),
-                        })?;
-                    stderr.flush().await
-                        .map_err(|e| DeliveryError::Stdio {
-                            stream: "stderr".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    stderr.write_all(data).await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stderr".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    stderr.write_all(b"\n").await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stderr".to_string(),
+                        error: e.to_string(),
+                    })?;
+                    stderr.flush().await.map_err(|e| DeliveryError::Stdio {
+                        stream: "stderr".to_string(),
+                        error: e.to_string(),
+                    })?;
                 }
             }
         }
@@ -309,11 +286,7 @@ impl StdioDestination {
 
 #[async_trait]
 impl OutputDestination for StdioDestination {
-    async fn deliver(
-        &self,
-        output: &TaskOutput,
-        context: &DeliveryContext,
-    ) -> Result<DeliveryResult, DeliveryError> {
+    async fn deliver(&self, output: &TaskOutput, context: &DeliveryContext) -> Result<DeliveryResult, DeliveryError> {
         let start_time = Instant::now();
 
         // Format the output data
@@ -364,10 +337,10 @@ impl OutputDestination for StdioDestination {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::template::TemplateEngine;
     use crate::destination::TaskOutput;
-    use serde_json::json;
+    use crate::template::TemplateEngine;
     use chrono::Utc;
+    use serde_json::json;
     use std::collections::HashMap;
     use std::time::Duration;
 
@@ -384,7 +357,7 @@ mod tests {
     #[test]
     fn test_stdio_destination_validation() {
         let template_engine = TemplateEngine::new();
-        
+
         // Test valid config
         let valid_config = StdioConfig {
             stream: StdStream::Stdout,
@@ -393,10 +366,10 @@ mod tests {
             line_buffered: true,
             prefix_template: Some("[{{timestamp}}] ".to_string()),
         };
-        
+
         let destination = StdioDestination::new(valid_config, template_engine.clone());
         assert!(destination.validate_config().is_ok());
-        
+
         // Test invalid template
         let invalid_config = StdioConfig {
             stream: StdStream::Stderr,
@@ -405,7 +378,7 @@ mod tests {
             line_buffered: true,
             prefix_template: Some("{{invalid_template".to_string()), // Missing closing brace
         };
-        
+
         let destination = StdioDestination::new(invalid_config, template_engine);
         assert!(destination.validate_config().is_err());
     }
@@ -420,9 +393,9 @@ mod tests {
             line_buffered: false,
             prefix_template: None,
         };
-        
+
         let destination = StdioDestination::new(config, template_engine);
-        
+
         // Create test data
         let output = TaskOutput {
             job_id: 1,
@@ -437,13 +410,13 @@ mod tests {
             completed_at: Utc::now(),
             execution_duration: Duration::from_secs(1),
         };
-        
+
         let context = DeliveryContext::default();
-        
+
         // Test format_output
         let formatted = destination.format_output(&output, &context).unwrap();
         assert!(!formatted.is_empty());
-        
+
         // Verify it's valid JSON
         let parsed: serde_json::Value = serde_json::from_slice(&formatted).unwrap();
         assert_eq!(parsed["status"], "success");
@@ -460,9 +433,9 @@ mod tests {
             line_buffered: false,
             prefix_template: None,
         };
-        
+
         let destination = StdioDestination::new(config, template_engine);
-        
+
         // Create test data
         let output = TaskOutput {
             job_id: 123,
@@ -473,13 +446,13 @@ mod tests {
             completed_at: Utc::now(),
             execution_duration: Duration::from_secs(5),
         };
-        
+
         let context = DeliveryContext::default();
-        
+
         // Test format_output with metadata
         let formatted = destination.format_output(&output, &context).unwrap();
         let parsed: serde_json::Value = serde_json::from_slice(&formatted).unwrap();
-        
+
         // Verify metadata is included
         assert_eq!(parsed["job_id"], 123);
         assert_eq!(parsed["task_id"], 456);
@@ -497,9 +470,9 @@ mod tests {
             line_buffered: false,
             prefix_template: Some("[Job {{job_id}}] ".to_string()),
         };
-        
+
         let destination = StdioDestination::new(config, template_engine);
-        
+
         let output = TaskOutput {
             job_id: 999,
             task_id: 1,
@@ -509,13 +482,15 @@ mod tests {
             completed_at: Utc::now(),
             execution_duration: Duration::from_secs(1),
         };
-        
+
         let mut context = DeliveryContext::default();
-        context.template_variables.insert("job_id".to_string(), "999".to_string());
-        
+        context
+            .template_variables
+            .insert("job_id".to_string(), "999".to_string());
+
         let formatted = destination.format_output(&output, &context).unwrap();
         let formatted_str = String::from_utf8(formatted).unwrap();
-        
+
         assert!(formatted_str.starts_with("[Job 999] "));
         assert!(formatted_str.contains("{\"result\":\"test\"}"));
     }

@@ -89,9 +89,9 @@ impl RegistryWatcher {
                 RecursiveMode::NonRecursive
             };
 
-            watcher.watch(path, mode).map_err(|e| {
-                RegistryError::WatcherError(format!("Failed to watch path {:?}: {}", path, e))
-            })?;
+            watcher
+                .watch(path, mode)
+                .map_err(|e| RegistryError::WatcherError(format!("Failed to watch path {:?}: {}", path, e)))?;
 
             info!("Watching path: {:?} (recursive: {})", path, recursive);
         }
@@ -140,10 +140,7 @@ impl RegistryWatcher {
         Ok(())
     }
 
-    fn handle_notify_event(
-        event: Event,
-        event_tx: &mpsc::UnboundedSender<WatchEvent>,
-    ) -> Result<()> {
+    fn handle_notify_event(event: Event, event_tx: &mpsc::UnboundedSender<WatchEvent>) -> Result<()> {
         match event.kind {
             EventKind::Create(_) => {
                 for path in event.paths {
@@ -219,11 +216,7 @@ struct EventProcessor {
 }
 
 impl EventProcessor {
-    async fn run(
-        self,
-        mut event_rx: mpsc::UnboundedReceiver<WatchEvent>,
-        mut shutdown_rx: oneshot::Receiver<()>,
-    ) {
+    async fn run(self, mut event_rx: mpsc::UnboundedReceiver<WatchEvent>, mut shutdown_rx: oneshot::Receiver<()>) {
         let mut pending_events: HashMap<PathBuf, WatchEvent> = HashMap::new();
         let mut debounce_interval = interval(Duration::from_millis(self.config.debounce_ms));
 
@@ -284,9 +277,7 @@ impl EventProcessor {
         info!("Processing {} file system events", events.len());
 
         // Limit concurrent reloads
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(
-            self.config.max_concurrent_reloads,
-        ));
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.config.max_concurrent_reloads));
         let mut handles = Vec::new();
 
         for event in events {
@@ -301,14 +292,8 @@ impl EventProcessor {
 
                 match event {
                     WatchEvent::TaskAdded(path) | WatchEvent::TaskModified(path) => {
-                        if let Err(e) = Self::reload_task(
-                            &path,
-                            registry,
-                            sync_service,
-                            retry_on_error,
-                            retry_delay_ms,
-                        )
-                        .await
+                        if let Err(e) =
+                            Self::reload_task(&path, registry, sync_service, retry_on_error, retry_delay_ms).await
                         {
                             error!("Failed to reload task at {:?}: {}", path, e);
                         }
@@ -352,10 +337,7 @@ impl EventProcessor {
             // For now, this is a placeholder
             match Self::load_task_from_path(path).await {
                 Ok(task) => {
-                    info!(
-                        "Reloading task: {} ({})",
-                        task.metadata.name, task.metadata.uuid
-                    );
+                    info!("Reloading task: {} ({})", task.metadata.name, task.metadata.uuid);
 
                     // Update registry
                     if let Err(e) = registry.add_task(task.clone()).await {
@@ -418,10 +400,7 @@ impl EventProcessor {
             // Check if this task's path matches
             if let Some(task_dir) = path.file_name().and_then(|n| n.to_str()) {
                 if task.metadata.uuid.to_string() == task_dir {
-                    info!(
-                        "Found task to remove: {} ({})",
-                        task.metadata.name, task.metadata.uuid
-                    );
+                    info!("Found task to remove: {} ({})", task.metadata.name, task.metadata.uuid);
 
                     // Remove from registry
                     if let Err(e) = registry.remove_task(&task.metadata.uuid).await {

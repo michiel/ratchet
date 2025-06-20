@@ -99,9 +99,7 @@ impl RateLimiter {
         let now = Instant::now();
         let mut states = self.states.write().await;
 
-        let state = states
-            .entry(key.to_string())
-            .or_insert_with(RateLimiterState::new);
+        let state = states.entry(key.to_string()).or_insert_with(RateLimiterState::new);
 
         if self.config.sliding_window {
             self.check_sliding_window(state, now, count)
@@ -111,17 +109,10 @@ impl RateLimiter {
     }
 
     /// Check sliding window rate limit
-    fn check_sliding_window(
-        &self,
-        state: &mut RateLimiterState,
-        now: Instant,
-        count: u32,
-    ) -> McpResult<()> {
+    fn check_sliding_window(&self, state: &mut RateLimiterState, now: Instant, count: u32) -> McpResult<()> {
         // Remove old requests outside the window
         let window_start = now - self.config.window_duration;
-        state
-            .requests
-            .retain(|record| record.timestamp >= window_start);
+        state.requests.retain(|record| record.timestamp >= window_start);
 
         // Count total requests in the window
         let current_requests: u32 = state.requests.iter().map(|r| r.count).sum();
@@ -141,21 +132,13 @@ impl RateLimiter {
         }
 
         // Add the new request
-        state.requests.push(RequestRecord {
-            timestamp: now,
-            count,
-        });
+        state.requests.push(RequestRecord { timestamp: now, count });
 
         Ok(())
     }
 
     /// Check fixed window rate limit
-    fn check_fixed_window(
-        &self,
-        state: &mut RateLimiterState,
-        now: Instant,
-        count: u32,
-    ) -> McpResult<()> {
+    fn check_fixed_window(&self, state: &mut RateLimiterState, now: Instant, count: u32) -> McpResult<()> {
         // Check if we need to reset the window
         if now.duration_since(state.window_start) >= self.config.window_duration {
             state.window_start = now;
@@ -196,11 +179,7 @@ impl RateLimiter {
     }
 
     /// Calculate when the client can retry (fixed window)
-    fn calculate_fixed_window_retry_after(
-        &self,
-        state: &RateLimiterState,
-        now: Instant,
-    ) -> Duration {
+    fn calculate_fixed_window_retry_after(&self, state: &RateLimiterState, now: Instant) -> Duration {
         let window_end = state.window_start + self.config.window_duration;
         if window_end > now {
             window_end - now
@@ -241,10 +220,7 @@ impl RateLimiter {
                     current_requests: state.total_requests,
                     max_requests: self.config.max_requests,
                     window_duration: self.config.window_duration,
-                    remaining_requests: self
-                        .config
-                        .max_requests
-                        .saturating_sub(state.total_requests),
+                    remaining_requests: self.config.max_requests.saturating_sub(state.total_requests),
                     reset_time: remaining_time,
                 }
             }
@@ -341,8 +317,7 @@ impl MultiTierRateLimiter {
 
     /// Add a rate limiter for a specific operation type
     pub fn add_limiter(&mut self, operation: impl Into<String>, config: RateLimitConfig) {
-        self.limiters
-            .insert(operation.into(), RateLimiter::new(config));
+        self.limiters.insert(operation.into(), RateLimiter::new(config));
     }
 
     /// Check rate limit for a specific operation and client
@@ -464,24 +439,15 @@ mod tests {
     #[tokio::test]
     async fn test_multi_tier_rate_limiter() {
         let mut limiter = MultiTierRateLimiter::new();
-        limiter.add_limiter(
-            "test_op",
-            RateLimitConfig::new(2, Duration::from_millis(100)),
-        );
+        limiter.add_limiter("test_op", RateLimitConfig::new(2, Duration::from_millis(100)));
 
         // Test operation-specific rate limiting
         assert!(limiter.check_rate_limit("test_op", "client1").await.is_ok());
         assert!(limiter.check_rate_limit("test_op", "client1").await.is_ok());
-        assert!(limiter
-            .check_rate_limit("test_op", "client1")
-            .await
-            .is_err());
+        assert!(limiter.check_rate_limit("test_op", "client1").await.is_err());
 
         // Non-configured operation should pass
-        assert!(limiter
-            .check_rate_limit("other_op", "client1")
-            .await
-            .is_ok());
+        assert!(limiter.check_rate_limit("other_op", "client1").await.is_ok());
     }
 
     #[test]

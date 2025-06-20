@@ -8,53 +8,53 @@ use url::Url;
 
 /// Maximum input sizes to prevent resource exhaustion
 pub const MAX_JSON_SIZE: usize = 10 * 1024 * 1024; // 10MB
-pub const MAX_STRING_LENGTH: usize = 10000;         // 10K characters
-pub const MAX_ARRAY_LENGTH: usize = 1000;           // 1K array elements
-pub const MAX_OBJECT_DEPTH: usize = 20;             // 20 levels deep
-pub const MAX_KEYS_PER_OBJECT: usize = 100;         // 100 keys per object
+pub const MAX_STRING_LENGTH: usize = 10000; // 10K characters
+pub const MAX_ARRAY_LENGTH: usize = 1000; // 1K array elements
+pub const MAX_OBJECT_DEPTH: usize = 20; // 20 levels deep
+pub const MAX_KEYS_PER_OBJECT: usize = 100; // 100 keys per object
 
 /// Input validation errors
 #[derive(Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error("Input too large: {actual} bytes exceeds maximum {max} bytes")]
     SizeTooLarge { actual: usize, max: usize },
-    
+
     #[error("String too long: {actual} characters exceeds maximum {max} characters")]
     StringTooLong { actual: usize, max: usize },
-    
+
     #[error("Array too large: {actual} elements exceeds maximum {max} elements")]
     ArrayTooLarge { actual: usize, max: usize },
-    
+
     #[error("Object nesting too deep: {actual} levels exceeds maximum {max} levels")]
     NestingTooDeep { actual: usize, max: usize },
-    
+
     #[error("Too many object keys: {actual} keys exceeds maximum {max} keys")]
     TooManyKeys { actual: usize, max: usize },
-    
+
     #[error("Required field missing: {field}")]
     RequiredField { field: String },
-    
+
     #[error("Invalid format for field {field}: {reason}")]
     InvalidFormat { field: String, reason: String },
-    
+
     #[error("Invalid value for field {field}: {reason}")]
     InvalidValue { field: String, reason: String },
-    
+
     #[error("Unsafe path detected: {path}")]
     UnsafePath { path: String },
-    
+
     #[error("Invalid URL: {reason}")]
     InvalidUrl { reason: String },
-    
+
     #[error("Blocked URL: {url} (reason: {reason})")]
     BlockedUrl { url: String, reason: String },
-    
+
     #[error("Invalid JSON: {reason}")]
     InvalidJson { reason: String },
-    
+
     #[error("Potential injection attack detected")]
     PotentialInjection,
-    
+
     #[error("Invalid character encoding")]
     InvalidEncoding,
 }
@@ -85,9 +85,9 @@ impl Default for InputValidator {
                 "localhost".to_string(),
                 "127.0.0.1".to_string(),
                 "0.0.0.0".to_string(),
-                "169.254.169.254".to_string(),      // AWS metadata
+                "169.254.169.254".to_string(),          // AWS metadata
                 "metadata.google.internal".to_string(), // GCP metadata
-                "169.254.0.1".to_string(),          // Azure metadata
+                "169.254.0.1".to_string(),              // Azure metadata
             ],
             blocked_ips: vec![
                 IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -104,11 +104,7 @@ impl InputValidator {
         Self::default()
     }
 
-    pub fn with_limits(
-        max_json_size: usize,
-        max_string_length: usize,
-        max_array_length: usize,
-    ) -> Self {
+    pub fn with_limits(max_json_size: usize, max_string_length: usize, max_array_length: usize) -> Self {
         Self {
             max_json_size,
             max_string_length,
@@ -131,10 +127,9 @@ impl InputValidator {
         self.check_injection_patterns(input)?;
 
         // Parse JSON
-        let value: Value = serde_json::from_str(input)
-            .map_err(|_e| ValidationError::InvalidJson {
-                reason: "Invalid JSON syntax".to_string(),
-            })?;
+        let value: Value = serde_json::from_str(input).map_err(|_e| ValidationError::InvalidJson {
+            reason: "Invalid JSON syntax".to_string(),
+        })?;
 
         // Validate structure
         self.validate_json_value(&value, 0)?;
@@ -214,16 +209,18 @@ impl InputValidator {
 
                 // Use the cron library for proper validation
                 use std::str::FromStr;
-                
+
                 // Try to parse with cron library (same one used in storage)
                 match cron::Schedule::from_str(input) {
                     Ok(_) => return Ok(()),
-                    Err(e) => return Err(ValidationError::InvalidFormat {
-                        field: "cron_expression".to_string(),
-                        reason: format!("Invalid cron expression: {}", e),
-                    }),
+                    Err(e) => {
+                        return Err(ValidationError::InvalidFormat {
+                            field: "cron_expression".to_string(),
+                            reason: format!("Invalid cron expression: {}", e),
+                        })
+                    }
                 }
-            },
+            }
             "email" | "email_address" | "emailAddress" => {
                 // Use existing email validation but with field-specific error
                 return self.validate_email(input).map_err(|e| match e {
@@ -233,7 +230,7 @@ impl InputValidator {
                     },
                     other => other,
                 });
-            },
+            }
             _ => {
                 // Apply standard validation for other fields
             }
@@ -274,7 +271,7 @@ impl InputValidator {
     /// Validate task name
     pub fn validate_task_name(&self, name: &str) -> Result<(), ValidationError> {
         let name_regex = Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap();
-        
+
         if name.is_empty() {
             return Err(ValidationError::RequiredField {
                 field: "name".to_string(),
@@ -301,7 +298,7 @@ impl InputValidator {
     /// Validate semantic version
     pub fn validate_semver(&self, version: &str) -> Result<(), ValidationError> {
         let semver_regex = Regex::new(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*|[0-9a-zA-Z-]*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*|[0-9a-zA-Z-]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$").unwrap();
-        
+
         if !semver_regex.is_match(version) {
             return Err(ValidationError::InvalidFormat {
                 field: "version".to_string(),
@@ -316,38 +313,29 @@ impl InputValidator {
     pub fn validate_safe_path(&self, path: &str) -> Result<(), ValidationError> {
         // Check for directory traversal attempts
         if path.contains("..") {
-            return Err(ValidationError::UnsafePath {
-                path: path.to_string(),
-            });
+            return Err(ValidationError::UnsafePath { path: path.to_string() });
         }
 
         // Check for null bytes
         if path.contains('\0') {
-            return Err(ValidationError::UnsafePath {
-                path: path.to_string(),
-            });
+            return Err(ValidationError::UnsafePath { path: path.to_string() });
         }
 
         // Check for absolute paths (may be dangerous depending on context)
         if Path::new(path).is_absolute() && !path.starts_with("/workspace") {
-            return Err(ValidationError::UnsafePath {
-                path: path.to_string(),
-            });
+            return Err(ValidationError::UnsafePath { path: path.to_string() });
         }
 
         // Check for Windows reserved names
         let path_lower = path.to_lowercase();
         let reserved_names = [
-            "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5",
-            "com6", "com7", "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4",
-            "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+            "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "lpt1",
+            "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
         ];
 
         for name in &reserved_names {
             if path_lower == *name || path_lower.starts_with(&format!("{}.", name)) {
-                return Err(ValidationError::UnsafePath {
-                    path: path.to_string(),
-                });
+                return Err(ValidationError::UnsafePath { path: path.to_string() });
             }
         }
 
@@ -357,10 +345,7 @@ impl InputValidator {
     /// Validate URL and check for SSRF risks
     pub fn validate_url(&self, url: &str) -> Result<Url, ValidationError> {
         // Parse URL
-        let parsed_url = Url::parse(url)
-            .map_err(|e| ValidationError::InvalidUrl {
-                reason: e.to_string(),
-            })?;
+        let parsed_url = Url::parse(url).map_err(|e| ValidationError::InvalidUrl { reason: e.to_string() })?;
 
         // Only allow HTTP/HTTPS
         match parsed_url.scheme() {
@@ -406,17 +391,14 @@ impl InputValidator {
             r"(?i)\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\b",
             r"(?i)(\-\-|\#|\/\*|\*\/)",
             r"(?i)\b(or|and)\s+\w+\s*=\s*\w+",
-            
             // XSS patterns
             r"(?i)<script[^>]*>",
             r"(?i)javascript:",
             r"(?i)on\w+\s*=",
             r"(?i)<iframe[^>]*>",
-            
             // Command injection patterns
             r"(?i)(\||;|&|`|\$\(|\$\{)",
             r"(?i)\b(rm|cat|ls|ps|kill|sudo|su)\b",
-            
             // Path traversal patterns
             r"\.\./",
             r"\.\.\\",
@@ -435,20 +417,20 @@ impl InputValidator {
     /// Check if input looks like a cron expression
     fn is_likely_cron_expression(&self, input: &str) -> bool {
         let trimmed = input.trim();
-        
+
         // Basic cron expression patterns - 5 or 6 space-separated fields
         let parts: Vec<&str> = trimmed.split_whitespace().collect();
         if parts.len() < 5 || parts.len() > 6 {
             return false;
         }
-        
+
         // Check if all parts match cron field patterns
         for part in &parts {
             if !self.is_valid_cron_field(part) {
                 return false;
             }
         }
-        
+
         true
     }
 
@@ -468,17 +450,17 @@ impl InputValidator {
                 if ipv4.is_loopback() {
                     return true;
                 }
-                
+
                 // Check private networks
                 if ipv4.is_private() {
                     return true;
                 }
-                
+
                 // Check link-local
                 if ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254 {
                     return true;
                 }
-                
+
                 // Check multicast
                 if ipv4.is_multicast() {
                     return true;
@@ -489,12 +471,12 @@ impl InputValidator {
                 if ipv6.is_loopback() {
                     return true;
                 }
-                
+
                 // Check link-local
                 if (ipv6.segments()[0] & 0xffc0) == 0xfe80 {
                     return true;
                 }
-                
+
                 // Check multicast
                 if ipv6.is_multicast() {
                     return true;
@@ -509,7 +491,7 @@ impl InputValidator {
     /// Validate email format
     pub fn validate_email(&self, email: &str) -> Result<(), ValidationError> {
         let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
-        
+
         if !email_regex.is_match(email) {
             return Err(ValidationError::InvalidFormat {
                 field: "email".to_string(),
@@ -547,7 +529,7 @@ impl InputValidator {
                 for (key, value) in obj {
                     // Validate key
                     self.validate_string(key, "input_key")?;
-                    
+
                     // Recursively validate and sanitize value
                     let sanitized_value = self.validate_task_input(value)?;
                     sanitized.insert(key.clone(), sanitized_value);
@@ -594,11 +576,11 @@ mod tests {
     #[test]
     fn test_validate_task_name() {
         let validator = InputValidator::new();
-        
+
         // Valid names
         assert!(validator.validate_task_name("my-task").is_ok());
         assert!(validator.validate_task_name("task_123").is_ok());
-        
+
         // Invalid names
         assert!(validator.validate_task_name("").is_err());
         assert!(validator.validate_task_name("task with spaces").is_err());
@@ -608,11 +590,11 @@ mod tests {
     #[test]
     fn test_validate_semver() {
         let validator = InputValidator::new();
-        
+
         // Valid versions
         assert!(validator.validate_semver("1.0.0").is_ok());
         assert!(validator.validate_semver("2.1.3-alpha.1").is_ok());
-        
+
         // Invalid versions
         assert!(validator.validate_semver("1.0").is_err());
         assert!(validator.validate_semver("v1.0.0").is_err());
@@ -622,11 +604,11 @@ mod tests {
     #[test]
     fn test_validate_safe_path() {
         let validator = InputValidator::new();
-        
+
         // Safe paths
         assert!(validator.validate_safe_path("tasks/my-task.js").is_ok());
         assert!(validator.validate_safe_path("/workspace/tasks/task.js").is_ok());
-        
+
         // Unsafe paths
         assert!(validator.validate_safe_path("../../../etc/passwd").is_err());
         assert!(validator.validate_safe_path("tasks/file\0.js").is_err());
@@ -636,10 +618,10 @@ mod tests {
     #[test]
     fn test_validate_url_ssrf() {
         let validator = InputValidator::new();
-        
+
         // Safe URLs
         assert!(validator.validate_url("https://api.example.com/data").is_ok());
-        
+
         // Unsafe URLs
         assert!(validator.validate_url("http://localhost:8080/admin").is_err());
         assert!(validator.validate_url("http://169.254.169.254/metadata").is_err());
@@ -650,13 +632,13 @@ mod tests {
     #[test]
     fn test_validate_json_nesting() {
         let validator = InputValidator::with_limits(1000, 100, 10);
-        
+
         // Create deeply nested JSON
         let mut deep_json = json!("value");
         for _ in 0..25 {
             deep_json = json!({ "nested": deep_json });
         }
-        
+
         let result = validator.validate_json_value(&deep_json, 0);
         assert!(matches!(result, Err(ValidationError::NestingTooDeep { .. })));
     }
@@ -664,7 +646,7 @@ mod tests {
     #[test]
     fn test_sanitize_text() {
         let validator = InputValidator::new();
-        
+
         let input = "<script>alert('xss')</script>";
         let sanitized = validator.sanitize_text(input);
         assert_eq!(sanitized, "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;");

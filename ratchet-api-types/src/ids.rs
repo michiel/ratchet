@@ -76,8 +76,4 @@ impl From<&str> for ApiId {
 
 // GraphQL scalar implementation (only when graphql feature is enabled)
 #[cfg(feature = "graphql")]
-scalar!(
-    ApiId,
-    "ApiId",
-    "A unified ID that accepts both strings and numbers"
-);
+scalar!(ApiId, "ApiId", "A unified ID that accepts both strings and numbers");

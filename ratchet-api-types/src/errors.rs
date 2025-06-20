@@ -64,11 +64,7 @@ impl ApiError {
     // Common error constructors
 
     pub fn not_found(resource: &str, id: &str) -> Self {
-        Self::new(
-            "NOT_FOUND",
-            format!("{} with ID '{}' not found", resource, id),
-        )
-        .with_suggestions(vec![
+        Self::new("NOT_FOUND", format!("{} with ID '{}' not found", resource, id)).with_suggestions(vec![
             format!("Verify that the {} ID is correct", resource),
             format!("Check if the {} still exists", resource),
         ])
@@ -90,10 +86,7 @@ impl ApiError {
     }
 
     pub fn conflict(resource: &str, reason: &str) -> Self {
-        Self::new(
-            "CONFLICT",
-            format!("{} operation failed: {}", resource, reason),
-        )
+        Self::new("CONFLICT", format!("{} operation failed: {}", resource, reason))
     }
 
     pub fn internal_error(message: impl Into<String>) -> Self {
@@ -249,16 +242,16 @@ impl From<ValidationErrors> for ApiError {
 pub enum CommonError {
     #[error("Validation error: {0}")]
     Validation(String),
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
-    
+
     #[error("Database error: {0}")]
     Database(String),
-    
+
     #[error("Network error: {0}")]
     Network(String),
 }

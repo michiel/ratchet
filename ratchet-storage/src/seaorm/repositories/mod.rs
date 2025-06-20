@@ -1,18 +1,18 @@
+pub mod api_key_repository;
 pub mod execution_repository;
 pub mod job_repository;
 pub mod schedule_repository;
+pub mod session_repository;
 pub mod task_repository;
 pub mod user_repository;
-pub mod session_repository;
-pub mod api_key_repository;
 
+pub use api_key_repository::SeaOrmApiKeyRepository;
 pub use execution_repository::ExecutionRepository;
 pub use job_repository::JobRepository;
 pub use schedule_repository::ScheduleRepository;
+pub use session_repository::SeaOrmSessionRepository;
 pub use task_repository::TaskRepository;
 pub use user_repository::SeaOrmUserRepository;
-pub use session_repository::SeaOrmSessionRepository;
-pub use api_key_repository::SeaOrmApiKeyRepository;
 
 use crate::seaorm::connection::DatabaseError;
 use async_trait::async_trait;

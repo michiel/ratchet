@@ -1,5 +1,5 @@
 //! HTTP client functionality for Ratchet
-//! 
+//!
 //! This crate provides HTTP client capabilities with mock support, request recording,
 //! and integration with the Ratchet configuration system.
 
@@ -19,8 +19,8 @@ pub use types::{HttpMethod, HttpMethodError};
 
 #[cfg(feature = "recording")]
 pub use recording::{
-    finalize_recording, get_recording_dir, is_recording, record_http_request, record_input,
-    record_output, set_recording_dir,
+    finalize_recording, get_recording_dir, is_recording, record_http_request, record_input, record_output,
+    set_recording_dir,
 };
 
 // Backward compatibility function

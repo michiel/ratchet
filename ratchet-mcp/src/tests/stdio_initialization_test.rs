@@ -68,18 +68,14 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
         .read_line(&mut response_line)
         .expect("Failed to read initialize response");
 
-    let init_response: Value =
-        serde_json::from_str(response_line.trim()).expect("Failed to parse initialize response");
+    let init_response: Value = serde_json::from_str(response_line.trim()).expect("Failed to parse initialize response");
 
     // Verify initialize response
     assert_eq!(init_response["jsonrpc"], "2.0");
     assert_eq!(init_response["id"], 1);
     assert!(init_response["result"].is_object());
     assert!(init_response["result"]["capabilities"]["tools"].is_object());
-    assert_eq!(
-        init_response["result"]["serverInfo"]["name"],
-        "Ratchet MCP Server"
-    );
+    assert_eq!(init_response["result"]["serverInfo"]["name"], "Ratchet MCP Server");
 
     // 2. Send tools/list request immediately (without 'initialized' notification)
     let tools_request = json!({
@@ -144,8 +140,7 @@ async fn test_mcp_server_stdio_initialization_compatibility() {
         .read_line(&mut response_line)
         .expect("Failed to read tools/call response");
 
-    let call_response: Value =
-        serde_json::from_str(response_line.trim()).expect("Failed to parse tools/call response");
+    let call_response: Value = serde_json::from_str(response_line.trim()).expect("Failed to parse tools/call response");
 
     // Verify tools/call response
     assert_eq!(call_response["jsonrpc"], "2.0");
@@ -246,8 +241,7 @@ async fn test_mcp_server_stdio_with_initialized_notification() {
         .read_line(&mut response_line)
         .expect("Failed to read initialize response");
 
-    let init_response: Value =
-        serde_json::from_str(response_line.trim()).expect("Failed to parse initialize response");
+    let init_response: Value = serde_json::from_str(response_line.trim()).expect("Failed to parse initialize response");
 
     assert_eq!(init_response["jsonrpc"], "2.0");
     assert_eq!(init_response["id"], 1);

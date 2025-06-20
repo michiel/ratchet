@@ -1,8 +1,8 @@
 //! Error types for MCP operations with sanitization support
 
+use ratchet_api_types::errors::ApiError;
 use std::time::Duration;
 use thiserror::Error;
-use ratchet_api_types::errors::ApiError;
 // Note: Error middleware disabled due to axum compatibility issues
 
 /// Result type for MCP operations
@@ -104,10 +104,7 @@ pub enum McpError {
 
     /// Resource not found
     #[error("Resource not found: {resource_type}: {resource_id}")]
-    ResourceNotFound {
-        resource_type: String,
-        resource_id: String,
-    },
+    ResourceNotFound { resource_type: String, resource_id: String },
 
     /// Operation cancelled
     #[error("Operation cancelled: {reason}")]
@@ -128,9 +125,7 @@ impl McpError {
 
     /// Create a connection failed error
     pub fn connection_failed(reason: impl Into<String>) -> Self {
-        Self::ConnectionFailed {
-            reason: reason.into(),
-        }
+        Self::ConnectionFailed { reason: reason.into() }
     }
 
     /// Create a protocol error
@@ -149,16 +144,12 @@ impl McpError {
 
     /// Create an authentication failed error
     pub fn authentication_failed(reason: impl Into<String>) -> Self {
-        Self::AuthenticationFailed {
-            reason: reason.into(),
-        }
+        Self::AuthenticationFailed { reason: reason.into() }
     }
 
     /// Create an authorization denied error
     pub fn authorization_denied(reason: impl Into<String>) -> Self {
-        Self::AuthorizationDenied {
-            reason: reason.into(),
-        }
+        Self::AuthorizationDenied { reason: reason.into() }
     }
 
     /// Create a rate limit exceeded error
@@ -285,57 +276,86 @@ impl From<McpError> for ApiError {
         // Apply error sanitization to prevent sensitive data leakage
         let sanitizer = ratchet_core::validation::error_sanitization::ErrorSanitizer::default();
         let sanitized = sanitizer.sanitize_error(&error);
-        
+
         let (code, suggestions) = match &error {
-            McpError::MethodNotFound { .. } => ("METHOD_NOT_FOUND", vec![
-                "Check the method name spelling".to_string(),
-                "Verify that the method is supported by this server".to_string(),
-            ]),
-            McpError::InvalidParams { .. } => ("INVALID_PARAMS", vec![
-                "Check the parameter types and values".to_string(),
-                "Refer to the method documentation".to_string(),
-            ]),
-            McpError::ToolNotFound { .. } => ("TOOL_NOT_FOUND", vec![
-                "Verify the tool name is correct".to_string(),
-                "Check if the tool is available in this context".to_string(),
-            ]),
-            McpError::AuthenticationFailed { .. } => ("AUTHENTICATION_FAILED", vec![
-                "Check your authentication credentials".to_string(),
-                "Verify the authentication method is supported".to_string(),
-            ]),
-            McpError::AuthorizationDenied { .. } => ("AUTHORIZATION_DENIED", vec![
-                "Verify you have permission for this operation".to_string(),
-                "Contact an administrator if needed".to_string(),
-            ]),
-            McpError::RateLimitExceeded { .. } => ("RATE_LIMITED", vec![
-                "Reduce the frequency of requests".to_string(),
-                "Wait before retrying".to_string(),
-            ]),
-            McpError::ServerTimeout { .. } | McpError::ConnectionTimeout { .. } => ("TIMEOUT", vec![
-                "Retry the operation".to_string(),
-                "Check network connectivity".to_string(),
-            ]),
-            McpError::ServerUnavailable { .. } => ("SERVICE_UNAVAILABLE", vec![
-                "Try again later".to_string(),
-                "Check server status".to_string(),
-            ]),
-            McpError::Validation { .. } => ("VALIDATION_ERROR", vec![
-                "Check input format and values".to_string(),
-                "Refer to the API documentation".to_string(),
-            ]),
-            McpError::ResourceNotFound { .. } => ("NOT_FOUND", vec![
-                "Verify the resource ID is correct".to_string(),
-                "Check if the resource still exists".to_string(),
-            ]),
-            _ => ("MCP_ERROR", vec![
-                "Check the MCP connection".to_string(),
-                "Retry the operation".to_string(),
-            ]),
+            McpError::MethodNotFound { .. } => (
+                "METHOD_NOT_FOUND",
+                vec![
+                    "Check the method name spelling".to_string(),
+                    "Verify that the method is supported by this server".to_string(),
+                ],
+            ),
+            McpError::InvalidParams { .. } => (
+                "INVALID_PARAMS",
+                vec![
+                    "Check the parameter types and values".to_string(),
+                    "Refer to the method documentation".to_string(),
+                ],
+            ),
+            McpError::ToolNotFound { .. } => (
+                "TOOL_NOT_FOUND",
+                vec![
+                    "Verify the tool name is correct".to_string(),
+                    "Check if the tool is available in this context".to_string(),
+                ],
+            ),
+            McpError::AuthenticationFailed { .. } => (
+                "AUTHENTICATION_FAILED",
+                vec![
+                    "Check your authentication credentials".to_string(),
+                    "Verify the authentication method is supported".to_string(),
+                ],
+            ),
+            McpError::AuthorizationDenied { .. } => (
+                "AUTHORIZATION_DENIED",
+                vec![
+                    "Verify you have permission for this operation".to_string(),
+                    "Contact an administrator if needed".to_string(),
+                ],
+            ),
+            McpError::RateLimitExceeded { .. } => (
+                "RATE_LIMITED",
+                vec![
+                    "Reduce the frequency of requests".to_string(),
+                    "Wait before retrying".to_string(),
+                ],
+            ),
+            McpError::ServerTimeout { .. } | McpError::ConnectionTimeout { .. } => (
+                "TIMEOUT",
+                vec![
+                    "Retry the operation".to_string(),
+                    "Check network connectivity".to_string(),
+                ],
+            ),
+            McpError::ServerUnavailable { .. } => (
+                "SERVICE_UNAVAILABLE",
+                vec!["Try again later".to_string(), "Check server status".to_string()],
+            ),
+            McpError::Validation { .. } => (
+                "VALIDATION_ERROR",
+                vec![
+                    "Check input format and values".to_string(),
+                    "Refer to the API documentation".to_string(),
+                ],
+            ),
+            McpError::ResourceNotFound { .. } => (
+                "NOT_FOUND",
+                vec![
+                    "Verify the resource ID is correct".to_string(),
+                    "Check if the resource still exists".to_string(),
+                ],
+            ),
+            _ => (
+                "MCP_ERROR",
+                vec![
+                    "Check the MCP connection".to_string(),
+                    "Retry the operation".to_string(),
+                ],
+            ),
         };
-        
+
         // Use sanitized message and prefer the sanitized error code if available
         let final_code = sanitized.error_code.unwrap_or_else(|| code.to_string());
-        ApiError::new(final_code, sanitized.message)
-            .with_suggestions(suggestions)
+        ApiError::new(final_code, sanitized.message).with_suggestions(suggestions)
     }
 }

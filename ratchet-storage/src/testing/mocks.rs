@@ -11,21 +11,16 @@ use mockall::mock;
 use std::sync::{Arc, Mutex};
 
 #[cfg(all(feature = "testing", feature = "seaorm"))]
-use crate::{
-    seaorm::safe_errors::SafeDatabaseError,
-    StorageError,
+use crate::{seaorm::safe_errors::SafeDatabaseError, StorageError};
+#[cfg(feature = "testing")]
+use ratchet_api_types::{
+    ApiId, ExecutionStatus, JobStatus, ListResponse, PaginationInput, UnifiedExecution, UnifiedJob, UnifiedSchedule,
+    UnifiedTask,
 };
 #[cfg(feature = "testing")]
 use ratchet_interfaces::database::{
-    TaskRepository, ExecutionRepository, JobRepository, ScheduleRepository,
-    TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters,
-    FilteredRepository, CrudRepository, Repository, DatabaseError
-};
-#[cfg(feature = "testing")]
-use ratchet_api_types::{
-    ApiId, PaginationInput, ListResponse,
-    UnifiedTask, UnifiedExecution, UnifiedJob, UnifiedSchedule,
-    ExecutionStatus, JobStatus
+    CrudRepository, DatabaseError, ExecutionFilters, ExecutionRepository, FilteredRepository, JobFilters,
+    JobRepository, Repository, ScheduleFilters, ScheduleRepository, TaskFilters, TaskRepository,
 };
 
 // Mock repository implementations using mockall
@@ -33,12 +28,12 @@ use ratchet_api_types::{
 #[cfg(feature = "testing")]
 mock! {
     pub TaskRepo {}
-    
+
     #[async_trait]
     impl Repository for TaskRepo {
         async fn health_check(&self) -> Result<(), DatabaseError>;
     }
-    
+
     #[async_trait]
     impl CrudRepository<UnifiedTask> for TaskRepo {
         async fn create(&self, entity: UnifiedTask) -> Result<UnifiedTask, DatabaseError>;
@@ -48,14 +43,14 @@ mock! {
         async fn delete(&self, id: i32) -> Result<(), DatabaseError>;
         async fn count(&self) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl FilteredRepository<UnifiedTask, TaskFilters> for TaskRepo {
         async fn find_with_filters(&self, filters: TaskFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedTask>, DatabaseError>;
         async fn find_with_list_input(&self, filters: TaskFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedTask>, DatabaseError>;
         async fn count_with_filters(&self, filters: TaskFilters) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl TaskRepository for TaskRepo {
         async fn find_enabled(&self) -> Result<Vec<UnifiedTask>, DatabaseError>;
@@ -69,12 +64,12 @@ mock! {
 #[cfg(feature = "testing")]
 mock! {
     pub ExecutionRepo {}
-    
+
     #[async_trait]
     impl Repository for ExecutionRepo {
         async fn health_check(&self) -> Result<(), DatabaseError>;
     }
-    
+
     #[async_trait]
     impl CrudRepository<UnifiedExecution> for ExecutionRepo {
         async fn create(&self, entity: UnifiedExecution) -> Result<UnifiedExecution, DatabaseError>;
@@ -84,14 +79,14 @@ mock! {
         async fn delete(&self, id: i32) -> Result<(), DatabaseError>;
         async fn count(&self) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl FilteredRepository<UnifiedExecution, ExecutionFilters> for ExecutionRepo {
         async fn find_with_filters(&self, filters: ExecutionFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedExecution>, DatabaseError>;
         async fn find_with_list_input(&self, filters: ExecutionFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedExecution>, DatabaseError>;
         async fn count_with_filters(&self, filters: ExecutionFilters) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl ExecutionRepository for ExecutionRepo {
         async fn find_by_task_id(&self, task_id: ApiId) -> Result<Vec<UnifiedExecution>, DatabaseError>;
@@ -108,12 +103,12 @@ mock! {
 #[cfg(feature = "testing")]
 mock! {
     pub JobRepo {}
-    
+
     #[async_trait]
     impl Repository for JobRepo {
         async fn health_check(&self) -> Result<(), DatabaseError>;
     }
-    
+
     #[async_trait]
     impl CrudRepository<UnifiedJob> for JobRepo {
         async fn create(&self, entity: UnifiedJob) -> Result<UnifiedJob, DatabaseError>;
@@ -123,14 +118,14 @@ mock! {
         async fn delete(&self, id: i32) -> Result<(), DatabaseError>;
         async fn count(&self) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl FilteredRepository<UnifiedJob, JobFilters> for JobRepo {
         async fn find_with_filters(&self, filters: JobFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedJob>, DatabaseError>;
         async fn find_with_list_input(&self, filters: JobFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedJob>, DatabaseError>;
         async fn count_with_filters(&self, filters: JobFilters) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl JobRepository for JobRepo {
         async fn find_ready_for_processing(&self, limit: u64) -> Result<Vec<UnifiedJob>, DatabaseError>;
@@ -146,12 +141,12 @@ mock! {
 #[cfg(feature = "testing")]
 mock! {
     pub ScheduleRepo {}
-    
+
     #[async_trait]
     impl Repository for ScheduleRepo {
         async fn health_check(&self) -> Result<(), DatabaseError>;
     }
-    
+
     #[async_trait]
     impl CrudRepository<UnifiedSchedule> for ScheduleRepo {
         async fn create(&self, entity: UnifiedSchedule) -> Result<UnifiedSchedule, DatabaseError>;
@@ -161,14 +156,14 @@ mock! {
         async fn delete(&self, id: i32) -> Result<(), DatabaseError>;
         async fn count(&self) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl FilteredRepository<UnifiedSchedule, ScheduleFilters> for ScheduleRepo {
         async fn find_with_filters(&self, filters: ScheduleFilters, pagination: PaginationInput) -> Result<ListResponse<UnifiedSchedule>, DatabaseError>;
         async fn find_with_list_input(&self, filters: ScheduleFilters, list_input: ratchet_api_types::pagination::ListInput) -> Result<ListResponse<UnifiedSchedule>, DatabaseError>;
         async fn count_with_filters(&self, filters: ScheduleFilters) -> Result<u64, DatabaseError>;
     }
-    
+
     #[async_trait]
     impl ScheduleRepository for ScheduleRepo {
         async fn find_enabled(&self) -> Result<Vec<UnifiedSchedule>, DatabaseError>;
@@ -188,12 +183,12 @@ mock! {
 /*
 mock! {
     pub AbstractTaskRepo {}
-    
+
     #[async_trait]
     impl Repository<crate::entities::task::Task> for AbstractTaskRepo {
         // ... implementation
     }
-    
+
     #[async_trait]
     impl BaseRepository for AbstractTaskRepo {
         // ... implementation
@@ -227,11 +222,10 @@ impl MockFactory {
         let calls = self.task_repo_calls.clone();
 
         // Default health check expectation
-        mock.expect_health_check()
-            .returning(move || {
-                calls.lock().unwrap().push("health_check".to_string());
-                Ok(())
-            });
+        mock.expect_health_check().returning(move || {
+            calls.lock().unwrap().push("health_check".to_string());
+            Ok(())
+        });
 
         mock
     }
@@ -240,20 +234,15 @@ impl MockFactory {
     pub fn empty_task_repository(&self) -> MockTaskRepo {
         let mut mock = self.task_repository();
 
-        mock.expect_find_enabled()
-            .returning(|| Ok(vec![]));
-            
-        mock.expect_count()
-            .returning(|| Ok(0));
-            
-        mock.expect_find_by_id()
-            .returning(|_| Ok(None));
+        mock.expect_find_enabled().returning(|| Ok(vec![]));
 
-        mock.expect_find_by_name()
-            .returning(|_| Ok(None));
+        mock.expect_count().returning(|| Ok(0));
 
-        mock.expect_find_by_uuid()
-            .returning(|_| Ok(None));
+        mock.expect_find_by_id().returning(|_| Ok(None));
+
+        mock.expect_find_by_name().returning(|_| Ok(None));
+
+        mock.expect_find_by_uuid().returning(|_| Ok(None));
 
         mock
     }
@@ -264,12 +253,10 @@ impl MockFactory {
         let tasks_clone = tasks.clone();
         let tasks_for_count = tasks.clone();
 
-        mock.expect_find_enabled()
-            .returning(move || Ok(tasks_clone.clone()));
-            
-        mock.expect_count()
-            .returning(move || Ok(tasks_for_count.len() as u64));
-            
+        mock.expect_find_enabled().returning(move || Ok(tasks_clone.clone()));
+
+        mock.expect_count().returning(move || Ok(tasks_for_count.len() as u64));
+
         // Set up find_by_id expectations for each task
         for task in tasks {
             if let Some(task_id) = task.id.as_i32() {
@@ -289,15 +276,13 @@ impl MockFactory {
         let calls = self.execution_repo_calls.clone();
 
         // Default health check expectation
-        mock.expect_health_check()
-            .returning(move || {
-                calls.lock().unwrap().push("health_check".to_string());
-                Ok(())
-            });
+        mock.expect_health_check().returning(move || {
+            calls.lock().unwrap().push("health_check".to_string());
+            Ok(())
+        });
 
         // Default empty implementations
-        mock.expect_count()
-            .returning(|| Ok(0));
+        mock.expect_count().returning(|| Ok(0));
 
         mock
     }
@@ -307,14 +292,12 @@ impl MockFactory {
         let mut mock = MockJobRepo::new();
         let calls = self.job_repo_calls.clone();
 
-        mock.expect_health_check()
-            .returning(move || {
-                calls.lock().unwrap().push("health_check".to_string());
-                Ok(())
-            });
+        mock.expect_health_check().returning(move || {
+            calls.lock().unwrap().push("health_check".to_string());
+            Ok(())
+        });
 
-        mock.expect_count()
-            .returning(|| Ok(0));
+        mock.expect_count().returning(|| Ok(0));
 
         mock
     }
@@ -324,18 +307,15 @@ impl MockFactory {
         let mut mock = MockScheduleRepo::new();
         let calls = self.schedule_repo_calls.clone();
 
-        mock.expect_health_check()
-            .returning(move || {
-                calls.lock().unwrap().push("health_check".to_string());
-                Ok(())
-            });
+        mock.expect_health_check().returning(move || {
+            calls.lock().unwrap().push("health_check".to_string());
+            Ok(())
+        });
 
-        mock.expect_count()
-            .returning(|| Ok(0));
+        mock.expect_count().returning(|| Ok(0));
 
         mock
     }
-
 
     /// Create a mock abstract task repository that always succeeds
     /// NOTE: Temporarily disabled - abstract repository mocks not working
@@ -344,7 +324,7 @@ impl MockFactory {
         // ... implementation
     }
 
-    /// Create a mock abstract task repository that always fails  
+    /// Create a mock abstract task repository that always fails
     pub fn failing_abstract_task_repository(&self) -> MockAbstractTaskRepo {
         // ... implementation
     }
@@ -369,7 +349,6 @@ impl MockFactory {
     pub fn get_schedule_repo_calls(&self) -> Vec<String> {
         self.schedule_repo_calls.lock().unwrap().clone()
     }
-
 }
 
 #[cfg(feature = "testing")]
@@ -385,30 +364,27 @@ pub mod mock_errors {
     use super::*;
 
     pub fn not_found_error() -> SafeDatabaseError {
-        SafeDatabaseError::new(
-            crate::seaorm::safe_errors::ErrorCode::NotFound, 
-            "Resource not found"
-        )
+        SafeDatabaseError::new(crate::seaorm::safe_errors::ErrorCode::NotFound, "Resource not found")
     }
 
     pub fn internal_error() -> SafeDatabaseError {
         SafeDatabaseError::new(
-            crate::seaorm::safe_errors::ErrorCode::InternalError, 
-            "Internal server error"
+            crate::seaorm::safe_errors::ErrorCode::InternalError,
+            "Internal server error",
         )
     }
 
     pub fn validation_error() -> SafeDatabaseError {
         SafeDatabaseError::new(
-            crate::seaorm::safe_errors::ErrorCode::ValidationError, 
-            "Validation failed"
+            crate::seaorm::safe_errors::ErrorCode::ValidationError,
+            "Validation failed",
         )
     }
 
     pub fn service_unavailable_error() -> SafeDatabaseError {
         SafeDatabaseError::new(
-            crate::seaorm::safe_errors::ErrorCode::ServiceUnavailable, 
-            "Service unavailable"
+            crate::seaorm::safe_errors::ErrorCode::ServiceUnavailable,
+            "Service unavailable",
         )
     }
 
@@ -428,7 +404,6 @@ pub mod mock_errors {
 #[cfg(all(test, feature = "testing", feature = "seaorm"))]
 mod tests {
     use super::*;
-    
 
     #[tokio::test]
     async fn test_mock_factory_empty_repository() {

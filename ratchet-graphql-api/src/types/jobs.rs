@@ -1,9 +1,9 @@
 //! GraphQL types for jobs
 
-use async_graphql::{SimpleObject, InputObject};
-use ratchet_api_types::{UnifiedJob, JobStatus, JobPriority};
 use super::scalars::GraphQLApiId;
+use async_graphql::{InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
+use ratchet_api_types::{JobPriority, JobStatus, UnifiedJob};
 
 /// GraphQL Job type with additional fields for GraphQL API
 #[derive(SimpleObject, Clone, Debug)]
@@ -25,15 +25,18 @@ impl From<UnifiedJob> for Job {
     fn from(job: UnifiedJob) -> Self {
         // Convert output destinations from UnifiedOutputDestination to GraphQL types
         let output_destinations = job.output_destinations.map(|dests| {
-            dests.into_iter().map(|dest| {
-                let destination_type = match dest.destination_type.as_str() {
-                    "webhook" => OutputDestinationType::Webhook,
-                    "file" => OutputDestinationType::File,
-                    "database" => OutputDestinationType::Database,
-                    _ => OutputDestinationType::Webhook, // Default fallback
-                };
-                OutputDestination { destination_type }
-            }).collect()
+            dests
+                .into_iter()
+                .map(|dest| {
+                    let destination_type = match dest.destination_type.as_str() {
+                        "webhook" => OutputDestinationType::Webhook,
+                        "file" => OutputDestinationType::File,
+                        "database" => OutputDestinationType::Database,
+                        _ => OutputDestinationType::Webhook, // Default fallback
+                    };
+                    OutputDestination { destination_type }
+                })
+                .collect()
         });
 
         Self {
@@ -86,34 +89,34 @@ pub struct JobFiltersInput {
     pub task_id: Option<GraphQLApiId>,
     pub task_id_in: Option<Vec<GraphQLApiId>>,
     pub id_in: Option<Vec<GraphQLApiId>>,
-    
+
     // Status filtering
     pub status: Option<JobStatusGraphQL>,
     pub status_in: Option<Vec<JobStatusGraphQL>>,
     pub status_not: Option<JobStatusGraphQL>,
-    
+
     // Priority filtering
     pub priority: Option<JobPriorityGraphQL>,
     pub priority_in: Option<Vec<JobPriorityGraphQL>>,
     pub priority_min: Option<JobPriorityGraphQL>,
-    
+
     // Date range filtering
     pub queued_after: Option<DateTime<Utc>>,
     pub queued_before: Option<DateTime<Utc>>,
     pub scheduled_after: Option<DateTime<Utc>>,
     pub scheduled_before: Option<DateTime<Utc>>,
-    
+
     // Retry filtering
     pub retry_count_min: Option<i32>,
     pub retry_count_max: Option<i32>,
     pub max_retries_min: Option<i32>,
     pub max_retries_max: Option<i32>,
     pub has_retries_remaining: Option<bool>,
-    
+
     // Error filtering
     pub has_error: Option<bool>,
     pub error_message_contains: Option<String>,
-    
+
     // Scheduling filtering
     pub is_scheduled: Option<bool>,
     pub due_now: Option<bool>, // scheduled_for <= now

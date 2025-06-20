@@ -10,10 +10,7 @@ use std::time::Duration;
 #[serde(default)]
 pub struct HttpConfig {
     /// Request timeout
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_timeout")]
     pub timeout: Duration,
 
     /// Maximum number of redirects to follow
@@ -46,10 +43,7 @@ pub struct ConnectionPoolConfig {
     pub max_idle_per_host: usize,
 
     /// Idle connection timeout
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_idle_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_idle_timeout")]
     pub idle_timeout: Duration,
 
     /// Connection timeout
@@ -122,17 +116,9 @@ impl Validatable for HttpConfig {
 
 impl Validatable for ConnectionPoolConfig {
     fn validate(&self) -> ConfigResult<()> {
-        validate_positive(
-            self.max_idle_per_host,
-            "max_idle_per_host",
-            self.domain_name(),
-        )?;
+        validate_positive(self.max_idle_per_host, "max_idle_per_host", self.domain_name())?;
 
-        validate_positive(
-            self.idle_timeout.as_secs(),
-            "idle_timeout",
-            self.domain_name(),
-        )?;
+        validate_positive(self.idle_timeout.as_secs(), "idle_timeout", self.domain_name())?;
 
         validate_positive(
             self.connection_timeout.as_secs(),

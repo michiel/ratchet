@@ -238,12 +238,7 @@ impl<T> ErrorExt<T> for Result<T> {
     {
         self.map_err(|e| {
             let ctx = f();
-            log::error!(
-                "Error in {}: {} (details: {:?})",
-                ctx.operation,
-                e,
-                ctx.details
-            );
+            log::error!("Error in {}: {} (details: {:?})", ctx.operation, e, ctx.details);
             e
         })
     }
@@ -317,10 +312,7 @@ mod tests {
     fn test_error_retryable() {
         assert!(RatchetError::Network("timeout".to_string()).is_retryable());
         assert!(RatchetError::Timeout("30s".to_string()).is_retryable());
-        assert!(
-            !RatchetError::Validation(ValidationError::InvalidFormat("json".to_string()))
-                .is_retryable()
-        );
+        assert!(!RatchetError::Validation(ValidationError::InvalidFormat("json".to_string())).is_retryable());
     }
 
     #[test]
@@ -330,8 +322,7 @@ mod tests {
             "TASK_NOT_FOUND"
         );
         assert_eq!(
-            RatchetError::Validation(ValidationError::InvalidFormat("json".to_string()))
-                .error_code(),
+            RatchetError::Validation(ValidationError::InvalidFormat("json".to_string())).error_code(),
             "VALIDATION_ERROR"
         );
     }
@@ -343,8 +334,7 @@ mod tests {
             404
         );
         assert_eq!(
-            RatchetError::Validation(ValidationError::InvalidFormat("json".to_string()))
-                .status_code(),
+            RatchetError::Validation(ValidationError::InvalidFormat("json".to_string())).status_code(),
             400
         );
         assert_eq!(RatchetError::Timeout("30s".to_string()).status_code(), 408);

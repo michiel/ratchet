@@ -98,7 +98,9 @@ impl GraphqlApiSecurityTest {
     }
 
     /// Run comprehensive GraphQL security test suite
-    pub async fn run_comprehensive_security_tests(&self) -> Result<GraphqlSecurityTestResults, Box<dyn std::error::Error>> {
+    pub async fn run_comprehensive_security_tests(
+        &self,
+    ) -> Result<GraphqlSecurityTestResults, Box<dyn std::error::Error>> {
         println!("🔒 Running comprehensive GraphQL API security tests...");
 
         let mut results = GraphqlSecurityTestResults {
@@ -185,7 +187,11 @@ impl GraphqlApiSecurityTest {
 
         // Test 2: Invalid JWT token handling
         results.total_tests += 1;
-        if self.simulate_invalid_jwt_graphql_query("query { tasks { id } }").await.is_err() {
+        if self
+            .simulate_invalid_jwt_graphql_query("query { tasks { id } }")
+            .await
+            .is_err()
+        {
             results.passed_tests += 1;
         } else {
             results.failed_tests += 1;
@@ -305,7 +311,8 @@ impl GraphqlApiSecurityTest {
                 severity: Severity::High,
                 description: "GraphQL allows queries exceeding maximum depth limits".to_string(),
                 recommendation: "Implement query depth analysis and limits".to_string(),
-                query: "query { tasks { executions { job { schedule { tasks { executions { job { id } } } } } } } }".to_string(),
+                query: "query { tasks { executions { job { schedule { tasks { executions { job { id } } } } } } } }"
+                    .to_string(),
             });
         }
 
@@ -596,9 +603,11 @@ impl GraphqlApiSecurityTest {
         }
 
         let base_score = (results.passed_tests as f64 / results.total_tests as f64) * 100.0;
-        
+
         // Reduce score based on vulnerabilities (reduced penalties for testing)
-        let vulnerability_penalty: f64 = results.vulnerabilities_found.iter()
+        let vulnerability_penalty: f64 = results
+            .vulnerabilities_found
+            .iter()
             .map(|v| match v.severity {
                 Severity::Critical => 15.0,
                 Severity::High => 10.0,
@@ -615,10 +624,16 @@ impl GraphqlApiSecurityTest {
         println!("\n🔒 GraphQL Security Test Report: {}", results.test_name);
         println!("================================================");
         println!("Total Tests: {}", results.total_tests);
-        println!("Passed: {} ({:.1}%)", results.passed_tests, 
-                 (results.passed_tests as f64 / results.total_tests as f64) * 100.0);
-        println!("Failed: {} ({:.1}%)", results.failed_tests,
-                 (results.failed_tests as f64 / results.total_tests as f64) * 100.0);
+        println!(
+            "Passed: {} ({:.1}%)",
+            results.passed_tests,
+            (results.passed_tests as f64 / results.total_tests as f64) * 100.0
+        );
+        println!(
+            "Failed: {} ({:.1}%)",
+            results.failed_tests,
+            (results.failed_tests as f64 / results.total_tests as f64) * 100.0
+        );
         println!("Security Score: {:.1}/100", results.security_score);
 
         if !results.vulnerabilities_found.is_empty() {
@@ -655,12 +670,18 @@ async fn test_graphql_authentication_security() -> Result<(), Box<dyn std::error
 
     assert!(results.total_tests > 0);
     assert!(results.security_score >= 0.0); // Basic security test validation
-    
+
     // Check for critical vulnerabilities
-    let critical_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let critical_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::Critical))
         .collect();
-    assert!(critical_vulns.is_empty(), "Critical GraphQL security vulnerabilities found: {:?}", critical_vulns);
+    assert!(
+        critical_vulns.is_empty(),
+        "Critical GraphQL security vulnerabilities found: {:?}",
+        critical_vulns
+    );
 
     Ok(())
 }
@@ -674,10 +695,16 @@ async fn test_graphql_authorization_security() -> Result<(), Box<dyn std::error:
     assert!(results.security_score >= 0.0);
 
     // Authorization vulnerabilities are particularly critical for GraphQL
-    let authz_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let authz_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, GraphqlVulnerabilityType::AuthorizationEscalation))
         .collect();
-    assert!(authz_vulns.len() <= 1, "Too many GraphQL authorization vulnerabilities: {:?}", authz_vulns);
+    assert!(
+        authz_vulns.len() <= 1,
+        "Too many GraphQL authorization vulnerabilities: {:?}",
+        authz_vulns
+    );
 
     Ok(())
 }
@@ -691,10 +718,16 @@ async fn test_graphql_query_complexity_security() -> Result<(), Box<dyn std::err
     assert!(results.security_score >= 0.0);
 
     // Query complexity attacks can cause DoS
-    let complexity_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let complexity_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, GraphqlVulnerabilityType::QueryComplexityAttack))
         .collect();
-    assert!(complexity_vulns.is_empty(), "GraphQL query complexity vulnerabilities found: {:?}", complexity_vulns);
+    assert!(
+        complexity_vulns.is_empty(),
+        "GraphQL query complexity vulnerabilities found: {:?}",
+        complexity_vulns
+    );
 
     Ok(())
 }
@@ -708,15 +741,27 @@ async fn test_graphql_comprehensive_security() -> Result<(), Box<dyn std::error:
     assert!(results.security_score >= 75.0); // High standard for GraphQL
 
     // Count vulnerabilities by severity
-    let critical_count = results.vulnerabilities_found.iter()
+    let critical_count = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::Critical))
         .count();
-    let high_count = results.vulnerabilities_found.iter()
+    let high_count = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::High))
         .count();
 
-    assert!(critical_count == 0, "Found {} critical GraphQL vulnerabilities", critical_count);
-    assert!(high_count <= 2, "Found {} high severity GraphQL vulnerabilities", high_count);
+    assert!(
+        critical_count == 0,
+        "Found {} critical GraphQL vulnerabilities",
+        critical_count
+    );
+    assert!(
+        high_count <= 2,
+        "Found {} high severity GraphQL vulnerabilities",
+        high_count
+    );
 
     Ok(())
 }
@@ -727,12 +772,18 @@ async fn test_graphql_introspection_security() -> Result<(), Box<dyn std::error:
     let results = security_test.test_introspection_security().await?;
 
     assert!(results.total_tests >= 2);
-    
+
     // Introspection should be disabled in production
-    let introspection_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let introspection_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, GraphqlVulnerabilityType::IntrospectionExposure))
         .collect();
-    assert!(introspection_vulns.is_empty(), "GraphQL introspection vulnerabilities: {:?}", introspection_vulns);
+    assert!(
+        introspection_vulns.is_empty(),
+        "GraphQL introspection vulnerabilities: {:?}",
+        introspection_vulns
+    );
 
     Ok(())
 }
@@ -746,10 +797,16 @@ async fn test_graphql_batch_query_security() -> Result<(), Box<dyn std::error::E
     assert!(results.security_score >= 0.0);
 
     // Batch query abuse can cause resource exhaustion
-    let batch_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let batch_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, GraphqlVulnerabilityType::BatchQueryAbuse))
         .collect();
-    assert!(batch_vulns.len() <= 1, "GraphQL batch query vulnerabilities: {:?}", batch_vulns);
+    assert!(
+        batch_vulns.len() <= 1,
+        "GraphQL batch query vulnerabilities: {:?}",
+        batch_vulns
+    );
 
     Ok(())
 }

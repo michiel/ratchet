@@ -29,10 +29,7 @@ impl<E: EntityTrait> SafeFilterBuilder<E> {
     {
         if !value.is_empty() {
             // Escape special characters in LIKE patterns
-            let escaped = value
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_");
+            let escaped = value.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
 
             // Use contains for safety (adds % on both sides)
             self.conditions.push(column.contains(&escaped));
@@ -210,17 +207,8 @@ mod tests {
 
     #[test]
     fn test_input_sanitization() {
-        assert_eq!(
-            validation::sanitize_input("normal-input_123"),
-            "normal-input_123"
-        );
-        assert_eq!(
-            validation::sanitize_input("test@example.com"),
-            "test@example.com"
-        );
-        assert_eq!(
-            validation::sanitize_input("'; DROP TABLE--"),
-            " DROP TABLE--"
-        );
+        assert_eq!(validation::sanitize_input("normal-input_123"), "normal-input_123");
+        assert_eq!(validation::sanitize_input("test@example.com"), "test@example.com");
+        assert_eq!(validation::sanitize_input("'; DROP TABLE--"), " DROP TABLE--");
     }
 }

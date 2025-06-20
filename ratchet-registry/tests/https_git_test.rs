@@ -1,22 +1,22 @@
 #[cfg(feature = "git")]
 mod https_git_tests {
     use tempfile::TempDir;
-    
-    use ratchet_registry::config::{TaskSource, GitConfig};
+
+    use ratchet_registry::config::{GitConfig, TaskSource};
     use ratchet_registry::loaders::git::GitLoader;
     use ratchet_registry::loaders::TaskLoader;
-    
+
     #[tokio::test]
     async fn test_gitoxide_https_clone_capability() {
         // Test that gitoxide can clone a public HTTPS repository
         // This verifies our rustls configuration is working
-        
+
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let clone_path = temp_dir.path().join("test_clone");
-        
+
         // Use a small, reliable public repository for testing
         let test_repo_url = "https://github.com/michiel/ratchet-repo-samples";
-        
+
         let git_config = GitConfig {
             branch: "main".to_string(),
             subdirectory: None,
@@ -41,10 +41,13 @@ mod https_git_tests {
 
         let loader = GitLoader::new();
         let result = loader.discover_tasks(&source).await;
-        
+
         match result {
             Ok(_) => {
-                println!("✅ Successfully cloned HTTPS repository with gitoxide: {}", test_repo_url);
+                println!(
+                    "✅ Successfully cloned HTTPS repository with gitoxide: {}",
+                    test_repo_url
+                );
                 println!("✅ HTTPS Git repository cloning is working correctly with rustls");
             }
             Err(e) => {
@@ -54,15 +57,15 @@ mod https_git_tests {
             }
         }
     }
-    
+
     #[test]
     fn test_gitoxide_has_https_support() {
         // Test that gitoxide/gix is available and configured with rustls
         // This is a compile-time check for our feature flags
-        
+
         // The fact that this compiles means gitoxide support is available
         println!("✅ Gitoxide support enabled with rustls");
-        
+
         // Verify HTTPS URLs are recognized as valid using the url crate
         use url::Url;
         match Url::parse("https://github.com/example/repo.git") {

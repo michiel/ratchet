@@ -66,7 +66,6 @@ pub enum ApiKeyPermissions {
     Admin,
 }
 
-
 impl ApiKeyPermissions {
     /// Check if this permission allows reading
     pub fn can_read(&self) -> bool {

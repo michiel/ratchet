@@ -29,17 +29,11 @@ pub struct DatabaseConfig {
     pub connection_timeout: Duration,
 
     /// Idle timeout for connections
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_idle_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_idle_timeout")]
     pub idle_timeout: Duration,
 
     /// Maximum lifetime for connections
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_max_lifetime"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_max_lifetime")]
     pub max_lifetime: Duration,
 
     /// Database-specific configuration
@@ -227,22 +221,12 @@ impl Validatable for DatabaseConfig {
             "connection_timeout",
             self.domain_name(),
         )?;
-        validate_positive(
-            self.idle_timeout.as_secs(),
-            "idle_timeout",
-            self.domain_name(),
-        )?;
-        validate_positive(
-            self.max_lifetime.as_secs(),
-            "max_lifetime",
-            self.domain_name(),
-        )?;
+        validate_positive(self.idle_timeout.as_secs(), "idle_timeout", self.domain_name())?;
+        validate_positive(self.max_lifetime.as_secs(), "max_lifetime", self.domain_name())?;
 
         // Validate that min_connections <= max_connections
         if self.min_connections > self.max_connections {
-            return Err(
-                self.validation_error("min_connections cannot be greater than max_connections")
-            );
+            return Err(self.validation_error("min_connections cannot be greater than max_connections"));
         }
 
         self.database_specific.validate()?;
@@ -301,37 +285,17 @@ impl Validatable for SqliteConfig {
 
 impl Validatable for PostgresConfig {
     fn validate(&self) -> ConfigResult<()> {
-        validate_required_string(
-            &self.application_name,
-            "application_name",
-            self.domain_name(),
-        )?;
+        validate_required_string(&self.application_name, "application_name", self.domain_name())?;
         validate_positive(
             self.statement_timeout.as_secs(),
             "statement_timeout",
             self.domain_name(),
         )?;
-        validate_positive(
-            self.lock_timeout.as_secs(),
-            "lock_timeout",
-            self.domain_name(),
-        )?;
+        validate_positive(self.lock_timeout.as_secs(), "lock_timeout", self.domain_name())?;
 
         // Validate SSL mode
-        let valid_ssl_modes = [
-            "disable",
-            "allow",
-            "prefer",
-            "require",
-            "verify-ca",
-            "verify-full",
-        ];
-        crate::validation::validate_enum_choice(
-            &self.ssl_mode,
-            &valid_ssl_modes,
-            "ssl_mode",
-            self.domain_name(),
-        )?;
+        let valid_ssl_modes = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
+        crate::validation::validate_enum_choice(&self.ssl_mode, &valid_ssl_modes, "ssl_mode", self.domain_name())?;
 
         Ok(())
     }
@@ -345,11 +309,7 @@ impl Validatable for MysqlConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_required_string(&self.charset, "charset", self.domain_name())?;
         validate_required_string(&self.collation, "collation", self.domain_name())?;
-        validate_positive(
-            self.connect_timeout.as_secs(),
-            "connect_timeout",
-            self.domain_name(),
-        )?;
+        validate_positive(self.connect_timeout.as_secs(), "connect_timeout", self.domain_name())?;
 
         Ok(())
     }

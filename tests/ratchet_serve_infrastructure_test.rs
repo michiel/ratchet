@@ -1,5 +1,5 @@
 //! Infrastructure test for `ratchet serve` command
-//! 
+//!
 //! This test validates that the core infrastructure components work correctly:
 //! 1. Server startup and configuration
 //! 2. Database initialization and migrations  
@@ -18,25 +18,22 @@ use axum::{
     Router,
 };
 // Removed unused imports
-use std::sync::{Arc, Mutex};
 use ratchet_config::{
-    RatchetConfig,
     domains::{
         database::DatabaseConfig,
-        server::ServerConfig,
-        registry::RegistryConfig,
-        output::OutputConfig,
         http::HttpConfig,
-        logging::{LoggingConfig, LogLevel, LogFormat},
+        logging::{LogFormat, LogLevel, LoggingConfig},
+        output::OutputConfig,
+        registry::RegistryConfig,
+        server::ServerConfig,
     },
+    RatchetConfig,
 };
 use ratchet_server::Server;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{
-    net::SocketAddr,
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
+use std::{net::SocketAddr, time::Duration};
 use tempfile::TempDir;
 use tokio::{net::TcpListener, time::timeout};
 
@@ -44,13 +41,16 @@ use tokio::{net::TcpListener, time::timeout};
 fn init_quiet_logging() {
     use std::sync::Once;
     static INIT: Once = Once::new();
-    
+
     // Initialize logging to be less verbose for tests
     INIT.call_once(|| {
         // Set very restrictive logging - only show warnings and errors from our code
-        std::env::set_var("RUST_LOG", "warn,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet=warn");
+        std::env::set_var(
+            "RUST_LOG",
+            "warn,sqlx=off,sea_orm=off,hyper=off,h2=off,tower=off,reqwest=off,ratchet=warn",
+        );
         std::env::set_var("RUST_LOG_STYLE", "never"); // Disable colored output
-        
+
         // Try to initialize a minimal tracing subscriber if one isn't already set
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::WARN)
@@ -84,11 +84,7 @@ async fn test_webhook_handler(
     Json(payload): Json<TestWebhookPayload>,
 ) -> StatusCode {
     println!("🔗 Test webhook received: {:?}", payload);
-    state
-        .received_payloads
-        .lock()
-        .unwrap()
-        .push(payload);
+    state.received_payloads.lock().unwrap().push(payload);
     StatusCode::OK
 }
 
@@ -106,9 +102,7 @@ async fn start_test_webhook_server() -> Result<(SocketAddr, TestWebhookState)> {
     let addr = listener.local_addr()?;
 
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
 
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -119,7 +113,7 @@ async fn start_test_webhook_server() -> Result<(SocketAddr, TestWebhookState)> {
 async fn create_minimal_test_config() -> Result<(RatchetConfig, TempDir)> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("infrastructure_test.db");
-    
+
     let config = RatchetConfig {
         server: Some(ServerConfig {
             bind_address: "127.0.0.1".to_string(),
@@ -141,9 +135,7 @@ async fn create_minimal_test_config() -> Result<(RatchetConfig, TempDir)> {
             default_timeout: Duration::from_secs(30),
             ..Default::default()
         },
-        http: HttpConfig {
-            ..Default::default()
-        },
+        http: HttpConfig { ..Default::default() },
         logging: LoggingConfig {
             level: LogLevel::Warn, // Reduce noise
             format: LogFormat::Json,
@@ -220,17 +212,15 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
     let app = server.build_app();
-    
+
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let server_addr = listener.local_addr()?;
     let server_url = format!("http://{}", server_addr);
-    
+
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
-    
+
     tokio::time::sleep(Duration::from_secs(1)).await;
     println!("✅ Ratchet server running on: {}", server_url);
 
@@ -246,23 +236,27 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
             }
         }
     "#;
-    
-    let health_response = timeout(
-        Duration::from_secs(10),
-        graphql_client.execute_query(health_query)
-    ).await??;
-    
-    assert!(!health_response["errors"].as_array().unwrap_or(&vec![]).iter().any(|e| {
-        e["message"].as_str().unwrap_or("").contains("Cannot query field")
-    }), "Health query should not have schema errors");
-    
+
+    let health_response = timeout(Duration::from_secs(10), graphql_client.execute_query(health_query)).await??;
+
+    assert!(
+        !health_response["errors"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .any(|e| { e["message"].as_str().unwrap_or("").contains("Cannot query field") }),
+        "Health query should not have schema errors"
+    );
+
     println!("✅ GraphQL health endpoint working");
 
     // Step 5: Test basic GraphQL schema queries
     println!("📊 Step 5: Testing GraphQL schema queries");
-    
+
     let queries_to_test = vec![
-        ("Tasks Query", r#"
+        (
+            "Tasks Query",
+            r#"
             query {
                 tasks {
                     items {
@@ -275,8 +269,11 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
                     }
                 }
             }
-        "#),
-        ("Executions Query", r#"
+        "#,
+        ),
+        (
+            "Executions Query",
+            r#"
             query {
                 executions {
                     items {
@@ -288,8 +285,11 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
                     }
                 }
             }
-        "#),
-        ("Jobs Query", r#"
+        "#,
+        ),
+        (
+            "Jobs Query",
+            r#"
             query {
                 jobs {
                     items {
@@ -302,8 +302,11 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
                     }
                 }
             }
-        "#),
-        ("Task Statistics", r#"
+        "#,
+        ),
+        (
+            "Task Statistics",
+            r#"
             query {
                 taskStats {
                     totalTasks
@@ -311,17 +314,15 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
                     disabledTasks
                 }
             }
-        "#),
+        "#,
+        ),
     ];
 
     for (name, query) in queries_to_test {
         println!("  🧪 Testing: {}", name);
-        
-        let response = timeout(
-            Duration::from_secs(5),
-            graphql_client.execute_query(query)
-        ).await??;
-        
+
+        let response = timeout(Duration::from_secs(5), graphql_client.execute_query(query)).await??;
+
         // Check for schema errors
         if let Some(errors) = response.get("errors") {
             let schema_errors: Vec<&str> = errors
@@ -330,21 +331,29 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
                 .iter()
                 .filter_map(|e| e["message"].as_str())
                 .filter(|msg| {
-                    msg.contains("Cannot query field") ||
-                    msg.contains("Unknown field") ||
-                    msg.contains("Unknown argument") ||
-                    msg.contains("Expected type")
+                    msg.contains("Cannot query field")
+                        || msg.contains("Unknown field")
+                        || msg.contains("Unknown argument")
+                        || msg.contains("Expected type")
                 })
                 .collect();
-            
-            assert!(schema_errors.is_empty(), 
-                "Query '{}' has schema errors: {:?}", name, schema_errors);
+
+            assert!(
+                schema_errors.is_empty(),
+                "Query '{}' has schema errors: {:?}",
+                name,
+                schema_errors
+            );
         }
-        
+
         // Verify data structure exists (even if empty)
-        assert!(response.get("data").is_some(), "Query '{}' should return data field", name);
+        assert!(
+            response.get("data").is_some(),
+            "Query '{}' should return data field",
+            name
+        );
     }
-    
+
     println!("✅ All GraphQL schema queries working");
 
     // Step 6: Test webhook communication
@@ -354,27 +363,27 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
         message: "Test webhook from infrastructure test".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     let webhook_response = reqwest::Client::new()
         .post(&webhook_url)
         .json(&test_payload)
         .send()
         .await?;
-    
+
     assert_eq!(webhook_response.status(), 200, "Webhook should respond with 200");
-    
+
     // Wait and verify webhook received the payload
     tokio::time::sleep(Duration::from_millis(100)).await;
     let received_payloads = webhook_state.received_payloads.lock().unwrap();
     assert_eq!(received_payloads.len(), 1, "Should have received one webhook payload");
     assert_eq!(received_payloads[0].test_id, "infrastructure-test-001");
-    
+
     println!("✅ Webhook communication working");
 
     // Step 7: Test REST API health endpoint (if available)
     println!("🩺 Step 7: Testing REST API health");
     let health_url = format!("{}/health", server_url);
-    
+
     match reqwest::Client::new().get(&health_url).send().await {
         Ok(response) => {
             println!("  ✅ REST health endpoint responded with: {}", response.status());
@@ -395,7 +404,7 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
             }
         }
     "#;
-    
+
     match graphql_client.execute_query(introspection_query).await {
         Ok(response) => {
             if response.get("errors").is_some() {
@@ -415,35 +424,33 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
     println!("✅ GraphQL API and schema: WORKING");
     println!("✅ Webhook communication: WORKING");
     println!("✅ Core infrastructure: READY FOR USE");
-    
+
     Ok(())
 }
 
-#[tokio::test] 
+#[tokio::test]
 async fn test_graphql_error_handling() -> Result<()> {
     init_quiet_logging();
     println!("🚨 Testing GraphQL error handling");
-    
+
     // Set up minimal server
     let (config, _temp_dir) = create_minimal_test_config().await?;
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
     let app = server.build_app();
-    
+
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let server_addr = listener.local_addr()?;
     let server_url = format!("http://{}", server_addr);
-    
+
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
-    
+
     tokio::time::sleep(Duration::from_millis(500)).await;
-    
+
     let graphql_client = GraphQLTestClient::new(format!("{}/graphql", server_url));
-    
+
     // Test invalid query
     let invalid_query = r#"
         query {
@@ -452,21 +459,24 @@ async fn test_graphql_error_handling() -> Result<()> {
             }
         }
     "#;
-    
+
     let response = graphql_client.execute_query(invalid_query).await?;
-    
+
     // Should have errors for unknown field
     assert!(response.get("errors").is_some(), "Invalid query should return errors");
-    
+
     let errors = response["errors"].as_array().unwrap();
     assert!(!errors.is_empty(), "Should have at least one error");
-    
+
     let error_message = errors[0]["message"].as_str().unwrap();
-    assert!(error_message.contains("Cannot query field") || error_message.contains("Unknown field"),
-        "Error should mention unknown field: {}", error_message);
-    
+    assert!(
+        error_message.contains("Cannot query field") || error_message.contains("Unknown field"),
+        "Error should mention unknown field: {}",
+        error_message
+    );
+
     println!("✅ GraphQL error handling working correctly");
-    
+
     Ok(())
 }
 
@@ -474,26 +484,24 @@ async fn test_graphql_error_handling() -> Result<()> {
 async fn test_concurrent_requests() -> Result<()> {
     init_quiet_logging();
     println!("🔄 Testing concurrent GraphQL requests");
-    
+
     let (config, _temp_dir) = create_minimal_test_config().await?;
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
     let app = server.build_app();
-    
+
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let server_addr = listener.local_addr()?;
     let server_url = format!("http://{}", server_addr);
-    
+
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
-    
+
     tokio::time::sleep(Duration::from_millis(500)).await;
-    
+
     let graphql_client = GraphQLTestClient::new(format!("{}/graphql", server_url));
-    
+
     // Execute multiple concurrent requests
     let health_query = r#"
         query {
@@ -503,11 +511,11 @@ async fn test_concurrent_requests() -> Result<()> {
             }
         }
     "#;
-    
+
     let tasks = (0..5).map(|_i| {
         let client = graphql_client.client.clone();
         let endpoint = graphql_client.endpoint.clone();
-        
+
         async move {
             let response = client
                 .post(&endpoint)
@@ -516,18 +524,18 @@ async fn test_concurrent_requests() -> Result<()> {
                 }))
                 .send()
                 .await?;
-            
+
             let result: Value = response.json().await?;
             Result::<Value>::Ok(result)
         }
     });
-    
+
     let results = futures::future::try_join_all(tasks).await?;
-    
+
     // Verify all requests succeeded
     for (i, result) in results.iter().enumerate() {
         assert!(result.get("data").is_some(), "Request {} should have data", i);
-        
+
         // Check for schema errors
         if let Some(errors) = result.get("errors") {
             let schema_errors: Vec<&str> = errors
@@ -537,12 +545,12 @@ async fn test_concurrent_requests() -> Result<()> {
                 .filter_map(|e| e["message"].as_str())
                 .filter(|msg| msg.contains("Cannot query field"))
                 .collect();
-            
+
             assert!(schema_errors.is_empty(), "Request {} should not have schema errors", i);
         }
     }
-    
+
     println!("✅ Concurrent requests handled successfully");
-    
+
     Ok(())
 }

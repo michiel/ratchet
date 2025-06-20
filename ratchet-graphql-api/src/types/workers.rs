@@ -1,8 +1,8 @@
 //! GraphQL types for workers
 
-use async_graphql::{SimpleObject, InputObject, Enum};
-use ratchet_api_types::{UnifiedWorkerStatus, WorkerStatusType};
+use async_graphql::{Enum, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
+use ratchet_api_types::{UnifiedWorkerStatus, WorkerStatusType};
 
 /// GraphQL Worker type
 #[derive(SimpleObject, Clone, Debug)]

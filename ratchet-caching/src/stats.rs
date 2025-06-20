@@ -123,14 +123,12 @@ impl StatsCollector {
 
     /// Record get latency
     pub fn record_get_latency(&self, latency_ns: u64) {
-        self.total_get_latency_ns
-            .fetch_add(latency_ns, Ordering::Relaxed);
+        self.total_get_latency_ns.fetch_add(latency_ns, Ordering::Relaxed);
     }
 
     /// Record put latency
     pub fn record_put_latency(&self, latency_ns: u64) {
-        self.total_put_latency_ns
-            .fetch_add(latency_ns, Ordering::Relaxed);
+        self.total_put_latency_ns.fetch_add(latency_ns, Ordering::Relaxed);
     }
 
     /// Get current stats
@@ -148,21 +146,13 @@ impl StatsCollector {
         };
 
         let avg_get_latency_us = if total_gets > 0 {
-            Some(
-                self.total_get_latency_ns.load(Ordering::Relaxed) as f64
-                    / total_gets as f64
-                    / 1000.0,
-            )
+            Some(self.total_get_latency_ns.load(Ordering::Relaxed) as f64 / total_gets as f64 / 1000.0)
         } else {
             None
         };
 
         let avg_put_latency_us = if total_puts > 0 {
-            Some(
-                self.total_put_latency_ns.load(Ordering::Relaxed) as f64
-                    / total_puts as f64
-                    / 1000.0,
-            )
+            Some(self.total_put_latency_ns.load(Ordering::Relaxed) as f64 / total_puts as f64 / 1000.0)
         } else {
             None
         };

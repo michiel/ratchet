@@ -1,10 +1,10 @@
 //! GraphQL resolvers
 
-pub mod query;
 pub mod mutation;
+pub mod query;
 pub mod subscription;
 
 // Re-export all resolvers
-pub use query::*;
 pub use mutation::*;
+pub use query::*;
 pub use subscription::*;

@@ -1,5 +1,5 @@
-use crate::JsExecutionError;
 use crate::error_handling::parse_js_error;
+use crate::JsExecutionError;
 use boa_engine::{property::PropertyKey, Context as BoaContext, JsString, Source};
 use serde_json::Value as JsonValue;
 use tracing::debug;
@@ -42,10 +42,7 @@ pub fn check_fetch_call(
             .map_err(|e| JsExecutionError::ExecutionError(e.to_string()))?
             .to_std_string_escaped();
 
-        Some(
-            serde_json::from_str(&params_str)
-                .map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?,
-        )
+        Some(serde_json::from_str(&params_str).map_err(|e| JsExecutionError::InvalidOutputFormat(e.to_string()))?)
     } else {
         None
     };
@@ -102,24 +99,14 @@ pub async fn handle_fetch_processing(
                 .eval(Source::from_bytes(&format!(
                     "({})",
                     serde_json::to_string(&http_result).map_err(|e| {
-                        JsExecutionError::ExecutionError(format!(
-                            "Failed to serialize HTTP result: {}",
-                            e
-                        ))
+                        JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e))
                     })?
                 )))
-                .map_err(|e| {
-                    JsExecutionError::ExecutionError(format!(
-                        "Failed to parse HTTP result JSON: {}",
-                        e
-                    ))
-                })?,
+                .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e)))?,
             true,
             context,
         )
-        .map_err(|e| {
-            JsExecutionError::ExecutionError(format!("Failed to set HTTP result: {}", e))
-        })?;
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to set HTTP result: {}", e)))?;
 
     // Replace the fetch function to return the stored result and throw appropriate errors
     context
@@ -153,9 +140,7 @@ pub async fn handle_fetch_processing(
             };
         "#,
         ))
-        .map_err(|e| {
-            JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e))
-        })?;
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e)))?;
 
     debug!("Re-calling JavaScript function with updated fetch");
 
@@ -212,13 +197,10 @@ pub async fn handle_fetch_processing_with_context(
     crate::conversion::set_js_value(
         context,
         "__http_result",
-        &serde_json::to_value(response_result).map_err(|e| {
-            JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e))
-        })?,
+        &serde_json::to_value(response_result)
+            .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to serialize HTTP result: {}", e)))?,
     )
-    .map_err(|e| {
-        JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e))
-    })?;
+    .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to parse HTTP result JSON: {}", e)))?;
 
     // Replace the fetch function to return the stored result and throw appropriate errors
     context
@@ -252,9 +234,7 @@ pub async fn handle_fetch_processing_with_context(
             };
         "#,
         ))
-        .map_err(|e| {
-            JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e))
-        })?;
+        .map_err(|e| JsExecutionError::ExecutionError(format!("Failed to replace fetch function: {}", e)))?;
 
     debug!("Re-calling JavaScript function with updated fetch and context");
 
@@ -262,7 +242,11 @@ pub async fn handle_fetch_processing_with_context(
     let result = func
         .as_callable()
         .ok_or_else(|| JsExecutionError::ExecutionError("Function is not callable".to_string()))?
-        .call(&boa_engine::JsValue::undefined(), &[input_arg.clone(), context_arg.clone()], context)
+        .call(
+            &boa_engine::JsValue::undefined(),
+            &[input_arg.clone(), context_arg.clone()],
+            context,
+        )
         .map_err(|e| {
             let error_message = e.to_string();
             // Try to parse as a typed JS error first

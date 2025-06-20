@@ -3,7 +3,7 @@
 //! This module provides tools for validating data integrity after migration,
 //! comparing source and target databases, and ensuring migration completeness.
 
-use sea_orm::{DatabaseConnection, Statement, QueryResult, ConnectionTrait};
+use sea_orm::{ConnectionTrait, DatabaseConnection, QueryResult, Statement};
 use serde::{Deserialize, Serialize};
 
 use crate::migration::MigrationError;
@@ -13,19 +13,19 @@ use crate::migration::MigrationError;
 pub struct ValidationReport {
     /// Overall validation success
     pub success: bool,
-    
+
     /// Entity-specific validation results
     pub entity_validations: Vec<EntityValidation>,
-    
+
     /// Record count comparison between source and target
     pub record_counts: RecordCounts,
-    
+
     /// Data integrity check results
     pub integrity_checks: Vec<IntegrityCheck>,
-    
+
     /// Performance metrics
     pub validation_duration_ms: u64,
-    
+
     /// Any validation errors encountered
     pub errors: Vec<String>,
 }
@@ -85,10 +85,7 @@ pub struct MigrationValidator {
 
 impl MigrationValidator {
     pub fn new(source_db: DatabaseConnection, target_db: DatabaseConnection) -> Self {
-        Self {
-            source_db,
-            target_db,
-        }
+        Self { source_db, target_db }
     }
 
     /// Perform complete migration validation
@@ -165,7 +162,11 @@ impl MigrationValidator {
     }
 
     /// Sample and compare specific records between databases
-    pub async fn sample_comparison(&self, entity: &str, sample_size: usize) -> Result<SampleComparison, MigrationError> {
+    pub async fn sample_comparison(
+        &self,
+        entity: &str,
+        sample_size: usize,
+    ) -> Result<SampleComparison, MigrationError> {
         let source_records = self.get_sample_records(&self.source_db, entity, sample_size).await?;
         let target_records = self.get_sample_records(&self.target_db, entity, sample_size).await?;
 
@@ -191,7 +192,11 @@ impl MigrationValidator {
         Ok(SampleComparison {
             sample_size: source_records.len().min(target_records.len()),
             matching_records,
-            mismatched_fields: mismatched_fields.into_iter().collect::<std::collections::HashSet<_>>().into_iter().collect(),
+            mismatched_fields: mismatched_fields
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect(),
             sample_errors,
         })
     }
@@ -223,7 +228,7 @@ impl MigrationValidator {
     async fn count_comparison(&self, table: &str) -> Result<CountComparison, MigrationError> {
         let source = self.count_records(&self.source_db, table).await?;
         let target = self.count_records(&self.target_db, table).await?;
-        
+
         Ok(CountComparison {
             source,
             target,
@@ -234,7 +239,7 @@ impl MigrationValidator {
     async fn count_records(&self, db: &DatabaseConnection, table: &str) -> Result<u64, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            format!("SELECT COUNT(*) as count FROM {}", table)
+            format!("SELECT COUNT(*) as count FROM {}", table),
         );
 
         let result = db.query_one(stmt).await?;
@@ -247,17 +252,27 @@ impl MigrationValidator {
         }
     }
 
-    async fn get_sample_records(&self, db: &DatabaseConnection, table: &str, limit: usize) -> Result<Vec<QueryResult>, MigrationError> {
+    async fn get_sample_records(
+        &self,
+        db: &DatabaseConnection,
+        table: &str,
+        limit: usize,
+    ) -> Result<Vec<QueryResult>, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            format!("SELECT * FROM {} ORDER BY id LIMIT {}", table, limit)
+            format!("SELECT * FROM {} ORDER BY id LIMIT {}", table, limit),
         );
 
         let results = db.query_all(stmt).await?;
         Ok(results)
     }
 
-    fn compare_records(&self, entity: &str, source: &QueryResult, target: &QueryResult) -> Result<RecordComparison, MigrationError> {
+    fn compare_records(
+        &self,
+        entity: &str,
+        source: &QueryResult,
+        target: &QueryResult,
+    ) -> Result<RecordComparison, MigrationError> {
         let mut comparison = RecordComparison {
             matches: true,
             mismatched_fields: Vec::new(),
@@ -281,14 +296,22 @@ impl MigrationValidator {
                 self.compare_delivery_result_records(source, target, &mut comparison)?;
             }
             _ => {
-                return Err(MigrationError::ValidationFailed(format!("Unknown entity type: {}", entity)));
+                return Err(MigrationError::ValidationFailed(format!(
+                    "Unknown entity type: {}",
+                    entity
+                )));
             }
         }
 
         Ok(comparison)
     }
 
-    fn compare_task_records(&self, source: &QueryResult, target: &QueryResult, comparison: &mut RecordComparison) -> Result<(), MigrationError> {
+    fn compare_task_records(
+        &self,
+        source: &QueryResult,
+        target: &QueryResult,
+        comparison: &mut RecordComparison,
+    ) -> Result<(), MigrationError> {
         // Compare key fields
         if !self.fields_match(source, target, "uuid")? {
             comparison.matches = false;
@@ -303,11 +326,16 @@ impl MigrationValidator {
             comparison.mismatched_fields.push("version".to_string());
         }
         // Note: path field might need special handling for task source migration
-        
+
         Ok(())
     }
 
-    fn compare_execution_records(&self, source: &QueryResult, target: &QueryResult, comparison: &mut RecordComparison) -> Result<(), MigrationError> {
+    fn compare_execution_records(
+        &self,
+        source: &QueryResult,
+        target: &QueryResult,
+        comparison: &mut RecordComparison,
+    ) -> Result<(), MigrationError> {
         if !self.fields_match(source, target, "uuid")? {
             comparison.matches = false;
             comparison.mismatched_fields.push("uuid".to_string());
@@ -320,11 +348,16 @@ impl MigrationValidator {
             comparison.matches = false;
             comparison.mismatched_fields.push("status".to_string());
         }
-        
+
         Ok(())
     }
 
-    fn compare_job_records(&self, source: &QueryResult, target: &QueryResult, comparison: &mut RecordComparison) -> Result<(), MigrationError> {
+    fn compare_job_records(
+        &self,
+        source: &QueryResult,
+        target: &QueryResult,
+        comparison: &mut RecordComparison,
+    ) -> Result<(), MigrationError> {
         if !self.fields_match(source, target, "uuid")? {
             comparison.matches = false;
             comparison.mismatched_fields.push("uuid".to_string());
@@ -337,11 +370,16 @@ impl MigrationValidator {
             comparison.matches = false;
             comparison.mismatched_fields.push("status".to_string());
         }
-        
+
         Ok(())
     }
 
-    fn compare_schedule_records(&self, source: &QueryResult, target: &QueryResult, comparison: &mut RecordComparison) -> Result<(), MigrationError> {
+    fn compare_schedule_records(
+        &self,
+        source: &QueryResult,
+        target: &QueryResult,
+        comparison: &mut RecordComparison,
+    ) -> Result<(), MigrationError> {
         if !self.fields_match(source, target, "uuid")? {
             comparison.matches = false;
             comparison.mismatched_fields.push("uuid".to_string());
@@ -354,11 +392,16 @@ impl MigrationValidator {
             comparison.matches = false;
             comparison.mismatched_fields.push("cron_expression".to_string());
         }
-        
+
         Ok(())
     }
 
-    fn compare_delivery_result_records(&self, source: &QueryResult, target: &QueryResult, comparison: &mut RecordComparison) -> Result<(), MigrationError> {
+    fn compare_delivery_result_records(
+        &self,
+        source: &QueryResult,
+        target: &QueryResult,
+        comparison: &mut RecordComparison,
+    ) -> Result<(), MigrationError> {
         if !self.fields_match(source, target, "execution_id")? {
             comparison.matches = false;
             comparison.mismatched_fields.push("execution_id".to_string());
@@ -367,7 +410,7 @@ impl MigrationValidator {
             comparison.matches = false;
             comparison.mismatched_fields.push("destination_type".to_string());
         }
-        
+
         Ok(())
     }
 
@@ -382,13 +425,12 @@ impl MigrationValidator {
     async fn check_task_execution_references(&self) -> Result<IntegrityCheck, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT COUNT(*) as count FROM executions e LEFT JOIN tasks t ON e.task_id = t.id WHERE t.id IS NULL".to_string()
+            "SELECT COUNT(*) as count FROM executions e LEFT JOIN tasks t ON e.task_id = t.id WHERE t.id IS NULL"
+                .to_string(),
         );
 
         let result = self.target_db.query_one(stmt).await?;
-        let orphan_count: i64 = result
-            .map(|row| row.try_get("", "count").unwrap_or(0))
-            .unwrap_or(0);
+        let orphan_count: i64 = result.map(|row| row.try_get("", "count").unwrap_or(0)).unwrap_or(0);
 
         Ok(IntegrityCheck {
             check_type: "foreign_key".to_string(),
@@ -405,13 +447,11 @@ impl MigrationValidator {
     async fn check_task_job_references(&self) -> Result<IntegrityCheck, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT COUNT(*) as count FROM jobs j LEFT JOIN tasks t ON j.task_id = t.id WHERE t.id IS NULL".to_string()
+            "SELECT COUNT(*) as count FROM jobs j LEFT JOIN tasks t ON j.task_id = t.id WHERE t.id IS NULL".to_string(),
         );
 
         let result = self.target_db.query_one(stmt).await?;
-        let orphan_count: i64 = result
-            .map(|row| row.try_get("", "count").unwrap_or(0))
-            .unwrap_or(0);
+        let orphan_count: i64 = result.map(|row| row.try_get("", "count").unwrap_or(0)).unwrap_or(0);
 
         Ok(IntegrityCheck {
             check_type: "foreign_key".to_string(),
@@ -428,13 +468,12 @@ impl MigrationValidator {
     async fn check_task_schedule_references(&self) -> Result<IntegrityCheck, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT COUNT(*) as count FROM schedules s LEFT JOIN tasks t ON s.task_id = t.id WHERE t.id IS NULL".to_string()
+            "SELECT COUNT(*) as count FROM schedules s LEFT JOIN tasks t ON s.task_id = t.id WHERE t.id IS NULL"
+                .to_string(),
         );
 
         let result = self.target_db.query_one(stmt).await?;
-        let orphan_count: i64 = result
-            .map(|row| row.try_get("", "count").unwrap_or(0))
-            .unwrap_or(0);
+        let orphan_count: i64 = result.map(|row| row.try_get("", "count").unwrap_or(0)).unwrap_or(0);
 
         Ok(IntegrityCheck {
             check_type: "foreign_key".to_string(),
@@ -455,9 +494,7 @@ impl MigrationValidator {
         );
 
         let result = self.target_db.query_one(stmt).await?;
-        let orphan_count: i64 = result
-            .map(|row| row.try_get("", "count").unwrap_or(0))
-            .unwrap_or(0);
+        let orphan_count: i64 = result.map(|row| row.try_get("", "count").unwrap_or(0)).unwrap_or(0);
 
         Ok(IntegrityCheck {
             check_type: "foreign_key".to_string(),
@@ -474,7 +511,7 @@ impl MigrationValidator {
     async fn check_unique_task_uuids(&self) -> Result<IntegrityCheck, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT COUNT(*) as total, COUNT(DISTINCT uuid) as unique_count FROM tasks".to_string()
+            "SELECT COUNT(*) as total, COUNT(DISTINCT uuid) as unique_count FROM tasks".to_string(),
         );
 
         let result = self.target_db.query_one(stmt).await?;
@@ -502,7 +539,7 @@ impl MigrationValidator {
     async fn check_unique_execution_uuids(&self) -> Result<IntegrityCheck, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT COUNT(*) as total, COUNT(DISTINCT uuid) as unique_count FROM executions".to_string()
+            "SELECT COUNT(*) as total, COUNT(DISTINCT uuid) as unique_count FROM executions".to_string(),
         );
 
         let result = self.target_db.query_one(stmt).await?;
@@ -544,14 +581,14 @@ impl MigrationValidator {
         for (table, field) in &tables_and_fields {
             let stmt = Statement::from_string(
                 sea_orm::DatabaseBackend::Sqlite,
-                format!("SELECT id, {} FROM {} WHERE {} IS NOT NULL", field, table, field)
+                format!("SELECT id, {} FROM {} WHERE {} IS NOT NULL", field, table, field),
             );
 
             let results = self.target_db.query_all(stmt).await?;
             for result in results {
                 let id: i32 = result.try_get("", "id").unwrap_or(0);
                 let json_str: String = result.try_get("", field).unwrap_or_default();
-                
+
                 if !json_str.is_empty() && serde_json::from_str::<serde_json::Value>(&json_str).is_err() {
                     invalid_count += 1;
                     errors.push(format!("{}.{} record {} has invalid JSON", table, field, id));
@@ -564,7 +601,11 @@ impl MigrationValidator {
             description: "JSON field validity".to_string(),
             passed: invalid_count == 0,
             details: if invalid_count > 0 {
-                Some(format!("{} invalid JSON fields found: {}", invalid_count, errors.join(", ")))
+                Some(format!(
+                    "{} invalid JSON fields found: {}",
+                    invalid_count,
+                    errors.join(", ")
+                ))
             } else {
                 None
             },
@@ -574,13 +615,11 @@ impl MigrationValidator {
     async fn check_timestamp_consistency(&self) -> Result<IntegrityCheck, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT COUNT(*) as count FROM tasks WHERE created_at > updated_at".to_string()
+            "SELECT COUNT(*) as count FROM tasks WHERE created_at > updated_at".to_string(),
         );
 
         let result = self.target_db.query_one(stmt).await?;
-        let inconsistent_count: i64 = result
-            .map(|row| row.try_get("", "count").unwrap_or(0))
-            .unwrap_or(0);
+        let inconsistent_count: i64 = result.map(|row| row.try_get("", "count").unwrap_or(0)).unwrap_or(0);
 
         Ok(IntegrityCheck {
             check_type: "data_consistency".to_string(),
@@ -611,13 +650,10 @@ mod tests {
         let source_db = TestDatabase::new().await.unwrap();
         let target_db = TestDatabase::new().await.unwrap();
 
-        let validator = MigrationValidator::new(
-            source_db.connection.clone(),
-            target_db.connection.clone(),
-        );
+        let validator = MigrationValidator::new(source_db.connection.clone(), target_db.connection.clone());
 
         let counts = validator.compare_record_counts().await.unwrap();
-        
+
         // Both databases should start empty
         assert_eq!(counts.tasks.source, 0);
         assert_eq!(counts.tasks.target, 0);
@@ -629,13 +665,10 @@ mod tests {
         let source_db = TestDatabase::new().await.unwrap();
         let target_db = TestDatabase::new().await.unwrap();
 
-        let validator = MigrationValidator::new(
-            source_db.connection.clone(),
-            target_db.connection.clone(),
-        );
+        let validator = MigrationValidator::new(source_db.connection.clone(), target_db.connection.clone());
 
         let checks = validator.perform_integrity_checks().await.unwrap();
-        
+
         // All checks should pass on empty databases
         for check in checks {
             assert!(check.passed, "Integrity check failed: {}", check.description);

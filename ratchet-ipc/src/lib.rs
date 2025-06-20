@@ -10,7 +10,7 @@ pub mod transport;
 // Re-export commonly used types
 pub use error::IpcError;
 pub use protocol::{
-    CoordinatorMessage, ExecutionContext, MessageEnvelope, TaskExecutionResult,
-    TaskValidationResult, WorkerError, WorkerMessage, WorkerStatus, IPC_PROTOCOL_VERSION,
+    CoordinatorMessage, ExecutionContext, MessageEnvelope, TaskExecutionResult, TaskValidationResult, WorkerError,
+    WorkerMessage, WorkerStatus, IPC_PROTOCOL_VERSION,
 };
 pub use transport::{IpcTransport, StdioTransport};

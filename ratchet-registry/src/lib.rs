@@ -16,15 +16,13 @@ pub use registry::{DefaultTaskRegistry, TaskRegistry};
 pub use service::{DefaultRegistryService, RegistryService};
 pub use sync::{ConflictResolver, DatabaseSync};
 pub use types::{
-    DiscoveredTask, RegistryEvent, SyncResult, TaskDefinition, TaskMetadata, TaskReference,
-    ValidationResult,
+    DiscoveredTask, RegistryEvent, SyncResult, TaskDefinition, TaskMetadata, TaskReference, ValidationResult,
 };
 pub use watcher::RegistryWatcher;
 
 // Re-export for backward compatibility if needed
 pub mod prelude {
     pub use crate::{
-        config::*, error::*, types::*, DefaultRegistryService,
-        DefaultTaskRegistry, RegistryService, TaskRegistry,
+        config::*, error::*, types::*, DefaultRegistryService, DefaultTaskRegistry, RegistryService, TaskRegistry,
     };
 }

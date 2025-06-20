@@ -66,10 +66,7 @@ impl Plugin for LoggingPlugin {
             "timestamp": chrono::Utc::now().to_rfc3339()
         });
 
-        info!(
-            "📊 Logging Plugin execution completed with result: {}",
-            result
-        );
+        info!("📊 Logging Plugin execution completed with result: {}", result);
         Ok(result)
     }
 
@@ -112,11 +109,7 @@ mod tests {
     #[tokio::test]
     async fn test_logging_plugin_lifecycle() {
         let mut plugin = LoggingPlugin::new();
-        let mut context = PluginContext::new(
-            Uuid::new_v4(),
-            serde_json::json!({}),
-            RatchetConfig::default(),
-        );
+        let mut context = PluginContext::new(Uuid::new_v4(), serde_json::json!({}), RatchetConfig::default());
 
         // Test initialization
         assert!(plugin.initialize(&mut context).await.is_ok());

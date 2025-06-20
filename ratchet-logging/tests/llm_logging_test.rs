@@ -1,6 +1,6 @@
 use ratchet_logging::{
-    format_markdown_report, ErrorCategory, ErrorInfo, ErrorPattern, ErrorPatternMatcher,
-    ErrorSeverity, LLMExportConfig, LLMExporter, LogEvent, LogLevel, MatchingRule, LogContext,
+    format_markdown_report, ErrorCategory, ErrorInfo, ErrorPattern, ErrorPatternMatcher, ErrorSeverity,
+    LLMExportConfig, LLMExporter, LogContext, LogEvent, LogLevel, MatchingRule,
 };
 
 #[test]
@@ -8,13 +8,9 @@ fn test_pattern_matching_for_task_errors() {
     let matcher = ErrorPatternMatcher::with_defaults();
 
     // Test TaskNotFound pattern
-    let error = ErrorInfo::new(
-        "TaskNotFound",
-        "TASK_NOT_FOUND",
-        "Task 'weather-api' not found",
-    )
-    .with_severity(ErrorSeverity::Medium)
-    .with_context_value("task_name", "weather-api");
+    let error = ErrorInfo::new("TaskNotFound", "TASK_NOT_FOUND", "Task 'weather-api' not found")
+        .with_severity(ErrorSeverity::Medium)
+        .with_context_value("task_name", "weather-api");
 
     let matched = matcher.match_error(&error);
     assert!(matched.is_some());
@@ -31,15 +27,11 @@ fn test_pattern_matching_for_task_errors() {
 fn test_network_timeout_pattern() {
     let matcher = ErrorPatternMatcher::with_defaults();
 
-    let error = ErrorInfo::new(
-        "NetworkError",
-        "NETWORK_TIMEOUT",
-        "Request timeout after 30s",
-    )
-    .with_severity(ErrorSeverity::High)
-    .with_retryable(true)
-    .with_context_value("url", "https://api.example.com/data")
-    .with_context_value("timeout_ms", 30000);
+    let error = ErrorInfo::new("NetworkError", "NETWORK_TIMEOUT", "Request timeout after 30s")
+        .with_severity(ErrorSeverity::High)
+        .with_retryable(true)
+        .with_context_value("url", "https://api.example.com/data")
+        .with_context_value("timeout_ms", 30000);
 
     let matched = matcher.match_error(&error);
     assert!(matched.is_some());
@@ -81,10 +73,7 @@ fn test_custom_pattern_matching() {
         ],
         preventive_measures: vec!["Implement token refresh logic".to_string()],
         related_documentation: vec![],
-        common_causes: vec![
-            "Expired API tokens".to_string(),
-            "Invalid credentials".to_string(),
-        ],
+        common_causes: vec!["Expired API tokens".to_string(), "Invalid credentials".to_string()],
         llm_prompts: vec![],
     };
 
@@ -100,17 +89,13 @@ fn test_custom_pattern_matching() {
 
 #[test]
 fn test_llm_export_with_patterns() {
-    let error = ErrorInfo::new(
-        "DatabaseError",
-        "DB_CONN_ERROR",
-        "Connection timeout after 5s",
-    )
-    .with_severity(ErrorSeverity::High)
-    .with_retryable(true)
-    .with_context_value("database", "postgres://localhost:5432/ratchet")
-    .with_context_value("timeout_ms", 5000)
-    .with_suggestion("Check database server is running")
-    .with_preventive_suggestion("Implement connection pooling");
+    let error = ErrorInfo::new("DatabaseError", "DB_CONN_ERROR", "Connection timeout after 5s")
+        .with_severity(ErrorSeverity::High)
+        .with_retryable(true)
+        .with_context_value("database", "postgres://localhost:5432/ratchet")
+        .with_context_value("timeout_ms", 5000)
+        .with_suggestion("Check database server is running")
+        .with_preventive_suggestion("Implement connection pooling");
 
     let event = LogEvent::new(LogLevel::Error, "Database connection failed")
         .with_error(error)
@@ -133,10 +118,7 @@ fn test_llm_export_with_patterns() {
     assert!(report.error_summary.is_retryable);
 
     // Verify execution context
-    assert_eq!(
-        report.execution_context.task_name,
-        Some("data-processor".to_string())
-    );
+    assert_eq!(report.execution_context.task_name, Some("data-processor".to_string()));
     assert_eq!(report.execution_context.job_id, Some(789));
     assert_eq!(report.execution_context.execution_duration_ms, Some(5100));
 
@@ -162,12 +144,9 @@ fn test_llm_export_with_patterns() {
 
 #[test]
 fn test_markdown_report_generation() {
-    let error_info = ErrorInfo::new(
-        "TaskNotFound",
-        "TASK_NOT_FOUND",
-        "Task 'weather-api' not found"
-    ).with_context_value("task_name", "weather-api");
-    
+    let error_info = ErrorInfo::new("TaskNotFound", "TASK_NOT_FOUND", "Task 'weather-api' not found")
+        .with_context_value("task_name", "weather-api");
+
     let context = LogContext::new()
         .with_field("request_id", "req-123")
         .with_field("user_id", 456);
@@ -279,8 +258,7 @@ fn test_complex_pattern_matching() {
     let matcher = ErrorPatternMatcher::new(patterns);
 
     // Test direct status code match
-    let error1 = ErrorInfo::new("HttpError", "HTTP_429", "Too many requests")
-        .with_context_value("http_status", 429);
+    let error1 = ErrorInfo::new("HttpError", "HTTP_429", "Too many requests").with_context_value("http_status", 429);
     assert!(matcher.match_error(&error1).is_some());
 
     // Test message pattern match

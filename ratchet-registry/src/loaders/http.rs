@@ -57,18 +57,15 @@ impl TaskLoader for HttpLoader {
             ));
         }
 
-        warn!(
-            "HTTP task loading not yet implemented for: {}",
-            task_ref.source
-        );
-        
+        warn!("HTTP task loading not yet implemented for: {}", task_ref.source);
+
         // TODO: Implement HTTP loading
         // This would typically:
         // 1. GET the task endpoint (e.g., /tasks/{name}/{version})
         // 2. Download and parse the task definition
         // 3. Handle different content types (JSON, ZIP, etc.)
         // 4. Apply authentication if configured
-        
+
         Err(RegistryError::NotImplemented(
             "HTTP task loading is not yet implemented".to_string(),
         ))

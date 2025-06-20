@@ -1,26 +1,16 @@
+use boa_engine::{property::PropertyKey, Context, JsError, JsNativeError, JsResult, JsString, JsValue, Source};
 use ratchet_http::call_http;
-use boa_engine::{
-    property::PropertyKey, Context, JsError, JsNativeError, JsResult, JsString, JsValue, Source,
-};
 use serde_json::Value as JsonValue;
 
 /// Native function to handle fetch calls from JavaScript
 #[allow(dead_code)]
-async fn fetch_native(
-    _this: &JsValue,
-    args: &[JsValue],
-    context: &mut Context,
-) -> JsResult<JsValue> {
+async fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     // Extract arguments
     let url = if args.is_empty() {
-        return Err(JsNativeError::error()
-            .with_message("URL parameter is required")
-            .into());
+        return Err(JsNativeError::error().with_message("URL parameter is required").into());
     } else {
         if !args[0].is_string() {
-            return Err(JsNativeError::error()
-                .with_message("URL must be a string")
-                .into());
+            return Err(JsNativeError::error().with_message("URL must be a string").into());
         }
         args[0].to_string(context)?.to_std_string_escaped()
     };
@@ -69,9 +59,7 @@ async fn fetch_native(
     let result = match call_http(&url, params_json.as_ref(), body_json.as_ref()).await {
         Ok(result) => result,
         Err(e) => {
-            return Err(JsNativeError::error()
-                .with_message(format!("HTTP error: {}", e))
-                .into());
+            return Err(JsNativeError::error().with_message(format!("HTTP error: {}", e)).into());
         }
     };
 

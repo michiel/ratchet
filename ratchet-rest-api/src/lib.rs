@@ -29,13 +29,13 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create your repository implementations
 //! // let repositories = ...;
-//! 
+//!
 //! // Configure the application
 //! // let config = AppConfig::default();
-//! 
+//!
 //! // Create the REST API router
 //! // let app = create_rest_app(repositories, config).await?;
-//! 
+//!
 //! // Serve the application
 //! // let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 //! // axum::serve(listener, app).await?;
@@ -43,11 +43,11 @@
 //! # }
 //! ```
 
+pub mod app;
+pub mod context;
+pub mod errors;
 pub mod handlers;
 pub mod models;
-pub mod context;
-pub mod app;
-pub mod errors;
 
 // Re-export commonly used types
 pub use app::{create_rest_app, AppConfig, AppContext};
@@ -84,7 +84,7 @@ pub use models::*;
 //         handlers::tasks::create_task,
 //         handlers::tasks::update_task,
 //         handlers::tasks::get_task_stats,
-        
+
 //         // Execution management endpoints
 //         handlers::executions::list_executions,
 //         handlers::executions::get_execution,
@@ -94,7 +94,7 @@ pub use models::*;
 //         handlers::executions::retry_execution,
 //         handlers::executions::get_execution_logs,
 //         handlers::executions::get_execution_stats,
-        
+
 //         // Job management endpoints
 //         handlers::jobs::list_jobs,
 //         handlers::jobs::get_job,
@@ -103,7 +103,7 @@ pub use models::*;
 //         handlers::jobs::cancel_job,
 //         handlers::jobs::retry_job,
 //         handlers::jobs::get_job_stats,
-        
+
 //         // Schedule management endpoints
 //         handlers::schedules::list_schedules,
 //         handlers::schedules::get_schedule,
@@ -114,10 +114,10 @@ pub use models::*;
 //         handlers::schedules::disable_schedule,
 //         handlers::schedules::trigger_schedule,
 //         handlers::schedules::get_schedule_stats,
-        
+
 //         // Health check
 //         handlers::health::health_check,
-        
+
 //         // Monitoring and metrics
 //         handlers::metrics::get_metrics,
 //         handlers::metrics::get_prometheus_metrics,
@@ -134,23 +134,23 @@ pub use models::*;
 //             models::tasks::SyncTasksResponse,
 //             models::tasks::TaskSyncError,
 //             models::tasks::TaskStats,
-            
+
 //             // Execution request/response models
 //             models::executions::CreateExecutionRequest,
 //             models::executions::UpdateExecutionRequest,
 //             models::executions::RetryExecutionRequest,
 //             models::executions::ExecutionStats,
-            
+
 //             // Job request/response models
 //             models::jobs::CreateJobRequest,
 //             models::jobs::UpdateJobRequest,
 //             models::jobs::JobStats,
-            
+
 //             // Schedule request/response models
 //             // models::schedules::CreateScheduleRequest, // Temporarily commented due to ToSchema issues with UnifiedOutputDestination
 //             // models::schedules::UpdateScheduleRequest, // Temporarily commented due to ToSchema issues with UnifiedOutputDestination
 //             models::schedules::ScheduleStats,
-            
+
 //             // Domain types from ratchet-api-types
 //             ratchet_api_types::UnifiedOutputDestination,
 //             ratchet_api_types::UnifiedWebhookConfig,
@@ -160,12 +160,12 @@ pub use models::*;
 //             ratchet_api_types::UnifiedBasicAuth,
 //             ratchet_api_types::UnifiedApiKeyAuth,
 //             ratchet_api_types::UnifiedFilesystemConfig,
-            
+
 //             // Enum types from ratchet-api-types
 //             ratchet_api_types::OutputFormat,
 //             ratchet_api_types::CompressionType,
 //             ratchet_api_types::HttpMethod,
-            
+
 //             // Metrics and monitoring models
 //             handlers::metrics::SystemMetrics,
 //             handlers::metrics::SystemInfo,

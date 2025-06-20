@@ -6,23 +6,19 @@ use axum::{
 use ratchet_api_types::pagination::PaginationMeta;
 
 /// Middleware to add pagination headers to responses
-pub async fn pagination_response_middleware(
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response {
+pub async fn pagination_response_middleware(request: Request<axum::body::Body>, next: Next) -> Response {
     let mut response = next.run(request).await;
 
     // Check if the response contains pagination metadata in extensions
     if let Some(pagination_meta) = response.extensions().get::<PaginationMeta>().cloned() {
         let headers = response.headers_mut();
-        
+
         // Add pagination headers for Refine.dev compatibility
         for (key, value) in pagination_meta.to_headers() {
             if let Ok(header_value) = HeaderValue::from_str(&value) {
                 headers.insert(
-                    axum::http::HeaderName::from_bytes(key.as_bytes()).unwrap_or_else(|_| {
-                        axum::http::HeaderName::from_static("x-custom-header")
-                    }),
+                    axum::http::HeaderName::from_bytes(key.as_bytes())
+                        .unwrap_or_else(|_| axum::http::HeaderName::from_static("x-custom-header")),
                     header_value,
                 );
             }

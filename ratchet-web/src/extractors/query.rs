@@ -7,8 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::WebError;
 
 /// Pagination query parameters
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PaginationQuery {
     /// Page number (1-based)
     pub page: Option<u32>,
@@ -22,7 +21,6 @@ pub struct PaginationQuery {
     pub end: Option<u64>,
 }
 
-
 impl PaginationQuery {
     /// Convert to standard pagination input
     pub fn to_pagination_input(&self) -> ratchet_api_types::PaginationInput {
@@ -30,7 +28,7 @@ impl PaginationQuery {
             ratchet_api_types::PaginationInput::from_refine(Some(start), Some(end))
         } else {
             ratchet_api_types::PaginationInput {
-                page: self.page.or(Some(1)), // Default to page 1 if not specified
+                page: self.page.or(Some(1)),    // Default to page 1 if not specified
                 limit: self.limit.or(Some(25)), // Default to 25 items if not specified
                 offset: None,
             }
@@ -43,35 +41,29 @@ impl PaginationQuery {
         if let (Some(start), Some(end)) = (self.start, self.end) {
             if start >= end {
                 return Err(WebError::bad_request(
-                    "Invalid pagination: _start must be less than _end"
+                    "Invalid pagination: _start must be less than _end",
                 ));
             }
             if end - start > 100 {
-                return Err(WebError::bad_request(
-                    "Invalid pagination: maximum limit is 100"
-                ));
+                return Err(WebError::bad_request("Invalid pagination: maximum limit is 100"));
             }
         }
 
         // Check standard parameters
         if let Some(limit) = self.limit {
             if limit > 100 {
-                return Err(WebError::bad_request(
-                    "Invalid pagination: maximum limit is 100"
-                ));
+                return Err(WebError::bad_request("Invalid pagination: maximum limit is 100"));
             }
             if limit == 0 {
                 return Err(WebError::bad_request(
-                    "Invalid pagination: limit must be greater than 0"
+                    "Invalid pagination: limit must be greater than 0",
                 ));
             }
         }
 
         if let Some(page) = self.page {
             if page == 0 {
-                return Err(WebError::bad_request(
-                    "Invalid pagination: page must be greater than 0"
-                ));
+                return Err(WebError::bad_request("Invalid pagination: page must be greater than 0"));
             }
         }
 
@@ -80,8 +72,7 @@ impl PaginationQuery {
 }
 
 /// Sort query parameters
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SortQuery {
     /// Field to sort by
     #[serde(rename = "_sort")]
@@ -91,14 +82,10 @@ pub struct SortQuery {
     pub order: Option<String>,
 }
 
-
 impl SortQuery {
     /// Convert to standard sort input
     pub fn to_sort_input(&self) -> Option<ratchet_api_types::pagination::SortInput> {
-        ratchet_api_types::pagination::SortInput::from_refine(
-            self.sort.clone(),
-            self.order.clone()
-        )
+        ratchet_api_types::pagination::SortInput::from_refine(self.sort.clone(), self.order.clone())
     }
 }
 
@@ -116,7 +103,7 @@ impl<'de> serde::Deserialize<'de> for FilterQuery {
         D: serde::Deserializer<'de>,
     {
         let map = std::collections::HashMap::<String, String>::deserialize(deserializer)?;
-        
+
         // Filter out pagination and sort fields to avoid conflicts
         let filters: std::collections::HashMap<String, String> = map
             .into_iter()
@@ -125,7 +112,7 @@ impl<'de> serde::Deserialize<'de> for FilterQuery {
                 !matches!(key.as_str(), "_start" | "_end" | "page" | "limit" | "_sort" | "_order")
             })
             .collect();
-        
+
         Ok(FilterQuery { filters })
     }
 }
@@ -140,7 +127,7 @@ impl FilterQuery {
                 if field.starts_with('_') && !self.is_advanced_filter_field(field) {
                     return None;
                 }
-                
+
                 // Skip standard pagination fields to avoid conflicts
                 if matches!(field.as_str(), "page" | "limit" | "start" | "end") {
                     return None;
@@ -161,17 +148,17 @@ impl FilterQuery {
     /// Check if a field starting with _ is actually an advanced filter field (not pagination/sort)
     fn is_advanced_filter_field(&self, field: &str) -> bool {
         // These are advanced filter operators that start with _
-        field.ends_with("_like") || 
-        field.ends_with("_ne") || 
-        field.ends_with("_gte") || 
-        field.ends_with("_lte") || 
-        field.ends_with("_gt") || 
-        field.ends_with("_lt") || 
-        field.ends_with("_in") || 
-        field.ends_with("_not_in") ||
-        field.ends_with("_starts_with") ||
-        field.ends_with("_ends_with") ||
-        field.ends_with("_contains")
+        field.ends_with("_like")
+            || field.ends_with("_ne")
+            || field.ends_with("_gte")
+            || field.ends_with("_lte")
+            || field.ends_with("_gt")
+            || field.ends_with("_lt")
+            || field.ends_with("_in")
+            || field.ends_with("_not_in")
+            || field.ends_with("_starts_with")
+            || field.ends_with("_ends_with")
+            || field.ends_with("_contains")
     }
 
     /// Parse field name and determine the appropriate FilterOperator from Refine.dev style suffixes
@@ -209,8 +196,7 @@ impl FilterQuery {
 }
 
 /// Combined query parameters for list endpoints - Full Refine.dev Support
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ListQuery {
     /// Alternative: Refine.dev style start offset
     #[serde(rename = "_start")]
@@ -233,7 +219,6 @@ pub struct ListQuery {
     pub filters: std::collections::HashMap<String, String>,
 }
 
-
 impl ListQuery {
     /// Convert to standard list input
     pub fn to_list_input(&self) -> ratchet_api_types::pagination::ListInput {
@@ -246,14 +231,11 @@ impl ListQuery {
                 offset: None,
             }
         };
-        
-        let sort_input = ratchet_api_types::pagination::SortInput::from_refine(
-            self.sort.clone(),
-            self.order.clone()
-        );
-        
+
+        let sort_input = ratchet_api_types::pagination::SortInput::from_refine(self.sort.clone(), self.order.clone());
+
         let filter_inputs = self.to_filter_inputs();
-        
+
         ratchet_api_types::pagination::ListInput {
             pagination: Some(pagination_input),
             sort: sort_input,
@@ -267,48 +249,45 @@ impl ListQuery {
         if let (Some(start), Some(end)) = (self.start, self.end) {
             if start >= end {
                 return Err(WebError::bad_request(
-                    "Invalid pagination: _start must be less than _end"
+                    "Invalid pagination: _start must be less than _end",
                 ));
             }
             if end - start > 100 {
-                return Err(WebError::bad_request(
-                    "Invalid pagination: maximum limit is 100"
-                ));
+                return Err(WebError::bad_request("Invalid pagination: maximum limit is 100"));
             }
         }
 
         // Check standard parameters
         if let Some(limit) = self.limit {
             if limit > 100 {
-                return Err(WebError::bad_request(
-                    "Invalid pagination: maximum limit is 100"
-                ));
+                return Err(WebError::bad_request("Invalid pagination: maximum limit is 100"));
             }
             if limit == 0 {
                 return Err(WebError::bad_request(
-                    "Invalid pagination: limit must be greater than 0"
+                    "Invalid pagination: limit must be greater than 0",
                 ));
             }
         }
 
         if let Some(page) = self.page {
             if page == 0 {
-                return Err(WebError::bad_request(
-                    "Invalid pagination: page must be greater than 0"
-                ));
+                return Err(WebError::bad_request("Invalid pagination: page must be greater than 0"));
             }
         }
 
         Ok(())
     }
-    
+
     /// Convert to filter inputs with advanced Refine.dev operator support
     pub fn to_filter_inputs(&self) -> Vec<ratchet_api_types::pagination::FilterInput> {
         self.filters
             .iter()
             .filter_map(|(field, value)| {
                 // Skip pagination and sort fields
-                if matches!(field.as_str(), "_start" | "_end" | "page" | "limit" | "_sort" | "_order") {
+                if matches!(
+                    field.as_str(),
+                    "_start" | "_end" | "page" | "limit" | "_sort" | "_order"
+                ) {
                     return None;
                 }
 
@@ -356,7 +335,7 @@ impl ListQuery {
             (field.to_string(), FilterOperator::Eq)
         }
     }
-    
+
     // Helper methods for compatibility
     pub fn sort(&self) -> SortQuery {
         SortQuery {
@@ -364,7 +343,7 @@ impl ListQuery {
             order: self.order.clone(),
         }
     }
-    
+
     pub fn filter(&self) -> FilterQuery {
         FilterQuery {
             filters: self.filters.clone(),
@@ -467,8 +446,8 @@ mod tests {
 
     #[test]
     fn test_filter_operator_parsing() {
-        use std::collections::HashMap;
         use ratchet_api_types::pagination::FilterOperator;
+        use std::collections::HashMap;
 
         let mut filters = HashMap::new();
         filters.insert("name".to_string(), "test".to_string());
@@ -484,10 +463,16 @@ mod tests {
         let filter_inputs = filter_query.to_filter_inputs();
 
         // Find specific filters
-        let name_eq_filter = filter_inputs.iter().find(|f| f.field == "name" && f.operator == FilterOperator::Eq).unwrap();
+        let name_eq_filter = filter_inputs
+            .iter()
+            .find(|f| f.field == "name" && f.operator == FilterOperator::Eq)
+            .unwrap();
         assert_eq!(name_eq_filter.value, "test");
 
-        let name_like_filter = filter_inputs.iter().find(|f| f.field == "name" && f.operator == FilterOperator::Contains).unwrap();
+        let name_like_filter = filter_inputs
+            .iter()
+            .find(|f| f.field == "name" && f.operator == FilterOperator::Contains)
+            .unwrap();
         assert_eq!(name_like_filter.value, "partial");
 
         let age_filter = filter_inputs.iter().find(|f| f.field == "age").unwrap();
@@ -560,7 +545,7 @@ mod tests {
 
         // Should only have 2 filters: name (eq) and name (contains)
         assert_eq!(filter_inputs.len(), 2);
-        
+
         // Should not include pagination/sort fields
         assert!(!filter_inputs.iter().any(|f| f.field == "_start"));
         assert!(!filter_inputs.iter().any(|f| f.field == "_end"));
@@ -570,7 +555,11 @@ mod tests {
         assert!(!filter_inputs.iter().any(|f| f.field == "limit"));
 
         // Should include valid filters
-        assert!(filter_inputs.iter().any(|f| f.field == "name" && f.operator == ratchet_api_types::pagination::FilterOperator::Eq));
-        assert!(filter_inputs.iter().any(|f| f.field == "name" && f.operator == ratchet_api_types::pagination::FilterOperator::Contains));
+        assert!(filter_inputs
+            .iter()
+            .any(|f| f.field == "name" && f.operator == ratchet_api_types::pagination::FilterOperator::Eq));
+        assert!(filter_inputs
+            .iter()
+            .any(|f| f.field == "name" && f.operator == ratchet_api_types::pagination::FilterOperator::Contains));
     }
 }

@@ -121,19 +121,13 @@ impl InputSanitizer {
     /// Validate that a task name is safe
     pub fn validate_task_name(name: &str) -> bool {
         // Task names should only contain alphanumeric, dash, underscore
-        name.chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-            && !name.is_empty()
-            && name.len() <= 100
+        name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') && !name.is_empty() && name.len() <= 100
     }
 
     /// Validate that a resource URI is safe
     pub fn validate_resource_uri(uri: &str) -> bool {
         // Basic URI validation - no dangerous schemes
-        if uri.starts_with("javascript:")
-            || uri.starts_with("data:text/html")
-            || uri.starts_with("file://")
-        {
+        if uri.starts_with("javascript:") || uri.starts_with("data:text/html") || uri.starts_with("file://") {
             return false;
         }
 
@@ -230,13 +224,7 @@ impl AuditLogger {
     }
 
     /// Log authentication event
-    pub async fn log_authentication(
-        &self,
-        client_id: &str,
-        success: bool,
-        method: &str,
-        request_id: Option<String>,
-    ) {
+    pub async fn log_authentication(&self, client_id: &str, success: bool, method: &str, request_id: Option<String>) {
         let event = AuditEvent {
             timestamp: chrono::Utc::now(),
             client_id: client_id.to_string(),
@@ -320,15 +308,9 @@ mod tests {
         assert!(!InputSanitizer::validate_task_name(""));
 
         // Test resource URI validation
-        assert!(InputSanitizer::validate_resource_uri(
-            "https://example.com/resource"
-        ));
-        assert!(!InputSanitizer::validate_resource_uri(
-            "javascript:alert(1)"
-        ));
-        assert!(!InputSanitizer::validate_resource_uri(
-            "../../../etc/passwd"
-        ));
+        assert!(InputSanitizer::validate_resource_uri("https://example.com/resource"));
+        assert!(!InputSanitizer::validate_resource_uri("javascript:alert(1)"));
+        assert!(!InputSanitizer::validate_resource_uri("../../../etc/passwd"));
     }
 
     #[test]
@@ -357,13 +339,7 @@ mod tests {
             .await;
 
         logger
-            .log_tool_execution(
-                "test-client",
-                "test-tool",
-                true,
-                100,
-                Some("req-124".to_string()),
-            )
+            .log_tool_execution("test-client", "test-tool", true, 100, Some("req-124".to_string()))
             .await;
     }
 }

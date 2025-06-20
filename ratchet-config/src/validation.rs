@@ -63,12 +63,7 @@ pub fn validate_url(url: &str, field_name: &str, domain: &str) -> ConfigResult<(
 }
 
 /// Validate an enum choice
-pub fn validate_enum_choice<T>(
-    value: &str,
-    valid_choices: &[T],
-    field_name: &str,
-    domain: &str,
-) -> ConfigResult<()>
+pub fn validate_enum_choice<T>(value: &str, valid_choices: &[T], field_name: &str, domain: &str) -> ConfigResult<()>
 where
     T: AsRef<str>,
 {
@@ -100,11 +95,7 @@ pub fn validate_port_range(port: u16, field_name: &str, domain: &str) -> ConfigR
 
     // Port 1-1023 are typically reserved for system services
     if port <= 1023 {
-        log::warn!(
-            "{} port {} is in the reserved range (1-1023)",
-            field_name,
-            port
-        );
+        log::warn!("{} port {} is in the reserved range (1-1023)", field_name, port);
     }
 
     Ok(())
@@ -118,19 +109,19 @@ pub fn validate_config(config: &crate::domains::RatchetConfig) -> ConfigResult<(
     config.logging.validate()?;
     config.cache.validate()?;
     config.output.validate()?;
-    
+
     // Validate optional domains
     if let Some(server) = &config.server {
         server.validate()?;
     }
-    
+
     if let Some(registry) = &config.registry {
         registry.validate()?;
     }
-    
+
     if let Some(mcp) = &config.mcp {
         mcp.validate()?;
     }
-    
+
     Ok(())
 }

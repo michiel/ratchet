@@ -204,9 +204,7 @@ mod tests {
         assert_eq!(sse.type_name(), "sse");
 
         match sse {
-            McpServerTransport::Sse {
-                port, host, tls, ..
-            } => {
+            McpServerTransport::Sse { port, host, tls, .. } => {
                 assert_eq!(port, 8080);
                 assert_eq!(host, "127.0.0.1");
                 assert!(!tls);

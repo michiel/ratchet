@@ -4,8 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
 /// Complete server configuration combining all subsystems
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerConfig {
     pub server: HttpServerConfig,
     pub rest_api: RestApiConfig,
@@ -105,8 +104,6 @@ pub struct HeartbeatConfig {
     pub cron_schedule: String,
     pub output_destinations: Vec<String>,
 }
-
-
 
 impl Default for HttpServerConfig {
     fn default() -> Self {
@@ -215,37 +212,38 @@ impl Default for HeartbeatConfig {
     }
 }
 
-
 impl ServerConfig {
     /// Convert from ratchet-config RatchetConfig to ServerConfig
     pub fn from_ratchet_config(config: ratchet_config::RatchetConfig) -> anyhow::Result<Self> {
         // Extract server configuration
-        let server_config = config.server.ok_or_else(|| anyhow::anyhow!("Server configuration is required"))?;
-        
+        let server_config = config
+            .server
+            .ok_or_else(|| anyhow::anyhow!("Server configuration is required"))?;
+
         let bind_address = format!("{}:{}", server_config.bind_address, server_config.port)
             .parse()
             .map_err(|e| anyhow::anyhow!("Invalid bind address: {}", e))?;
-        
+
         Ok(Self {
             server: HttpServerConfig {
                 bind_address,
                 enable_cors: server_config.cors.allowed_origins.contains(&"*".to_string()),
-                enable_request_id: true, // Default enabled
-                enable_tracing: true, // Default enabled  
+                enable_request_id: true,      // Default enabled
+                enable_tracing: true,         // Default enabled
                 shutdown_timeout_seconds: 30, // Default value
-                tls: None, // TODO: Extract from config if available
+                tls: None,                    // TODO: Extract from config if available
             },
             rest_api: RestApiConfig {
-                enabled: true, // Default enabled
+                enabled: true,                 // Default enabled
                 prefix: "/api/v1".to_string(), // Default prefix
                 enable_health_checks: true,
                 enable_detailed_health: true,
                 enable_openapi_docs: true,
             },
             graphql_api: GraphQLApiConfig {
-                enabled: true, // Default enabled
+                enabled: true,                    // Default enabled
                 endpoint: "/graphql".to_string(), // Default endpoint
-                enable_playground: true, // Default enabled
+                enable_playground: true,          // Default enabled
                 enable_introspection: true,
                 max_query_depth: Some(15),
                 max_query_complexity: Some(1000),
@@ -254,7 +252,10 @@ impl ServerConfig {
             mcp_api: McpApiConfig {
                 enabled: config.mcp.as_ref().is_none_or(|mcp| mcp.enabled), // Default enabled unless explicitly disabled
                 sse_enabled: config.mcp.as_ref().is_none_or(|mcp| mcp.transport == "sse"), // Default SSE enabled
-                host: config.mcp.as_ref().map_or("127.0.0.1".to_string(), |mcp| mcp.host.clone()),
+                host: config
+                    .mcp
+                    .as_ref()
+                    .map_or("127.0.0.1".to_string(), |mcp| mcp.host.clone()),
                 port: config.mcp.as_ref().map_or(8090, |mcp| mcp.port),
                 endpoint: "/mcp".to_string(), // Default endpoint
             },
@@ -274,10 +275,10 @@ impl ServerConfig {
             },
             registry: RegistryConfig {
                 filesystem_paths: vec!["./tasks".to_string()], // Default value
-                http_endpoints: Vec::new(), // Default empty
-                sync_interval_seconds: 300, // Default 5 minutes
-                enable_auto_sync: true, // Default enabled
-                enable_validation: true, // Default enabled
+                http_endpoints: Vec::new(),                    // Default empty
+                sync_interval_seconds: 300,                    // Default 5 minutes
+                enable_auto_sync: true,                        // Default enabled
+                enable_validation: true,                       // Default enabled
             },
             heartbeat: HeartbeatConfig::default(),
         })

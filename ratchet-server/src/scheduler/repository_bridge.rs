@@ -1,12 +1,12 @@
 //! Repository bridge for scheduler to repository layer communication
 
-use std::sync::Arc;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use tracing::{info, debug};
+use std::sync::Arc;
+use tracing::{debug, info};
 
+use ratchet_api_types::{ApiId, JobPriority, JobStatus, UnifiedJob, UnifiedSchedule};
 use ratchet_interfaces::RepositoryFactory;
-use ratchet_api_types::{UnifiedSchedule, UnifiedJob, ApiId, JobStatus, JobPriority};
 use ratchet_interfaces::SchedulerError;
 
 /// Bridge between scheduler and repository layer
@@ -24,8 +24,10 @@ impl RepositoryBridge {
     /// Load all enabled schedules from the repository
     pub async fn load_all_schedules(&self) -> Result<Vec<UnifiedSchedule>, SchedulerError> {
         debug!("Loading all schedules from repository");
-        
-        let schedules = self.repositories.schedule_repository()
+
+        let schedules = self
+            .repositories
+            .schedule_repository()
             .find_enabled()
             .await
             .map_err(|e| SchedulerError::Repository(e.to_string()))?;
@@ -36,14 +38,16 @@ impl RepositoryBridge {
 
     /// Create a job for a scheduled execution
     pub async fn create_job_for_schedule(
-        &self, 
-        schedule_id: ApiId, 
-        execution_time: DateTime<Utc>
+        &self,
+        schedule_id: ApiId,
+        execution_time: DateTime<Utc>,
     ) -> Result<UnifiedJob, SchedulerError> {
         debug!("Creating job for schedule {}", schedule_id);
 
         // First, get the schedule to determine the task
-        let schedule = self.repositories.schedule_repository()
+        let schedule = self
+            .repositories
+            .schedule_repository()
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
             .map_err(|e| SchedulerError::Repository(e.to_string()))?
@@ -64,18 +68,22 @@ impl RepositoryBridge {
             queued_at: execution_time,
             scheduled_for: Some(execution_time),
             error_message: None,
-            output_destinations: None, // TODO: Get from schedule metadata if needed
+            output_destinations: schedule.output_destinations.clone(),
         };
 
         // Store the job through the repository
-        let created_job = self.repositories.job_repository()
+        let created_job = self
+            .repositories
+            .job_repository()
             .create(job)
             .await
             .map_err(|e| SchedulerError::Repository(format!("Failed to create job: {}", e)))?;
 
-        info!("Created job {} for schedule {} (task {})", 
-              created_job.id, schedule_name, created_job.task_id);
-        
+        info!(
+            "Created job {} for schedule {} (task {})",
+            created_job.id, schedule_name, created_job.task_id
+        );
+
         Ok(created_job)
     }
 
@@ -84,13 +92,15 @@ impl RepositoryBridge {
         &self,
         schedule_id: ApiId,
         last_run: DateTime<Utc>,
-        next_run: Option<DateTime<Utc>>
+        next_run: Option<DateTime<Utc>>,
     ) -> Result<(), SchedulerError> {
         let schedule_id_clone = schedule_id.clone();
         debug!("Updating schedule {} execution metadata", schedule_id);
 
         // Get the current schedule
-        let mut schedule = self.repositories.schedule_repository()
+        let mut schedule = self
+            .repositories
+            .schedule_repository()
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
             .map_err(|e| SchedulerError::Repository(e.to_string()))?
@@ -102,7 +112,8 @@ impl RepositoryBridge {
         schedule.updated_at = Utc::now();
 
         // Save the updated schedule
-        self.repositories.schedule_repository()
+        self.repositories
+            .schedule_repository()
             .update(schedule)
             .await
             .map_err(|e| SchedulerError::Repository(format!("Failed to update schedule: {}", e)))?;
@@ -113,7 +124,8 @@ impl RepositoryBridge {
 
     /// Find a schedule by ID
     pub async fn find_schedule(&self, schedule_id: ApiId) -> Result<Option<UnifiedSchedule>, SchedulerError> {
-        self.repositories.schedule_repository()
+        self.repositories
+            .schedule_repository()
             .find_by_id(schedule_id.as_i32().unwrap_or(0))
             .await
             .map_err(|e| SchedulerError::Repository(e.to_string()))
@@ -121,7 +133,8 @@ impl RepositoryBridge {
 
     /// Create a new schedule
     pub async fn create_schedule(&self, schedule: UnifiedSchedule) -> Result<UnifiedSchedule, SchedulerError> {
-        self.repositories.schedule_repository()
+        self.repositories
+            .schedule_repository()
             .create(schedule)
             .await
             .map_err(|e| SchedulerError::Repository(format!("Failed to create schedule: {}", e)))
@@ -129,7 +142,8 @@ impl RepositoryBridge {
 
     /// Update an existing schedule
     pub async fn update_schedule(&self, schedule: UnifiedSchedule) -> Result<UnifiedSchedule, SchedulerError> {
-        self.repositories.schedule_repository()
+        self.repositories
+            .schedule_repository()
             .update(schedule)
             .await
             .map_err(|e| SchedulerError::Repository(format!("Failed to update schedule: {}", e)))
@@ -137,7 +151,8 @@ impl RepositoryBridge {
 
     /// Delete a schedule
     pub async fn delete_schedule(&self, schedule_id: ApiId) -> Result<(), SchedulerError> {
-        self.repositories.schedule_repository()
+        self.repositories
+            .schedule_repository()
             .delete(schedule_id.as_i32().unwrap_or(0))
             .await
             .map_err(|e| SchedulerError::Repository(format!("Failed to delete schedule: {}", e)))

@@ -1,12 +1,12 @@
 //! Individual command implementations for the console
 
-pub mod repo;
-pub mod task;
+pub mod database;
 pub mod execution;
 pub mod job;
-pub mod database;
-pub mod server;
 pub mod monitor;
+pub mod repo;
+pub mod server;
+pub mod task;
 
 // Re-export command modules (currently empty placeholders)
 // pub use repo::*;

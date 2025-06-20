@@ -1,13 +1,12 @@
 use crate::database::{
-    entities::{jobs, Job, JobActiveModel, JobStatus, JobPriority, Jobs},
+    entities::{jobs, Job, JobActiveModel, JobPriority, JobStatus, Jobs},
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
-};
 use chrono::{DateTime, Utc};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+};
 
 /// Filters for job queries
 #[derive(Debug, Clone, Default)]
@@ -88,11 +87,7 @@ impl JobRepository {
         let now = chrono::Utc::now();
         let jobs = Jobs::find()
             .filter(jobs::Column::Status.is_in(vec![JobStatus::Queued, JobStatus::Retrying]))
-            .filter(
-                jobs::Column::ProcessAt
-                    .is_null()
-                    .or(jobs::Column::ProcessAt.lte(now)),
-            )
+            .filter(jobs::Column::ProcessAt.is_null().or(jobs::Column::ProcessAt.lte(now)))
             .order_by(jobs::Column::Priority, Order::Desc) // Higher priority first
             .order_by(jobs::Column::QueuedAt, Order::Asc) // FIFO within same priority
             .limit(limit)
@@ -202,9 +197,7 @@ impl JobRepository {
 
     /// Delete job
     pub async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        Jobs::delete_by_id(id)
-            .exec(self.db.get_connection())
-            .await?;
+        Jobs::delete_by_id(id).exec(self.db.get_connection()).await?;
         Ok(())
     }
 
@@ -276,19 +269,19 @@ impl JobRepository {
         if let Some(task_id) = filters.task_id {
             query = query.filter(jobs::Column::TaskId.eq(task_id));
         }
-        
+
         if let Some(status) = filters.status {
             query = query.filter(jobs::Column::Status.eq(status));
         }
-        
+
         if let Some(priority) = filters.priority {
             query = query.filter(jobs::Column::Priority.eq(priority));
         }
-        
+
         if let Some(queued_after) = filters.queued_after {
             query = query.filter(jobs::Column::QueuedAt.gte(queued_after));
         }
-        
+
         if let Some(scheduled_after) = filters.scheduled_after {
             query = query.filter(jobs::Column::ProcessAt.gte(Some(scheduled_after)));
         }
@@ -297,7 +290,7 @@ impl JobRepository {
         if let Some(limit) = pagination.limit {
             query = query.limit(limit);
         }
-        
+
         if let Some(offset) = pagination.offset {
             query = query.offset(offset);
         }
@@ -305,9 +298,13 @@ impl JobRepository {
         // Apply ordering (default to priority + queued_at)
         query = query.order_by(
             pagination.order_by.unwrap_or(jobs::Column::Priority),
-            if pagination.order_desc.unwrap_or(true) { Order::Desc } else { Order::Asc }
+            if pagination.order_desc.unwrap_or(true) {
+                Order::Desc
+            } else {
+                Order::Asc
+            },
         );
-        
+
         // Secondary order by queued time for jobs with same priority
         if pagination.order_by.is_none() {
             query = query.order_by(jobs::Column::QueuedAt, Order::Asc);
@@ -325,19 +322,19 @@ impl JobRepository {
         if let Some(task_id) = filters.task_id {
             query = query.filter(jobs::Column::TaskId.eq(task_id));
         }
-        
+
         if let Some(status) = filters.status {
             query = query.filter(jobs::Column::Status.eq(status));
         }
-        
+
         if let Some(priority) = filters.priority {
             query = query.filter(jobs::Column::Priority.eq(priority));
         }
-        
+
         if let Some(queued_after) = filters.queued_after {
             query = query.filter(jobs::Column::QueuedAt.gte(queued_after));
         }
-        
+
         if let Some(scheduled_after) = filters.scheduled_after {
             query = query.filter(jobs::Column::ProcessAt.gte(Some(scheduled_after)));
         }

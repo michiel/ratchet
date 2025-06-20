@@ -119,16 +119,15 @@ impl ErrorSanitizer {
     pub fn sanitize_error<E: std::error::Error>(&self, error: &E) -> SanitizedError {
         let error_message = format!("{}", error);
         let error_source = error.source().map(|s| format!("{}", s));
-        
+
         // Check for custom mappings first
         if let Some(custom_message) = self.check_custom_mappings(&error_message) {
-            return SanitizedError::new(custom_message)
-                .with_code("CUSTOM_ERROR");
+            return SanitizedError::new(custom_message).with_code("CUSTOM_ERROR");
         }
 
         // Categorize the error and provide appropriate sanitized message
         let sanitized = self.categorize_and_sanitize(&error_message, error_source.as_deref());
-        
+
         self.apply_final_sanitization(sanitized)
     }
 
@@ -136,13 +135,12 @@ impl ErrorSanitizer {
     pub fn sanitize_message(&self, message: &str) -> SanitizedError {
         // Check for custom mappings first
         if let Some(custom_message) = self.check_custom_mappings(message) {
-            return SanitizedError::new(custom_message)
-                .with_code("CUSTOM_ERROR");
+            return SanitizedError::new(custom_message).with_code("CUSTOM_ERROR");
         }
 
         // Categorize the error and provide appropriate sanitized message
         let sanitized = self.categorize_and_sanitize(message, None);
-        
+
         self.apply_final_sanitization(sanitized)
     }
 
@@ -167,14 +165,12 @@ impl ErrorSanitizer {
 
         // Database errors (check before filesystem errors to avoid misclassification)
         if self.is_database_error(&lower_message) {
-            return SanitizedError::new("Database operation failed")
-                .with_code("DATABASE_ERROR");
+            return SanitizedError::new("Database operation failed").with_code("DATABASE_ERROR");
         }
 
         // Authentication/Authorization errors
         if self.is_auth_error(&lower_message) {
-            return SanitizedError::new("Authentication or authorization failed")
-                .with_code("AUTH_ERROR");
+            return SanitizedError::new("Authentication or authorization failed").with_code("AUTH_ERROR");
         }
 
         // Validation errors
@@ -186,26 +182,22 @@ impl ErrorSanitizer {
 
         // File system errors
         if self.is_filesystem_error(&lower_message) {
-            return SanitizedError::new("File operation failed")
-                .with_code("FILESYSTEM_ERROR");
+            return SanitizedError::new("File operation failed").with_code("FILESYSTEM_ERROR");
         }
 
         // Network errors
         if self.is_network_error(&lower_message) {
-            return SanitizedError::new("Network operation failed")
-                .with_code("NETWORK_ERROR");
+            return SanitizedError::new("Network operation failed").with_code("NETWORK_ERROR");
         }
 
         // Configuration errors
         if self.is_config_error(&lower_message) {
-            return SanitizedError::new("Configuration error")
-                .with_code("CONFIG_ERROR");
+            return SanitizedError::new("Configuration error").with_code("CONFIG_ERROR");
         }
 
         // Task execution errors
         if self.is_task_error(&lower_message) {
-            return SanitizedError::new("Task execution failed")
-                .with_code("TASK_ERROR");
+            return SanitizedError::new("Task execution failed").with_code("TASK_ERROR");
         }
 
         // Generic sanitization for unknown errors
@@ -214,17 +206,38 @@ impl ErrorSanitizer {
             "An error occurred"
         } else {
             &sanitized_text
-        }).with_code("INTERNAL_ERROR")
+        })
+        .with_code("INTERNAL_ERROR")
     }
 
     /// Check if error is database-related
     fn is_database_error(&self, message: &str) -> bool {
         let db_keywords = [
-            "database", "sql", "connection", "sqlite", "postgresql", "mysql",
-            "table", "column", "constraint", "foreign key", "primary key",
-            "deadlock", "timeout", "transaction", "rollback", "commit",
-            "seaorm", "sqlx", "no rows returned", "record not found",
-            "find_by_id", "entity", "model", "repository", "query failed"
+            "database",
+            "sql",
+            "connection",
+            "sqlite",
+            "postgresql",
+            "mysql",
+            "table",
+            "column",
+            "constraint",
+            "foreign key",
+            "primary key",
+            "deadlock",
+            "timeout",
+            "transaction",
+            "rollback",
+            "commit",
+            "seaorm",
+            "sqlx",
+            "no rows returned",
+            "record not found",
+            "find_by_id",
+            "entity",
+            "model",
+            "repository",
+            "query failed",
         ];
 
         db_keywords.iter().any(|keyword| message.contains(keyword))
@@ -233,9 +246,17 @@ impl ErrorSanitizer {
     /// Check if error is authentication/authorization-related
     fn is_auth_error(&self, message: &str) -> bool {
         let auth_keywords = [
-            "unauthorized", "forbidden", "access denied", "permission",
-            "authentication", "authorization", "token", "credential",
-            "login", "session", "expired"
+            "unauthorized",
+            "forbidden",
+            "access denied",
+            "permission",
+            "authentication",
+            "authorization",
+            "token",
+            "credential",
+            "login",
+            "session",
+            "expired",
         ];
 
         auth_keywords.iter().any(|keyword| message.contains(keyword))
@@ -244,8 +265,16 @@ impl ErrorSanitizer {
     /// Check if error is validation-related
     fn is_validation_error(&self, message: &str) -> bool {
         let validation_keywords = [
-            "validation", "invalid", "required", "format", "schema",
-            "constraint", "length", "range", "pattern", "type"
+            "validation",
+            "invalid",
+            "required",
+            "format",
+            "schema",
+            "constraint",
+            "length",
+            "range",
+            "pattern",
+            "type",
         ];
 
         validation_keywords.iter().any(|keyword| message.contains(keyword))
@@ -257,34 +286,60 @@ impl ErrorSanitizer {
         if self.is_database_error(message) {
             return false;
         }
-        
+
         // Check for specific file operation patterns first
         let file_operation_patterns = [
-            "failed to read file", "failed to write file", "failed to open file",
-            "failed to create file", "failed to delete file", "could not read file",
-            "could not write file", "could not open file", "unable to read file",
-            "unable to write file", "file not found", "cannot access file"
+            "failed to read file",
+            "failed to write file",
+            "failed to open file",
+            "failed to create file",
+            "failed to delete file",
+            "could not read file",
+            "could not write file",
+            "could not open file",
+            "unable to read file",
+            "unable to write file",
+            "file not found",
+            "cannot access file",
         ];
-        
+
         if file_operation_patterns.iter().any(|pattern| message.contains(pattern)) {
             return true;
         }
-        
+
         let fs_keywords = [
-            "file system", "filesystem", "directory", "path", "permission denied",
-            "file exists", "no such file", "read only", "write protected", 
-            "io error", "disk full", "invalid filename"
+            "file system",
+            "filesystem",
+            "directory",
+            "path",
+            "permission denied",
+            "file exists",
+            "no such file",
+            "read only",
+            "write protected",
+            "io error",
+            "disk full",
+            "invalid filename",
         ];
 
         fs_keywords.iter().any(|keyword| message.contains(keyword))
     }
 
-
     /// Check if error is network-related
     fn is_network_error(&self, message: &str) -> bool {
         let network_keywords = [
-            "network", "connection", "timeout", "dns", "http", "https",
-            "ssl", "tls", "certificate", "host", "unreachable", "refused"
+            "network",
+            "connection",
+            "timeout",
+            "dns",
+            "http",
+            "https",
+            "ssl",
+            "tls",
+            "certificate",
+            "host",
+            "unreachable",
+            "refused",
         ];
 
         network_keywords.iter().any(|keyword| message.contains(keyword))
@@ -293,8 +348,16 @@ impl ErrorSanitizer {
     /// Check if error is configuration-related
     fn is_config_error(&self, message: &str) -> bool {
         let config_keywords = [
-            "config", "configuration", "setting", "option", "parameter",
-            "property", "environment", "variable", "missing", "parse"
+            "config",
+            "configuration",
+            "setting",
+            "option",
+            "parameter",
+            "property",
+            "environment",
+            "variable",
+            "missing",
+            "parse",
         ];
 
         config_keywords.iter().any(|keyword| message.contains(keyword))
@@ -306,10 +369,17 @@ impl ErrorSanitizer {
         if self.is_database_error(message) {
             return false;
         }
-        
+
         let task_keywords = [
-            "execution", "runtime", "script", "javascript",
-            "eval", "syntax", "reference", "undefined", "null"
+            "execution",
+            "runtime",
+            "script",
+            "javascript",
+            "eval",
+            "syntax",
+            "reference",
+            "undefined",
+            "null",
         ];
 
         task_keywords.iter().any(|keyword| message.contains(keyword))
@@ -331,7 +401,8 @@ impl ErrorSanitizer {
 
         // Remove stack traces
         let lines: Vec<&str> = sanitized.lines().collect();
-        let filtered_lines: Vec<&str> = lines.into_iter()
+        let filtered_lines: Vec<&str> = lines
+            .into_iter()
             .filter(|line| !line.trim().starts_with("at ") && !line.contains("Error:"))
             .take(3) // Limit to first 3 non-stack-trace lines
             .collect();
@@ -355,7 +426,10 @@ impl ErrorSanitizer {
     fn apply_final_sanitization(&self, mut error: SanitizedError) -> SanitizedError {
         // Truncate message if too long
         if error.message.len() > self.config.max_message_length {
-            error.message = format!("{}...", &error.message[..self.config.max_message_length.saturating_sub(3)]);
+            error.message = format!(
+                "{}...",
+                &error.message[..self.config.max_message_length.saturating_sub(3)]
+            );
         }
 
         // Ensure message is not empty
@@ -388,20 +462,17 @@ impl ErrorSanitizer {
 
     /// Create a sanitized not found error
     pub fn not_found_error(resource_type: &str) -> SanitizedError {
-        SanitizedError::new(format!("{} not found", resource_type))
-            .with_code("NOT_FOUND")
+        SanitizedError::new(format!("{} not found", resource_type)).with_code("NOT_FOUND")
     }
 
     /// Create a sanitized permission error
     pub fn permission_error() -> SanitizedError {
-        SanitizedError::new("Permission denied")
-            .with_code("PERMISSION_DENIED")
+        SanitizedError::new("Permission denied").with_code("PERMISSION_DENIED")
     }
 
     /// Create a sanitized internal error
     pub fn internal_error() -> SanitizedError {
-        SanitizedError::new("Internal server error")
-            .with_code("INTERNAL_ERROR")
+        SanitizedError::new("Internal server error").with_code("INTERNAL_ERROR")
     }
 }
 
@@ -413,7 +484,7 @@ mod tests {
     fn test_sanitize_database_error() {
         let sanitizer = ErrorSanitizer::default();
         let error_msg = "Database connection failed: postgresql://user:pass@localhost:5432/db";
-        
+
         let sanitized = sanitizer.sanitize_message(error_msg);
         assert_eq!(sanitized.message, "Database operation failed");
         assert_eq!(sanitized.error_code, Some("DATABASE_ERROR".to_string()));
@@ -424,7 +495,7 @@ mod tests {
     fn test_sanitize_file_path() {
         let sanitizer = ErrorSanitizer::default();
         let error_msg = "Failed to read file: /home/user/secret/config.json";
-        
+
         let sanitized = sanitizer.sanitize_message(error_msg);
         assert_eq!(sanitized.message, "File operation failed");
         assert!(!sanitized.message.contains("/home/user"));
@@ -434,7 +505,7 @@ mod tests {
     fn test_sanitize_validation_error() {
         let sanitizer = ErrorSanitizer::default();
         let error_msg = "Validation failed: invalid email format";
-        
+
         let sanitized = sanitizer.sanitize_message(error_msg);
         assert_eq!(sanitized.message, "Input validation failed");
         assert_eq!(sanitized.error_code, Some("VALIDATION_ERROR".to_string()));
@@ -444,7 +515,7 @@ mod tests {
     fn test_sanitize_generic_error() {
         let sanitizer = ErrorSanitizer::default();
         let error_msg = "Something went wrong in function xyz::process() at line 123";
-        
+
         let sanitized = sanitizer.sanitize_message(error_msg);
         assert!(!sanitized.message.contains("xyz::process"));
         assert!(!sanitized.message.contains("line 123"));
@@ -456,7 +527,7 @@ mod tests {
         let error_msg = r#"Error: Something failed
     at process (/path/to/file.js:123:45)
     at main (/path/to/main.js:567:89)"#;
-        
+
         let sanitized = sanitizer.sanitize_message(error_msg);
         assert!(!sanitized.message.contains("at process"));
         assert!(!sanitized.message.contains("/path/to/"));
@@ -465,14 +536,13 @@ mod tests {
     #[test]
     fn test_custom_mappings() {
         let mut config = ErrorSanitizationConfig::default();
-        config.custom_mappings.insert(
-            "special error".to_string(),
-            "User-friendly message".to_string(),
-        );
-        
+        config
+            .custom_mappings
+            .insert("special error".to_string(), "User-friendly message".to_string());
+
         let sanitizer = ErrorSanitizer::new(config);
         let error_msg = "This is a special error that occurred";
-        
+
         let sanitized = sanitizer.sanitize_message(error_msg);
         assert_eq!(sanitized.message, "User-friendly message");
         assert_eq!(sanitized.error_code, Some("CUSTOM_ERROR".to_string()));
@@ -482,10 +552,10 @@ mod tests {
     fn test_message_length_limit() {
         let mut config = ErrorSanitizationConfig::default();
         config.max_message_length = 20;
-        
+
         let sanitizer = ErrorSanitizer::new(config);
         let error_msg = "This is a very long error message that should be truncated";
-        
+
         let sanitized = sanitizer.sanitize_message(error_msg);
         assert!(sanitized.message.len() <= 20);
         assert!(sanitized.message.ends_with("..."));

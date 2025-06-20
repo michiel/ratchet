@@ -5,11 +5,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 // use utoipa::ToSchema; // temporarily disabled
 
-use crate::{
-    context::TasksContext,
-    errors::RestResult,
-    models::common::StatsResponse,
-};
+use crate::{context::TasksContext, errors::RestResult, models::common::StatsResponse};
 
 /// System metrics response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,53 +134,49 @@ pub struct ScheduleMetrics {
 }
 
 /// Get comprehensive system metrics
-/// 
+///
 /// Returns detailed system and application metrics for monitoring and observability.
 
-pub async fn get_metrics(
-    State(ctx): State<TasksContext>,
-) -> RestResult<impl IntoResponse> {
+pub async fn get_metrics(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Metrics collection requested");
-    
+
     let start_time = std::time::Instant::now();
-    
+
     // Collect system information
     let system_info = collect_system_info();
-    
+
     // Collect performance metrics (placeholder for now)
     let performance = collect_performance_metrics();
-    
+
     // Collect resource metrics
     let resources = collect_resource_metrics();
-    
+
     // Collect application metrics
     let application = collect_application_metrics(&ctx).await;
-    
+
     let metrics = SystemMetrics {
         system_info,
         performance,
         resources,
         application,
     };
-    
+
     let collection_time = start_time.elapsed().as_millis();
     tracing::debug!("Metrics collection completed in {}ms", collection_time);
-    
+
     Ok(Json(StatsResponse::new(metrics)))
 }
 
 /// Get Prometheus-formatted metrics
-/// 
+///
 /// Returns metrics in Prometheus exposition format for integration with monitoring systems.
 
-pub async fn get_prometheus_metrics(
-    State(ctx): State<TasksContext>,
-) -> RestResult<impl IntoResponse> {
+pub async fn get_prometheus_metrics(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Prometheus metrics requested");
-    
+
     let metrics = collect_application_metrics(&ctx).await;
     let prometheus_output = format_prometheus_metrics(&metrics);
-    
+
     Ok(axum::response::Response::builder()
         .header("content-type", "text/plain; version=0.0.4")
         .body(prometheus_output)
@@ -198,7 +190,7 @@ fn collect_system_info() -> SystemInfo {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    
+
     SystemInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         build_timestamp: chrono::Utc::now().to_rfc3339(),
@@ -240,13 +232,13 @@ fn collect_resource_metrics() -> ResourceMetrics {
 async fn collect_application_metrics(ctx: &TasksContext) -> ApplicationMetrics {
     // Collect database metrics
     let database = collect_database_metrics(ctx).await;
-    
+
     // Collect application-specific metrics
     let tasks = collect_task_metrics(ctx).await;
     let executions = collect_execution_metrics(ctx).await;
     let jobs = collect_job_metrics(ctx).await;
     let schedules = collect_schedule_metrics(ctx).await;
-    
+
     ApplicationMetrics {
         database,
         tasks,
@@ -271,7 +263,7 @@ async fn collect_database_metrics(_ctx: &TasksContext) -> DatabaseMetrics {
 
 async fn collect_task_metrics(ctx: &TasksContext) -> TaskMetrics {
     let total_tasks = ctx.repositories.task_repository().count().await.unwrap_or(0);
-    
+
     // TODO: Collect more detailed task metrics
     TaskMetrics {
         total_tasks,
@@ -285,7 +277,7 @@ async fn collect_task_metrics(ctx: &TasksContext) -> TaskMetrics {
 
 async fn collect_execution_metrics(ctx: &TasksContext) -> ExecutionMetrics {
     let total_executions = ctx.repositories.execution_repository().count().await.unwrap_or(0);
-    
+
     // TODO: Collect more detailed execution metrics
     ExecutionMetrics {
         total_executions,
@@ -300,7 +292,7 @@ async fn collect_execution_metrics(ctx: &TasksContext) -> ExecutionMetrics {
 
 async fn collect_job_metrics(ctx: &TasksContext) -> JobMetrics {
     let total_jobs = ctx.repositories.job_repository().count().await.unwrap_or(0);
-    
+
     // TODO: Collect more detailed job metrics
     JobMetrics {
         total_jobs,
@@ -315,7 +307,7 @@ async fn collect_job_metrics(ctx: &TasksContext) -> JobMetrics {
 
 async fn collect_schedule_metrics(ctx: &TasksContext) -> ScheduleMetrics {
     let total_schedules = ctx.repositories.schedule_repository().count().await.unwrap_or(0);
-    
+
     // TODO: Collect more detailed schedule metrics
     ScheduleMetrics {
         total_schedules,
@@ -329,27 +321,36 @@ async fn collect_schedule_metrics(ctx: &TasksContext) -> ScheduleMetrics {
 
 fn format_prometheus_metrics(metrics: &ApplicationMetrics) -> String {
     let mut output = String::new();
-    
+
     // Add help and type annotations
     output.push_str("# HELP ratchet_tasks_total Total number of tasks\n");
     output.push_str("# TYPE ratchet_tasks_total gauge\n");
     output.push_str(&format!("ratchet_tasks_total {}\n", metrics.tasks.total_tasks));
-    
+
     output.push_str("# HELP ratchet_executions_total Total number of executions\n");
     output.push_str("# TYPE ratchet_executions_total gauge\n");
-    output.push_str(&format!("ratchet_executions_total {}\n", metrics.executions.total_executions));
-    
+    output.push_str(&format!(
+        "ratchet_executions_total {}\n",
+        metrics.executions.total_executions
+    ));
+
     output.push_str("# HELP ratchet_jobs_total Total number of jobs\n");
     output.push_str("# TYPE ratchet_jobs_total gauge\n");
     output.push_str(&format!("ratchet_jobs_total {}\n", metrics.jobs.total_jobs));
-    
+
     output.push_str("# HELP ratchet_schedules_total Total number of schedules\n");
     output.push_str("# TYPE ratchet_schedules_total gauge\n");
-    output.push_str(&format!("ratchet_schedules_total {}\n", metrics.schedules.total_schedules));
-    
+    output.push_str(&format!(
+        "ratchet_schedules_total {}\n",
+        metrics.schedules.total_schedules
+    ));
+
     output.push_str("# HELP ratchet_database_connections_active Active database connections\n");
     output.push_str("# TYPE ratchet_database_connections_active gauge\n");
-    output.push_str(&format!("ratchet_database_connections_active {}\n", metrics.database.active_connections));
-    
+    output.push_str(&format!(
+        "ratchet_database_connections_active {}\n",
+        metrics.database.active_connections
+    ));
+
     output
 }

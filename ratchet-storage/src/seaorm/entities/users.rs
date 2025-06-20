@@ -75,7 +75,6 @@ pub enum UserRole {
     Service,
 }
 
-
 impl UserRole {
     /// Check if this role can perform admin operations
     pub fn can_admin(&self) -> bool {

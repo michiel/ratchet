@@ -56,18 +56,16 @@ async fn test_mcp_server_basic_stdio_functionality() {
     });
 
     let request_json = serde_json::to_string(&init_request).unwrap();
-    
+
     // Write request with timeout
-    let write_result = timeout(Duration::from_secs(5), async {
-        writeln!(stdin, "{}", request_json)
-    }).await;
-    
+    let write_result = timeout(Duration::from_secs(5), async { writeln!(stdin, "{}", request_json) }).await;
+
     match write_result {
-        Ok(Ok(_)) => {},
+        Ok(Ok(_)) => {}
         Ok(Err(e)) => {
             let _ = child.kill();
             panic!("Failed to write initialize request: {}", e);
-        },
+        }
         Err(_) => {
             let _ = child.kill();
             panic!("Timeout writing initialize request");
@@ -76,16 +74,14 @@ async fn test_mcp_server_basic_stdio_functionality() {
 
     // Read response with timeout
     let mut response_line = String::new();
-    let read_result = timeout(Duration::from_secs(10), async {
-        reader.read_line(&mut response_line)
-    }).await;
-    
+    let read_result = timeout(Duration::from_secs(10), async { reader.read_line(&mut response_line) }).await;
+
     match read_result {
-        Ok(Ok(_)) => {},
+        Ok(Ok(_)) => {}
         Ok(Err(e)) => {
             let _ = child.kill();
             panic!("Failed to read initialize response: {}", e);
-        },
+        }
         Err(_) => {
             let _ = child.kill();
             panic!("Timeout reading initialize response");
@@ -93,8 +89,7 @@ async fn test_mcp_server_basic_stdio_functionality() {
     }
 
     // Parse and verify response
-    let init_response: Value = serde_json::from_str(response_line.trim())
-        .expect("Failed to parse initialize response");
+    let init_response: Value = serde_json::from_str(response_line.trim()).expect("Failed to parse initialize response");
 
     // Basic verification
     assert_eq!(init_response["jsonrpc"], "2.0");
@@ -110,18 +105,16 @@ async fn test_mcp_server_basic_stdio_functionality() {
     });
 
     let request_json = serde_json::to_string(&tools_request).unwrap();
-    
+
     // Write tools request with timeout
-    let write_result = timeout(Duration::from_secs(5), async {
-        writeln!(stdin, "{}", request_json)
-    }).await;
-    
+    let write_result = timeout(Duration::from_secs(5), async { writeln!(stdin, "{}", request_json) }).await;
+
     match write_result {
-        Ok(Ok(_)) => {},
+        Ok(Ok(_)) => {}
         Ok(Err(e)) => {
             let _ = child.kill();
             panic!("Failed to write tools/list request: {}", e);
-        },
+        }
         Err(_) => {
             let _ = child.kill();
             panic!("Timeout writing tools/list request");
@@ -130,24 +123,22 @@ async fn test_mcp_server_basic_stdio_functionality() {
 
     // Read tools response with timeout
     response_line.clear();
-    let read_result = timeout(Duration::from_secs(10), async {
-        reader.read_line(&mut response_line)
-    }).await;
-    
+    let read_result = timeout(Duration::from_secs(10), async { reader.read_line(&mut response_line) }).await;
+
     match read_result {
-        Ok(Ok(_)) => {},
+        Ok(Ok(_)) => {}
         Ok(Err(e)) => {
             let _ = child.kill();
             panic!("Failed to read tools/list response: {}", e);
-        },
+        }
         Err(_) => {
             let _ = child.kill();
             panic!("Timeout reading tools/list response");
         }
     }
 
-    let tools_response: Value = serde_json::from_str(response_line.trim())
-        .expect("Failed to parse tools/list response");
+    let tools_response: Value =
+        serde_json::from_str(response_line.trim()).expect("Failed to parse tools/list response");
 
     // Verify tools/list response works (no "Server not initialized" error)
     assert_eq!(tools_response["jsonrpc"], "2.0");

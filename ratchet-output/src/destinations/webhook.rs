@@ -33,18 +33,14 @@ pub struct WebhookDestination {
 }
 
 impl WebhookDestination {
-    pub fn new(
-        config: WebhookConfig,
-        client: reqwest::Client,
-        template_engine: TemplateEngine,
-    ) -> Self {
+    pub fn new(config: WebhookConfig, client: reqwest::Client, template_engine: TemplateEngine) -> Self {
         Self {
             config,
             client,
             template_engine,
         }
     }
-    
+
     /// Create a cross-platform HTTP client with appropriate TLS configuration
     pub fn create_default_client() -> Result<reqwest::Client, reqwest::Error> {
         reqwest::Client::builder()
@@ -68,27 +64,22 @@ impl WebhookDestination {
     ) -> Result<reqwest::RequestBuilder, DeliveryError> {
         match auth {
             WebhookAuth::Bearer { token } => {
-                let rendered_token = self
-                    .template_engine
-                    .render(token, &context.template_variables)?;
+                let rendered_token = self.template_engine.render(token, &context.template_variables)?;
                 request = request.bearer_auth(rendered_token);
             }
             WebhookAuth::Basic { username, password } => {
-                let rendered_username = self
-                    .template_engine
-                    .render(username, &context.template_variables)?;
-                let rendered_password = self
-                    .template_engine
-                    .render(password, &context.template_variables)?;
+                let rendered_username = self.template_engine.render(username, &context.template_variables)?;
+                let rendered_password = self.template_engine.render(password, &context.template_variables)?;
                 request = request.basic_auth(rendered_username, Some(rendered_password));
             }
             WebhookAuth::ApiKey { header, key } => {
-                let rendered_key = self
-                    .template_engine
-                    .render(key, &context.template_variables)?;
+                let rendered_key = self.template_engine.render(key, &context.template_variables)?;
                 request = request.header(header, rendered_key);
             }
-            WebhookAuth::Signature { secret: _, algorithm: _ } => {
+            WebhookAuth::Signature {
+                secret: _,
+                algorithm: _,
+            } => {
                 // TODO: Implement HMAC signature
                 return Err(DeliveryError::Network {
                     url: "webhook".to_string(),
@@ -121,9 +112,7 @@ impl WebhookDestination {
                 HttpMethod::Patch => self.client.patch(url),
                 HttpMethod::Delete => self.client.delete(url),
                 HttpMethod::Head => self.client.head(url),
-                HttpMethod::Options => {
-                    self.client.request(reqwest::Method::OPTIONS, url)
-                },
+                HttpMethod::Options => self.client.request(reqwest::Method::OPTIONS, url),
             };
 
             // Add headers
@@ -171,7 +160,7 @@ impl WebhookDestination {
                                 attempts: attempt,
                             });
                         }
-                        
+
                         tracing::warn!(
                             "Webhook request failed with status {}, attempt {}/{}, retrying in {:?}",
                             status,
@@ -195,7 +184,7 @@ impl WebhookDestination {
                             error: e.to_string(),
                         });
                     }
-                    
+
                     tracing::warn!(
                         "Webhook request failed with error: {}, attempt {}/{}, retrying in {:?}",
                         e,
@@ -210,9 +199,8 @@ impl WebhookDestination {
             tokio::time::sleep(delay).await;
 
             // Calculate next delay with exponential backoff
-            delay = Duration::from_millis(
-                (delay.as_millis() as f64 * self.config.retry_policy.backoff_multiplier) as u64
-            );
+            delay =
+                Duration::from_millis((delay.as_millis() as f64 * self.config.retry_policy.backoff_multiplier) as u64);
             if delay > self.config.retry_policy.max_delay {
                 delay = self.config.retry_policy.max_delay;
             }
@@ -229,11 +217,7 @@ impl WebhookDestination {
 
 #[async_trait]
 impl OutputDestination for WebhookDestination {
-    async fn deliver(
-        &self,
-        output: &TaskOutput,
-        context: &DeliveryContext,
-    ) -> Result<DeliveryResult, DeliveryError> {
+    async fn deliver(&self, output: &TaskOutput, context: &DeliveryContext) -> Result<DeliveryResult, DeliveryError> {
         let _start_time = Instant::now();
 
         // Render the URL template

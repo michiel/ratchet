@@ -9,7 +9,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput},
-    destinations::{FilesystemDestination, WebhookDestination, StdioDestination, StdioConfig, StdStream},
+    destinations::{FilesystemDestination, StdStream, StdioConfig, StdioDestination, WebhookDestination},
     errors::{ConfigError, DeliveryError},
     metrics::DeliveryMetrics,
     template::TemplateEngine,
@@ -44,15 +44,12 @@ impl OutputDeliveryManager {
     }
 
     /// Add a destination to the manager
-    pub async fn add_destination(
-        &self,
-        name: String,
-        config: OutputDestinationConfig,
-    ) -> Result<(), ConfigError> {
+    pub async fn add_destination(&self, name: String, config: OutputDestinationConfig) -> Result<(), ConfigError> {
         let destination = Self::create_destination_static(config, &self.template_engine)?;
-        
+
         // Validate the destination configuration
-        destination.validate_config()
+        destination
+            .validate_config()
             .map_err(|e| ConfigError::InvalidDestination {
                 destination_type: destination.destination_type().to_string(),
                 error: e,
@@ -60,7 +57,7 @@ impl OutputDeliveryManager {
 
         let mut destinations = self.destinations.write().await;
         destinations.insert(name.clone(), destination);
-        
+
         info!("Added output destination: {}", name);
         Ok(())
     }
@@ -69,13 +66,13 @@ impl OutputDeliveryManager {
     pub async fn remove_destination(&self, name: &str) -> bool {
         let mut destinations = self.destinations.write().await;
         let removed = destinations.remove(name).is_some();
-        
+
         if removed {
             info!("Removed output destination: {}", name);
         } else {
             warn!("Attempted to remove non-existent destination: {}", name);
         }
-        
+
         removed
     }
 
@@ -87,18 +84,19 @@ impl OutputDeliveryManager {
         context: &DeliveryContext,
     ) -> Result<DeliveryResult, DeliveryError> {
         let start_time = Instant::now();
-        
+
         debug!("Delivering output to destination: {}", destination_name);
 
         let destinations = self.destinations.read().await;
-        let destination = destinations.get(destination_name)
+        let destination = destinations
+            .get(destination_name)
             .ok_or_else(|| DeliveryError::Network {
                 url: destination_name.to_string(),
                 error: "Destination not found".to_string(),
             })?;
 
         let result = destination.deliver(output, context).await;
-        
+
         // Record metrics
         match &result {
             Ok(delivery_result) => {
@@ -109,8 +107,7 @@ impl OutputDeliveryManager {
                 );
                 info!(
                     "Successfully delivered output to {} in {:?}",
-                    destination_name,
-                    delivery_result.delivery_time
+                    destination_name, delivery_result.delivery_time
                 );
             }
             Err(e) => {
@@ -133,7 +130,7 @@ impl OutputDeliveryManager {
         drop(destinations); // Release the read lock
 
         let mut results = Vec::new();
-        
+
         for name in destination_names {
             let result = self.deliver_output(&name, output, context).await;
             results.push((name, result));
@@ -177,10 +174,7 @@ impl OutputDeliveryManager {
     }
 
     /// Create a delivery manager from destination configurations
-    pub fn from_configs(
-        configs: &[OutputDestinationConfig],
-        _max_concurrent: usize,
-    ) -> Result<Self, ConfigError> {
+    pub fn from_configs(configs: &[OutputDestinationConfig], _max_concurrent: usize) -> Result<Self, ConfigError> {
         let manager = Self::new();
 
         for (index, config) in configs.iter().enumerate() {
@@ -191,7 +185,7 @@ impl OutputDeliveryManager {
                     destination_type: destination.destination_type().to_string(),
                     error: e,
                 })?;
-            
+
             // Use index as the destination name for now
             let destination_name = format!("destination_{}", index);
             tokio::runtime::Handle::current().block_on(async {
@@ -204,9 +198,7 @@ impl OutputDeliveryManager {
     }
 
     /// Test delivery configurations without actually delivering
-    pub async fn test_configurations(
-        configs: &[OutputDestinationConfig],
-    ) -> Result<Vec<TestResult>, ConfigError> {
+    pub async fn test_configurations(configs: &[OutputDestinationConfig]) -> Result<Vec<TestResult>, ConfigError> {
         let mut results = Vec::new();
         let template_engine = TemplateEngine::new();
 
@@ -269,11 +261,8 @@ impl OutputDeliveryManager {
                     overwrite,
                     backup_existing,
                 };
-                
-                Ok(Arc::new(FilesystemDestination::new(
-                    fs_config,
-                    template_engine.clone(),
-                )))
+
+                Ok(Arc::new(FilesystemDestination::new(fs_config, template_engine.clone())))
             }
             OutputDestinationConfig::Webhook {
                 url,
@@ -313,10 +302,12 @@ impl OutputDeliveryManager {
                 let std_stream = match stream.as_str() {
                     "stdout" => StdStream::Stdout,
                     "stderr" => StdStream::Stderr,
-                    _ => return Err(ConfigError::InvalidValue {
-                        field: "stream".to_string(),
-                        value: stream,
-                    }),
+                    _ => {
+                        return Err(ConfigError::InvalidValue {
+                            field: "stream".to_string(),
+                            value: stream,
+                        })
+                    }
                 };
 
                 let stdio_config = StdioConfig {
@@ -327,20 +318,14 @@ impl OutputDeliveryManager {
                     prefix_template: prefix,
                 };
 
-                Ok(Arc::new(StdioDestination::new(
-                    stdio_config,
-                    template_engine.clone(),
-                )))
+                Ok(Arc::new(StdioDestination::new(stdio_config, template_engine.clone())))
             }
             OutputDestinationConfig::Database { .. } => {
                 Err(ConfigError::UnsupportedDestination("database".to_string()))
             }
-            OutputDestinationConfig::S3 { .. } => {
-                Err(ConfigError::UnsupportedDestination("s3".to_string()))
-            }
+            OutputDestinationConfig::S3 { .. } => Err(ConfigError::UnsupportedDestination("s3".to_string())),
         }
     }
-
 }
 
 impl Default for OutputDeliveryManager {

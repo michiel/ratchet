@@ -1,6 +1,6 @@
 //! Command parsing for console commands
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 /// Represents a parsed console command
@@ -14,8 +14,7 @@ pub struct ConsoleCommand {
 }
 
 /// Command parser for console input
-pub struct CommandParser {
-}
+pub struct CommandParser {}
 
 impl CommandParser {
     pub fn new() -> Self {
@@ -31,7 +30,7 @@ impl CommandParser {
 
         let mut args_iter = parts.iter();
         let category = args_iter.next().unwrap().clone();
-        
+
         let action = if let Some(action) = args_iter.next() {
             action.clone()
         } else {
@@ -49,10 +48,10 @@ impl CommandParser {
 
         let remaining: Vec<String> = args_iter.cloned().collect();
         let mut i = 0;
-        
+
         while i < remaining.len() {
             let arg = &remaining[i];
-            
+
             if arg.starts_with("--") {
                 // Long flag
                 let flag_name = arg.trim_start_matches("--");
@@ -167,9 +166,8 @@ impl CommandParser {
 
     /// Clean a token by removing outer quotes if present
     fn clean_token(&self, token: &str) -> String {
-        if (token.starts_with('"') && token.ends_with('"')) ||
-           (token.starts_with('\'') && token.ends_with('\'')) {
-            token[1..token.len()-1].to_string()
+        if (token.starts_with('"') && token.ends_with('"')) || (token.starts_with('\'') && token.ends_with('\'')) {
+            token[1..token.len() - 1].to_string()
         } else {
             token.to_string()
         }
@@ -192,7 +190,9 @@ mod tests {
     #[test]
     fn test_command_with_flags() {
         let parser = CommandParser::new();
-        let cmd = parser.parse("task execute my-task --input '{\"key\": \"value\"}' --force").unwrap();
+        let cmd = parser
+            .parse("task execute my-task --input '{\"key\": \"value\"}' --force")
+            .unwrap();
         assert_eq!(cmd.category, "task");
         assert_eq!(cmd.action, "execute");
         assert_eq!(cmd.arguments, vec!["my-task"]);
@@ -202,7 +202,9 @@ mod tests {
     #[test]
     fn test_json_parsing() {
         let parser = CommandParser::new();
-        let cmd = parser.parse("task execute my-task '{\"num1\": 42, \"num2\": 58}'").unwrap();
+        let cmd = parser
+            .parse("task execute my-task '{\"num1\": 42, \"num2\": 58}'")
+            .unwrap();
         assert!(cmd.json_input.is_some());
         if let Some(json) = cmd.json_input {
             assert_eq!(json["num1"], 42);

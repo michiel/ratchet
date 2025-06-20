@@ -209,16 +209,9 @@ impl PluginManager {
 
         for discovered in plugins {
             // Check if plugin is compatible
-            if self
-                .registry
-                .is_compatible(&discovered.manifest.plugin)
-                .await?
-            {
+            if self.registry.is_compatible(&discovered.manifest.plugin).await? {
                 let source = discovered.source_path.to_string_lossy();
-                if let Err(e) = self
-                    .load_plugin_from_source(&source, serde_json::json!({}))
-                    .await
-                {
+                if let Err(e) = self.load_plugin_from_source(&source, serde_json::json!({})).await {
                     tracing::warn!(
                         target: "plugin_manager",
                         plugin_id = %discovered.manifest.plugin.id,
@@ -233,11 +226,7 @@ impl PluginManager {
     }
 
     /// Load a plugin from source
-    pub async fn load_plugin_from_source(
-        &self,
-        source: &str,
-        config: serde_json::Value,
-    ) -> PluginResult<String> {
+    pub async fn load_plugin_from_source(&self, source: &str, config: serde_json::Value) -> PluginResult<String> {
         let mut state = self.state.write().await;
         state.stats.total_loads += 1;
         drop(state);
@@ -261,25 +250,17 @@ impl PluginManager {
         plugin.validate_config(&config)?;
 
         // Register plugin
-        self.registry
-            .register_plugin(plugin, config.clone())
-            .await?;
+        self.registry.register_plugin(plugin, config.clone()).await?;
 
         // Create plugin context
         let system_config = self.system_config.read().await.clone();
         let execution_id = Uuid::new_v4();
-        let context = Arc::new(RwLock::new(PluginContext::new(
-            execution_id,
-            config,
-            system_config,
-        )));
+        let context = Arc::new(RwLock::new(PluginContext::new(execution_id, config, system_config)));
 
         // Store context
         {
             let mut state = self.state.write().await;
-            state
-                .active_contexts
-                .insert(plugin_id.clone(), context.clone());
+            state.active_contexts.insert(plugin_id.clone(), context.clone());
             state.stats.successful_loads += 1;
         }
 
@@ -300,9 +281,7 @@ impl PluginManager {
                         .await?;
 
                     // Execute startup hooks
-                    self.hooks
-                        .execute_plugin_loaded_hooks(&mut context, &plugin_id)
-                        .await?;
+                    self.hooks.execute_plugin_loaded_hooks(&mut context, &plugin_id).await?;
 
                     tracing::info!(
                         target: "plugin_manager",
@@ -311,16 +290,11 @@ impl PluginManager {
                     );
                 }
                 Err(e) => {
-                    self.registry
-                        .update_plugin_error(&plugin_id, e.to_string())
-                        .await?;
+                    self.registry.update_plugin_error(&plugin_id, e.to_string()).await?;
                     self.registry
                         .update_plugin_status(&plugin_id, PluginStatus::Failed)
                         .await?;
-                    return Err(PluginError::initialization_failed(
-                        &plugin_id,
-                        e.to_string(),
-                    ));
+                    return Err(PluginError::initialization_failed(&plugin_id, e.to_string()));
                 }
             }
         }
@@ -388,11 +362,7 @@ impl PluginManager {
     }
 
     /// Execute a plugin
-    pub async fn execute_plugin(
-        &self,
-        plugin_id: &str,
-        input: serde_json::Value,
-    ) -> PluginResult<serde_json::Value> {
+    pub async fn execute_plugin(&self, plugin_id: &str, input: serde_json::Value) -> PluginResult<serde_json::Value> {
         let start_time = std::time::Instant::now();
 
         // Get plugin context
@@ -406,13 +376,13 @@ impl PluginManager {
         })?;
 
         // Get plugin instance
-        let instance = self
-            .registry
-            .get_plugin_instance(plugin_id)
-            .await
-            .ok_or_else(|| PluginError::PluginNotFound {
-                name: plugin_id.to_string(),
-            })?;
+        let instance =
+            self.registry
+                .get_plugin_instance(plugin_id)
+                .await
+                .ok_or_else(|| PluginError::PluginNotFound {
+                    name: plugin_id.to_string(),
+                })?;
 
         let mut execution_data = TaskExecutionData::new(plugin_id, input);
 
@@ -459,10 +429,8 @@ impl PluginManager {
             state.stats.total_executions += 1;
 
             // Update average execution time
-            let total_time =
-                state.stats.avg_execution_time_ms * (state.stats.total_executions - 1) as f64;
-            state.stats.avg_execution_time_ms =
-                (total_time + duration_ms as f64) / state.stats.total_executions as f64;
+            let total_time = state.stats.avg_execution_time_ms * (state.stats.total_executions - 1) as f64;
+            state.stats.avg_execution_time_ms = (total_time + duration_ms as f64) / state.stats.total_executions as f64;
         }
 
         tracing::debug!(
@@ -496,20 +464,12 @@ impl PluginManager {
     }
 
     /// Register a task hook
-    pub async fn register_task_hook(
-        &self,
-        hook: Arc<dyn TaskHook>,
-        plugin_id: &str,
-    ) -> PluginResult<Uuid> {
+    pub async fn register_task_hook(&self, hook: Arc<dyn TaskHook>, plugin_id: &str) -> PluginResult<Uuid> {
         self.hooks.register_task_hook(hook, plugin_id).await
     }
 
     /// Register an execution hook
-    pub async fn register_execution_hook(
-        &self,
-        hook: Arc<dyn ExecutionHook>,
-        plugin_id: &str,
-    ) -> PluginResult<Uuid> {
+    pub async fn register_execution_hook(&self, hook: Arc<dyn ExecutionHook>, plugin_id: &str) -> PluginResult<Uuid> {
         self.hooks.register_execution_hook(hook, plugin_id).await
     }
 
@@ -535,11 +495,7 @@ impl PluginManager {
                 let state = self.state.read().await;
                 state.active_contexts.get(&plugin_info.metadata.id).cloned()
             } {
-                if let Some(instance) = self
-                    .registry
-                    .get_plugin_instance(&plugin_info.metadata.id)
-                    .await
-                {
+                if let Some(instance) = self.registry.get_plugin_instance(&plugin_info.metadata.id).await {
                     let plugin = instance.read().await;
                     let context = context.read().await;
 
@@ -563,10 +519,7 @@ impl PluginManager {
     }
 
     /// Update system configuration
-    pub async fn update_system_config(
-        &self,
-        config: ratchet_config::RatchetConfig,
-    ) -> PluginResult<()> {
+    pub async fn update_system_config(&self, config: ratchet_config::RatchetConfig) -> PluginResult<()> {
         {
             let mut system_config = self.system_config.write().await;
             *system_config = config.clone();
@@ -694,10 +647,7 @@ mod tests {
             &self.metadata
         }
 
-        async fn execute(
-            &mut self,
-            _context: &mut PluginContext,
-        ) -> PluginResult<serde_json::Value> {
+        async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
             Ok(serde_json::json!({"status": "success", "message": "Test execution"}))
         }
 

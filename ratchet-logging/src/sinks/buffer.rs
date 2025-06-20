@@ -21,11 +21,7 @@ enum BufferCommand {
 }
 
 impl BufferedSink {
-    pub fn new(
-        inner_sink: Arc<dyn LogSink>,
-        max_buffer_size: usize,
-        flush_interval: Duration,
-    ) -> Self {
+    pub fn new(inner_sink: Arc<dyn LogSink>, max_buffer_size: usize, flush_interval: Duration) -> Self {
         let buffer = Arc::new(Mutex::new(VecDeque::with_capacity(max_buffer_size)));
         let (tx, mut rx) = mpsc::channel::<BufferCommand>(1000);
 
@@ -93,9 +89,7 @@ impl BufferedSink {
 impl LogSink for BufferedSink {
     fn log(&self, event: LogEvent) {
         // Try to send to background task, fall back to direct write if channel is full
-        if let Err(mpsc::error::TrySendError::Full(_)) =
-            self.tx.try_send(BufferCommand::Log(event.clone()))
-        {
+        if let Err(mpsc::error::TrySendError::Full(_)) = self.tx.try_send(BufferCommand::Log(event.clone())) {
             // Channel full, write directly
             self.inner_sink.log(event);
         }

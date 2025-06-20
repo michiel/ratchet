@@ -1,16 +1,18 @@
 //! Execution bridge for converting between legacy and new execution systems
-//! 
+//!
 //! This module provides adapters that allow the new modular execution system
 //! to work with legacy interfaces while maintaining backward compatibility.
 
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 
-use ratchet_interfaces::execution::{TaskExecutor, ExecutionResult, ExecutionContext, ExecutionStatus, ExecutorMetrics};
-use crate::{ProcessTaskExecutor, ProcessExecutorConfig, ExecutionError, TaskExecutionResult};
+use crate::{ExecutionError, ProcessExecutorConfig, ProcessTaskExecutor, TaskExecutionResult};
+use ratchet_interfaces::execution::{
+    ExecutionContext, ExecutionResult, ExecutionStatus, ExecutorMetrics, TaskExecutor,
+};
 
 /// Bridge that adapts ProcessTaskExecutor to the TaskExecutor interface
-/// 
+///
 /// This bridge allows the new modular execution system to be used anywhere
 /// the legacy execution interfaces are expected, providing a clean migration path.
 pub struct ExecutionBridge {
@@ -28,13 +30,10 @@ impl ExecutionBridge {
     }
 
     /// Create from legacy ratchet-lib configuration (for backward compatibility)
-    /// 
+    ///
     /// This method will be useful when we re-enable legacy configuration support
     /// in Phase 3 of the migration.
-    pub fn from_legacy_config(
-        max_workers: u32,
-        timeout_seconds: u64,
-    ) -> Self {
+    pub fn from_legacy_config(max_workers: u32, timeout_seconds: u64) -> Self {
         let config = ProcessExecutorConfig {
             worker_count: max_workers as usize,
             task_timeout_seconds: timeout_seconds,
@@ -67,26 +66,23 @@ impl TaskExecutor for ExecutionBridge {
     ) -> Result<ExecutionResult, Self::Error> {
         use crate::ipc::ExecutionContext as IpcExecutionContext;
         use uuid::Uuid;
-        
+
         // Convert task_id from string to i32 (required by ProcessTaskExecutor)
-        let task_id_i32: i32 = task_id.parse().map_err(|_| {
-            ExecutionError::TaskExecutionError(format!("Invalid task_id format: {}", task_id))
-        })?;
-        
+        let task_id_i32: i32 = task_id
+            .parse()
+            .map_err(|_| ExecutionError::TaskExecutionError(format!("Invalid task_id format: {}", task_id)))?;
+
         // Convert execution context
-        let ipc_context = context.map(|_| {
-            IpcExecutionContext::new(
-                Uuid::new_v4(),
-                None,
-                Uuid::new_v4(),
-                "1.0.0".to_string(),
-            )
-        });
-        
+        let ipc_context =
+            context.map(|_| IpcExecutionContext::new(Uuid::new_v4(), None, Uuid::new_v4(), "1.0.0".to_string()));
+
         // Use the direct execution method which should be Send
         let task_path = format!("/bridge-task/{}", task_id);
-        let result = self.inner.execute_task_direct(task_id_i32, task_path, input, ipc_context).await?;
-        
+        let result = self
+            .inner
+            .execute_task_direct(task_id_i32, task_path, input, ipc_context)
+            .await?;
+
         // Convert the result to the interface format
         Ok(convert_execution_result(result))
     }
@@ -112,21 +108,22 @@ impl TaskExecutor for ExecutionBridge {
     }
 }
 
-
 /// Convert internal TaskExecutionResult to interface ExecutionResult (for IPC results)
 fn convert_execution_result(result: TaskExecutionResult) -> ExecutionResult {
     let status = if result.success {
         ExecutionStatus::Success
     } else {
         ExecutionStatus::Failed {
-            error_message: result.error_message.unwrap_or_else(|| "Task execution failed".to_string()),
+            error_message: result
+                .error_message
+                .unwrap_or_else(|| "Task execution failed".to_string()),
         }
     };
 
     ExecutionResult {
         output: result.output.unwrap_or(JsonValue::Null),
         execution_time_ms: result.duration_ms as u64,
-        logs: vec![], // TaskExecutionResult doesn't provide logs
+        logs: vec![],                // TaskExecutionResult doesn't provide logs
         trace: result.error_details, // Use error_details as trace data
         status,
     }
@@ -137,9 +134,7 @@ pub struct ExecutionConfigAdapter;
 
 impl ExecutionConfigAdapter {
     /// Create ExecutionBridge from ratchet-config execution configuration
-    pub fn from_execution_config(
-        config: &ratchet_config::domains::execution::ExecutionConfig,
-    ) -> ExecutionBridge {
+    pub fn from_execution_config(config: &ratchet_config::domains::execution::ExecutionConfig) -> ExecutionBridge {
         let executor_config = ProcessExecutorConfig {
             worker_count: config.max_concurrent_tasks,
             task_timeout_seconds: config.max_execution_duration.as_secs(),
@@ -169,8 +164,8 @@ impl ExecutionConfigAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
     use chrono::Utc;
+    use serde_json::json;
 
     #[tokio::test]
     async fn test_execution_bridge_creation() {
@@ -180,9 +175,9 @@ mod tests {
             restart_on_crash: true,
             max_restart_attempts: 3,
         };
-        
+
         let bridge = ExecutionBridge::new(config);
-        
+
         // Test that we can access the inner executor
         assert_eq!(bridge.config().worker_count, 2);
         assert_eq!(bridge.config().task_timeout_seconds, 60);
@@ -191,7 +186,7 @@ mod tests {
     #[tokio::test]
     async fn test_execution_bridge_from_legacy_config() {
         let bridge = ExecutionBridge::from_legacy_config(4, 120);
-        
+
         assert_eq!(bridge.config().worker_count, 4);
         assert_eq!(bridge.config().task_timeout_seconds, 120);
         assert!(bridge.config().restart_on_crash);
@@ -213,7 +208,6 @@ mod tests {
 
     #[test]
     fn test_convert_execution_result() {
-        
         // Test successful result conversion
         let start = Utc::now();
         let end = start + chrono::Duration::milliseconds(1500);
@@ -257,7 +251,7 @@ mod tests {
     #[tokio::test]
     async fn test_execution_bridge_health_check() {
         let bridge = ExecutionConfigAdapter::for_testing();
-        
+
         // Health check should succeed for a properly initialized bridge
         let health_result = bridge.health_check().await;
         // Note: This might fail if the underlying executor requires more setup
@@ -268,7 +262,7 @@ mod tests {
     #[test]
     fn test_execution_bridge_metrics() {
         let bridge = ExecutionConfigAdapter::for_testing();
-        
+
         let metrics = bridge.metrics();
         // Check that metrics structure is properly converted
         assert_eq!(metrics.tasks_executed, 0);

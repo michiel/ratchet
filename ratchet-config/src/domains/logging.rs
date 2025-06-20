@@ -168,17 +168,14 @@ impl Validatable for LogTarget {
 
                 Ok(())
             }
-            LogTarget::Syslog {
-                facility, ident, ..
-            } => {
+            LogTarget::Syslog { facility, ident, .. } => {
                 validate_required_string(facility, "facility", self.domain_name())?;
                 validate_required_string(ident, "ident", self.domain_name())?;
 
                 // Validate syslog facility
                 let valid_facilities = [
-                    "kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp",
-                    "cron", "authpriv", "ftp", "local0", "local1", "local2", "local3", "local4",
-                    "local5", "local6", "local7",
+                    "kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv",
+                    "ftp", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7",
                 ];
                 validate_enum_choice(facility, &valid_facilities, "facility", self.domain_name())?;
 

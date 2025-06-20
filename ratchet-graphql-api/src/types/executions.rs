@@ -1,9 +1,9 @@
 //! GraphQL types for executions
 
-use async_graphql::{SimpleObject, InputObject};
-use ratchet_api_types::{UnifiedExecution, ExecutionStatus};
 use super::scalars::GraphQLApiId;
+use async_graphql::{InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
+use ratchet_api_types::{ExecutionStatus, UnifiedExecution};
 use serde_json::Value as JsonValue;
 
 /// GraphQL Execution type - using UnifiedExecution directly for API consistency
@@ -39,12 +39,12 @@ pub struct ExecutionFiltersInput {
     pub task_id: Option<GraphQLApiId>,
     pub task_id_in: Option<Vec<GraphQLApiId>>,
     pub id_in: Option<Vec<GraphQLApiId>>,
-    
+
     // Status filtering
     pub status: Option<ExecutionStatusGraphQL>,
     pub status_in: Option<Vec<ExecutionStatusGraphQL>>,
     pub status_not: Option<ExecutionStatusGraphQL>,
-    
+
     // Date range filtering
     pub queued_after: Option<DateTime<Utc>>,
     pub queued_before: Option<DateTime<Utc>>,
@@ -52,20 +52,20 @@ pub struct ExecutionFiltersInput {
     pub started_before: Option<DateTime<Utc>>,
     pub completed_after: Option<DateTime<Utc>>,
     pub completed_before: Option<DateTime<Utc>>,
-    
+
     // Duration filtering
     pub duration_min_ms: Option<i32>,
     pub duration_max_ms: Option<i32>,
-    
+
     // Progress filtering
     pub progress_min: Option<f32>,
     pub progress_max: Option<f32>,
     pub has_progress: Option<bool>,
-    
+
     // Error filtering
     pub has_error: Option<bool>,
     pub error_message_contains: Option<String>,
-    
+
     // Advanced filtering
     pub can_retry: Option<bool>,
     pub can_cancel: Option<bool>,

@@ -106,10 +106,7 @@ where
 {
     type Output = F::Output;
 
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
         let future = unsafe { std::pin::Pin::new_unchecked(&mut this.future) };
 

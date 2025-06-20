@@ -62,8 +62,8 @@ impl IntoResponse for RestError {
     fn into_response(self) -> Response {
         // Convert to unified error first, then to HTTP response
         let unified_error = self.to_unified_error();
-        let status = StatusCode::from_u16(unified_error.http_status_code())
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status =
+            StatusCode::from_u16(unified_error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
         let error_response = json!({
             "error": {
@@ -91,26 +91,27 @@ impl RestError {
             RestError::Timeout(msg) => ("TIMEOUT".to_string(), msg.clone()),
             RestError::ServiceUnavailable(msg) => ("SERVICE_UNAVAILABLE".to_string(), msg.clone()),
             RestError::Validation { message } => ("VALIDATION_ERROR".to_string(), message.clone()),
-            
+
             // These error types may contain sensitive data and need sanitization
-            RestError::InternalError(_) | RestError::Database(_) | RestError::Web(_) | RestError::InputValidation(_) => {
+            RestError::InternalError(_)
+            | RestError::Database(_)
+            | RestError::Web(_)
+            | RestError::InputValidation(_) => {
                 let sanitizer = ErrorSanitizer::default();
                 let sanitized = sanitizer.sanitize_error(self);
-                
-                let error_code = sanitized.error_code.unwrap_or_else(|| {
-                    match self {
-                        RestError::InternalError(_) => "INTERNAL_ERROR".to_string(),
-                        RestError::Database(_) => "DATABASE_ERROR".to_string(),
-                        RestError::Web(_) => "WEB_ERROR".to_string(),
-                        RestError::InputValidation(_) => "BAD_REQUEST".to_string(),
-                        _ => "INTERNAL_ERROR".to_string(),
-                    }
+
+                let error_code = sanitized.error_code.unwrap_or_else(|| match self {
+                    RestError::InternalError(_) => "INTERNAL_ERROR".to_string(),
+                    RestError::Database(_) => "DATABASE_ERROR".to_string(),
+                    RestError::Web(_) => "WEB_ERROR".to_string(),
+                    RestError::InputValidation(_) => "BAD_REQUEST".to_string(),
+                    _ => "INTERNAL_ERROR".to_string(),
                 });
-                
+
                 (error_code, sanitized.message)
             }
         };
-        
+
         ApiError::new(error_code, message)
     }
 

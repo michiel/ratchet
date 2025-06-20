@@ -99,9 +99,7 @@ impl<K: CacheKey + 'static, V: CacheValue + 'static> Cache<K, V> for LruCache<K,
                 // Check if entry is expired
                 let is_expired = {
                     let queue = self.queue.read();
-                    queue
-                        .get(index)
-                        .is_none_or(|node| node.entry.is_expired())
+                    queue.get(index).is_none_or(|node| node.entry.is_expired())
                 };
 
                 if is_expired {
@@ -145,8 +143,7 @@ impl<K: CacheKey + 'static, V: CacheValue + 'static> Cache<K, V> for LruCache<K,
     }
 
     async fn put(&self, key: K, value: V) -> CacheResult<()> {
-        self.put_with_ttl(key, value, std::time::Duration::MAX)
-            .await
+        self.put_with_ttl(key, value, std::time::Duration::MAX).await
     }
 
     async fn put_with_ttl(&self, key: K, value: V, ttl: std::time::Duration) -> CacheResult<()> {

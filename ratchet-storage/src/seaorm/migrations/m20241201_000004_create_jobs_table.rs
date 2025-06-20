@@ -22,37 +22,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Jobs::TaskId).integer().not_null())
                     .col(ColumnDef::new(Jobs::ExecutionId).integer())
                     .col(ColumnDef::new(Jobs::ScheduleId).integer())
-                    .col(
-                        ColumnDef::new(Jobs::Priority)
-                            .string()
-                            .not_null()
-                            .default("normal"),
-                    )
-                    .col(
-                        ColumnDef::new(Jobs::Status)
-                            .string()
-                            .not_null()
-                            .default("queued"),
-                    )
+                    .col(ColumnDef::new(Jobs::Priority).string().not_null().default("normal"))
+                    .col(ColumnDef::new(Jobs::Status).string().not_null().default("queued"))
                     .col(ColumnDef::new(Jobs::InputData).json().not_null())
-                    .col(
-                        ColumnDef::new(Jobs::RetryCount)
-                            .integer()
-                            .not_null()
-                            .default(0),
-                    )
-                    .col(
-                        ColumnDef::new(Jobs::MaxRetries)
-                            .integer()
-                            .not_null()
-                            .default(3),
-                    )
-                    .col(
-                        ColumnDef::new(Jobs::RetryDelaySeconds)
-                            .integer()
-                            .not_null()
-                            .default(60),
-                    )
+                    .col(ColumnDef::new(Jobs::RetryCount).integer().not_null().default(0))
+                    .col(ColumnDef::new(Jobs::MaxRetries).integer().not_null().default(3))
+                    .col(ColumnDef::new(Jobs::RetryDelaySeconds).integer().not_null().default(60))
                     .col(ColumnDef::new(Jobs::ErrorMessage).text())
                     .col(ColumnDef::new(Jobs::ErrorDetails).json())
                     .col(
@@ -92,9 +67,7 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_table(Table::drop().table(Jobs::Table).to_owned())
-            .await
+        manager.drop_table(Table::drop().table(Jobs::Table).to_owned()).await
     }
 }
 

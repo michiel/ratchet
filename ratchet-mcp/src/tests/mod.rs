@@ -6,10 +6,9 @@ use uuid::Uuid;
 
 use crate::{server::adapter::RatchetMcpAdapter, McpConfig, McpServer, SimpleTransportType};
 
-
 // Stdio-specific integration tests
-mod stdio_initialization_test;
 mod simple_stdio_test;
+mod stdio_initialization_test;
 
 // SSE-specific integration tests
 mod sse_integration_test;
@@ -61,10 +60,7 @@ async fn test_mcp_server_initialization() {
 
     // Parse the result as InitializeResult
     let result: serde_json::Value = response.result.unwrap();
-    assert!(result["serverInfo"]["name"]
-        .as_str()
-        .unwrap()
-        .contains("Ratchet"));
+    assert!(result["serverInfo"]["name"].as_str().unwrap().contains("Ratchet"));
     assert!(result["capabilities"]["tools"].is_object());
 }
 
@@ -171,10 +167,7 @@ async fn test_mcp_server_tools_list() {
     });
 
     server
-        .handle_message(
-            &serde_json::to_string(&initialized_notification).unwrap(),
-            None,
-        )
+        .handle_message(&serde_json::to_string(&initialized_notification).unwrap(), None)
         .await
         .unwrap();
 
@@ -231,10 +224,7 @@ async fn test_mcp_server_error_handling() {
     });
 
     let response = server
-        .handle_message(
-            &serde_json::to_string(&invalid_method_request).unwrap(),
-            None,
-        )
+        .handle_message(&serde_json::to_string(&invalid_method_request).unwrap(), None)
         .await
         .unwrap();
 
@@ -246,10 +236,8 @@ async fn test_mcp_server_error_handling() {
 
 /// Create a test adapter with mock repositories
 async fn create_test_adapter() -> RatchetMcpAdapter {
-    use ratchet_execution::{ProcessTaskExecutor, ProcessExecutorConfig};
-    use ratchet_storage::seaorm::{
-        connection::DatabaseConnection, repositories::RepositoryFactory,
-    };
+    use ratchet_execution::{ProcessExecutorConfig, ProcessTaskExecutor};
+    use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
 
     // Create in-memory database for testing using new config type
     let db_config = ratchet_storage::seaorm::config::DatabaseConfig {
@@ -555,10 +543,7 @@ async fn test_monitoring_tools_with_real_execution() {
     });
 
     let response = server
-        .handle_message(
-            &serde_json::to_string(&invalid_status_request).unwrap(),
-            None,
-        )
+        .handle_message(&serde_json::to_string(&invalid_status_request).unwrap(), None)
         .await
         .unwrap()
         .unwrap();

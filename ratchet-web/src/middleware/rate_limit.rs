@@ -1,20 +1,15 @@
-use axum::{
-    extract::ConnectInfo,
-    http::Request,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::ConnectInfo, http::Request, middleware::Next, response::Response};
+use chrono::{DateTime, Utc};
 use lru::LruCache;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use chrono::{DateTime, Utc};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
 use crate::errors::WebError;
-use crate::middleware::{AuthContext, AuditLogger, TracingAuditLogger, AuditEvent, AuditEventType, AuditSeverity};
+use crate::middleware::{AuditEvent, AuditEventType, AuditLogger, AuditSeverity, AuthContext, TracingAuditLogger};
 
 /// User role-based rate limit quotas
 #[derive(Debug, Clone)]
@@ -216,7 +211,7 @@ impl TokenBucket {
         self.refill();
         self.tokens
     }
-    
+
     // For cases where we need immutable access
     fn remaining_tokens_immutable(&self) -> f64 {
         let mut cloned = self.clone();
@@ -242,7 +237,7 @@ impl TokenBucket {
 pub enum ClientType {
     Anonymous,
     User(String),     // user_id
-    Admin(String),    // user_id  
+    Admin(String),    // user_id
     Readonly(String), // user_id
     Service(String),  // api_key
 }
@@ -261,24 +256,24 @@ impl DailyUsage {
             requests: 0,
         }
     }
-    
+
     fn is_today(&self) -> bool {
         let today = Utc::now().date_naive();
         self.date.date_naive() == today
     }
-    
+
     fn reset_if_new_day(&mut self) {
         if !self.is_today() {
             self.date = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
             self.requests = 0;
         }
     }
-    
+
     fn add_request(&mut self) {
         self.reset_if_new_day();
         self.requests += 1;
     }
-    
+
     fn can_make_request(&mut self, daily_limit: Option<u32>) -> bool {
         self.reset_if_new_day();
         match daily_limit {
@@ -315,12 +310,12 @@ impl ClientInfo {
 
     fn update_activity(&mut self, quota: &RateLimitQuota) -> bool {
         self.last_seen = Instant::now();
-        
+
         // Check daily limit first
         if !self.daily_usage.can_make_request(quota.daily_limit) {
             return false;
         }
-        
+
         self.total_requests += 1;
         self.daily_usage.add_request();
         true
@@ -350,28 +345,34 @@ impl RateLimiter {
         if !self.config.enabled {
             return Ok(());
         }
-        
+
         let quota = self.get_quota_for_client(&client_type);
         let mut clients = self.clients.write().await;
-        
-        let client_info = clients
-            .get_or_insert_mut(client_id.to_string(), || ClientInfo::new(client_type.clone(), quota));
+
+        let client_info =
+            clients.get_or_insert_mut(client_id.to_string(), || ClientInfo::new(client_type.clone(), quota));
 
         // Check daily limit first
         if !client_info.update_activity(quota) {
             client_info.record_blocked();
-            warn!("Daily limit exceeded for client: {} (type: {:?})", client_id, client_type);
+            warn!(
+                "Daily limit exceeded for client: {} (type: {:?})",
+                client_id, client_type
+            );
             return Err(WebError::RateLimit);
         }
 
         // Check rate limit (burst + per-minute)
         if client_info.bucket.try_consume(1.0) {
-            debug!("Rate limit check passed for client: {} (type: {:?})", client_id, client_type);
+            debug!(
+                "Rate limit check passed for client: {} (type: {:?})",
+                client_id, client_type
+            );
             Ok(())
         } else {
             client_info.record_blocked();
             let retry_after = client_info.bucket.time_until_available();
-            
+
             warn!(
                 "Rate limit exceeded for client: {} (type: {:?}), retry after: {:?}",
                 client_id, client_type, retry_after
@@ -380,7 +381,7 @@ impl RateLimiter {
             Err(WebError::RateLimit)
         }
     }
-    
+
     fn get_quota_for_client(&self, client_type: &ClientType) -> &RateLimitQuota {
         match client_type {
             ClientType::Anonymous => &self.config.quotas.anonymous,
@@ -391,7 +392,11 @@ impl RateLimiter {
         }
     }
 
-    fn extract_client_info(&self, auth_context: Option<&AuthContext>, connect_info: Option<&ConnectInfo<SocketAddr>>) -> (ClientType, String) {
+    fn extract_client_info(
+        &self,
+        auth_context: Option<&AuthContext>,
+        connect_info: Option<&ConnectInfo<SocketAddr>>,
+    ) -> (ClientType, String) {
         if let Some(auth) = auth_context {
             if auth.is_authenticated {
                 // Determine user type based on role (stored as string in AuthContext)
@@ -412,10 +417,10 @@ impl RateLimiter {
         } else {
             "unknown".to_string()
         };
-        
+
         (ClientType::Anonymous, client_id)
     }
-    
+
     /// Get rate limit statistics for a client
     pub async fn get_client_stats(&self, client_id: &str) -> Option<ClientStats> {
         let clients = self.clients.read().await;
@@ -455,7 +460,7 @@ pub async fn rate_limit_middleware(
 
     // Extract auth context if available
     let auth_context = request.extensions().get::<AuthContext>();
-    
+
     let (client_type, client_id) = rate_limiter.extract_client_info(auth_context, connect_info.as_ref());
 
     // Check rate limit
@@ -468,16 +473,16 @@ pub async fn rate_limit_middleware(
                 AuditSeverity::Warning,
                 format!("Rate limit exceeded for client {} (type: {:?})", client_id, client_type),
             );
-            
+
             if let Some(auth) = auth_context {
                 if auth.is_authenticated {
                     event = event.with_user(auth.user_id.clone(), Some(auth.session_id.clone()));
                 }
             }
-            
+
             logger.log_event(event);
         }
-        
+
         return Err(err);
     }
 
@@ -499,7 +504,7 @@ pub fn create_rate_limit_middleware(config: RateLimitConfig) -> Arc<RateLimiter>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{routing::get, Router, http::StatusCode};
+    use axum::{http::StatusCode, routing::get, Router};
     use std::net::{IpAddr, Ipv4Addr};
     use tower::ServiceExt;
 
@@ -513,9 +518,7 @@ mod tests {
 
         let app = {
             rate_limit_layer(config);
-            Router::new()
-            .route("/test", get(test_handler))
-            .layer(())
+            Router::new().route("/test", get(test_handler)).layer(())
         };
 
         // First request should succeed
@@ -533,15 +536,15 @@ mod tests {
     #[tokio::test]
     async fn test_token_bucket_refill() {
         let mut bucket = TokenBucket::new(5, 1.0); // 5 tokens, 1 token per second
-        
+
         // Consume all tokens
         for _ in 0..5 {
             assert!(bucket.try_consume(1.0));
         }
-        
+
         // Should be empty now
         assert!(!bucket.try_consume(1.0));
-        
+
         // Wait a bit and check that tokens are refilled
         tokio::time::sleep(Duration::from_millis(1100)).await;
         assert!(bucket.try_consume(1.0));

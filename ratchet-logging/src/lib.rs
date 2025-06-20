@@ -1,5 +1,5 @@
 //! Structured logging infrastructure for Ratchet
-//! 
+//!
 //! This crate provides comprehensive logging capabilities including:
 //! - Structured logging with enrichment
 //! - Multiple output sinks (console, file, etc.)
@@ -48,9 +48,7 @@ static GLOBAL_LOGGER: OnceCell<Arc<dyn StructuredLogger>> = OnceCell::new();
 
 /// Initialize the global logger
 pub fn init_logger(logger: Arc<dyn StructuredLogger>) -> Result<(), &'static str> {
-    GLOBAL_LOGGER
-        .set(logger)
-        .map_err(|_| "Logger already initialized")
+    GLOBAL_LOGGER.set(logger).map_err(|_| "Logger already initialized")
 }
 
 /// Get the global logger

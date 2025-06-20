@@ -40,7 +40,7 @@ impl FilesystemDestination {
             template_engine,
         }
     }
-    
+
     /// Normalize path for cross-platform compatibility
     fn normalize_path(path: &str) -> PathBuf {
         // Replace forward slashes with platform-specific separators
@@ -49,15 +49,15 @@ impl FilesystemDestination {
         } else {
             path.to_string()
         };
-        
+
         PathBuf::from(normalized)
     }
-    
+
     /// Validate path for cross-platform compatibility
     fn validate_path(path: &str) -> Result<(), DeliveryError> {
         // Check for invalid characters based on platform
         if cfg!(windows) {
-            // Windows forbidden characters: < > : " | ? * 
+            // Windows forbidden characters: < > : " | ? *
             let forbidden_chars = ['<', '>', ':', '"', '|', '?', '*'];
             if path.chars().any(|c| forbidden_chars.contains(&c)) {
                 return Err(DeliveryError::Filesystem {
@@ -66,19 +66,18 @@ impl FilesystemDestination {
                     error: "Path contains invalid characters for Windows".to_string(),
                 });
             }
-            
+
             // Check for reserved names (CON, PRN, AUX, etc.)
             let path_obj = Path::new(path);
             if let Some(filename) = path_obj.file_name().and_then(|n| n.to_str()) {
                 let reserved_names = [
-                    "CON", "PRN", "AUX", "NUL",
-                    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-                    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+                    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+                    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
                 ];
-                
+
                 let filename_upper = filename.to_uppercase();
                 let base_name = filename_upper.split('.').next().unwrap_or("");
-                
+
                 if reserved_names.contains(&base_name) {
                     return Err(DeliveryError::Filesystem {
                         path: path.to_string(),
@@ -88,7 +87,7 @@ impl FilesystemDestination {
                 }
             }
         }
-        
+
         // Check for null bytes (invalid on all platforms)
         if path.contains('\0') {
             return Err(DeliveryError::Filesystem {
@@ -97,25 +96,21 @@ impl FilesystemDestination {
                 error: "Path contains null bytes".to_string(),
             });
         }
-        
+
         Ok(())
     }
 
     /// Format output data according to the configured format
     fn format_output(&self, data: &serde_json::Value) -> Result<Vec<u8>, DeliveryError> {
         match &self.config.format {
-            OutputFormat::Json => {
-                serde_json::to_vec_pretty(data).map_err(|e| DeliveryError::Serialization {
-                    format: "json".to_string(),
-                    error: e.to_string(),
-                })
-            }
-            OutputFormat::JsonCompact => {
-                serde_json::to_vec(data).map_err(|e| DeliveryError::Serialization {
-                    format: "json_compact".to_string(),
-                    error: e.to_string(),
-                })
-            }
+            OutputFormat::Json => serde_json::to_vec_pretty(data).map_err(|e| DeliveryError::Serialization {
+                format: "json".to_string(),
+                error: e.to_string(),
+            }),
+            OutputFormat::JsonCompact => serde_json::to_vec(data).map_err(|e| DeliveryError::Serialization {
+                format: "json_compact".to_string(),
+                error: e.to_string(),
+            }),
             #[cfg(feature = "yaml")]
             OutputFormat::Yaml => {
                 serde_yaml::to_string(data)
@@ -138,18 +133,19 @@ impl FilesystemDestination {
                 }
             }
             OutputFormat::Template(template) => {
-                let rendered = self
-                    .template_engine
-                    .render_json(template, data)
-                    .map_err(|e| match e {
-                        DeliveryError::TemplateRender { template: t, error: err } => {
-                            DeliveryError::TemplateRender { template: t, error: err }
-                        }
-                        _ => DeliveryError::TemplateRender {
-                            template: template.clone(),
-                            error: e.to_string(),
-                        }
-                    })?;
+                let rendered = self.template_engine.render_json(template, data).map_err(|e| match e {
+                    DeliveryError::TemplateRender {
+                        template: t,
+                        error: err,
+                    } => DeliveryError::TemplateRender {
+                        template: t,
+                        error: err,
+                    },
+                    _ => DeliveryError::TemplateRender {
+                        template: template.clone(),
+                        error: e.to_string(),
+                    },
+                })?;
                 Ok(rendered.into_bytes())
             }
             #[cfg(feature = "csv")]
@@ -172,28 +168,22 @@ impl FilesystemDestination {
                 // Extract headers from first object
                 if let Some(serde_json::Value::Object(first_obj)) = arr.first() {
                     let headers: Vec<&String> = first_obj.keys().collect();
-                    wtr.write_record(&headers)
-                        .map_err(|e| DeliveryError::Serialization {
-                            format: "csv".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    wtr.write_record(&headers).map_err(|e| DeliveryError::Serialization {
+                        format: "csv".to_string(),
+                        error: e.to_string(),
+                    })?;
 
                     // Write data rows
                     for item in arr {
                         if let serde_json::Value::Object(obj) = item {
                             let values: Vec<String> = headers
                                 .iter()
-                                .map(|h| {
-                                    obj.get(*h)
-                                        .unwrap_or(&serde_json::Value::Null)
-                                        .to_string()
-                                })
+                                .map(|h| obj.get(*h).unwrap_or(&serde_json::Value::Null).to_string())
                                 .collect();
-                            wtr.write_record(&values)
-                                .map_err(|e| DeliveryError::Serialization {
-                                    format: "csv".to_string(),
-                                    error: e.to_string(),
-                                })?;
+                            wtr.write_record(&values).map_err(|e| DeliveryError::Serialization {
+                                format: "csv".to_string(),
+                                error: e.to_string(),
+                            })?;
                         }
                     }
                 }
@@ -206,28 +196,22 @@ impl FilesystemDestination {
             serde_json::Value::Object(_) => {
                 // Single object - treat as one row
                 let mut wtr = csv::Writer::from_writer(Vec::new());
-                
+
                 if let serde_json::Value::Object(obj) = data {
                     let headers: Vec<&String> = obj.keys().collect();
-                    wtr.write_record(&headers)
-                        .map_err(|e| DeliveryError::Serialization {
-                            format: "csv".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    wtr.write_record(&headers).map_err(|e| DeliveryError::Serialization {
+                        format: "csv".to_string(),
+                        error: e.to_string(),
+                    })?;
 
                     let values: Vec<String> = headers
                         .iter()
-                        .map(|h| {
-                            obj.get(*h)
-                                .unwrap_or(&serde_json::Value::Null)
-                                .to_string()
-                        })
+                        .map(|h| obj.get(*h).unwrap_or(&serde_json::Value::Null).to_string())
                         .collect();
-                    wtr.write_record(&values)
-                        .map_err(|e| DeliveryError::Serialization {
-                            format: "csv".to_string(),
-                            error: e.to_string(),
-                        })?;
+                    wtr.write_record(&values).map_err(|e| DeliveryError::Serialization {
+                        format: "csv".to_string(),
+                        error: e.to_string(),
+                    })?;
                 }
 
                 wtr.into_inner().map_err(|e| DeliveryError::Serialization {
@@ -248,11 +232,13 @@ impl FilesystemDestination {
             return Ok(());
         }
 
-        let backup_path = path.with_extension(
-            format!("{}.backup", path.extension().and_then(|s| s.to_str()).unwrap_or(""))
-        );
+        let backup_path = path.with_extension(format!(
+            "{}.backup",
+            path.extension().and_then(|s| s.to_str()).unwrap_or("")
+        ));
 
-        fs::copy(path, backup_path).await
+        fs::copy(path, backup_path)
+            .await
             .map_err(|e| DeliveryError::Filesystem {
                 path: path.to_string_lossy().to_string(),
                 operation: "backup".to_string(),
@@ -265,11 +251,7 @@ impl FilesystemDestination {
 
 #[async_trait]
 impl OutputDestination for FilesystemDestination {
-    async fn deliver(
-        &self,
-        output: &TaskOutput,
-        context: &DeliveryContext,
-    ) -> Result<DeliveryResult, DeliveryError> {
+    async fn deliver(&self, output: &TaskOutput, context: &DeliveryContext) -> Result<DeliveryResult, DeliveryError> {
         let start_time = Instant::now();
 
         // Render the path template
@@ -284,9 +266,7 @@ impl OutputDestination for FilesystemDestination {
 
         // Check if file exists and handle overwrite policy
         if path.exists() && !self.config.overwrite {
-            return Err(DeliveryError::FileExists {
-                path: rendered_path,
-            });
+            return Err(DeliveryError::FileExists { path: rendered_path });
         }
 
         // Create backup if requested and file exists
@@ -297,7 +277,8 @@ impl OutputDestination for FilesystemDestination {
         // Create parent directories if needed
         if self.config.create_dirs {
             if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).await
+                fs::create_dir_all(parent)
+                    .await
                     .map_err(|e| DeliveryError::Filesystem {
                         path: parent.to_string_lossy().to_string(),
                         operation: "create_dirs".to_string(),
@@ -311,7 +292,8 @@ impl OutputDestination for FilesystemDestination {
         let size_bytes = formatted_data.len() as u64;
 
         // Write the file
-        fs::write(path, &formatted_data).await
+        fs::write(path, &formatted_data)
+            .await
             .map_err(|e| DeliveryError::Filesystem {
                 path: rendered_path.clone(),
                 operation: "write".to_string(),
@@ -322,32 +304,33 @@ impl OutputDestination for FilesystemDestination {
         #[cfg(unix)]
         if self.config.permissions != 0 {
             let permissions = std::fs::Permissions::from_mode(self.config.permissions);
-            std::fs::set_permissions(path, permissions)
-                .map_err(|e| DeliveryError::Filesystem {
-                    path: rendered_path.clone(),
-                    operation: "set_permissions".to_string(),
-                    error: e.to_string(),
-                })?;
+            std::fs::set_permissions(path, permissions).map_err(|e| DeliveryError::Filesystem {
+                path: rendered_path.clone(),
+                operation: "set_permissions".to_string(),
+                error: e.to_string(),
+            })?;
         }
-        
+
         // On Windows, permissions are handled differently through ACLs
         // For now, we just ensure the file is writable
         #[cfg(windows)]
         if self.config.permissions != 0 {
             // On Windows, we can only set read-only flag
-            let mut perms = fs::metadata(path).await
+            let mut perms = fs::metadata(path)
+                .await
                 .map_err(|e| DeliveryError::Filesystem {
                     path: rendered_path.clone(),
                     operation: "get_metadata".to_string(),
                     error: e.to_string(),
                 })?
                 .permissions();
-            
+
             // If permissions don't include write bit (owner write = 0o200), set read-only
             let readonly = (self.config.permissions & 0o200) == 0;
             perms.set_readonly(readonly);
-            
-            fs::set_permissions(path, perms).await
+
+            fs::set_permissions(path, perms)
+                .await
                 .map_err(|e| DeliveryError::Filesystem {
                     path: rendered_path.clone(),
                     operation: "set_permissions".to_string(),
@@ -380,7 +363,7 @@ impl OutputDestination for FilesystemDestination {
         if self.config.permissions > 0o777 {
             return Err(ValidationError::InvalidPermissions(self.config.permissions));
         }
-        
+
         // On Windows, only validate that permissions are reasonable (not used for ACLs)
         #[cfg(windows)]
         if self.config.permissions > 0o777 {
@@ -414,7 +397,7 @@ mod tests {
         // Test Unix-style paths
         let unix_path = "/results/2024/01/06/output.json";
         let normalized = FilesystemDestination::normalize_path(unix_path);
-        
+
         if cfg!(windows) {
             assert_eq!(normalized.to_string_lossy(), "\\results\\2024\\01\\06\\output.json");
         } else {
@@ -429,13 +412,13 @@ mod tests {
             assert!(FilesystemDestination::validate_path("output<test>.json").is_err());
             assert!(FilesystemDestination::validate_path("output|test.json").is_err());
             assert!(FilesystemDestination::validate_path("output\"test.json").is_err());
-            
+
             // Test reserved names
             assert!(FilesystemDestination::validate_path("CON.txt").is_err());
             assert!(FilesystemDestination::validate_path("PRN.json").is_err());
             assert!(FilesystemDestination::validate_path("AUX").is_err());
             assert!(FilesystemDestination::validate_path("NUL.log").is_err());
-            
+
             // Test valid paths
             assert!(FilesystemDestination::validate_path("output.json").is_ok());
             assert!(FilesystemDestination::validate_path("results/2024/output.json").is_ok());
@@ -446,7 +429,7 @@ mod tests {
     fn test_path_validation_universal() {
         // Test null bytes (invalid on all platforms)
         assert!(FilesystemDestination::validate_path("output\0test.json").is_err());
-        
+
         // Test valid paths
         assert!(FilesystemDestination::validate_path("output.json").is_ok());
         assert!(FilesystemDestination::validate_path("results/sub/output.json").is_ok());
@@ -456,7 +439,7 @@ mod tests {
     #[test]
     fn test_filesystem_config_validation() {
         let template_engine = TemplateEngine::new();
-        
+
         // Test valid config
         let valid_config = FilesystemConfig {
             path_template: "/results/{{job_id}}.json".to_string(),
@@ -466,10 +449,10 @@ mod tests {
             overwrite: false,
             backup_existing: false,
         };
-        
+
         let destination = FilesystemDestination::new(valid_config, template_engine.clone());
         assert!(destination.validate_config().is_ok());
-        
+
         // Test invalid permissions
         let invalid_config = FilesystemConfig {
             path_template: "/results/{{job_id}}.json".to_string(),
@@ -479,10 +462,10 @@ mod tests {
             overwrite: false,
             backup_existing: false,
         };
-        
+
         let destination = FilesystemDestination::new(invalid_config, template_engine.clone());
         assert!(destination.validate_config().is_err());
-        
+
         // Test empty path
         let empty_path_config = FilesystemConfig {
             path_template: "".to_string(),
@@ -492,7 +475,7 @@ mod tests {
             overwrite: false,
             backup_existing: false,
         };
-        
+
         let destination = FilesystemDestination::new(empty_path_config, template_engine);
         assert!(destination.validate_config().is_err());
     }
@@ -500,7 +483,7 @@ mod tests {
     #[tokio::test]
     async fn test_cross_platform_output_formats() {
         use serde_json::json;
-        
+
         let template_engine = TemplateEngine::new();
         let config = FilesystemConfig {
             path_template: "test_output.json".to_string(),
@@ -510,19 +493,19 @@ mod tests {
             overwrite: true,
             backup_existing: false,
         };
-        
+
         let destination = FilesystemDestination::new(config, template_engine);
-        
+
         // Test format_output with different data types
         let test_data = json!({
             "status": "success",
             "result": 42,
             "message": "Cross-platform test"
         });
-        
+
         let formatted = destination.format_output(&test_data).unwrap();
         assert!(!formatted.is_empty());
-        
+
         // Verify it's valid JSON
         let parsed: serde_json::Value = serde_json::from_slice(&formatted).unwrap();
         assert_eq!(parsed["status"], "success");

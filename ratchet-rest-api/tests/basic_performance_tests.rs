@@ -4,10 +4,13 @@
 //! without complex mocking dependencies.
 
 use std::{
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
-use tokio::{time::sleep, sync::Semaphore};
+use tokio::{sync::Semaphore, time::sleep};
 
 /// Basic performance metrics
 #[derive(Debug, Clone)]
@@ -118,12 +121,15 @@ impl BasicPerformanceTest {
     }
 
     /// Simulate a performance test by measuring request processing time
-    pub async fn test_endpoint_simulation(&self, endpoint_name: &str) -> Result<BasicPerformanceMetrics, Box<dyn std::error::Error>> {
+    pub async fn test_endpoint_simulation(
+        &self,
+        endpoint_name: &str,
+    ) -> Result<BasicPerformanceMetrics, Box<dyn std::error::Error>> {
         println!("🚀 Testing simulated performance for endpoint: {}", endpoint_name);
 
         let tracker = BasicLatencyTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_requests));
-        
+
         let start_time = Instant::now();
         let mut handles = Vec::new();
 
@@ -134,9 +140,9 @@ impl BasicPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let request_start = Instant::now();
-                
+
                 // Simulate request processing time based on endpoint
                 let processing_time = match endpoint_name.as_str() {
                     "health" => Duration::from_millis(1 + (i % 5) as u64),
@@ -147,7 +153,7 @@ impl BasicPerformanceTest {
                 };
 
                 sleep(processing_time).await;
-                
+
                 // Simulate success/failure based on endpoint
                 let success_rate = match endpoint_name.as_str() {
                     "health" => 0.99,
@@ -159,7 +165,7 @@ impl BasicPerformanceTest {
 
                 let latency = request_start.elapsed().as_millis() as u64;
                 let success = fastrand::f64() < success_rate;
-                
+
                 tracker_clone.record_request(latency, success).await;
             });
 
@@ -180,21 +186,17 @@ impl BasicPerformanceTest {
     }
 
     /// Test multiple endpoints
-    pub async fn test_multiple_endpoints(&self) -> Result<Vec<(String, BasicPerformanceMetrics)>, Box<dyn std::error::Error>> {
-        let endpoints = vec![
-            "health",
-            "list_tasks", 
-            "create_task",
-            "get_task",
-            "list_executions",
-        ];
+    pub async fn test_multiple_endpoints(
+        &self,
+    ) -> Result<Vec<(String, BasicPerformanceMetrics)>, Box<dyn std::error::Error>> {
+        let endpoints = vec!["health", "list_tasks", "create_task", "get_task", "list_executions"];
 
         let mut results = Vec::new();
 
         for endpoint in endpoints {
             let metrics = self.test_endpoint_simulation(endpoint).await?;
             results.push((endpoint.to_string(), metrics));
-            
+
             // Brief pause between endpoint tests
             sleep(Duration::from_millis(100)).await;
         }
@@ -206,11 +208,14 @@ impl BasicPerformanceTest {
 
     /// Test concurrent load
     pub async fn test_concurrent_load(&self) -> Result<BasicPerformanceMetrics, Box<dyn std::error::Error>> {
-        println!("🔥 Testing concurrent load with {} concurrent requests", self.concurrent_requests);
+        println!(
+            "🔥 Testing concurrent load with {} concurrent requests",
+            self.concurrent_requests
+        );
 
         let tracker = BasicLatencyTracker::new();
         let semaphore = Arc::new(Semaphore::new(self.concurrent_requests));
-        
+
         let start_time = Instant::now();
         let mut handles = Vec::new();
 
@@ -221,19 +226,19 @@ impl BasicPerformanceTest {
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                
+
                 let request_start = Instant::now();
-                
+
                 // Simulate varying load based on request index
                 let base_time = 10;
                 let variance = (i % 50) as u64;
                 let processing_time = Duration::from_millis(base_time + variance);
 
                 sleep(processing_time).await;
-                
+
                 let latency = request_start.elapsed().as_millis() as u64;
                 let success = fastrand::f64() < 0.95; // 95% success rate
-                
+
                 tracker_clone.record_request(latency, success).await;
             });
 
@@ -257,9 +262,16 @@ impl BasicPerformanceTest {
     fn print_metrics(&self, endpoint: &str, metrics: &BasicPerformanceMetrics) {
         println!("\n=== Performance Test Results: {} ===", endpoint);
         println!("Total Requests: {}", metrics.total_requests);
-        println!("Successful: {} ({:.2}%)", metrics.successful_requests, 
-                 (metrics.successful_requests as f64 / metrics.total_requests as f64) * 100.0);
-        println!("Failed: {} ({:.2}%)", metrics.failed_requests, metrics.error_rate * 100.0);
+        println!(
+            "Successful: {} ({:.2}%)",
+            metrics.successful_requests,
+            (metrics.successful_requests as f64 / metrics.total_requests as f64) * 100.0
+        );
+        println!(
+            "Failed: {} ({:.2}%)",
+            metrics.failed_requests,
+            metrics.error_rate * 100.0
+        );
         println!("Test Duration: {:.2}s", metrics.total_duration_ms as f64 / 1000.0);
         println!("Requests/Second: {:.2}", metrics.requests_per_second);
         println!("Average Latency: {:.2}ms", metrics.average_latency_ms);
@@ -271,7 +283,10 @@ impl BasicPerformanceTest {
         if metrics.error_rate <= 0.05 {
             println!("✅ Error rate within acceptable limits");
         } else {
-            println!("❌ Error rate exceeds acceptable limits ({:.2}%)", metrics.error_rate * 100.0);
+            println!(
+                "❌ Error rate exceeds acceptable limits ({:.2}%)",
+                metrics.error_rate * 100.0
+            );
         }
 
         if metrics.p95_latency_ms <= 100 {
@@ -287,24 +302,30 @@ impl BasicPerformanceTest {
         println!("Endpoints tested: {}", results.len());
 
         for (endpoint, metrics) in results {
-            println!("{}: {:.2} RPS, {:.2}% errors, {:.2}ms P95", 
-                     endpoint, metrics.requests_per_second, 
-                     metrics.error_rate * 100.0, metrics.p95_latency_ms);
+            println!(
+                "{}: {:.2} RPS, {:.2}% errors, {:.2}ms P95",
+                endpoint,
+                metrics.requests_per_second,
+                metrics.error_rate * 100.0,
+                metrics.p95_latency_ms
+            );
         }
 
-        let overall_error_rate: f64 = results.iter()
-            .map(|(_, m)| m.error_rate)
-            .sum::<f64>() / results.len() as f64;
+        let overall_error_rate: f64 = results.iter().map(|(_, m)| m.error_rate).sum::<f64>() / results.len() as f64;
 
-        let overall_p95: f64 = results.iter()
-            .map(|(_, m)| m.p95_latency_ms as f64)
-            .sum::<f64>() / results.len() as f64;
+        let overall_p95: f64 = results.iter().map(|(_, m)| m.p95_latency_ms as f64).sum::<f64>() / results.len() as f64;
 
         println!("\nOverall Assessment:");
         if overall_error_rate <= 0.05 {
-            println!("✅ Average error rate within limits ({:.2}%)", overall_error_rate * 100.0);
+            println!(
+                "✅ Average error rate within limits ({:.2}%)",
+                overall_error_rate * 100.0
+            );
         } else {
-            println!("❌ Average error rate exceeds limits ({:.2}%)", overall_error_rate * 100.0);
+            println!(
+                "❌ Average error rate exceeds limits ({:.2}%)",
+                overall_error_rate * 100.0
+            );
         }
 
         if overall_p95 <= 100.0 {

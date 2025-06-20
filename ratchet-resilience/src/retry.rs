@@ -141,10 +141,7 @@ impl RetryExecutor {
         let mut attempt = 1;
 
         loop {
-            debug!(
-                "Executing attempt {} of {}",
-                attempt, self.policy.max_attempts
-            );
+            debug!("Executing attempt {} of {}", attempt, self.policy.max_attempts);
 
             match f(attempt).await {
                 Ok(result) => {
@@ -175,10 +172,7 @@ impl RetryExecutor {
                     if error.is_transient() && delay < Duration::from_millis(10) {
                         debug!("Transient error, retrying immediately");
                     } else {
-                        warn!(
-                            "Attempt {} failed: {}. Retrying in {:?}",
-                            attempt, error, delay
-                        );
+                        warn!("Attempt {} failed: {}. Retrying in {:?}", attempt, error, delay);
                         sleep(delay).await;
                     }
 
@@ -330,10 +324,7 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RetryError::MaxAttemptsExceeded { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), RetryError::MaxAttemptsExceeded { .. }));
     }
 
     #[tokio::test]
@@ -350,10 +341,7 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RetryError::NonRetryableError(_)
-        ));
+        assert!(matches!(result.unwrap_err(), RetryError::NonRetryableError(_)));
     }
 
     #[tokio::test]

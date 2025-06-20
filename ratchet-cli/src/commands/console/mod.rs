@@ -1,16 +1,16 @@
 //! Console command implementation
-//! 
+//!
 //! Provides an interactive REPL console for Ratchet administration
 
-use std::path::PathBuf;
 use anyhow::Result;
+use std::path::PathBuf;
 
-pub mod repl;
-pub mod parser;
+pub mod commands;
 pub mod executor;
 pub mod formatter;
-pub mod commands;
 pub mod mcp_client;
+pub mod parser;
+pub mod repl;
 
 use repl::RatchetConsole;
 

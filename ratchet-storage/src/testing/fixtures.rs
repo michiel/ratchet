@@ -4,15 +4,15 @@
 //! and task structures for testing purposes.
 
 #[cfg(feature = "testing")]
+use serde_yaml;
+#[cfg(feature = "testing")]
 use std::collections::HashMap;
+#[cfg(feature = "testing")]
+use std::io::Write;
 #[cfg(feature = "testing")]
 use std::path::PathBuf;
 #[cfg(feature = "testing")]
 use tempfile::TempDir;
-#[cfg(feature = "testing")]
-use std::io::Write;
-#[cfg(feature = "testing")]
-use serde_yaml;
 
 /// Test fixtures for file-based testing
 #[cfg(feature = "testing")]
@@ -94,20 +94,26 @@ if (typeof module !== 'undefined' && module.exports) {
         std::fs::create_dir_all(&tests_dir)?;
 
         // Create test cases
-        self.create_test_case(&tests_dir, "test-001", 
+        self.create_test_case(
+            &tests_dir,
+            "test-001",
             &serde_json::json!({"input": "hello"}),
-            &serde_json::json!({"output": "Processed: hello"})
+            &serde_json::json!({"output": "Processed: hello"}),
         )?;
 
-        self.create_test_case(&tests_dir, "test-002", 
+        self.create_test_case(
+            &tests_dir,
+            "test-002",
             &serde_json::json!({"input": "world"}),
-            &serde_json::json!({"output": "Processed: world"})
+            &serde_json::json!({"output": "Processed: world"}),
         )?;
 
         // Create failing test case
-        self.create_failing_test_case(&tests_dir, "test-003-fail",
+        self.create_failing_test_case(
+            &tests_dir,
+            "test-003-fail",
             &serde_json::json!({}),
-            "Missing required input"
+            "Missing required input",
         )?;
 
         self.files.insert(task_name.to_string(), task_dir.clone());
@@ -140,9 +146,14 @@ if (typeof module !== 'undefined' && module.exports) {
     }
 
     /// Create a task with HTTP fetch functionality
-    pub fn create_http_task(&mut self, task_name: &str, mock_responses: Option<&str>) -> Result<PathBuf, std::io::Error> {
+    pub fn create_http_task(
+        &mut self,
+        task_name: &str,
+        mock_responses: Option<&str>,
+    ) -> Result<PathBuf, std::io::Error> {
         let js_code = if let Some(responses) = mock_responses {
-            format!(r#"
+            format!(
+                r#"
 function main(input) {{
     // Mock HTTP responses for testing
     const mockResponses = {};
@@ -163,7 +174,9 @@ function main(input) {{
         .then(response => response.json())
         .then(data => ({{ result: data }}));
 }}
-"#, responses)
+"#,
+                responses
+            )
         } else {
             r#"
 function main(input) {
@@ -172,7 +185,8 @@ function main(input) {
         .then(response => response.json())
         .then(data => ({ result: data }));
 }
-"#.to_string()
+"#
+            .to_string()
         };
 
         self.create_simple_task(task_name, &js_code)
@@ -204,7 +218,7 @@ function main(input) {
             "expected_output": expected_output,
             "should_succeed": true
         });
-        
+
         let test_file = tests_dir.join(format!("{}.json", test_name));
         self.create_json_file(&test_file, &test_case)
     }
@@ -222,7 +236,7 @@ function main(input) {
             "expected_error": expected_error,
             "should_succeed": false
         });
-        
+
         let test_file = tests_dir.join(format!("{}.json", test_name));
         self.create_json_file(&test_file, &test_case)
     }
@@ -252,10 +266,14 @@ function main(input) {
 
     /// Create a configuration file
     #[cfg(feature = "testing")]
-    pub fn create_config_file(&mut self, config_name: &str, config: &serde_json::Value) -> Result<PathBuf, std::io::Error> {
+    pub fn create_config_file(
+        &mut self,
+        config_name: &str,
+        config: &serde_json::Value,
+    ) -> Result<PathBuf, std::io::Error> {
         let config_path = self.temp_dir.path().join(format!("{}.yaml", config_name));
-        let yaml_string = serde_yaml::to_string(config)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let yaml_string =
+            serde_yaml::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         self.create_text_file(&config_path, &yaml_string)?;
         Ok(config_path)
     }
@@ -288,7 +306,8 @@ function main(input) {
         self.create_json_file(&task_path.join("input.schema.json"), &schema)?;
         self.create_json_file(&task_path.join("output.schema.json"), &schema)?;
 
-        let js_code = format!(r#"
+        let js_code = format!(
+            r#"
 function main(input) {{
     return {{
         task_name: "{}",
@@ -296,7 +315,9 @@ function main(input) {{
         timestamp: new Date().toISOString()
     }};
 }}
-"#, task_name);
+"#,
+            task_name
+        );
         self.create_text_file(&task_path.join("main.js"), &js_code)?;
 
         Ok(())
@@ -326,7 +347,7 @@ function main(input) {{
                     "max_connections": 10,
                     "connection_timeout": 30
                 }
-            })
+            }),
         };
 
         self.create_config_file(config_name, &db_config)
@@ -384,12 +405,17 @@ function main(input) {
 
     /// Add a task that makes HTTP requests
     pub fn with_http_task(mut self) -> Result<Self, std::io::Error> {
-        self.fixtures.create_http_task("http-test", Some(r#"
+        self.fixtures.create_http_task(
+            "http-test",
+            Some(
+                r#"
 {
     "https://api.example.com/data": {"message": "Hello from API"},
     "https://httpbin.org/json": {"slideshow": {"title": "Sample Slide Show"}}
 }
-"#))?;
+"#,
+            ),
+        )?;
         Ok(self)
     }
 
@@ -538,10 +564,10 @@ mod tests {
     #[test]
     fn test_database_config_creation() {
         let mut fixtures = TestFixtures::new().unwrap();
-        
+
         let sqlite_config = fixtures.create_database_config("sqlite", "sqlite").unwrap();
         assert!(sqlite_config.exists());
-        
+
         let memory_config = fixtures.create_database_config("memory", "memory").unwrap();
         assert!(memory_config.exists());
     }
@@ -549,10 +575,10 @@ mod tests {
     #[test]
     fn test_server_config_creation() {
         let mut fixtures = TestFixtures::new().unwrap();
-        
+
         let server_config = fixtures.create_server_config("test-server", 3000).unwrap();
         assert!(server_config.exists());
-        
+
         let content = std::fs::read_to_string(server_config).unwrap();
         assert!(content.contains("3000"));
         assert!(content.contains("127.0.0.1"));

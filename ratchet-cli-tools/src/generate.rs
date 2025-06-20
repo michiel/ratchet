@@ -61,17 +61,11 @@ pub fn generate_task(config: TaskGenerationConfig) -> Result<GeneratedTaskInfo> 
 
     // Check if directory already exists
     if config.path.exists() {
-        return Err(anyhow::anyhow!(
-            "Directory already exists: {:?}",
-            config.path
-        ));
+        return Err(anyhow::anyhow!("Directory already exists: {:?}", config.path));
     }
 
     // Create the task directory
-    fs::create_dir_all(&config.path).context(format!(
-        "Failed to create task directory: {:?}",
-        config.path
-    ))?;
+    fs::create_dir_all(&config.path).context(format!("Failed to create task directory: {:?}", config.path))?;
 
     // Generate UUID for the task
     let task_uuid = Uuid::new_v4();
@@ -109,14 +103,12 @@ pub fn generate_task(config: TaskGenerationConfig) -> Result<GeneratedTaskInfo> 
     // Create main.js
     let main_js_content = create_main_js_content();
     let main_js_path = config.path.join("main.js");
-    fs::write(&main_js_path, main_js_content)
-        .context(format!("Failed to write main.js: {:?}", main_js_path))?;
+    fs::write(&main_js_path, main_js_content).context(format!("Failed to write main.js: {:?}", main_js_path))?;
     files_created.push("main.js".to_string());
 
     // Create tests directory with a sample test
     let tests_dir = config.path.join("tests");
-    fs::create_dir_all(&tests_dir)
-        .context(format!("Failed to create tests directory: {:?}", tests_dir))?;
+    fs::create_dir_all(&tests_dir).context(format!("Failed to create tests directory: {:?}", tests_dir))?;
 
     // Create a sample test file
     let test_data = create_sample_test()?;
@@ -137,12 +129,7 @@ pub fn generate_task(config: TaskGenerationConfig) -> Result<GeneratedTaskInfo> 
 }
 
 /// Create metadata.json content
-fn create_metadata_json(
-    uuid: Uuid,
-    label: &str,
-    description: &str,
-    version: &str,
-) -> Result<JsonValue> {
+fn create_metadata_json(uuid: Uuid, label: &str, description: &str, version: &str) -> Result<JsonValue> {
     debug!("Creating metadata.json with UUID: {}", uuid);
     Ok(json!({
         "uuid": uuid,
@@ -304,10 +291,7 @@ mod tests {
         let result = generate_task(config);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Directory already exists"));
+        assert!(result.unwrap_err().to_string().contains("Directory already exists"));
     }
 
     #[test]

@@ -302,9 +302,6 @@ mod tests {
         // Should fail due to memory limit
         let result = cache.put("large".to_string(), large_task).await;
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            CacheError::CapacityExceeded(_)
-        ));
+        assert!(matches!(result.unwrap_err(), CacheError::CapacityExceeded(_)));
     }
 }

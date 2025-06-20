@@ -87,10 +87,7 @@ impl Model {
             ratchet_core::task::TaskSource::File { path } => path.clone(),
             ratchet_core::task::TaskSource::Url { url, .. } => url.clone(),
             ratchet_core::task::TaskSource::JavaScript { .. } => "javascript:inline".to_string(),
-            ratchet_core::task::TaskSource::Plugin {
-                plugin_id,
-                task_name,
-            } => {
+            ratchet_core::task::TaskSource::Plugin { plugin_id, task_name } => {
                 format!("plugin://{}:{}", plugin_id, task_name)
             }
         };

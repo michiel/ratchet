@@ -1,27 +1,20 @@
 //! Worker monitoring endpoints
 
-use axum::{
-    extract::State,
-    response::IntoResponse,
-    Json,
-};
-use ratchet_web::{QueryParams, ApiResponse};
+use axum::{extract::State, response::IntoResponse, Json};
+use ratchet_web::{ApiResponse, QueryParams};
 use tracing::info;
 
 use crate::{
     context::TasksContext,
     errors::RestResult,
-    models::{WorkersListResponse, WorkerStats, common::StatsResponse},
+    models::{common::StatsResponse, WorkerStats, WorkersListResponse},
 };
 
 /// List all active workers
 
-pub async fn list_workers(
-    State(_ctx): State<TasksContext>,
-    query: QueryParams,
-) -> RestResult<impl IntoResponse> {
+pub async fn list_workers(State(_ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing workers with query: {:?}", query.0);
-    
+
     // For now, return a mock list of workers
     // In a full implementation, this would query the worker registry
     let workers = vec![
@@ -36,7 +29,7 @@ pub async fn list_workers(
             "last_heartbeat": chrono::Utc::now().to_rfc3339()
         }),
         serde_json::json!({
-            "id": "worker-002", 
+            "id": "worker-002",
             "status": "idle",
             "task_count": 0,
             "current_task": null,
@@ -44,9 +37,9 @@ pub async fn list_workers(
             "memory_usage_mb": 64,
             "cpu_usage_percent": 12.1,
             "last_heartbeat": chrono::Utc::now().to_rfc3339()
-        })
+        }),
     ];
-    
+
     let list_input = query.0.to_list_input();
     let pagination = list_input.pagination.unwrap_or_default();
     let response = WorkersListResponse {
@@ -55,17 +48,15 @@ pub async fn list_workers(
         page: pagination.get_page(),
         limit: pagination.get_limit(),
     };
-    
+
     Ok(Json(ApiResponse::new(response)))
 }
 
 /// Get worker statistics
 
-pub async fn get_worker_stats(
-    State(_ctx): State<TasksContext>,
-) -> RestResult<impl IntoResponse> {
+pub async fn get_worker_stats(State(_ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Getting worker statistics");
-    
+
     // For now, return mock statistics
     // In a full implementation, this would aggregate from worker registry
     let stats = WorkerStats {
@@ -79,6 +70,6 @@ pub async fn get_worker_stats(
         average_uptime_seconds: Some(5400.0),
         total_memory_usage_mb: Some(192),
     };
-    
+
     Ok(Json(ApiResponse::new(StatsResponse::new(stats))))
 }

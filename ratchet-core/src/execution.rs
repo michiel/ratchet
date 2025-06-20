@@ -264,12 +264,7 @@ pub enum OutputFormat {
 
 impl Execution {
     /// Create a new pending execution
-    pub fn new(
-        task_id: TaskId,
-        task_version: String,
-        input_data: serde_json::Value,
-        priority: Priority,
-    ) -> Self {
+    pub fn new(task_id: TaskId, task_version: String, input_data: serde_json::Value, priority: Priority) -> Self {
         let context = ExecutionContext {
             execution_id: ExecutionId::new(),
             job_id: None,
@@ -337,11 +332,7 @@ impl Execution {
     /// Update the duration based on start and completion times
     fn update_duration(&mut self) {
         if let (Some(start), Some(end)) = (self.started_at, self.completed_at) {
-            self.duration = Some(
-                end.signed_duration_since(start)
-                    .to_std()
-                    .unwrap_or_default(),
-            );
+            self.duration = Some(end.signed_duration_since(start).to_std().unwrap_or_default());
         }
     }
 
@@ -368,11 +359,7 @@ pub struct ExecutionBuilder {
 
 impl ExecutionBuilder {
     /// Create a new execution builder
-    pub fn new(
-        task_id: TaskId,
-        task_version: impl Into<String>,
-        input_data: serde_json::Value,
-    ) -> Self {
+    pub fn new(task_id: TaskId, task_version: impl Into<String>, input_data: serde_json::Value) -> Self {
         Self {
             task_id,
             task_version: task_version.into(),
@@ -417,12 +404,7 @@ impl ExecutionBuilder {
 
     /// Build the execution
     pub fn build(self) -> Execution {
-        let mut execution = Execution::new(
-            self.task_id,
-            self.task_version,
-            self.input_data,
-            self.priority,
-        );
+        let mut execution = Execution::new(self.task_id, self.task_version, self.input_data, self.priority);
 
         execution.context.job_id = self.job_id;
         execution.context.trace_id = self.trace_id;

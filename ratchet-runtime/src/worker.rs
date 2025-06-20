@@ -13,8 +13,8 @@ use ratchet_core::{
     RatchetError,
 };
 use ratchet_ipc::{
-    CoordinatorMessage, IpcTransport, MessageEnvelope, StdioTransport, TaskExecutionResult,
-    TaskValidationResult, WorkerError, WorkerMessage, WorkerStatus,
+    CoordinatorMessage, IpcTransport, MessageEnvelope, StdioTransport, TaskExecutionResult, TaskValidationResult,
+    WorkerError, WorkerMessage, WorkerStatus,
 };
 
 /// Worker process main entry point
@@ -110,10 +110,7 @@ impl Worker {
     }
 
     /// Handle incoming messages
-    async fn handle_message(
-        &mut self,
-        message: WorkerMessage,
-    ) -> Result<Option<CoordinatorMessage>, WorkerError> {
+    async fn handle_message(&mut self, message: WorkerMessage) -> Result<Option<CoordinatorMessage>, WorkerError> {
         match message {
             WorkerMessage::ExecuteTask {
                 job_id,
@@ -138,10 +135,7 @@ impl Worker {
                 correlation_id,
             } => {
                 let result = self.validate_task_impl(&task_path).await;
-                Ok(Some(CoordinatorMessage::ValidationResult {
-                    correlation_id,
-                    result,
-                }))
+                Ok(Some(CoordinatorMessage::ValidationResult { correlation_id, result }))
             }
 
             WorkerMessage::Ping { correlation_id } => {
@@ -268,9 +262,7 @@ impl Worker {
         self.transport
             .send(&envelope)
             .await
-            .map_err(|e| WorkerError::CommunicationError {
-                error: e.to_string(),
-            })
+            .map_err(|e| WorkerError::CommunicationError { error: e.to_string() })
     }
 
     /// Receive a message from the coordinator
@@ -278,9 +270,7 @@ impl Worker {
         self.transport
             .receive()
             .await
-            .map_err(|e| WorkerError::CommunicationError {
-                error: e.to_string(),
-            })
+            .map_err(|e| WorkerError::CommunicationError { error: e.to_string() })
     }
 
     /// Update last activity timestamp

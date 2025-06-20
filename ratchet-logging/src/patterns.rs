@@ -63,10 +63,7 @@ pub enum MatchingRule {
     MessagePattern { pattern: String },
 
     /// Match if field exists and equals value
-    FieldEquals {
-        field: String,
-        value: serde_json::Value,
-    },
+    FieldEquals { field: String, value: serde_json::Value },
 
     /// Match if field exists and matches regex
     FieldPattern { field: String, pattern: String },
@@ -115,18 +112,18 @@ impl MatchingRule {
                 Err(_) => false,
             },
 
-            Self::FieldEquals { field, value } => {
-                error.context.get(field) == Some(value)
-            }
+            Self::FieldEquals { field, value } => error.context.get(field) == Some(value),
 
-            Self::FieldPattern { field, pattern } => error
-                .context
-                .get(field)
-                .and_then(|v| v.as_str())
-                .is_some_and(|s| match Regex::new(pattern) {
-                    Ok(re) => re.is_match(s),
-                    Err(_) => false,
-                }),
+            Self::FieldPattern { field, pattern } => {
+                error
+                    .context
+                    .get(field)
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|s| match Regex::new(pattern) {
+                        Ok(re) => re.is_match(s),
+                        Err(_) => false,
+                    })
+            }
 
             Self::All { rules } => rules.iter().all(|r| r.matches(error)),
 
@@ -154,14 +151,11 @@ impl ErrorPatternMatcher {
 
     /// Find the best matching pattern for an error
     pub fn match_error(&self, error: &ErrorInfo) -> Option<&ErrorPattern> {
-        self.patterns
-            .iter()
-            .filter(|p| p.matches(error))
-            .max_by(|a, b| {
-                a.match_score(error)
-                    .partial_cmp(&b.match_score(error))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+        self.patterns.iter().filter(|p| p.matches(error)).max_by(|a, b| {
+            a.match_score(error)
+                .partial_cmp(&b.match_score(error))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Find all matching patterns for an error
@@ -191,8 +185,7 @@ impl ErrorPatternMatcher {
             ErrorPattern {
                 id: "db_connection_timeout".to_string(),
                 name: "Database Connection Timeout".to_string(),
-                description: "Failed to establish database connection within timeout period"
-                    .to_string(),
+                description: "Failed to establish database connection within timeout period".to_string(),
                 category: ErrorCategory::Database,
                 matching_rules: vec![
                     MatchingRule::ErrorCode {
@@ -212,9 +205,7 @@ impl ErrorPatternMatcher {
                     "Add circuit breaker for database connections".to_string(),
                     "Configure appropriate connection timeout values".to_string(),
                 ],
-                related_documentation: vec![
-                    "https://docs.ratchet.io/database-configuration".to_string()
-                ],
+                related_documentation: vec!["https://docs.ratchet.io/database-configuration".to_string()],
                 common_causes: vec![
                     "Database server down or overloaded".to_string(),
                     "Network issues between application and database".to_string(),
@@ -250,9 +241,7 @@ impl ErrorPatternMatcher {
                     "Task file not deployed or loaded".to_string(),
                     "Task disabled or removed".to_string(),
                 ],
-                llm_prompts: vec![
-                    "How to handle missing tasks in a task execution system?".to_string()
-                ],
+                llm_prompts: vec!["How to handle missing tasks in a task execution system?".to_string()],
             },
             // HTTP timeout
             ErrorPattern {
@@ -287,17 +276,13 @@ impl ErrorPatternMatcher {
                     "Add circuit breaker for external services".to_string(),
                     "Cache responses when appropriate".to_string(),
                 ],
-                related_documentation: vec![
-                    "https://docs.ratchet.io/http-configuration".to_string()
-                ],
+                related_documentation: vec!["https://docs.ratchet.io/http-configuration".to_string()],
                 common_causes: vec![
                     "Remote service overloaded or down".to_string(),
                     "Network latency or packet loss".to_string(),
                     "Timeout value too low for operation".to_string(),
                 ],
-                llm_prompts: vec![
-                    "Best practices for handling HTTP timeouts in microservices".to_string()
-                ],
+                llm_prompts: vec!["Best practices for handling HTTP timeouts in microservices".to_string()],
             },
             // Rate limiting
             ErrorPattern {
@@ -331,9 +316,7 @@ impl ErrorPatternMatcher {
                     "Burst of requests from application".to_string(),
                     "Shared rate limit across multiple clients".to_string(),
                 ],
-                llm_prompts: vec![
-                    "How to handle rate limiting gracefully in distributed systems?".to_string(),
-                ],
+                llm_prompts: vec!["How to handle rate limiting gracefully in distributed systems?".to_string()],
             },
         ]
     }

@@ -43,11 +43,7 @@ impl ConflictResolver {
         self
     }
 
-    pub fn resolve_conflict(
-        &self,
-        _existing: &(),
-        discovered: &DiscoveredTask,
-    ) -> ConflictResolution {
+    pub fn resolve_conflict(&self, _existing: &(), discovered: &DiscoveredTask) -> ConflictResolution {
         // TEMPORARILY DISABLED: Legacy entity parameter removed during SeaORM migration
         match self.strategy {
             ConflictStrategy::PreferRegistry => {
@@ -91,11 +87,7 @@ impl ConflictResolver {
         }
     }
 
-    fn is_registry_newer(
-        &self,
-        _existing: &(),
-        _discovered: &DiscoveredTask,
-    ) -> bool {
+    fn is_registry_newer(&self, _existing: &(), _discovered: &DiscoveredTask) -> bool {
         // TEMPORARILY DISABLED: Legacy entity parameter removed during SeaORM migration
         // Always assume registry is newer for now
         true

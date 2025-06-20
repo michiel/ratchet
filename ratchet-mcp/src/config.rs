@@ -200,16 +200,15 @@ fn default_false() -> bool {
 impl McpConfig {
     /// Load configuration from a file
     pub async fn from_file(path: &str) -> McpResult<Self> {
-        let content = tokio::fs::read_to_string(path).await.map_err(|e| {
-            crate::error::McpError::Configuration {
+        let content = tokio::fs::read_to_string(path)
+            .await
+            .map_err(|e| crate::error::McpError::Configuration {
                 message: format!("Failed to read config file '{}': {}", path, e),
-            }
-        })?;
-
-        let config: Self =
-            serde_yaml::from_str(&content).map_err(|e| crate::error::McpError::Configuration {
-                message: format!("Failed to parse config file '{}': {}", path, e),
             })?;
+
+        let config: Self = serde_yaml::from_str(&content).map_err(|e| crate::error::McpError::Configuration {
+            message: format!("Failed to parse config file '{}': {}", path, e),
+        })?;
 
         config.validate()?;
         Ok(config)

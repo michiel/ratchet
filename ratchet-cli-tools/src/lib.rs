@@ -8,22 +8,8 @@ pub mod js_execution;
 pub mod recording;
 
 // Re-export commonly used types for convenience
-pub use generate::{
-    TaskGenerationConfig, 
-    GeneratedTaskInfo, 
-    generate_task
-};
+pub use generate::{generate_task, GeneratedTaskInfo, TaskGenerationConfig};
 
-pub use js_execution::{
-    execute_task_with_lib_compatibility,
-    execute_task,
-    ExecutionMode,
-    TaskInput,
-};
+pub use js_execution::{execute_task, execute_task_with_lib_compatibility, ExecutionMode, TaskInput};
 
-pub use recording::{
-    set_recording_dir,
-    get_recording_dir,
-    is_recording,
-    finalize_recording,
-};
+pub use recording::{finalize_recording, get_recording_dir, is_recording, set_recording_dir};

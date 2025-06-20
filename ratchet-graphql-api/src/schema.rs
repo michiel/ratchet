@@ -1,14 +1,11 @@
 //! GraphQL schema definition
 
 use async_graphql::{Schema, SchemaBuilder};
-use axum::{
-    response::IntoResponse,
-    Json,
-};
+use axum::{response::IntoResponse, Json};
 
 use crate::{
-    context::{GraphQLContext, GraphQLConfig},
-    resolvers::{Query, Mutation, Subscription},
+    context::{GraphQLConfig, GraphQLContext},
+    resolvers::{Mutation, Query, Subscription},
 };
 
 /// The main GraphQL schema type
@@ -58,7 +55,7 @@ pub async fn graphql_handler(
 /// GraphQL playground handler for development
 pub async fn graphql_playground() -> impl IntoResponse {
     use axum::response::Html;
-    
+
     // Custom HTML with GraphQL Playground and preloaded tabs with predefined queries
     let html = r#"<!DOCTYPE html>
 <html>
@@ -256,9 +253,7 @@ pub async fn graphql_playground() -> impl IntoResponse {
 }
 
 /// GraphQL introspection schema handler
-pub async fn graphql_introspection(
-    schema: axum::extract::Extension<RatchetSchema>,
-) -> impl IntoResponse {
+pub async fn graphql_introspection(schema: axum::extract::Extension<RatchetSchema>) -> impl IntoResponse {
     let introspection = schema.sdl();
     Json(serde_json::json!({ "schema": introspection }))
 }

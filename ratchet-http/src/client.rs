@@ -48,10 +48,7 @@ impl HttpManager {
 
     /// Create a new HttpManager with specific configuration
     pub fn with_config(config: HttpConfig) -> Self {
-        debug!(
-            "Creating HttpManager with timeout: {}s",
-            config.timeout.as_secs()
-        );
+        debug!("Creating HttpManager with timeout: {}s", config.timeout.as_secs());
         Self {
             offline: false,
             mocks: HashMap::new(),
@@ -153,10 +150,7 @@ impl HttpClient for HttpManager {
                         if mock_method.eq_ignore_ascii_case(method.as_str())
                             && (url.contains(mock_url) || mock_url.contains(url))
                         {
-                            debug!(
-                                "Found partial matching mock response for {} {}",
-                                method, url
-                            );
+                            debug!("Found partial matching mock response for {} {}", method, url);
                             let response = json!({
                                 "ok": true,
                                 "status": 200,
@@ -177,31 +171,23 @@ impl HttpClient for HttpManager {
         }
 
         // If no mock data or mock doesn't match, perform a real HTTP request
-        debug!(
-            "Creating HTTP client with {}s timeout",
-            self.config.timeout.as_secs()
-        );
+        debug!("Creating HTTP client with {}s timeout", self.config.timeout.as_secs());
         // Create a client with configured settings
         let client = Client::builder()
             .timeout(self.config.timeout)
             .user_agent(&self.config.user_agent)
             .danger_accept_invalid_certs(!self.config.verify_ssl)
-            .redirect(reqwest::redirect::Policy::limited(
-                self.config.max_redirects as usize,
-            ))
+            .redirect(reqwest::redirect::Policy::limited(self.config.max_redirects as usize))
             .build()?;
 
         // Extract headers for recording
         let request_headers: Option<HashMap<String, String>> = if let Some(params) = params {
-            params
-                .get("headers")
-                .and_then(|h| h.as_object())
-                .map(|headers| {
-                    headers
-                        .iter()
-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                        .collect()
-                })
+            params.get("headers").and_then(|h| h.as_object()).map(|headers| {
+                headers
+                    .iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect()
+            })
         } else {
             None
         };
@@ -228,9 +214,8 @@ impl HttpClient for HttpManager {
                 let mut header_map = HeaderMap::new();
                 for (key, value) in headers {
                     if let Some(value_str) = value.as_str() {
-                        let header_name = HeaderName::from_str(key).map_err(|_| {
-                            HttpError::InvalidHeaderName(key.to_string())
-                        })?;
+                        let header_name =
+                            HeaderName::from_str(key).map_err(|_| HttpError::InvalidHeaderName(key.to_string()))?;
 
                         if let Ok(header_value) = HeaderValue::from_str(value_str) {
                             header_map.insert(header_name, header_value);
@@ -264,9 +249,7 @@ impl HttpClient for HttpManager {
                     debug!("Adding form-encoded body to request");
                     request = request.body(body_str.to_string());
                 } else {
-                    debug!(
-                        "Adding JSON body to request (form data expected but body is not string)"
-                    );
+                    debug!("Adding JSON body to request (form data expected but body is not string)");
                     request = request.json(body);
                 }
             } else {
@@ -290,12 +273,7 @@ impl HttpClient for HttpManager {
         let response_headers: HashMap<String, String> = response
             .headers()
             .iter()
-            .filter_map(|(name, value)| {
-                value
-                    .to_str()
-                    .ok()
-                    .map(|v| (name.to_string(), v.to_string()))
-            })
+            .filter_map(|(name, value)| value.to_str().ok().map(|v| (name.to_string(), v.to_string())))
             .collect();
 
         // Try to parse the response as JSON, fall back to text if it fails
@@ -308,10 +286,7 @@ impl HttpClient for HttpManager {
             Err(_) => {
                 warn!("Failed to parse response as JSON, falling back to text");
                 // Fall back to text - we need to send a new request since json() consumes the response
-                let text_response = client
-                    .request(reqwest::Method::from(method), url)
-                    .send()
-                    .await?;
+                let text_response = client.request(reqwest::Method::from(method), url).send().await?;
                 let text = text_response.text().await?;
                 debug!("Response parsed as text: {} bytes", text.len());
                 json!(text)

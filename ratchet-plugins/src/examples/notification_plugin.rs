@@ -40,10 +40,7 @@ impl NotificationPlugin {
     /// Send a notification (simulated)
     async fn send_notification(&self, title: &str, message: &str, level: &str) {
         if let Some(webhook_url) = &self.webhook_url {
-            info!(
-                "📤 Sending webhook to {}: {} - {}",
-                webhook_url, title, message
-            );
+            info!("📤 Sending webhook to {}: {} - {}", webhook_url, title, message);
             // In a real implementation, you would use reqwest to send HTTP request
         } else {
             match level {
@@ -68,10 +65,7 @@ impl Plugin for NotificationPlugin {
     }
 
     async fn initialize(&mut self, context: &mut PluginContext) -> PluginResult<()> {
-        info!(
-            "📬 Initializing Notification Plugin v{}",
-            self.metadata.version
-        );
+        info!("📬 Initializing Notification Plugin v{}", self.metadata.version);
 
         if self.webhook_url.is_some() {
             info!("🌐 Webhook URL configured: notifications will be sent via HTTP");
@@ -90,12 +84,8 @@ impl Plugin for NotificationPlugin {
         info!("📬 Notification Plugin execute called");
 
         // Simulate sending some notifications
-        self.send_notification(
-            "Plugin Execution",
-            "Notification plugin executed successfully",
-            "info",
-        )
-        .await;
+        self.send_notification("Plugin Execution", "Notification plugin executed successfully", "info")
+            .await;
 
         // In a real plugin, this might:
         // - Check for pending alerts
@@ -118,12 +108,8 @@ impl Plugin for NotificationPlugin {
         info!("📬 Shutting down Notification Plugin");
 
         // Send shutdown notification
-        self.send_notification(
-            "Plugin Shutdown",
-            "Notification plugin is shutting down",
-            "info",
-        )
-        .await;
+        self.send_notification("Plugin Shutdown", "Notification plugin is shutting down", "info")
+            .await;
 
         // Set status to unloaded (normally done by parent)
         context.set_status(PluginStatus::Unloaded);
@@ -168,11 +154,7 @@ mod tests {
     #[tokio::test]
     async fn test_notification_plugin_lifecycle() {
         let mut plugin = NotificationPlugin::new();
-        let mut context = PluginContext::new(
-            Uuid::new_v4(),
-            serde_json::json!({}),
-            RatchetConfig::default(),
-        );
+        let mut context = PluginContext::new(Uuid::new_v4(), serde_json::json!({}), RatchetConfig::default());
 
         // Test initialization
         assert!(plugin.initialize(&mut context).await.is_ok());

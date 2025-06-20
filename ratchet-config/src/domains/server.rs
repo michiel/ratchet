@@ -78,10 +78,7 @@ pub struct CorsConfig {
     pub allow_credentials: bool,
 
     /// Max age for preflight requests
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_cors_max_age"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_cors_max_age")]
     pub max_age: Duration,
 }
 
@@ -102,10 +99,7 @@ pub struct RateLimitConfig {
     pub burst_size: u32,
 
     /// Time window for rate limiting
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_time_window"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_time_window")]
     pub time_window: Duration,
 }
 
@@ -194,11 +188,7 @@ impl Validatable for AuthConfig {
         validate_required_string(&self.issuer, "issuer", self.domain_name())?;
         validate_required_string(&self.audience, "audience", self.domain_name())?;
 
-        validate_positive(
-            self.token_expiration.as_secs(),
-            "token_expiration",
-            self.domain_name(),
-        )?;
+        validate_positive(self.token_expiration.as_secs(), "token_expiration", self.domain_name())?;
 
         // Validate JWT secret strength
         if self.jwt_secret.len() < 32 {
@@ -226,10 +216,7 @@ impl Validatable for CorsConfig {
         let valid_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
         for method in &self.allowed_methods {
             if !valid_methods.contains(&method.as_str()) {
-                return Err(self.validation_error(format!(
-                    "Invalid HTTP method in allowed_methods: {}",
-                    method
-                )));
+                return Err(self.validation_error(format!("Invalid HTTP method in allowed_methods: {}", method)));
             }
         }
 
@@ -246,17 +233,9 @@ impl Validatable for CorsConfig {
 impl Validatable for RateLimitConfig {
     fn validate(&self) -> ConfigResult<()> {
         if self.enabled {
-            validate_positive(
-                self.requests_per_minute,
-                "requests_per_minute",
-                self.domain_name(),
-            )?;
+            validate_positive(self.requests_per_minute, "requests_per_minute", self.domain_name())?;
             validate_positive(self.burst_size, "burst_size", self.domain_name())?;
-            validate_positive(
-                self.time_window.as_secs(),
-                "time_window",
-                self.domain_name(),
-            )?;
+            validate_positive(self.time_window.as_secs(), "time_window", self.domain_name())?;
         }
 
         Ok(())
@@ -285,15 +264,11 @@ impl Validatable for TlsConfig {
 
         // Check if files exist
         if !std::path::Path::new(&self.cert_file).exists() {
-            return Err(
-                self.validation_error(format!("Certificate file not found: {}", self.cert_file))
-            );
+            return Err(self.validation_error(format!("Certificate file not found: {}", self.cert_file)));
         }
 
         if !std::path::Path::new(&self.key_file).exists() {
-            return Err(
-                self.validation_error(format!("Private key file not found: {}", self.key_file))
-            );
+            return Err(self.validation_error(format!("Private key file not found: {}", self.key_file)));
         }
 
         Ok(())

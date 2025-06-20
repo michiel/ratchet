@@ -4,13 +4,9 @@
 //! covering TaskDevelopmentService operations, protocol handlers, and real service integration.
 
 use ratchet_mcp::{
-    server::task_dev_tools::{
-        CreateTaskRequest, TaskTestCase
-    },
-    protocol::{
-        JsonRpcRequest, JsonRpcResponse
-    },
-    McpError
+    protocol::{JsonRpcRequest, JsonRpcResponse},
+    server::task_dev_tools::{CreateTaskRequest, TaskTestCase},
+    McpError,
 };
 use sea_orm::{Database, DatabaseConnection};
 use serde_json::{json, Value};
@@ -65,7 +61,7 @@ impl McpTestServer {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Self::with_config(McpTestConfig::default()).await
     }
-    
+
     /// Create a new test server with custom configuration
     pub async fn with_config(config: McpTestConfig) -> Result<Self, Box<dyn std::error::Error>> {
         // Setup test database
@@ -74,31 +70,28 @@ impl McpTestServer {
         } else {
             "sqlite:./test_mcp.db"
         };
-        
+
         let db_connection = Database::connect(db_url).await?;
-        
+
         // Setup test directory
         if config.enable_file_system {
             let _ = fs::remove_dir_all(&config.test_data_dir).await;
             fs::create_dir_all(&config.test_data_dir).await?;
         }
-        
+
         // For this test, we'll create a mock TaskDevelopmentService
         // In a real implementation, this would have the full service
         let task_dev_service = Arc::new(MockTaskDevelopmentService::new());
-        
+
         Ok(Self {
             task_dev_service,
             config,
             _db_connection: db_connection,
         })
     }
-    
+
     /// Execute an MCP request through the task development service
-    pub async fn execute_mcp_request(
-        &self,
-        request: JsonRpcRequest,
-    ) -> Result<JsonRpcResponse, McpError> {
+    pub async fn execute_mcp_request(&self, request: JsonRpcRequest) -> Result<JsonRpcResponse, McpError> {
         // This would normally go through the MCP protocol handler
         // For now, we'll simulate the basic protocol structure
         match request.method.as_str() {
@@ -116,7 +109,7 @@ impl McpTestServer {
                     }
                 });
                 Ok(JsonRpcResponse::success(result, request.id))
-            },
+            }
             "task/edit" => {
                 let result = json!({
                     "task_id": "test-task-1",
@@ -124,7 +117,7 @@ impl McpTestServer {
                     "backup_created": true
                 });
                 Ok(JsonRpcResponse::success(result, request.id))
-            },
+            }
             "task/test" => {
                 let result = json!({
                     "total_tests": 2,
@@ -144,7 +137,7 @@ impl McpTestServer {
                     ]
                 });
                 Ok(JsonRpcResponse::success(result, request.id))
-            },
+            }
             "task/store_result" => {
                 let result = json!({
                     "execution_id": "exec-123",
@@ -152,7 +145,7 @@ impl McpTestServer {
                     "timestamp": "2024-01-01T00:00:00Z"
                 });
                 Ok(JsonRpcResponse::success(result, request.id))
-            },
+            }
             "task/get_result" => {
                 let result = json!({
                     "execution_id": request.params
@@ -168,7 +161,7 @@ impl McpTestServer {
                     }
                 });
                 Ok(JsonRpcResponse::success(result, request.id))
-            },
+            }
             "task/delete" => {
                 let result = json!({
                     "task_id": "test-task-1",
@@ -176,13 +169,13 @@ impl McpTestServer {
                     "backup_location": "/tmp/backup/task-1.js"
                 });
                 Ok(JsonRpcResponse::success(result, request.id))
-            },
+            }
             _ => Err(McpError::MethodNotFound {
                 method: request.method.clone(),
             }),
         }
     }
-    
+
     /// Create a basic JavaScript task for testing
     pub fn create_test_task_request(&self, name: &str) -> CreateTaskRequest {
         CreateTaskRequest {
@@ -197,7 +190,8 @@ impl McpTestServer {
                     };
                 }
                 module.exports = { execute };
-            "#.to_string(),
+            "#
+            .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -233,14 +227,14 @@ impl McpTestServer {
                     name: "empty_input_test".to_string(),
                     input: json!({}),
                     expected_output: None, // Let it run without validation
-                    should_fail: true, // Should fail due to missing required field
+                    should_fail: true,     // Should fail due to missing required field
                     description: Some("Test with missing required input".to_string()),
-                }
+                },
             ],
             metadata: std::collections::HashMap::new(),
         }
     }
-    
+
     /// Create an MCP request wrapper
     pub fn create_mcp_request(&self, method: &str, params: Value) -> JsonRpcRequest {
         JsonRpcRequest {
@@ -267,42 +261,36 @@ impl Drop for McpTestServer {
 #[tokio::test]
 async fn test_mcp_task_create_basic() -> Result<(), Box<dyn std::error::Error>> {
     let server = McpTestServer::new().await?;
-    
+
     let create_request = server.create_test_task_request("test-create-task");
-    let mcp_request = server.create_mcp_request(
-        "task/create",
-        serde_json::to_value(create_request)?
-    );
-    
+    let mcp_request = server.create_mcp_request("task/create", serde_json::to_value(create_request)?);
+
     let response = server.execute_mcp_request(mcp_request).await?;
-    
+
     assert_eq!(response.jsonrpc, "2.0");
     assert!(response.error.is_none());
     assert!(response.result.is_some());
-    
+
     // Verify the task was actually created
     let result = response.result.unwrap();
     assert!(result.get("task_id").is_some());
     assert!(result.get("version").is_some());
-    
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_mcp_task_create_with_validation_errors() -> Result<(), Box<dyn std::error::Error>> {
     let server = McpTestServer::new().await?;
-    
+
     // Create a task with invalid JavaScript code
     let mut create_request = server.create_test_task_request("invalid-task");
     create_request.code = "invalid javascript { syntax error }".to_string();
-    
-    let mcp_request = server.create_mcp_request(
-        "task/create",
-        serde_json::to_value(create_request)?
-    );
-    
+
+    let mcp_request = server.create_mcp_request("task/create", serde_json::to_value(create_request)?);
+
     let response = server.execute_mcp_request(mcp_request).await;
-    
+
     // Should either succeed with validation warnings or fail with clear error
     match response {
         Ok(resp) => {
@@ -312,31 +300,28 @@ async fn test_mcp_task_create_with_validation_errors() -> Result<(), Box<dyn std
                     assert!(validation.get("warnings").is_some() || validation.get("errors").is_some());
                 }
             }
-        },
+        }
         Err(err) => {
             // Should be a validation error
             assert!(format!("{}", err).contains("validation") || format!("{}", err).contains("syntax"));
         }
     }
-    
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_mcp_task_edit() -> Result<(), Box<dyn std::error::Error>> {
     let server = McpTestServer::new().await?;
-    
+
     // First create a task
     let create_request = server.create_test_task_request("edit-test-task");
-    let create_mcp_request = server.create_mcp_request(
-        "task/create",
-        serde_json::to_value(create_request)?
-    );
-    
+    let create_mcp_request = server.create_mcp_request("task/create", serde_json::to_value(create_request)?);
+
     let create_response = server.execute_mcp_request(create_mcp_request).await?;
     let create_result = create_response.result.unwrap();
     let task_id = create_result["task_id"].as_str().unwrap();
-    
+
     // Now edit the task
     let edit_request = json!({
         "task_id": task_id,
@@ -355,39 +340,33 @@ async fn test_mcp_task_edit() -> Result<(), Box<dyn std::error::Error>> {
         "validate_changes": true,
         "create_backup": true
     });
-    
-    let edit_mcp_request = server.create_mcp_request(
-        "task/edit",
-        edit_request
-    );
-    
+
+    let edit_mcp_request = server.create_mcp_request("task/edit", edit_request);
+
     let edit_response = server.execute_mcp_request(edit_mcp_request).await?;
-    
+
     assert!(edit_response.error.is_none());
     assert!(edit_response.result.is_some());
-    
+
     let result = edit_response.result.unwrap();
     assert_eq!(result["task_id"].as_str().unwrap(), task_id);
     assert!(result.get("backup_created").is_some());
-    
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_mcp_task_test_execution() -> Result<(), Box<dyn std::error::Error>> {
     let server = McpTestServer::new().await?;
-    
+
     // Create a task with test cases
     let create_request = server.create_test_task_request("test-execution-task");
-    let create_mcp_request = server.create_mcp_request(
-        "task/create",
-        serde_json::to_value(create_request)?
-    );
-    
+    let create_mcp_request = server.create_mcp_request("task/create", serde_json::to_value(create_request)?);
+
     let create_response = server.execute_mcp_request(create_mcp_request).await?;
     let create_result = create_response.result.unwrap();
     let task_id = create_result["task_id"].as_str().unwrap();
-    
+
     // Run the task tests
     let test_request = json!({
         "task_id": task_id,
@@ -396,45 +375,39 @@ async fn test_mcp_task_test_execution() -> Result<(), Box<dyn std::error::Error>
         "include_traces": true,
         "parallel": false
     });
-    
-    let test_mcp_request = server.create_mcp_request(
-        "task/test",
-        test_request
-    );
-    
+
+    let test_mcp_request = server.create_mcp_request("task/test", test_request);
+
     let test_response = server.execute_mcp_request(test_mcp_request).await?;
-    
+
     assert!(test_response.error.is_none());
     assert!(test_response.result.is_some());
-    
+
     let result = test_response.result.unwrap();
     assert!(result.get("total_tests").is_some());
     assert!(result.get("passed_tests").is_some());
     assert!(result.get("failed_tests").is_some());
     assert!(result.get("test_results").is_some());
-    
+
     // We expect at least one test to pass and one to fail based on our test cases
     let total_tests = result["total_tests"].as_i64().unwrap();
     assert!(total_tests >= 2);
-    
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_mcp_task_store_and_get_result() -> Result<(), Box<dyn std::error::Error>> {
     let server = McpTestServer::new().await?;
-    
+
     // Create a task first
     let create_request = server.create_test_task_request("result-storage-task");
-    let create_mcp_request = server.create_mcp_request(
-        "task/create",
-        serde_json::to_value(create_request)?
-    );
-    
+    let create_mcp_request = server.create_mcp_request("task/create", serde_json::to_value(create_request)?);
+
     let create_response = server.execute_mcp_request(create_mcp_request).await?;
     let create_result = create_response.result.unwrap();
     let task_id = create_result["task_id"].as_str().unwrap();
-    
+
     // Store an execution result
     let execution_id = Uuid::new_v4().to_string();
     let store_request = json!({
@@ -448,56 +421,47 @@ async fn test_mcp_task_store_and_get_result() -> Result<(), Box<dyn std::error::
         "status": "completed",
         "execution_time_ms": 150
     });
-    
-    let store_mcp_request = server.create_mcp_request(
-        "task/store_result",
-        store_request
-    );
-    
+
+    let store_mcp_request = server.create_mcp_request("task/store_result", store_request);
+
     let store_response = server.execute_mcp_request(store_mcp_request).await?;
-    
+
     assert!(store_response.error.is_none());
     assert!(store_response.result.is_some());
-    
+
     // Now retrieve the result
     let get_request = json!({
         "task_id": task_id,
         "execution_id": execution_id,
         "include_metadata": true
     });
-    
-    let get_mcp_request = server.create_mcp_request(
-        "task/get_result",
-        get_request
-    );
-    
+
+    let get_mcp_request = server.create_mcp_request("task/get_result", get_request);
+
     let get_response = server.execute_mcp_request(get_mcp_request).await?;
-    
+
     assert!(get_response.error.is_none());
     assert!(get_response.result.is_some());
-    
+
     let result = get_response.result.unwrap();
     assert_eq!(result["execution_id"].as_str().unwrap(), execution_id);
     assert_eq!(result["status"].as_str().unwrap(), "completed");
-    
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_mcp_task_delete() -> Result<(), Box<dyn std::error::Error>> {
     let server = McpTestServer::new().await?;
-    
+
     // Create a task first
     let create_request = server.create_test_task_request("delete-test-task");
-    let create_mcp_request = server.create_mcp_request(
-        "task/create",
-        serde_json::to_value(create_request)?
-    );
-    
+    let create_mcp_request = server.create_mcp_request("task/create", serde_json::to_value(create_request)?);
+
     let create_response = server.execute_mcp_request(create_mcp_request).await?;
     let create_result = create_response.result.unwrap();
     let task_id = create_result["task_id"].as_str().unwrap();
-    
+
     // Delete the task
     let delete_request = json!({
         "task_id": task_id,
@@ -505,76 +469,65 @@ async fn test_mcp_task_delete() -> Result<(), Box<dyn std::error::Error>> {
         "force": false,
         "delete_files": true
     });
-    
-    let delete_mcp_request = server.create_mcp_request(
-        "task/delete",
-        delete_request
-    );
-    
+
+    let delete_mcp_request = server.create_mcp_request("task/delete", delete_request);
+
     let delete_response = server.execute_mcp_request(delete_mcp_request).await?;
-    
+
     assert!(delete_response.error.is_none());
     assert!(delete_response.result.is_some());
-    
+
     let result = delete_response.result.unwrap();
     assert_eq!(result["task_id"].as_str().unwrap(), task_id);
     assert!(result["deleted"].as_bool().unwrap());
     assert!(result.get("backup_location").is_some());
-    
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_mcp_error_handling() -> Result<(), Box<dyn std::error::Error>> {
     let server = McpTestServer::new().await?;
-    
+
     // Test unknown method
-    let invalid_request = server.create_mcp_request(
-        "unknown/method",
-        json!({"param": "value"})
-    );
-    
+    let invalid_request = server.create_mcp_request("unknown/method", json!({"param": "value"}));
+
     let response = server.execute_mcp_request(invalid_request).await;
     assert!(response.is_err());
-    
+
     let error = response.unwrap_err();
     assert!(matches!(error, McpError::MethodNotFound { .. }));
-    
+
     // Test invalid parameters - this would normally fail during parameter parsing
     // For our mock implementation, we'll just verify the method works
-    let invalid_params_request = server.create_mcp_request(
-        "task/create",
-        json!({"invalid": "params"})
-    );
-    
+    let invalid_params_request = server.create_mcp_request("task/create", json!({"invalid": "params"}));
+
     let response = server.execute_mcp_request(invalid_params_request).await;
     // In our mock, this should succeed since we don't validate parameters
     assert!(response.is_ok());
-    
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_mcp_concurrent_operations() -> Result<(), Box<dyn std::error::Error>> {
     let server = Arc::new(McpTestServer::new().await?);
-    
+
     // Create multiple tasks concurrently
     let mut handles = vec![];
-    
+
     for i in 0..5 {
         let server_clone = server.clone();
         let handle = tokio::spawn(async move {
             let create_request = server_clone.create_test_task_request(&format!("concurrent-task-{}", i));
-            let mcp_request = server_clone.create_mcp_request(
-                "task/create",
-                serde_json::to_value(create_request).unwrap()
-            );
-            
+            let mcp_request =
+                server_clone.create_mcp_request("task/create", serde_json::to_value(create_request).unwrap());
+
             server_clone.execute_mcp_request(mcp_request).await
         });
         handles.push(handle);
     }
-    
+
     // Wait for all tasks to complete
     let mut successful_creates = 0;
     for handle in handles {
@@ -583,16 +536,16 @@ async fn test_mcp_concurrent_operations() -> Result<(), Box<dyn std::error::Erro
                 if response.error.is_none() {
                     successful_creates += 1;
                 }
-            },
+            }
             Err(_) => {
                 // Some failures are expected in concurrent scenarios
             }
         }
     }
-    
+
     // At least some tasks should succeed
     assert!(successful_creates > 0);
-    
+
     Ok(())
 }
 

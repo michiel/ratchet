@@ -1,6 +1,6 @@
 #[cfg(feature = "git")]
 mod git_tests {
-    use ratchet_registry::config::{TaskSource, GitConfig, GitSyncStrategy};
+    use ratchet_registry::config::{GitConfig, GitSyncStrategy, TaskSource};
     use ratchet_registry::loaders::git::GitLoader;
     use ratchet_registry::loaders::TaskLoader;
 
@@ -27,7 +27,7 @@ mod git_tests {
     #[tokio::test]
     async fn test_git_loader_with_public_repo() {
         let loader = GitLoader::new();
-        
+
         let git_config = GitConfig {
             branch: "main".to_string(),
             subdirectory: None,
@@ -52,14 +52,17 @@ mod git_tests {
 
         // Test discovery (may fail in CI without network, that's OK)
         let result = loader.discover_tasks(&source).await;
-        
+
         match result {
             Ok(discovered) => {
-                println!("✅ Successfully discovered {} tasks from Git repository", discovered.len());
+                println!(
+                    "✅ Successfully discovered {} tasks from Git repository",
+                    discovered.len()
+                );
                 for task in &discovered {
                     println!("  - {} v{}", task.metadata.name, task.metadata.version);
                 }
-                
+
                 // If we discovered tasks, try to load one
                 if let Some(task) = discovered.first() {
                     match loader.load_task(&task.task_ref).await {
@@ -84,14 +87,14 @@ mod git_tests {
     async fn test_git_loader_creation() {
         // Test that we can create a GitLoader without errors
         let loader = GitLoader::new();
-        
+
         // Test that it supports Git sources
         let git_source = TaskSource::Git {
             url: "https://github.com/example/repo.git".to_string(),
             auth: None,
             config: GitConfig::default(),
         };
-        
+
         assert!(loader.supports_source(&git_source).await);
         println!("✅ GitLoader created successfully and supports Git sources");
     }

@@ -3,18 +3,15 @@
 //! This module provides testing infrastructure for isolated database testing
 //! with automatic cleanup and seeding capabilities.
 
-use sea_orm::{Database, DatabaseConnection, ConnectionTrait};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 #[cfg(all(feature = "testing", feature = "seaorm"))]
 use sea_orm_migration::MigratorTrait;
+use std::sync::Arc;
 #[cfg(feature = "testing")]
 use tempfile::TempDir;
-use std::sync::Arc;
 
 #[cfg(all(feature = "testing", feature = "seaorm"))]
-use crate::seaorm::{
-    connection::DatabaseConnection as RatchetDatabaseConnection,
-    config::DatabaseConfig,
-};
+use crate::seaorm::{config::DatabaseConfig, connection::DatabaseConnection as RatchetDatabaseConnection};
 
 /// Test database for isolated testing
 #[cfg(all(feature = "testing", feature = "seaorm"))]
@@ -33,8 +30,7 @@ impl TestDatabase {
 
     /// Create a new SQLite test database
     pub async fn new_sqlite() -> Result<Self, TestDatabaseError> {
-        let temp_dir = TempDir::new()
-            .map_err(|e| TestDatabaseError::TempDirCreation(e.to_string()))?;
+        let temp_dir = TempDir::new().map_err(|e| TestDatabaseError::TempDirCreation(e.to_string()))?;
 
         let db_path = temp_dir.path().join("test.db");
         let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
@@ -91,8 +87,7 @@ impl TestDatabase {
             .map_err(|e| TestDatabaseError::RatchetConnection(e.to_string()))?;
 
         // For in-memory database, we still need a temp directory for other purposes
-        let temp_dir = TempDir::new()
-            .map_err(|e| TestDatabaseError::TempDirCreation(e.to_string()))?;
+        let temp_dir = TempDir::new().map_err(|e| TestDatabaseError::TempDirCreation(e.to_string()))?;
 
         Ok(Self {
             _temp_dir: temp_dir,
@@ -118,7 +113,10 @@ impl TestDatabase {
     }
 
     /// Seed the database with test executions
-    pub async fn seed_executions(&self, executions: Vec<crate::seaorm::entities::executions::Model>) -> Result<(), TestDatabaseError> {
+    pub async fn seed_executions(
+        &self,
+        executions: Vec<crate::seaorm::entities::executions::Model>,
+    ) -> Result<(), TestDatabaseError> {
         use crate::seaorm::entities::executions;
         use sea_orm::ActiveModelTrait;
 
@@ -150,7 +148,10 @@ impl TestDatabase {
     }
 
     /// Seed the database with test schedules
-    pub async fn seed_schedules(&self, schedules: Vec<crate::seaorm::entities::schedules::Model>) -> Result<(), TestDatabaseError> {
+    pub async fn seed_schedules(
+        &self,
+        schedules: Vec<crate::seaorm::entities::schedules::Model>,
+    ) -> Result<(), TestDatabaseError> {
         use crate::seaorm::entities::schedules;
         use sea_orm::ActiveModelTrait;
 
@@ -166,7 +167,10 @@ impl TestDatabase {
     }
 
     /// Seed the database with test delivery results
-    pub async fn seed_delivery_results(&self, results: Vec<crate::seaorm::entities::delivery_results::Model>) -> Result<(), TestDatabaseError> {
+    pub async fn seed_delivery_results(
+        &self,
+        results: Vec<crate::seaorm::entities::delivery_results::Model>,
+    ) -> Result<(), TestDatabaseError> {
         use crate::seaorm::entities::delivery_results;
         use sea_orm::ActiveModelTrait;
 
@@ -233,7 +237,8 @@ impl TestDatabase {
 
         match result {
             Some(row) => {
-                let count: i64 = row.try_get("", "count")
+                let count: i64 = row
+                    .try_get("", "count")
                     .map_err(|e| TestDatabaseError::Query(e.to_string()))?;
                 Ok(count as u64)
             }
@@ -285,9 +290,7 @@ pub struct SharedTestDatabase {
 impl SharedTestDatabase {
     pub async fn new() -> Result<Self, TestDatabaseError> {
         let db = TestDatabase::new_in_memory().await?;
-        Ok(Self {
-            inner: Arc::new(db),
-        })
+        Ok(Self { inner: Arc::new(db) })
     }
 
     pub fn connection(&self) -> &DatabaseConnection {
@@ -326,15 +329,13 @@ macro_rules! test_with_db {
             let db = $crate::testing::TestDatabase::new()
                 .await
                 .expect("Failed to create test database");
-            
+
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    $test_body(&db).await
-                })
+                tokio::runtime::Handle::current().block_on(async { $test_body(&db).await })
             }));
-            
+
             // Database cleanup happens automatically when db is dropped
-            
+
             if let Err(e) = result {
                 std::panic::resume_unwind(e);
             }
@@ -352,20 +353,20 @@ macro_rules! test_with_seeded_db {
             let db = $crate::testing::TestDatabase::new()
                 .await
                 .expect("Failed to create test database");
-            
+
             // Seed the database
             let seed_future = ($seed_fn)(&db);
             seed_future.await.expect("Failed to seed database");
-            
+
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 tokio::runtime::Handle::current().block_on(async {
                     let test_future = ($test_body)(&db);
                     test_future.await
                 })
             }));
-            
+
             // Database cleanup happens automatically when db is dropped
-            
+
             if let Err(e) = result {
                 std::panic::resume_unwind(e);
             }
@@ -380,7 +381,7 @@ mod tests {
     #[tokio::test]
     async fn test_database_creation() {
         let db = TestDatabase::new().await.unwrap();
-        
+
         // Verify migrations ran
         let task_count = db.count_records("tasks").await.unwrap();
         assert_eq!(task_count, 0);
@@ -389,7 +390,7 @@ mod tests {
     #[tokio::test]
     async fn test_database_seeding() {
         let db = TestDatabase::new().await.unwrap();
-        
+
         let tasks = vec![
             crate::seaorm::entities::tasks::Model {
                 id: 1,
@@ -422,9 +423,9 @@ mod tests {
                 validated_at: Some(chrono::Utc::now()),
             },
         ];
-        
+
         db.seed_tasks(tasks).await.unwrap();
-        
+
         let task_count = db.count_records("tasks").await.unwrap();
         assert_eq!(task_count, 2);
     }
@@ -432,7 +433,7 @@ mod tests {
     #[tokio::test]
     async fn test_database_clearing() {
         let db = TestDatabase::new().await.unwrap();
-        
+
         // Seed some data
         let tasks = vec![crate::seaorm::entities::tasks::Model {
             id: 1,
@@ -450,14 +451,14 @@ mod tests {
             validated_at: Some(chrono::Utc::now()),
         }];
         db.seed_tasks(tasks).await.unwrap();
-        
+
         // Verify data exists
         let task_count = db.count_records("tasks").await.unwrap();
         assert_eq!(task_count, 1);
-        
+
         // Clear data
         db.clear_all().await.unwrap();
-        
+
         // Verify data is gone
         let task_count = db.count_records("tasks").await.unwrap();
         assert_eq!(task_count, 0);
@@ -466,11 +467,11 @@ mod tests {
     #[tokio::test]
     async fn test_repository_factory_creation() {
         let db = TestDatabase::new().await.unwrap();
-        
+
         // Test SeaORM repository factory
         let seaorm_factory = db.create_repository_factory();
         let task_repo = seaorm_factory.task_repository();
-        
+
         // Verify health check works
         task_repo.health_check_send().await.unwrap();
     }
@@ -494,7 +495,7 @@ mod tests {
             validated_at: Some(chrono::Utc::now()),
         }];
         db.seed_tasks(tasks).await.unwrap();
-        
+
         let count = db.count_records("tasks").await.unwrap();
         assert_eq!(count, 1);
     }
@@ -502,7 +503,7 @@ mod tests {
     #[tokio::test]
     async fn test_seeded_macro_usage() {
         let db = TestDatabase::new().await.unwrap();
-        
+
         // Seed the database
         let tasks = vec![
             crate::seaorm::entities::tasks::Model {
@@ -537,7 +538,7 @@ mod tests {
             },
         ];
         db.seed_tasks(tasks).await.unwrap();
-        
+
         let count = db.count_records("tasks").await.unwrap();
         assert_eq!(count, 2);
     }

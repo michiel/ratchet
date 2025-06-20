@@ -1,8 +1,8 @@
 use async_trait::async_trait;
+use chrono::Utc;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::{info, warn};
-use chrono::Utc;
 use uuid::Uuid;
 
 use crate::config::TaskSource;
@@ -66,8 +66,7 @@ impl FilesystemLoader {
             .to_string();
 
         let uuid = if let Some(uuid_str) = metadata["uuid"].as_str() {
-            Uuid::parse_str(uuid_str)
-                .map_err(|e| RegistryError::ValidationError(format!("Invalid UUID: {}", e)))?
+            Uuid::parse_str(uuid_str).map_err(|e| RegistryError::ValidationError(format!("Invalid UUID: {}", e)))?
         } else {
             Uuid::new_v4() // Generate if not present
         };
@@ -75,11 +74,7 @@ impl FilesystemLoader {
         let description = metadata["description"].as_str().map(|s| s.to_string());
         let tags = metadata["tags"]
             .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
             .unwrap_or_default();
 
         let now = Utc::now();
@@ -130,80 +125,81 @@ impl FilesystemLoader {
             script,
             input_schema,
             output_schema,
-            dependencies: Vec::new(), // TODO: Extract from metadata
+            dependencies: Vec::new(),                      // TODO: Extract from metadata
             environment: std::collections::HashMap::new(), // TODO: Extract from metadata
         })
     }
 
-    fn discover_tasks_in_directory<'a>(&'a self, path: &'a Path, source: &'a TaskSource) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<DiscoveredTask>>> + Send + 'a>> {
+    fn discover_tasks_in_directory<'a>(
+        &'a self,
+        path: &'a Path,
+        source: &'a TaskSource,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<DiscoveredTask>>> + Send + 'a>> {
         Box::pin(async move {
-        let mut discovered = Vec::new();
+            let mut discovered = Vec::new();
 
-        if !path.exists() {
-            return Err(RegistryError::TaskNotFound(format!(
-                "Path does not exist: {:?}",
-                path
-            )));
-        }
+            if !path.exists() {
+                return Err(RegistryError::TaskNotFound(format!("Path does not exist: {:?}", path)));
+            }
 
-        let metadata = fs::metadata(path).await?;
+            let metadata = fs::metadata(path).await?;
 
-        if metadata.is_file() && Self::is_zip_file(path).await {
-            // Handle ZIP file - for now, skip implementation
-            warn!("ZIP file support not yet implemented: {:?}", path);
-        } else if metadata.is_dir() {
-            if Self::is_task_directory(path).await {
-                // Single task directory
-                info!("Found task directory: {:?}", path);
-                let task_metadata = Self::load_task_metadata(path).await?;
-                let task_ref = TaskReference {
-                    name: task_metadata.name.clone(),
-                    version: task_metadata.version.clone(),
-                    source: format!("file://{}", path.display()),
-                };
+            if metadata.is_file() && Self::is_zip_file(path).await {
+                // Handle ZIP file - for now, skip implementation
+                warn!("ZIP file support not yet implemented: {:?}", path);
+            } else if metadata.is_dir() {
+                if Self::is_task_directory(path).await {
+                    // Single task directory
+                    info!("Found task directory: {:?}", path);
+                    let task_metadata = Self::load_task_metadata(path).await?;
+                    let task_ref = TaskReference {
+                        name: task_metadata.name.clone(),
+                        version: task_metadata.version.clone(),
+                        source: format!("file://{}", path.display()),
+                    };
 
-                discovered.push(DiscoveredTask {
-                    task_ref,
-                    metadata: task_metadata,
-                    discovered_at: Utc::now(),
-                });
-            } else if self.recursive {
-                // Scan directory recursively
-                info!("Scanning directory for tasks: {:?}", path);
-                let mut entries = fs::read_dir(path).await?;
+                    discovered.push(DiscoveredTask {
+                        task_ref,
+                        metadata: task_metadata,
+                        discovered_at: Utc::now(),
+                    });
+                } else if self.recursive {
+                    // Scan directory recursively
+                    info!("Scanning directory for tasks: {:?}", path);
+                    let mut entries = fs::read_dir(path).await?;
 
-                while let Some(entry) = entries.next_entry().await? {
-                    let entry_path = entry.path();
-                    let entry_metadata = entry.metadata().await?;
+                    while let Some(entry) = entries.next_entry().await? {
+                        let entry_path = entry.path();
+                        let entry_metadata = entry.metadata().await?;
 
-                    if entry_metadata.is_dir() && Self::is_task_directory(&entry_path).await {
-                        info!("Found task directory: {:?}", entry_path);
-                        let task_metadata = Self::load_task_metadata(&entry_path).await?;
-                        let task_ref = TaskReference {
-                            name: task_metadata.name.clone(),
-                            version: task_metadata.version.clone(),
-                            source: format!("file://{}", entry_path.display()),
-                        };
+                        if entry_metadata.is_dir() && Self::is_task_directory(&entry_path).await {
+                            info!("Found task directory: {:?}", entry_path);
+                            let task_metadata = Self::load_task_metadata(&entry_path).await?;
+                            let task_ref = TaskReference {
+                                name: task_metadata.name.clone(),
+                                version: task_metadata.version.clone(),
+                                source: format!("file://{}", entry_path.display()),
+                            };
 
-                        discovered.push(DiscoveredTask {
-                            task_ref,
-                            metadata: task_metadata,
-                            discovered_at: Utc::now(),
-                        });
-                    } else if entry_metadata.is_file() && Self::is_zip_file(&entry_path).await {
-                        // Handle ZIP files - for now, skip
-                        warn!("ZIP file support not yet implemented: {:?}", entry_path);
-                    } else if entry_metadata.is_dir() {
-                        // Recursively scan subdirectories
-                        let subdiscovered = self.discover_tasks_in_directory(&entry_path, source).await?;
-                        discovered.extend(subdiscovered);
+                            discovered.push(DiscoveredTask {
+                                task_ref,
+                                metadata: task_metadata,
+                                discovered_at: Utc::now(),
+                            });
+                        } else if entry_metadata.is_file() && Self::is_zip_file(&entry_path).await {
+                            // Handle ZIP files - for now, skip
+                            warn!("ZIP file support not yet implemented: {:?}", entry_path);
+                        } else if entry_metadata.is_dir() {
+                            // Recursively scan subdirectories
+                            let subdiscovered = self.discover_tasks_in_directory(&entry_path, source).await?;
+                            discovered.extend(subdiscovered);
+                        }
                     }
                 }
             }
-        }
 
-        info!("Discovered {} tasks from {:?}", discovered.len(), path);
-        Ok(discovered)
+            info!("Discovered {} tasks from {:?}", discovered.len(), path);
+            Ok(discovered)
         })
     }
 }

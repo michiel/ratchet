@@ -115,9 +115,7 @@ pub fn register_error_types(context: &mut BoaContext) -> Result<(), JsExecutionE
 
     context
         .eval(Source::from_bytes(&error_classes))
-        .map_err(|e| {
-            JsExecutionError::CompileError(format!("Failed to register error types: {}", e))
-        })?;
+        .map_err(|e| JsExecutionError::CompileError(format!("Failed to register error types: {}", e)))?;
 
     Ok(())
 }
@@ -125,10 +123,7 @@ pub fn register_error_types(context: &mut BoaContext) -> Result<(), JsExecutionE
 /// Parse JavaScript error and convert to JsErrorType
 pub fn parse_js_error(error_message: &str) -> JsErrorType {
     // Try to extract error type and message from the error string
-    if let Some(captures) = regex::Regex::new(r"(\w+Error): (.+)")
-        .unwrap()
-        .captures(error_message)
-    {
+    if let Some(captures) = regex::Regex::new(r"(\w+Error): (.+)").unwrap().captures(error_message) {
         let error_type = &captures[1];
         let message = captures[2].to_string();
 
@@ -138,9 +133,7 @@ pub fn parse_js_error(error_message: &str) -> JsErrorType {
             "NetworkError" => JsErrorType::NetworkError(message),
             "HttpError" => {
                 // Try to extract status code from message
-                if let Some(status_captures) =
-                    regex::Regex::new(r"(\d+)").unwrap().captures(&message)
-                {
+                if let Some(status_captures) = regex::Regex::new(r"(\d+)").unwrap().captures(&message) {
                     if let Ok(status) = status_captures[1].parse::<u16>() {
                         return JsErrorType::HttpError { status, message };
                     }

@@ -1,8 +1,8 @@
 //! GraphQL types for tasks
 
 use async_graphql::{InputObject, SimpleObject};
-use ratchet_api_types::UnifiedTask;
 use chrono::{DateTime, Utc};
+use ratchet_api_types::UnifiedTask;
 use serde_json::Value as JsonValue;
 
 /// GraphQL Task type - using UnifiedTask directly for API consistency
@@ -41,15 +41,15 @@ pub struct TaskFiltersInput {
     pub name_exact: Option<String>,
     pub name_starts_with: Option<String>,
     pub name_ends_with: Option<String>,
-    
+
     // Version filtering
     pub version: Option<String>,
     pub version_in: Option<Vec<String>>,
-    
+
     // Boolean filtering
     pub enabled: Option<bool>,
     pub registry_source: Option<bool>,
-    
+
     // Date range filtering
     pub created_after: Option<DateTime<Utc>>,
     pub created_before: Option<DateTime<Utc>>,
@@ -57,12 +57,12 @@ pub struct TaskFiltersInput {
     pub updated_before: Option<DateTime<Utc>>,
     pub validated_after: Option<DateTime<Utc>>,
     pub validated_before: Option<DateTime<Utc>>,
-    
+
     // ID and UUID filtering
     pub uuid: Option<String>,
     pub uuid_in: Option<Vec<String>>,
     pub id_in: Option<Vec<i32>>,
-    
+
     // Advanced filtering
     pub has_validation: Option<bool>,
     pub in_sync: Option<bool>,

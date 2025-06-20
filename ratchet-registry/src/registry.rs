@@ -7,9 +7,7 @@ use uuid::Uuid;
 
 use crate::config::TaskSource;
 use crate::error::{RegistryError, Result};
-use crate::types::{
-    DiscoveredTask, RegistryEvent, SyncResult, TaskDefinition, TaskReference, ValidationResult,
-};
+use crate::types::{DiscoveredTask, RegistryEvent, SyncResult, TaskDefinition, TaskReference, ValidationResult};
 
 #[async_trait]
 pub trait TaskRegistry: Send + Sync {
@@ -75,11 +73,7 @@ impl DefaultTaskRegistry {
                 Ok(version_map.get(version).cloned())
             } else {
                 // Get latest version
-                let latest = version_map
-                    .keys()
-                    .max()
-                    .and_then(|v| version_map.get(v))
-                    .cloned();
+                let latest = version_map.keys().max().and_then(|v| version_map.get(v)).cloned();
                 Ok(latest)
             }
         } else {
@@ -140,7 +134,9 @@ impl TaskRegistry for DefaultTaskRegistry {
     async fn load_task(&self, _task_ref: &TaskReference) -> Result<TaskDefinition> {
         // This is a placeholder implementation
         // In practice, this would use the loaders to load the task definition
-        Err(RegistryError::NotImplemented("load_task not yet implemented".to_string()))
+        Err(RegistryError::NotImplemented(
+            "load_task not yet implemented".to_string(),
+        ))
     }
 
     async fn validate_task(&self, _task: &TaskDefinition) -> Result<ValidationResult> {

@@ -3,9 +3,7 @@ use crate::database::{
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, Set};
 
 /// Repository for schedule-related database operations
 #[derive(Clone)]
@@ -45,9 +43,7 @@ impl ScheduleRepository {
 
     /// Find schedule by ID
     pub async fn find_by_id(&self, id: i32) -> Result<Option<Schedule>, DatabaseError> {
-        let schedule = Schedules::find_by_id(id)
-            .one(self.db.get_connection())
-            .await?;
+        let schedule = Schedules::find_by_id(id).one(self.db.get_connection()).await?;
         Ok(schedule)
     }
 
@@ -142,9 +138,7 @@ impl ScheduleRepository {
 
     /// Delete schedule
     pub async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        Schedules::delete_by_id(id)
-            .exec(self.db.get_connection())
-            .await?;
+        Schedules::delete_by_id(id).exec(self.db.get_connection()).await?;
         Ok(())
     }
 

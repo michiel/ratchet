@@ -18,34 +18,34 @@ pub struct SecurityConfig {
     pub hsts_include_subdomains: bool,
     /// Enable HSTS preload
     pub hsts_preload: bool,
-    
+
     /// Content Security Policy
     pub csp_policy: Option<String>,
-    
+
     /// Enable X-Frame-Options
     pub enable_frame_options: bool,
     /// X-Frame-Options value (DENY, SAMEORIGIN, or ALLOW-FROM)
     pub frame_options: String,
-    
+
     /// Enable X-Content-Type-Options
     pub enable_content_type_options: bool,
-    
+
     /// Enable X-XSS-Protection
     pub enable_xss_protection: bool,
-    
+
     /// Enable Referrer Policy
     pub enable_referrer_policy: bool,
     /// Referrer Policy value
     pub referrer_policy: String,
-    
+
     /// Enable Permissions Policy
     pub enable_permissions_policy: bool,
     /// Permissions Policy value
     pub permissions_policy: Option<String>,
-    
+
     /// Remove Server header
     pub remove_server_header: bool,
-    
+
     /// Custom security headers
     pub custom_headers: Vec<(String, String)>,
 }
@@ -57,7 +57,7 @@ impl Default for SecurityConfig {
             hsts_max_age: 31536000, // 1 year
             hsts_include_subdomains: true,
             hsts_preload: false,
-            
+
             csp_policy: Some(
                 "default-src 'self'; \
                  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; \
@@ -65,24 +65,26 @@ impl Default for SecurityConfig {
                  img-src 'self' data: https:; \
                  font-src 'self'; \
                  connect-src 'self'; \
-                 frame-ancestors 'none'".to_string()
+                 frame-ancestors 'none'"
+                    .to_string(),
             ),
-            
+
             enable_frame_options: true,
             frame_options: "DENY".to_string(),
-            
+
             enable_content_type_options: true,
             enable_xss_protection: true,
-            
+
             enable_referrer_policy: true,
             referrer_policy: "strict-origin-when-cross-origin".to_string(),
-            
+
             enable_permissions_policy: true,
             permissions_policy: Some(
                 "geolocation=(), microphone=(), camera=(), \
-                 payment=(), usb=(), magnetometer=(), gyroscope=()".to_string()
+                 payment=(), usb=(), magnetometer=(), gyroscope=()"
+                    .to_string(),
             ),
-            
+
             remove_server_header: true,
             custom_headers: vec![],
         }
@@ -99,13 +101,14 @@ impl SecurityConfig {
                  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; \
                  style-src 'self' 'unsafe-inline' https://unpkg.com; \
                  img-src 'self' data: https: http:; \
-                 connect-src 'self' ws: wss:".to_string()
+                 connect-src 'self' ws: wss:"
+                    .to_string(),
             ),
             frame_options: "SAMEORIGIN".to_string(),
             ..Default::default()
         }
     }
-    
+
     /// Create a strict configuration for production
     pub fn production() -> Self {
         Self {
@@ -113,7 +116,7 @@ impl SecurityConfig {
             hsts_max_age: 63072000, // 2 years
             hsts_include_subdomains: true,
             hsts_preload: true,
-            
+
             csp_policy: Some(
                 "default-src 'self'; \
                  script-src 'self'; \
@@ -123,28 +126,27 @@ impl SecurityConfig {
                  connect-src 'self'; \
                  frame-ancestors 'none'; \
                  base-uri 'self'; \
-                 form-action 'self'".to_string()
+                 form-action 'self'"
+                    .to_string(),
             ),
-            
+
             frame_options: "DENY".to_string(),
             referrer_policy: "no-referrer".to_string(),
-            
+
             permissions_policy: Some(
                 "geolocation=(), microphone=(), camera=(), \
                  payment=(), usb=(), magnetometer=(), gyroscope=(), \
-                 accelerometer=(), ambient-light-sensor=()".to_string()
+                 accelerometer=(), ambient-light-sensor=()"
+                    .to_string(),
             ),
-            
+
             ..Default::default()
         }
     }
 }
 
 /// Security headers middleware
-pub async fn security_headers_middleware(
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response {
+pub async fn security_headers_middleware(request: Request<axum::body::Body>, next: Next) -> Response {
     // Get security config from request extensions
     let config = request
         .extensions()
@@ -219,10 +221,9 @@ pub async fn security_headers_middleware(
 
     // Add custom headers
     for (name, value) in &config.custom_headers {
-        if let (Ok(header_name), Ok(header_value)) = (
-            HeaderName::from_bytes(name.as_bytes()),
-            HeaderValue::from_str(value),
-        ) {
+        if let (Ok(header_name), Ok(header_value)) =
+            (HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_str(value))
+        {
             headers.insert(header_name, header_value);
         }
     }
@@ -276,7 +277,7 @@ impl TlsConfig {
             ..Default::default()
         }
     }
-    
+
     /// Create a compatible TLS configuration (TLS 1.2+)
     pub fn compatible() -> Self {
         Self {
@@ -310,13 +311,15 @@ mod tests {
         let config = SecurityConfig::default();
         let app = Router::new()
             .route("/test", get(test_handler))
-            .layer(axum::middleware::from_fn(move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
-                let config = config.clone();
-                async move {
-                    req.extensions_mut().insert(config);
-                    security_headers_middleware(req, next).await
-                }
-            }));
+            .layer(axum::middleware::from_fn(
+                move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+                    let config = config.clone();
+                    async move {
+                        req.extensions_mut().insert(config);
+                        security_headers_middleware(req, next).await
+                    }
+                },
+            ));
 
         let request = axum::http::Request::builder()
             .uri("/test")
@@ -341,13 +344,15 @@ mod tests {
         let config = SecurityConfig::development();
         let app = Router::new()
             .route("/test", get(test_handler))
-            .layer(axum::middleware::from_fn(move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
-                let config = config.clone();
-                async move {
-                    req.extensions_mut().insert(config);
-                    security_headers_middleware(req, next).await
-                }
-            }));
+            .layer(axum::middleware::from_fn(
+                move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+                    let config = config.clone();
+                    async move {
+                        req.extensions_mut().insert(config);
+                        security_headers_middleware(req, next).await
+                    }
+                },
+            ));
 
         let request = axum::http::Request::builder()
             .uri("/test")
@@ -359,7 +364,7 @@ mod tests {
 
         // HSTS should be disabled in development
         assert!(!headers.contains_key("strict-transport-security"));
-        
+
         // But other headers should still be present
         assert!(headers.contains_key("content-security-policy"));
         assert!(headers.contains_key("x-frame-options"));

@@ -24,6 +24,5 @@ pub mod migrations {
 
 #[cfg(feature = "seaorm")]
 pub use crate::seaorm::{
-    connection::DatabaseConnection, connection::DatabaseError, filters::validation,
-    filters::SafeFilterBuilder,
+    connection::DatabaseConnection, connection::DatabaseError, filters::validation, filters::SafeFilterBuilder,
 };

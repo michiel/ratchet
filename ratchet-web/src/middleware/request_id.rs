@@ -1,6 +1,6 @@
 use axum::{
     extract::FromRequestParts,
-    http::{HeaderMap, HeaderValue, Request, request::Parts},
+    http::{request::Parts, HeaderMap, HeaderValue, Request},
     middleware::Next,
     response::Response,
 };
@@ -42,11 +42,7 @@ impl std::fmt::Display for RequestId {
 }
 
 /// Middleware to add request ID to all requests
-pub async fn request_id_middleware(
-    headers: HeaderMap,
-    mut request: Request<axum::body::Body>,
-    next: Next,
-) -> Response {
+pub async fn request_id_middleware(headers: HeaderMap, mut request: Request<axum::body::Body>, next: Next) -> Response {
     // Try to get request ID from incoming headers, otherwise generate one
     let request_id = headers
         .get(REQUEST_ID_HEADER)
@@ -55,9 +51,7 @@ pub async fn request_id_middleware(
         .unwrap_or_default();
 
     // Store request ID in request extensions for handlers to access
-    request
-        .extensions_mut()
-        .insert(Arc::new(request_id.clone()));
+    request.extensions_mut().insert(Arc::new(request_id.clone()));
 
     // Add request ID to tracing span
     let span = tracing::info_span!(
@@ -72,9 +66,7 @@ pub async fn request_id_middleware(
 
         // Add request ID to response headers
         if let Ok(header_value) = HeaderValue::from_str(&request_id.0) {
-            response
-                .headers_mut()
-                .insert(REQUEST_ID_HEADER, header_value);
+            response.headers_mut().insert(REQUEST_ID_HEADER, header_value);
         }
 
         response
@@ -91,9 +83,7 @@ pub trait RequestIdExt {
 
 impl RequestIdExt for Request<axum::body::Body> {
     fn request_id(&self) -> Option<RequestId> {
-        self.extensions()
-            .get::<Arc<RequestId>>()
-            .map(|id| id.as_ref().clone())
+        self.extensions().get::<Arc<RequestId>>().map(|id| id.as_ref().clone())
     }
 
     fn request_id_or_generate(&self) -> RequestId {

@@ -32,9 +32,8 @@ pub use safe_errors::SafeDatabaseError;
 // Re-export common SeaORM types for convenience
 #[cfg(feature = "seaorm")]
 pub use sea_orm::{
-    ActiveModelTrait, ConnectOptions, ConnectionTrait, Database,
-    DatabaseConnection as SeaOrmConnection, DatabaseTransaction, EntityTrait, ModelTrait,
-    PaginatorTrait, QueryFilter, QueryOrder, TransactionTrait,
+    ActiveModelTrait, ConnectOptions, ConnectionTrait, Database, DatabaseConnection as SeaOrmConnection,
+    DatabaseTransaction, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, TransactionTrait,
 };
 
 pub use sea_orm::Schema;

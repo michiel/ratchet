@@ -236,11 +236,7 @@ impl CircuitBreaker {
     }
 
     fn should_open(&self, state: &CircuitBreakerState) -> bool {
-        let window_failures = state
-            .window_requests
-            .iter()
-            .filter(|(_, success)| !success)
-            .count() as u32;
+        let window_failures = state.window_requests.iter().filter(|(_, success)| !success).count() as u32;
 
         let window_total = state.window_requests.len() as u32;
 
@@ -249,9 +245,7 @@ impl CircuitBreaker {
 
     fn clean_window(&self, state: &mut CircuitBreakerState) {
         let cutoff = Instant::now() - self.config.window;
-        state
-            .window_requests
-            .retain(|(timestamp, _)| *timestamp > cutoff);
+        state.window_requests.retain(|(timestamp, _)| *timestamp > cutoff);
     }
 
     fn transition_to_open(&self, state: &mut CircuitBreakerState) {

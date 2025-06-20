@@ -18,12 +18,10 @@ async fn test_filesystem_loader() {
     std::fs::write(
         task_dir.join("metadata.json"),
         serde_json::to_string_pretty(&metadata).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
 
-    std::fs::write(
-        task_dir.join("main.js"),
-        "console.log('Hello, world!');",
-    ).unwrap();
+    std::fs::write(task_dir.join("main.js"), "console.log('Hello, world!');").unwrap();
 
     // Test filesystem loader
     let loader = ratchet_registry::FilesystemLoader::new();
@@ -60,7 +58,7 @@ async fn test_registry_service() {
 #[tokio::test]
 async fn test_task_validation() {
     let validator = ratchet_registry::loaders::validation::TaskValidator::new();
-    
+
     let task_def = TaskDefinition {
         reference: TaskReference {
             name: "test-task".to_string(),

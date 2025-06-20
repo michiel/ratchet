@@ -75,30 +75,22 @@ impl DatabaseConnection {
             // Extract the file path from the URL, handling various SQLite URL formats
             let file_path = if database_url.starts_with("sqlite:///") {
                 // Absolute path with three slashes: sqlite:///path/to/file.db -> /path/to/file.db
-                database_url.strip_prefix("sqlite:///").map(|p| format!("/{}", p)).ok_or_else(|| {
-                    DatabaseError::ConfigError(format!(
-                        "Invalid SQLite URL format: {}",
-                        database_url
-                    ))
-                })?
+                database_url
+                    .strip_prefix("sqlite:///")
+                    .map(|p| format!("/{}", p))
+                    .ok_or_else(|| DatabaseError::ConfigError(format!("Invalid SQLite URL format: {}", database_url)))?
             } else if database_url.starts_with("sqlite://") {
                 // Relative path or hostname format: sqlite://file.db -> file.db
-                database_url.strip_prefix("sqlite://").ok_or_else(|| {
-                    DatabaseError::ConfigError(format!(
-                        "Invalid SQLite URL format: {}",
-                        database_url
-                    ))
-                })?
-                .to_string()
+                database_url
+                    .strip_prefix("sqlite://")
+                    .ok_or_else(|| DatabaseError::ConfigError(format!("Invalid SQLite URL format: {}", database_url)))?
+                    .to_string()
             } else if database_url.starts_with("sqlite:") {
                 // Direct path: sqlite:file.db -> file.db or sqlite:/path -> /path
-                database_url.strip_prefix("sqlite:").ok_or_else(|| {
-                    DatabaseError::ConfigError(format!(
-                        "Invalid SQLite URL format: {}",
-                        database_url
-                    ))
-                })?
-                .to_string()
+                database_url
+                    .strip_prefix("sqlite:")
+                    .ok_or_else(|| DatabaseError::ConfigError(format!("Invalid SQLite URL format: {}", database_url)))?
+                    .to_string()
             } else {
                 return Err(DatabaseError::ConfigError(format!(
                     "Invalid SQLite URL format: {}",
@@ -126,10 +118,7 @@ impl DatabaseConnection {
             if !path.exists() {
                 info!("Creating SQLite database file: {:?}", path);
                 std::fs::File::create(path).map_err(|e| {
-                    DatabaseError::ConfigError(format!(
-                        "Failed to create database file {:?}: {}",
-                        path, e
-                    ))
+                    DatabaseError::ConfigError(format!("Failed to create database file {:?}: {}", path, e))
                 })?;
                 info!("SQLite database file created successfully: {:?}", path);
             } else {

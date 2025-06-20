@@ -19,6 +19,5 @@ pub use service::{ServiceProvider, ServiceRegistry};
 pub use task::{Task, TaskId, TaskMetadata};
 pub use types::{HttpMethod, LogLevel, Priority};
 pub use validation::{
-    parse_schema, validate_json, validate_json_type, validate_json_with_schema_file,
-    validate_required_fields,
+    parse_schema, validate_json, validate_json_type, validate_json_with_schema_file, validate_required_fields,
 };

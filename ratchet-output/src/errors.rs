@@ -22,11 +22,7 @@ pub enum DeliveryError {
     FileExists { path: String },
 
     #[error("Webhook request failed to {url} (HTTP {status}): {response}")]
-    WebhookFailed {
-        url: String,
-        status: u16,
-        response: String,
-    },
+    WebhookFailed { url: String, status: u16, response: String },
 
     #[error("Network error for {url}: {error}")]
     Network { url: String, error: String },

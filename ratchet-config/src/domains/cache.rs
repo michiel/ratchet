@@ -43,10 +43,7 @@ pub struct TaskCacheConfig {
     pub memory_limit_bytes: usize,
 
     /// TTL for cached task definitions
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_task_ttl"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_task_ttl")]
     pub ttl: Duration,
 }
 
@@ -63,10 +60,7 @@ pub struct HttpCacheConfig {
     pub max_size_bytes: usize,
 
     /// Default TTL for responses without cache headers
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_http_ttl"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_http_ttl")]
     pub default_ttl: Duration,
 
     /// Whether to respect cache-control headers
@@ -91,10 +85,7 @@ pub struct ResultCacheConfig {
     pub max_entries: usize,
 
     /// TTL for cached results
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_result_ttl"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_result_ttl")]
     pub ttl: Duration,
 }
 
@@ -159,12 +150,7 @@ impl Validatable for TaskCacheConfig {
     fn validate(&self) -> ConfigResult<()> {
         // Validate cache type
         let valid_types = ["lru", "ttl", "moka", "inmemory"];
-        validate_enum_choice(
-            &self.cache_type,
-            &valid_types,
-            "cache_type",
-            self.domain_name(),
-        )?;
+        validate_enum_choice(&self.cache_type, &valid_types, "cache_type", self.domain_name())?;
 
         validate_positive(
             self.task_content_cache_size,
@@ -172,11 +158,7 @@ impl Validatable for TaskCacheConfig {
             self.domain_name(),
         )?;
 
-        validate_positive(
-            self.memory_limit_bytes,
-            "memory_limit_bytes",
-            self.domain_name(),
-        )?;
+        validate_positive(self.memory_limit_bytes, "memory_limit_bytes", self.domain_name())?;
 
         validate_positive(self.ttl.as_secs(), "ttl", self.domain_name())?;
 
@@ -192,11 +174,7 @@ impl Validatable for HttpCacheConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_positive(self.max_size_bytes, "max_size_bytes", self.domain_name())?;
 
-        validate_positive(
-            self.default_ttl.as_secs(),
-            "default_ttl",
-            self.domain_name(),
-        )?;
+        validate_positive(self.default_ttl.as_secs(), "default_ttl", self.domain_name())?;
 
         Ok(())
     }

@@ -23,29 +23,23 @@
 //! - Builder patterns - `TaskBuilder`, `ExecutionBuilder`, etc. for creating test data
 //! - Test fixtures - File-based testing utilities for tasks and configurations
 
+pub mod builders;
 pub mod database;
 pub mod mocks;
-pub mod builders;
 
 #[cfg(feature = "testing")]
 pub mod fixtures;
 
 // Re-export commonly used testing utilities
 #[cfg(all(feature = "testing", feature = "seaorm"))]
-pub use database::{TestDatabase, SharedTestDatabase, TestDatabaseError};
+pub use builders::{factories, DeliveryResultBuilder, ExecutionBuilder, JobBuilder, ScheduleBuilder, TaskBuilder};
 #[cfg(all(feature = "testing", feature = "seaorm"))]
-pub use builders::{
-    TaskBuilder, ExecutionBuilder, JobBuilder, ScheduleBuilder, DeliveryResultBuilder,
-    factories,
-};
+pub use database::{SharedTestDatabase, TestDatabase, TestDatabaseError};
 #[cfg(all(feature = "testing", feature = "seaorm"))]
-pub use mocks::{
-    MockFactory, MockTaskRepo, MockExecutionRepo, MockJobRepo, MockScheduleRepo,
-    mock_errors,
-};
+pub use mocks::{mock_errors, MockExecutionRepo, MockFactory, MockJobRepo, MockScheduleRepo, MockTaskRepo};
 
 #[cfg(feature = "testing")]
-pub use fixtures::{TestFixtures, FixtureBuilder};
+pub use fixtures::{FixtureBuilder, TestFixtures};
 
 // Re-export testing macros
 #[cfg(all(feature = "testing", feature = "seaorm"))]

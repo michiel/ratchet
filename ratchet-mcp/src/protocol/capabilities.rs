@@ -5,8 +5,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 pub use super::messages::{
-    ClientCapabilities, LoggingCapability, PromptsCapability, ResourcesCapability,
-    SamplingCapability, ServerCapabilities, ToolsCapability,
+    ClientCapabilities, LoggingCapability, PromptsCapability, ResourcesCapability, SamplingCapability,
+    ServerCapabilities, ToolsCapability,
 };
 
 /// MCP capabilities container
@@ -106,16 +106,12 @@ impl Default for ServerCapabilities {
         Self {
             experimental: HashMap::new(),
             logging: Some(LoggingCapability {}),
-            prompts: Some(PromptsCapability {
-                list_changed: false,
-            }),
+            prompts: Some(PromptsCapability { list_changed: false }),
             resources: Some(ResourcesCapability {
                 subscribe: false,
                 list_changed: false,
             }),
-            tools: Some(ToolsCapability {
-                list_changed: false,
-            }),
+            tools: Some(ToolsCapability { list_changed: false }),
             batch: Some(crate::protocol::BatchCapability {
                 max_batch_size: 50,
                 max_parallel: 5,

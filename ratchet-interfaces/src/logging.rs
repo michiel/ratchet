@@ -1,5 +1,5 @@
 //! Logging interface definitions
-//! 
+//!
 //! Provides structured logging interfaces that can be implemented
 //! by different logging backends.
 
@@ -9,7 +9,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 /// Log level enumeration
-/// 
+///
 /// Defines the severity levels for log messages, following standard
 /// logging conventions from most verbose (Trace) to least verbose (Error).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -68,7 +68,7 @@ impl std::fmt::Display for LogLevel {
 pub struct LogLevelParseError(String);
 
 /// Structured log event
-/// 
+///
 /// Represents a single log entry with structured metadata.
 /// This provides a common format for log events across the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,7 +87,7 @@ pub struct LogEvent {
     pub target: Option<String>,
     /// Optional correlation ID for tracing (legacy: used to be called 'correlation_id')
     pub correlation_id: Option<String>,
-    
+
     // Legacy compatibility fields for ratchet-mcp
     /// Trace ID for distributed tracing
     pub trace_id: Option<String>,
@@ -173,11 +173,11 @@ impl LogEvent {
         if self.context.is_null() {
             self.context = JsonValue::Object(serde_json::Map::new());
         }
-        
+
         if let JsonValue::Object(ref mut map) = self.context {
             map.insert(key.to_string(), value.into());
         }
-        
+
         self
     }
 
@@ -189,13 +189,13 @@ impl LogEvent {
 }
 
 /// Structured logger trait
-/// 
+///
 /// Defines the interface for structured logging backends.
 /// Implementations can route logs to different destinations (console, files, remote systems).
 pub trait StructuredLogger: Send + Sync {
     /// Log a structured event
     fn log(&self, event: LogEvent);
-    
+
     /// Log with level and message (convenience method)
     fn log_simple(&self, level: LogLevel, message: String) {
         self.log(LogEvent::new(level, message));
@@ -203,18 +203,12 @@ pub trait StructuredLogger: Send + Sync {
 
     /// Log with level, message, and source
     fn log_with_source(&self, level: LogLevel, message: String, source: String) {
-        self.log(
-            LogEvent::new(level, message)
-                .with_source(source)
-        );
+        self.log(LogEvent::new(level, message).with_source(source));
     }
 
     /// Log with full context
     fn log_with_context(&self, level: LogLevel, message: String, context: JsonValue) {
-        self.log(
-            LogEvent::new(level, message)
-                .with_context(context)
-        );
+        self.log(LogEvent::new(level, message).with_context(context));
     }
 
     /// Trace level logging
@@ -256,7 +250,7 @@ pub trait StructuredLogger: Send + Sync {
 }
 
 /// Log context builder for structured logging
-/// 
+///
 /// Helps build complex log contexts incrementally.
 #[derive(Debug, Default)]
 pub struct LogContext {
@@ -283,10 +277,7 @@ impl LogContext {
 
     /// Convert to JsonValue for use in LogEvent
     pub fn to_json(self) -> JsonValue {
-        JsonValue::Object(
-            self.fields.into_iter()
-                .collect()
-        )
+        JsonValue::Object(self.fields.into_iter().collect())
     }
 }
 
@@ -308,7 +299,7 @@ mod tests {
         assert_eq!(LogLevel::from_str("INFO").unwrap(), LogLevel::Info);
         assert_eq!(LogLevel::from_str("warn").unwrap(), LogLevel::Warn);
         assert_eq!(LogLevel::from_str("warning").unwrap(), LogLevel::Warn);
-        
+
         assert!(LogLevel::from_str("invalid").is_err());
     }
 
@@ -333,7 +324,7 @@ mod tests {
         assert_eq!(event.message, "Test message");
         assert_eq!(event.source, Some("test-module".to_string()));
         assert_eq!(event.correlation_id, Some("req-456".to_string()));
-        
+
         if let JsonValue::Object(context) = &event.context {
             assert_eq!(context["user_id"], "123");
             assert_eq!(context["action"], "login");
@@ -350,7 +341,7 @@ mod tests {
             .with_field("environment", "production");
 
         let json = context.to_json();
-        
+
         if let JsonValue::Object(obj) = json {
             assert_eq!(obj["service"], "auth");
             assert_eq!(obj["version"], "1.2.3");
@@ -386,11 +377,11 @@ mod tests {
     #[test]
     fn test_structured_logger_convenience_methods() {
         let logger = MockLogger::new();
-        
+
         logger.info("Test info message".to_string());
         logger.warn("Test warning".to_string());
         logger.error("Test error".to_string());
-        
+
         let events = logger.get_events();
         assert_eq!(events.len(), 3);
         assert_eq!(events[0].level, LogLevel::Info);

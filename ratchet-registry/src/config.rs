@@ -30,13 +30,9 @@ impl Default for RegistryConfig {
 #[serde(tag = "type")]
 pub enum TaskSource {
     #[serde(rename = "filesystem")]
-    Filesystem { 
-        path: String,
-        recursive: bool,
-        watch: bool,
-    },
+    Filesystem { path: String, recursive: bool, watch: bool },
     #[serde(rename = "http")]
-    Http { 
+    Http {
         url: String,
         auth: Option<HttpAuth>,
         polling_interval: Duration,
@@ -78,7 +74,7 @@ pub enum GitAuthType {
     #[serde(rename = "git_token")]
     Token { token: String },
     #[serde(rename = "ssh_key")]
-    SshKey { 
+    SshKey {
         private_key_path: String,
         passphrase: Option<String>,
     },
@@ -98,47 +94,47 @@ pub struct GitConfig {
     /// Also accepts tags or commit hashes
     #[serde(alias = "git_ref", default = "default_git_branch")]
     pub branch: String,
-    
+
     /// Subdirectory within repository
     pub subdirectory: Option<String>,
-    
+
     /// Use shallow clone for performance
     #[serde(default = "default_shallow")]
     pub shallow: bool,
-    
+
     /// Clone depth for shallow clones
     #[serde(default = "default_depth")]
     pub depth: Option<u32>,
-    
+
     /// Sync strategy
     #[serde(default)]
     pub sync_strategy: GitSyncStrategy,
-    
+
     /// Cleanup on error
     #[serde(default = "default_cleanup_on_error")]
     pub cleanup_on_error: bool,
-    
+
     /// Verify Git commit signatures
     #[serde(default)]
     pub verify_signatures: bool,
-    
+
     /// Allowed Git refs (for security)
     pub allowed_refs: Option<Vec<String>>,
-    
+
     /// Git operation timeout
     #[serde(default = "default_git_timeout")]
     pub timeout: Duration,
-    
+
     /// Maximum repository size
     pub max_repo_size: Option<String>,
-    
+
     /// Local cache path
     pub local_cache_path: Option<String>,
-    
+
     /// Cache TTL
     #[serde(default = "default_cache_ttl")]
     pub cache_ttl: Duration,
-    
+
     /// Keep Git history
     #[serde(default)]
     pub keep_history: bool,
@@ -259,7 +255,11 @@ impl TaskSource {
             })
         } else if uri.starts_with("http://") || uri.starts_with("https://") {
             // Check if this is a Git repository URL
-            if uri.ends_with(".git") || uri.contains("github.com") || uri.contains("gitlab.com") || uri.contains("bitbucket.org") {
+            if uri.ends_with(".git")
+                || uri.contains("github.com")
+                || uri.contains("gitlab.com")
+                || uri.contains("bitbucket.org")
+            {
                 Ok(TaskSource::Git {
                     url: uri.to_string(),
                     auth: None,
@@ -297,11 +297,11 @@ impl TaskSource {
         match self {
             TaskSource::Http { url, .. } => Some(
                 url.parse()
-                    .map_err(|e| RegistryError::Configuration(format!("Invalid URL: {}", e)))
+                    .map_err(|e| RegistryError::Configuration(format!("Invalid URL: {}", e))),
             ),
             TaskSource::Git { url, .. } => Some(
                 url.parse()
-                    .map_err(|e| RegistryError::Configuration(format!("Invalid Git URL: {}", e)))
+                    .map_err(|e| RegistryError::Configuration(format!("Invalid Git URL: {}", e))),
             ),
             _ => None,
         }

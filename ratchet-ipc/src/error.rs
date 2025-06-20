@@ -88,21 +88,13 @@ mod tests {
         assert!(IpcError::IoError("network error".to_string()).is_retryable());
         assert!(IpcError::Timeout.is_retryable());
         assert!(IpcError::ConnectionClosed.is_retryable());
-        assert!(!IpcError::ProtocolVersionMismatch {
-            expected: 1,
-            actual: 2
-        }
-        .is_retryable());
+        assert!(!IpcError::ProtocolVersionMismatch { expected: 1, actual: 2 }.is_retryable());
         assert!(!IpcError::InvalidMessage("bad format".to_string()).is_retryable());
     }
 
     #[test]
     fn test_error_fatal() {
-        assert!(IpcError::ProtocolVersionMismatch {
-            expected: 1,
-            actual: 2
-        }
-        .is_fatal());
+        assert!(IpcError::ProtocolVersionMismatch { expected: 1, actual: 2 }.is_fatal());
         assert!(IpcError::InvalidMessage("bad format".to_string()).is_fatal());
         assert!(!IpcError::IoError("network error".to_string()).is_fatal());
         assert!(!IpcError::Timeout.is_fatal());

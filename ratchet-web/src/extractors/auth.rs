@@ -1,14 +1,8 @@
 //! Authentication extractors for Axum
 
-use axum::{
-    extract::FromRequestParts,
-    http::request::Parts,
-};
+use axum::{extract::FromRequestParts, http::request::Parts};
 
-use crate::{
-    middleware::AuthContext,
-    errors::WebError,
-};
+use crate::{errors::WebError, middleware::AuthContext};
 
 /// Auth context extractor for Axum handlers
 impl<S> FromRequestParts<S> for AuthContext
@@ -24,8 +18,6 @@ where
             .extensions
             .get::<AuthContext>()
             .cloned()
-            .ok_or_else(|| {
-                WebError::internal("Authentication context not found. Ensure auth middleware is enabled.")
-            })
+            .ok_or_else(|| WebError::internal("Authentication context not found. Ensure auth middleware is enabled."))
     }
 }

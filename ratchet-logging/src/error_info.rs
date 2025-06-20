@@ -35,11 +35,7 @@ pub struct RelatedError {
 }
 
 impl ErrorInfo {
-    pub fn new(
-        error_type: impl Into<String>,
-        error_code: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn new(error_type: impl Into<String>, error_code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             error_type: error_type.into(),
             error_code: error_code.into(),

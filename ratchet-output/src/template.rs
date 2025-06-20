@@ -15,20 +15,15 @@ impl TemplateEngine {
     pub fn new() -> Self {
         let mut handlebars = Handlebars::new();
         handlebars.set_strict_mode(true); // Error on missing variables
-        
-        Self {
-            handlebars,
-        }
+
+        Self { handlebars }
     }
 
     /// Render a template with the given variables
-    pub fn render(
-        &self,
-        template: &str,
-        variables: &HashMap<String, String>,
-    ) -> Result<String, DeliveryError> {
+    pub fn render(&self, template: &str, variables: &HashMap<String, String>) -> Result<String, DeliveryError> {
         // Convert HashMap<String, String> to Value for handlebars
-        let json_vars: Value = variables.iter()
+        let json_vars: Value = variables
+            .iter()
             .map(|(k, v)| (k.clone(), Value::String(v.clone())))
             .collect::<serde_json::Map<_, _>>()
             .into();
@@ -42,11 +37,7 @@ impl TemplateEngine {
     }
 
     /// Render a template with JSON variables (for complex data)
-    pub fn render_json(
-        &self,
-        template: &str,
-        variables: &Value,
-    ) -> Result<String, DeliveryError> {
+    pub fn render_json(&self, template: &str, variables: &Value) -> Result<String, DeliveryError> {
         self.handlebars
             .render_template(template, variables)
             .map_err(|e| DeliveryError::TemplateRender {

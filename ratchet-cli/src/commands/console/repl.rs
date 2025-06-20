@@ -1,18 +1,18 @@
 //! REPL (Read-Eval-Print Loop) implementation for Ratchet console
 
-use std::collections::HashMap;
-use std::path::PathBuf;
 use anyhow::Result;
 use colored::*;
-use rustyline::Result as RustylineResult;
-use rustyline::completion::{Completer, FilenameCompleter, Pair};
-use rustyline::highlight::{Highlighter, MatchingBracketHighlighter, CmdKind};
-use rustyline::hint::{Hinter, HistoryHinter};
-use rustyline::validate::{Validator, MatchingBracketValidator};
-use rustyline::{Context, Helper, Editor};
 use regex;
+use rustyline::completion::{Completer, FilenameCompleter, Pair};
+use rustyline::highlight::{CmdKind, Highlighter, MatchingBracketHighlighter};
+use rustyline::hint::{Hinter, HistoryHinter};
+use rustyline::validate::{MatchingBracketValidator, Validator};
+use rustyline::Result as RustylineResult;
+use rustyline::{Context, Editor, Helper};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
-use super::{ConsoleConfig, parser::CommandParser, executor::CommandExecutor, formatter::OutputFormatter};
+use super::{executor::CommandExecutor, formatter::OutputFormatter, parser::CommandParser, ConsoleConfig};
 
 /// Ratchet command completer for tab completion
 struct RatchetHelper {
@@ -41,7 +41,10 @@ impl Hinter for RatchetHelper {
 }
 
 impl Validator for RatchetHelper {
-    fn validate(&self, ctx: &mut rustyline::validate::ValidationContext) -> rustyline::Result<rustyline::validate::ValidationResult> {
+    fn validate(
+        &self,
+        ctx: &mut rustyline::validate::ValidationContext,
+    ) -> rustyline::Result<rustyline::validate::ValidationResult> {
         self.validator.validate(ctx)
     }
 }
@@ -77,7 +80,29 @@ impl RatchetCompleter {
     }
 
     fn get_command_categories() -> Vec<&'static str> {
-        vec!["repo", "task", "execution", "job", "server", "db", "health", "stats", "monitor", "help", "exit", "quit", "clear", "history", "set", "unset", "vars", "env", "source", "connect", "disconnect"]
+        vec![
+            "repo",
+            "task",
+            "execution",
+            "job",
+            "server",
+            "db",
+            "health",
+            "stats",
+            "monitor",
+            "help",
+            "exit",
+            "quit",
+            "clear",
+            "history",
+            "set",
+            "unset",
+            "vars",
+            "env",
+            "source",
+            "connect",
+            "disconnect",
+        ]
     }
 
     fn get_repo_commands() -> Vec<&'static str> {
@@ -111,7 +136,7 @@ impl Completer for RatchetCompleter {
     fn complete(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> rustyline::Result<(usize, Vec<Pair>)> {
         let line_to_cursor = &line[..pos];
         let tokens: Vec<&str> = line_to_cursor.split_whitespace().collect();
-        
+
         let mut candidates = Vec::new();
         let start: usize;
 
@@ -119,7 +144,7 @@ impl Completer for RatchetCompleter {
             // Complete command categories
             start = line_to_cursor.rfind(' ').map(|i| i + 1).unwrap_or(0);
             let prefix = &line_to_cursor[start..];
-            
+
             for category in Self::get_command_categories() {
                 if category.starts_with(prefix) {
                     candidates.push(Pair {
@@ -133,7 +158,7 @@ impl Completer for RatchetCompleter {
             let category = tokens[0];
             start = line_to_cursor.rfind(' ').map(|i| i + 1).unwrap_or(0);
             let prefix = if tokens.len() == 2 { tokens[1] } else { "" };
-            
+
             let actions = match category {
                 "repo" => Self::get_repo_commands(),
                 "task" => Self::get_task_commands(),
@@ -143,7 +168,7 @@ impl Completer for RatchetCompleter {
                 "db" => Self::get_db_commands(),
                 _ => Vec::new(),
             };
-            
+
             for action in actions {
                 if action.starts_with(prefix) {
                     candidates.push(Pair {
@@ -191,7 +216,7 @@ impl RatchetConsole {
     pub async fn new(config: ConsoleConfig) -> Result<Self> {
         let mut editor = Editor::new()?;
         editor.set_helper(Some(RatchetHelper::default()));
-        
+
         // Load history file if specified
         if let Some(history_file) = &config.history_file {
             let _ = editor.load_history(history_file);
@@ -257,7 +282,7 @@ impl RatchetConsole {
     /// Show the console banner
     async fn show_banner(&mut self) -> Result<()> {
         println!("{}", "Ratchet Console v0.6.0".bright_cyan().bold());
-        
+
         // Show connection status without failing on connection errors
         match self.executor.connect().await {
             Ok(info) => {
@@ -273,11 +298,16 @@ impl RatchetConsole {
             }
             Err(e) => {
                 self.formatter.print_warning(&format!("Connection failed: {}", e));
-                self.formatter.print_info("Console running in offline mode. Use 'connect' to retry connection.");
+                self.formatter
+                    .print_info("Console running in offline mode. Use 'connect' to retry connection.");
             }
         }
-        
-        println!("Type '{}' for available commands, '{}' to quit", "help".bright_yellow(), "exit".bright_yellow());
+
+        println!(
+            "Type '{}' for available commands, '{}' to quit",
+            "help".bright_yellow(),
+            "exit".bright_yellow()
+        );
         println!();
         Ok(())
     }
@@ -300,7 +330,7 @@ impl RatchetConsole {
     /// Process a single command
     async fn process_command(&mut self, input: &str) -> Result<()> {
         let input = input.trim();
-        
+
         // Skip empty lines
         if input.is_empty() {
             return Ok(());
@@ -358,7 +388,8 @@ impl RatchetConsole {
                     let var_name = parts[1].to_string();
                     let var_value = parts[3..].join(" ");
                     self.variables.insert(var_name.clone(), var_value.clone());
-                    self.formatter.print_success(&format!("Set {} = {}", var_name, var_value));
+                    self.formatter
+                        .print_success(&format!("Set {} = {}", var_name, var_value));
                 } else {
                     self.formatter.print_error("Usage: set <variable> = <value>");
                 }
@@ -370,7 +401,8 @@ impl RatchetConsole {
                     if self.variables.remove(var_name).is_some() {
                         self.formatter.print_success(&format!("Unset {}", var_name));
                     } else {
-                        self.formatter.print_warning(&format!("Variable {} not found", var_name));
+                        self.formatter
+                            .print_warning(&format!("Variable {} not found", var_name));
                     }
                 } else {
                     self.formatter.print_error("Usage: unset <variable>");
@@ -416,7 +448,9 @@ impl RatchetConsole {
                     let env_var = parts[1];
                     match std::env::var(env_var) {
                         Ok(value) => println!("{}={}", env_var, value),
-                        Err(_) => self.formatter.print_warning(&format!("Environment variable '{}' not found", env_var)),
+                        Err(_) => self
+                            .formatter
+                            .print_warning(&format!("Environment variable '{}' not found", env_var)),
                     }
                 } else {
                     // Show all environment variables
@@ -428,7 +462,7 @@ impl RatchetConsole {
                 }
                 Ok(Some(Ok(())))
             }
-            _ => Ok(None)
+            _ => Ok(None),
         }
     }
 
@@ -442,7 +476,10 @@ impl RatchetConsole {
         println!("  {}   - Set a variable", "set <var> = <value>".bright_yellow());
         println!("  {}      - Unset a variable", "unset <var>".bright_yellow());
         println!("  {}             - Show all variables", "vars".bright_yellow());
-        println!("  {}              - Show environment variables", "env [var]".bright_yellow());
+        println!(
+            "  {}              - Show environment variables",
+            "env [var]".bright_yellow()
+        );
         println!("  {}    - Execute a script file", "source <file>".bright_yellow());
         println!("  {}          - Connect to server", "connect".bright_yellow());
         println!("  {}       - Disconnect from server", "disconnect".bright_yellow());
@@ -474,84 +511,89 @@ impl RatchetConsole {
     /// Substitute variables in input
     fn substitute_variables(&self, input: &str) -> String {
         let mut result = input.to_string();
-        
+
         // Enhanced variable substitution with multiple formats
         // Support: $VAR, ${VAR}, $ENV{VAR}, ${ENV:VAR}, ${VAR:-default}
-        
+
         let re = regex::Regex::new(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)").unwrap();
-        
-        result = re.replace_all(&result, |caps: &regex::Captures| {
-            if let Some(var_expr) = caps.get(1) {
-                // Handle ${...} format with advanced features
-                let expr = var_expr.as_str();
-                
-                // Handle ${ENV:VAR} - environment variable
-                if let Some(env_var) = expr.strip_prefix("ENV:") {
-                    return std::env::var(env_var).unwrap_or_default();
-                }
-                
-                // Handle ${VAR:-default} - variable with default value
-                if let Some((var_name, default_value)) = expr.split_once(":-") {
+
+        result = re
+            .replace_all(&result, |caps: &regex::Captures| {
+                if let Some(var_expr) = caps.get(1) {
+                    // Handle ${...} format with advanced features
+                    let expr = var_expr.as_str();
+
+                    // Handle ${ENV:VAR} - environment variable
+                    if let Some(env_var) = expr.strip_prefix("ENV:") {
+                        return std::env::var(env_var).unwrap_or_default();
+                    }
+
+                    // Handle ${VAR:-default} - variable with default value
+                    if let Some((var_name, default_value)) = expr.split_once(":-") {
+                        if let Some(value) = self.variables.get(var_name) {
+                            return value.clone();
+                        } else {
+                            return default_value.to_string();
+                        }
+                    }
+
+                    // Handle ${VAR:+value} - value if variable is set
+                    if let Some((var_name, value_if_set)) = expr.split_once(":+") {
+                        if self.variables.contains_key(var_name) {
+                            return value_if_set.to_string();
+                        } else {
+                            return String::new();
+                        }
+                    }
+
+                    // Handle ${VAR} - simple variable
+                    if let Some(value) = self.variables.get(expr) {
+                        return value.clone();
+                    }
+
+                    // Check environment variables as fallback
+                    std::env::var(expr).unwrap_or_else(|_| format!("${{{}}}", expr))
+                } else if let Some(var_name) = caps.get(2) {
+                    // Handle $VAR format
+                    let var_name = var_name.as_str();
+
+                    // Check local variables first
                     if let Some(value) = self.variables.get(var_name) {
                         return value.clone();
-                    } else {
-                        return default_value.to_string();
                     }
+
+                    // Check environment variables as fallback
+                    std::env::var(var_name).unwrap_or_else(|_| format!("${}", var_name))
+                } else {
+                    caps.get(0).unwrap().as_str().to_string()
                 }
-                
-                // Handle ${VAR:+value} - value if variable is set
-                if let Some((var_name, value_if_set)) = expr.split_once(":+") {
-                    if self.variables.contains_key(var_name) {
-                        return value_if_set.to_string();
-                    } else {
-                        return String::new();
-                    }
-                }
-                
-                // Handle ${VAR} - simple variable
-                if let Some(value) = self.variables.get(expr) {
-                    return value.clone();
-                }
-                
-                // Check environment variables as fallback
-                std::env::var(expr).unwrap_or_else(|_| format!("${{{}}}", expr))
-            } else if let Some(var_name) = caps.get(2) {
-                // Handle $VAR format
-                let var_name = var_name.as_str();
-                
-                // Check local variables first
-                if let Some(value) = self.variables.get(var_name) {
-                    return value.clone();
-                }
-                
-                // Check environment variables as fallback
-                std::env::var(var_name).unwrap_or_else(|_| format!("${}", var_name))
-            } else {
-                caps.get(0).unwrap().as_str().to_string()
-            }
-        }).to_string();
-        
+            })
+            .to_string();
+
         result
     }
 
     /// Execute a script file
-    fn execute_script<'a>(&'a mut self, script_path: &'a PathBuf) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+    fn execute_script<'a>(
+        &'a mut self,
+        script_path: &'a PathBuf,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
             let content = std::fs::read_to_string(script_path)?;
-            
+
             for line in content.lines() {
                 let line = line.trim();
                 if line.is_empty() || line.starts_with('#') {
                     continue; // Skip empty lines and comments
                 }
-                
+
                 self.formatter.print_info(&format!("> {}", line));
                 if let Err(e) = self.process_command(line).await {
                     self.formatter.print_error(&format!("Script error: {}", e));
                     return Err(e);
                 }
             }
-            
+
             Ok(())
         })
     }

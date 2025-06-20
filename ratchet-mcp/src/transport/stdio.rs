@@ -110,12 +110,9 @@ impl StdioTransport {
         })?;
 
         let mut line = String::new();
-        let bytes_read = stdout
-            .read_line(&mut line)
-            .await
-            .map_err(|e| McpError::Transport {
-                message: format!("Failed to read from stdout: {}", e),
-            })?;
+        let bytes_read = stdout.read_line(&mut line).await.map_err(|e| McpError::Transport {
+            message: format!("Failed to read from stdout: {}", e),
+        })?;
 
         if bytes_read == 0 {
             return Err(McpError::ConnectionFailed {
@@ -147,12 +144,9 @@ impl StdioTransport {
                 message: format!("Failed to write to stdin: {}", e),
             })?;
 
-        stdin
-            .write_all(b"\n")
-            .await
-            .map_err(|e| McpError::Transport {
-                message: format!("Failed to write newline to stdin: {}", e),
-            })?;
+        stdin.write_all(b"\n").await.map_err(|e| McpError::Transport {
+            message: format!("Failed to write newline to stdin: {}", e),
+        })?;
 
         stdin.flush().await.map_err(|e| McpError::Transport {
             message: format!("Failed to flush stdin: {}", e),
@@ -184,18 +178,12 @@ impl McpTransport for StdioTransport {
         // Update health status
         let mut health = self.health.lock().await;
         health.mark_success(None);
-        health.metadata.insert(
-            "command".to_string(),
-            serde_json::Value::String(self.command.clone()),
-        );
+        health
+            .metadata
+            .insert("command".to_string(), serde_json::Value::String(self.command.clone()));
         health.metadata.insert(
             "args".to_string(),
-            serde_json::Value::Array(
-                self.args
-                    .iter()
-                    .map(|s| serde_json::Value::String(s.clone()))
-                    .collect(),
-            ),
+            serde_json::Value::Array(self.args.iter().map(|s| serde_json::Value::String(s.clone())).collect()),
         );
 
         Ok(())
@@ -268,10 +256,9 @@ impl McpTransport for StdioTransport {
         };
 
         // Parse JSON response
-        let response: JsonRpcResponse =
-            serde_json::from_str(&line).map_err(|e| McpError::Serialization {
-                details: format!("Failed to parse response: {}", e),
-            })?;
+        let response: JsonRpcResponse = serde_json::from_str(&line).map_err(|e| McpError::Serialization {
+            details: format!("Failed to parse response: {}", e),
+        })?;
 
         // Update health
         let latency = start_time.elapsed();
@@ -355,12 +342,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stdio_transport_creation() {
-        let transport = StdioTransport::new(
-            "echo".to_string(),
-            vec!["hello".to_string()],
-            HashMap::new(),
-            None,
-        );
+        let transport = StdioTransport::new("echo".to_string(), vec!["hello".to_string()], HashMap::new(), None);
         assert!(transport.is_ok());
 
         let empty_command = StdioTransport::new("".to_string(), vec![], HashMap::new(), None);
@@ -369,8 +351,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transport_health_tracking() {
-        let mut transport =
-            StdioTransport::new("cat".to_string(), vec![], HashMap::new(), None).unwrap();
+        let mut transport = StdioTransport::new("cat".to_string(), vec![], HashMap::new(), None).unwrap();
 
         // Initially unhealthy
         let health = transport.health().await;
@@ -398,8 +379,7 @@ mod tests {
 
         assert!(transport.connect().await.is_ok());
 
-        let request =
-            JsonRpcRequest::with_id("test_method", Some(json!({"param": "value"})), "test-id");
+        let request = JsonRpcRequest::with_id("test_method", Some(json!({"param": "value"})), "test-id");
 
         // Send request
         assert!(transport.send(request.clone()).await.is_ok());

@@ -1,7 +1,7 @@
 //! Integration tests for MCP task development tools
 
+use ratchet_mcp::security::{ClientContext, ClientPermissions, SecurityConfig, SecurityContext};
 use ratchet_mcp::server::tools::{RatchetToolRegistry, ToolRegistry};
-use ratchet_mcp::security::{ClientContext, ClientPermissions, SecurityContext, SecurityConfig};
 use serde_json::json;
 
 fn create_test_context() -> SecurityContext {
@@ -20,13 +20,13 @@ fn create_test_context() -> SecurityContext {
 async fn test_task_development_tools_registered() {
     let registry = RatchetToolRegistry::new();
     let context = create_test_context();
-    
+
     // List all tools
     let tools = registry.list_tools(&context).await.unwrap();
-    
+
     // Verify task development tools are registered
     let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-    
+
     assert!(tool_names.contains(&"ratchet_create_task"));
     assert!(tool_names.contains(&"ratchet_validate_task"));
     assert!(tool_names.contains(&"ratchet_debug_task_execution"));
@@ -38,15 +38,15 @@ async fn test_task_development_tools_registered() {
 async fn test_create_task_tool_schema() {
     let registry = RatchetToolRegistry::new();
     let context = create_test_context();
-    
+
     // Get the create_task tool
     let tool = registry.get_tool("ratchet_create_task", &context).await.unwrap();
     assert!(tool.is_some());
-    
+
     let create_tool = tool.unwrap();
     assert_eq!(create_tool.tool.name, "ratchet_create_task");
     assert_eq!(create_tool.category, "development");
-    
+
     // Verify schema has required fields
     let schema = &create_tool.tool.input_schema;
     assert!(schema["properties"]["name"].is_object());
@@ -54,7 +54,7 @@ async fn test_create_task_tool_schema() {
     assert!(schema["properties"]["code"].is_object());
     assert!(schema["properties"]["input_schema"].is_object());
     assert!(schema["properties"]["output_schema"].is_object());
-    
+
     // Verify required fields
     let required = schema["required"].as_array().unwrap();
     assert!(required.contains(&json!("name")));
@@ -65,14 +65,14 @@ async fn test_create_task_tool_schema() {
 async fn test_validate_task_tool_schema() {
     let registry = RatchetToolRegistry::new();
     let context = create_test_context();
-    
+
     // Get the validate_task tool
     let tool = registry.get_tool("ratchet_validate_task", &context).await.unwrap();
     assert!(tool.is_some());
-    
+
     let validate_tool = tool.unwrap();
     assert_eq!(validate_tool.tool.name, "ratchet_validate_task");
-    
+
     // Verify schema
     let schema = &validate_tool.tool.input_schema;
     assert!(schema["properties"]["task_id"].is_object());
@@ -81,21 +81,21 @@ async fn test_validate_task_tool_schema() {
 
 #[tokio::test]
 async fn test_task_dev_tools_without_service() {
-    use ratchet_mcp::server::tools::{ToolExecutionContext, McpTaskExecutor};
+    use ratchet_mcp::server::tools::{McpTaskExecutor, ToolExecutionContext};
     use std::sync::Arc;
-    
+
     // Create registry without task development service
     let mut registry = RatchetToolRegistry::new();
-    
+
     // Set a mock executor for other tools
     struct MockExecutor;
-    
+
     #[async_trait::async_trait]
     impl McpTaskExecutor for MockExecutor {
         async fn execute_task(&self, _task_path: &str, _input: serde_json::Value) -> Result<serde_json::Value, String> {
             Ok(json!({"result": "mock"}))
         }
-        
+
         async fn execute_task_with_progress(
             &self,
             _task_path: &str,
@@ -106,27 +106,28 @@ async fn test_task_dev_tools_without_service() {
         ) -> Result<(String, serde_json::Value), String> {
             Ok(("exec-123".to_string(), json!({"result": "mock"})))
         }
-        
-        async fn list_tasks(&self, _filter: Option<&str>) -> Result<Vec<ratchet_mcp::server::tools::McpTaskInfo>, String> {
+
+        async fn list_tasks(
+            &self,
+            _filter: Option<&str>,
+        ) -> Result<Vec<ratchet_mcp::server::tools::McpTaskInfo>, String> {
             Ok(vec![])
         }
-        
-        async fn get_execution_logs(
-            &self,
-            _execution_id: &str,
-            _level: &str,
-            _limit: usize,
-        ) -> Result<String, String> {
+
+        async fn get_execution_logs(&self, _execution_id: &str, _level: &str, _limit: usize) -> Result<String, String> {
             Ok("[]".to_string())
         }
-        
-        async fn get_execution_status(&self, _execution_id: &str) -> Result<ratchet_mcp::server::tools::McpExecutionStatus, String> {
+
+        async fn get_execution_status(
+            &self,
+            _execution_id: &str,
+        ) -> Result<ratchet_mcp::server::tools::McpExecutionStatus, String> {
             Err("Not implemented".to_string())
         }
     }
-    
+
     registry.set_executor(Arc::new(MockExecutor));
-    
+
     let context = create_test_context();
     let execution_context = ToolExecutionContext {
         security: context,
@@ -139,14 +140,14 @@ async fn test_task_dev_tools_without_service() {
         })),
         request_id: Some("req-123".to_string()),
     };
-    
+
     // Try to execute create_task without service configured
     let result = registry.execute_tool("ratchet_create_task", execution_context).await;
     assert!(result.is_ok());
-    
+
     let tool_result = result.unwrap();
     assert!(tool_result.is_error);
-    
+
     // Verify error message
     if let ratchet_mcp::protocol::ToolContent::Text { text } = &tool_result.content[0] {
         assert!(text.contains("Task development service not configured"));

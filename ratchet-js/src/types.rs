@@ -8,13 +8,13 @@ use serde_json::Value as JsonValue;
 pub struct JsTask {
     /// Task name
     pub name: String,
-    
+
     /// JavaScript code content
     pub content: String,
-    
+
     /// Input JSON schema (optional)
     pub input_schema: Option<JsonValue>,
-    
+
     /// Output JSON schema (optional)
     pub output_schema: Option<JsonValue>,
 }
@@ -24,13 +24,13 @@ pub struct JsTask {
 pub struct ExecutionContext {
     /// Unique execution ID
     pub execution_id: String,
-    
+
     /// Task ID
     pub task_id: String,
-    
+
     /// Task version
     pub task_version: String,
-    
+
     /// Optional job ID
     pub job_id: Option<String>,
 }
@@ -44,7 +44,7 @@ impl ExecutionContext {
             job_id: None,
         }
     }
-    
+
     pub fn with_job_id(mut self, job_id: String) -> Self {
         self.job_id = Some(job_id);
         self

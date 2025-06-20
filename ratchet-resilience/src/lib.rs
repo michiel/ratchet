@@ -10,11 +10,8 @@ pub mod shutdown;
 
 // Re-export commonly used types
 pub use backoff::{BackoffCalculator, BackoffStrategy, DecorrelatedJitterCalculator};
-pub use circuit_breaker::{
-    CircuitBreaker, CircuitBreakerBuilder, CircuitBreakerConfig, CircuitState,
-};
+pub use circuit_breaker::{CircuitBreaker, CircuitBreakerBuilder, CircuitBreakerConfig, CircuitState};
 pub use retry::{RetryError, RetryExecutor, RetryPolicy, Retryable};
 pub use shutdown::{
-    GracefulTask, ProcessShutdownManager, ShutdownAwareTask, ShutdownCoordinator, ShutdownError,
-    ShutdownSignal,
+    GracefulTask, ProcessShutdownManager, ShutdownAwareTask, ShutdownCoordinator, ShutdownError, ShutdownSignal,
 };

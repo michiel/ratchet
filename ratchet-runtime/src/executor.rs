@@ -119,8 +119,7 @@ impl ExecutionEngine {
         if stats.total_executions == 1 {
             stats.average_execution_time_ms = execution_time_ms;
         } else {
-            stats.average_execution_time_ms =
-                (stats.average_execution_time_ms + execution_time_ms) / 2;
+            stats.average_execution_time_ms = (stats.average_execution_time_ms + execution_time_ms) / 2;
         }
 
         stats.available_workers = self.available_worker_count().await;
@@ -137,10 +136,7 @@ impl TaskExecutor for ExecutionEngine {
     ) -> Result<serde_json::Value> {
         let start_time = std::time::Instant::now();
 
-        debug!(
-            "Executing task: {} with input: {:?}",
-            task.metadata.id, input_data
-        );
+        debug!("Executing task: {} with input: {:?}", task.metadata.id, input_data);
 
         // Get an available worker
         let mut manager = self.worker_manager.write().await;
@@ -151,12 +147,7 @@ impl TaskExecutor for ExecutionEngine {
 
         // Create execution context if not provided
         let exec_context = context.unwrap_or_else(|| {
-            ratchet_ipc::ExecutionContext::new(
-                Uuid::new_v4(),
-                None,
-                Uuid::new_v4(),
-                "1.0.0".to_string(),
-            )
+            ratchet_ipc::ExecutionContext::new(Uuid::new_v4(), None, Uuid::new_v4(), "1.0.0".to_string())
         });
 
         // Create task execution message
@@ -187,9 +178,7 @@ impl TaskExecutor for ExecutionEngine {
                             task.metadata.id, execution_time
                         );
                         result.output.ok_or_else(|| {
-                            RatchetError::ExecutionError(
-                                "Task succeeded but returned no output".to_string(),
-                            )
+                            RatchetError::ExecutionError("Task succeeded but returned no output".to_string())
                         })
                     } else {
                         let error_msg = result
@@ -207,9 +196,7 @@ impl TaskExecutor for ExecutionEngine {
             }
             Err(WorkerProcessError::Timeout) => {
                 self.update_stats(execution_time, false).await;
-                Err(RatchetError::ExecutionError(
-                    "Task execution timed out".to_string(),
-                ))
+                Err(RatchetError::ExecutionError("Task execution timed out".to_string()))
             }
             Err(e) => {
                 self.update_stats(execution_time, false).await;
@@ -297,8 +284,7 @@ impl TaskExecutor for InMemoryTaskExecutor {
             if stats.total_executions == 1 {
                 stats.average_execution_time_ms = execution_time;
             } else {
-                stats.average_execution_time_ms =
-                    (stats.average_execution_time_ms + execution_time) / 2;
+                stats.average_execution_time_ms = (stats.average_execution_time_ms + execution_time) / 2;
             }
         }
 
@@ -378,9 +364,7 @@ mod tests {
             .unwrap();
 
         // Execute a task
-        let _ = executor
-            .execute_task(&task, serde_json::json!({}), None)
-            .await;
+        let _ = executor.execute_task(&task, serde_json::json!({}), None).await;
 
         let stats = executor.get_stats().await;
         assert_eq!(stats.total_executions, 1);

@@ -1,4 +1,4 @@
-use crate::{JsExecutionError, JsTask, ExecutionContext};
+use crate::{ExecutionContext, JsExecutionError, JsTask};
 use serde_json::Value as JsonValue;
 use thiserror::Error;
 use tracing::debug;
@@ -51,7 +51,7 @@ impl JsTaskRunner {
         // Create HTTP manager if HTTP feature is enabled
         #[cfg(feature = "http")]
         let http_manager = ratchet_http::HttpManager::new();
-        
+
         #[cfg(not(feature = "http"))]
         let http_manager = ();
 
@@ -84,7 +84,7 @@ impl JsTaskRunner {
         // Create HTTP manager if HTTP feature is enabled
         #[cfg(feature = "http")]
         let http_manager = ratchet_http::HttpManager::new();
-        
+
         #[cfg(not(feature = "http"))]
         let http_manager = ();
 
@@ -148,7 +148,8 @@ mod tests {
                 function main(input) {
                     return { result: input.a + input.b };
                 }
-            "#.to_string(),
+            "#
+            .to_string(),
             input_schema: None,
             output_schema: None,
         };
@@ -160,7 +161,7 @@ mod tests {
 
         let runner = JsTaskRunner::new();
         let result = runner.execute_task(&task, input_data, None).await;
-        
+
         assert!(result.is_ok());
         let output = result.unwrap();
         assert_eq!(output["result"], 30);

@@ -179,7 +179,7 @@ impl Default for ResourceQuotas {
             max_memory_mb: Some(1024),          // 1GB
             max_log_entries_per_request: Some(1000),
             max_trace_entries_per_request: Some(500),
-            max_request_size_bytes: Some(1024 * 1024), // 1MB
+            max_request_size_bytes: Some(1024 * 1024),       // 1MB
             max_response_size_bytes: Some(10 * 1024 * 1024), // 10MB
         }
     }
@@ -205,7 +205,7 @@ impl ResourceQuotas {
             max_memory_mb: Some(256),          // 256MB
             max_log_entries_per_request: Some(100),
             max_trace_entries_per_request: Some(50),
-            max_request_size_bytes: Some(100 * 1024), // 100KB
+            max_request_size_bytes: Some(100 * 1024),   // 100KB
             max_response_size_bytes: Some(1024 * 1024), // 1MB
         }
     }
@@ -236,10 +236,7 @@ impl PermissionChecker {
     }
 
     /// Validate request size against quotas
-    pub fn validate_request_size(
-        permissions: &ClientPermissions,
-        size_bytes: u64,
-    ) -> Result<(), String> {
+    pub fn validate_request_size(permissions: &ClientPermissions, size_bytes: u64) -> Result<(), String> {
         if let Some(max_size) = permissions.resource_quotas.max_request_size_bytes {
             if size_bytes > max_size {
                 return Err(format!(
@@ -252,10 +249,7 @@ impl PermissionChecker {
     }
 
     /// Validate log request parameters
-    pub fn validate_log_request(
-        permissions: &ClientPermissions,
-        max_entries: u32,
-    ) -> Result<u32, String> {
+    pub fn validate_log_request(permissions: &ClientPermissions, max_entries: u32) -> Result<u32, String> {
         if !permissions.can_read_logs {
             return Err("Client does not have permission to read logs".to_string());
         }
@@ -269,10 +263,7 @@ impl PermissionChecker {
     }
 
     /// Validate trace request parameters
-    pub fn validate_trace_request(
-        permissions: &ClientPermissions,
-        max_entries: u32,
-    ) -> Result<u32, String> {
+    pub fn validate_trace_request(permissions: &ClientPermissions, max_entries: u32) -> Result<u32, String> {
         if !permissions.can_read_traces {
             return Err("Client does not have permission to read traces".to_string());
         }
@@ -338,10 +329,7 @@ mod tests {
 
         assert!(PermissionChecker::can_read_logs(&permissions));
         assert!(PermissionChecker::can_read_traces(&permissions));
-        assert!(!PermissionChecker::can_execute_task(
-            &permissions,
-            "test-task"
-        ));
+        assert!(!PermissionChecker::can_execute_task(&permissions, "test-task"));
 
         // Test request size validation
         let mut permissions = ClientPermissions::default();

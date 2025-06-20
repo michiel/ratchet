@@ -1,9 +1,9 @@
 //! Task loading from filesystem
-//! 
+//!
 //! This module provides functionality to load JavaScript tasks from filesystem
 //! directories, compatible with the ratchet task format.
 
-use crate::{JsTask, JsExecutionError};
+use crate::{JsExecutionError, JsTask};
 use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::Path;
@@ -59,11 +59,9 @@ impl FileSystemTask {
     /// Load a task from filesystem path
     pub fn from_fs<P: AsRef<Path>>(path: P) -> Result<Self, TaskLoadError> {
         let task_path = path.as_ref();
-        
+
         if !task_path.exists() {
-            return Err(TaskLoadError::TaskNotFound(
-                task_path.display().to_string()
-            ));
+            return Err(TaskLoadError::TaskNotFound(task_path.display().to_string()));
         }
 
         // Check if it's a directory with task structure
@@ -71,7 +69,7 @@ impl FileSystemTask {
             Self::load_from_directory(task_path)
         } else {
             Err(TaskLoadError::InvalidStructure(
-                "Task path must be a directory".to_string()
+                "Task path must be a directory".to_string(),
             ))
         }
     }
@@ -129,22 +127,23 @@ impl FileSystemTask {
         // 2. Const function: const main = (input) => { ... }
         // 3. Anonymous function: (function(input) { ... })
         // 4. Arrow function: (input) => { ... }
-        let has_executable_content = self.content.contains("function main") 
-            || self.content.contains("const main") 
-            || self.content.contains("(function(") 
-            || self.content.trim().starts_with("(") 
+        let has_executable_content = self.content.contains("function main")
+            || self.content.contains("const main")
+            || self.content.contains("(function(")
+            || self.content.trim().starts_with("(")
             || self.content.contains("=> {");
 
         if !has_executable_content {
             return Err(JsExecutionError::ValidationError(
-                "Task must contain executable JavaScript code (function main, anonymous function, or arrow function)".to_string()
+                "Task must contain executable JavaScript code (function main, anonymous function, or arrow function)"
+                    .to_string(),
             ));
         }
 
         // Ensure the content is not empty
         if self.content.trim().is_empty() {
             return Err(JsExecutionError::ValidationError(
-                "Task content cannot be empty".to_string()
+                "Task content cannot be empty".to_string(),
             ));
         }
 
@@ -189,10 +188,10 @@ pub async fn load_and_execute_task<P: AsRef<Path>>(
 ) -> Result<JsonValue, Box<dyn std::error::Error + Send + Sync>> {
     let fs_task = FileSystemTask::from_fs(path)?;
     fs_task.validate()?;
-    
+
     let js_task = fs_task.to_js_task();
     let runner = crate::JsTaskRunner::new();
-    
+
     let result = runner.execute_task(&js_task, input_data, None).await?;
     Ok(result)
 }
@@ -246,7 +245,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let task_dir = temp_dir.path().join("test_task");
         fs::create_dir(&task_dir).unwrap();
-        
+
         create_test_task(&task_dir).unwrap();
 
         let task = FileSystemTask::from_fs(&task_dir).unwrap();
@@ -261,7 +260,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let task_dir = temp_dir.path().join("test_task");
         fs::create_dir(&task_dir).unwrap();
-        
+
         create_test_task(&task_dir).unwrap();
 
         let task = FileSystemTask::from_fs(&task_dir).unwrap();
@@ -273,12 +272,12 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let task_dir = temp_dir.path().join("test_task");
         fs::create_dir(&task_dir).unwrap();
-        
+
         create_test_task(&task_dir).unwrap();
 
         let input = serde_json::json!({ "a": 5, "b": 3 });
         let result = load_and_execute_task(&task_dir, input).await.unwrap();
-        
+
         assert_eq!(result["result"], 8);
     }
 }

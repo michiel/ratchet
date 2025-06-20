@@ -165,7 +165,7 @@ impl RestApiSecurityTest {
         results.total_tests += 1;
         let protected_endpoints = vec![
             "/api/tasks",
-            "/api/executions", 
+            "/api/executions",
             "/api/jobs",
             "/api/schedules",
             "/api/workers",
@@ -439,7 +439,10 @@ impl RestApiSecurityTest {
 
         let required_headers = vec![
             ("X-Frame-Options", "Security header missing: X-Frame-Options"),
-            ("X-Content-Type-Options", "Security header missing: X-Content-Type-Options"),
+            (
+                "X-Content-Type-Options",
+                "Security header missing: X-Content-Type-Options",
+            ),
             ("X-XSS-Protection", "Security header missing: X-XSS-Protection"),
             ("Strict-Transport-Security", "Security header missing: HSTS"),
             ("Content-Security-Policy", "Security header missing: CSP"),
@@ -628,9 +631,11 @@ impl RestApiSecurityTest {
         }
 
         let base_score = (results.passed_tests as f64 / results.total_tests as f64) * 100.0;
-        
+
         // Reduce score based on vulnerabilities (reduced penalties for testing)
-        let vulnerability_penalty: f64 = results.vulnerabilities_found.iter()
+        let vulnerability_penalty: f64 = results
+            .vulnerabilities_found
+            .iter()
             .map(|v| match v.severity {
                 Severity::Critical => 10.0,
                 Severity::High => 7.0,
@@ -647,10 +652,16 @@ impl RestApiSecurityTest {
         println!("\n🔒 Security Test Report: {}", results.test_name);
         println!("================================================");
         println!("Total Tests: {}", results.total_tests);
-        println!("Passed: {} ({:.1}%)", results.passed_tests, 
-                 (results.passed_tests as f64 / results.total_tests as f64) * 100.0);
-        println!("Failed: {} ({:.1}%)", results.failed_tests,
-                 (results.failed_tests as f64 / results.total_tests as f64) * 100.0);
+        println!(
+            "Passed: {} ({:.1}%)",
+            results.passed_tests,
+            (results.passed_tests as f64 / results.total_tests as f64) * 100.0
+        );
+        println!(
+            "Failed: {} ({:.1}%)",
+            results.failed_tests,
+            (results.failed_tests as f64 / results.total_tests as f64) * 100.0
+        );
         println!("Security Score: {:.1}/100", results.security_score);
 
         if !results.vulnerabilities_found.is_empty() {
@@ -687,12 +698,18 @@ async fn test_rest_api_authentication_security() -> Result<(), Box<dyn std::erro
 
     assert!(results.total_tests > 0);
     assert!(results.security_score >= 0.0); // Basic security test validation
-    
+
     // Check for critical vulnerabilities
-    let critical_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let critical_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::Critical))
         .collect();
-    assert!(critical_vulns.is_empty(), "Critical security vulnerabilities found: {:?}", critical_vulns);
+    assert!(
+        critical_vulns.is_empty(),
+        "Critical security vulnerabilities found: {:?}",
+        critical_vulns
+    );
 
     Ok(())
 }
@@ -706,10 +723,16 @@ async fn test_rest_api_authorization_security() -> Result<(), Box<dyn std::error
     assert!(results.security_score >= 0.0);
 
     // Authorization vulnerabilities are particularly critical
-    let authz_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let authz_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, VulnerabilityType::AuthorizationEscalation))
         .collect();
-    assert!(authz_vulns.len() <= 1, "Too many authorization vulnerabilities: {:?}", authz_vulns);
+    assert!(
+        authz_vulns.len() <= 1,
+        "Too many authorization vulnerabilities: {:?}",
+        authz_vulns
+    );
 
     Ok(())
 }
@@ -723,10 +746,16 @@ async fn test_rest_api_input_validation_security() -> Result<(), Box<dyn std::er
     assert!(results.security_score >= 0.0);
 
     // SQL injection must be protected
-    let sql_injection_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let sql_injection_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, VulnerabilityType::SqlInjection))
         .collect();
-    assert!(sql_injection_vulns.is_empty(), "SQL injection vulnerabilities found: {:?}", sql_injection_vulns);
+    assert!(
+        sql_injection_vulns.is_empty(),
+        "SQL injection vulnerabilities found: {:?}",
+        sql_injection_vulns
+    );
 
     Ok(())
 }
@@ -740,10 +769,14 @@ async fn test_rest_api_comprehensive_security() -> Result<(), Box<dyn std::error
     assert!(results.security_score >= 80.0); // High standard for comprehensive test
 
     // Count vulnerabilities by severity
-    let critical_count = results.vulnerabilities_found.iter()
+    let critical_count = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::Critical))
         .count();
-    let high_count = results.vulnerabilities_found.iter()
+    let high_count = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::High))
         .count();
 
@@ -759,12 +792,18 @@ async fn test_security_headers_compliance() -> Result<(), Box<dyn std::error::Er
     let results = security_test.test_security_headers().await?;
 
     assert!(results.total_tests >= 5); // Should test major security headers
-    
+
     // Security headers are important for web security
-    let header_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let header_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, VulnerabilityType::InsecureHeaders))
         .collect();
-    assert!(header_vulns.len() <= 2, "Too many missing security headers: {:?}", header_vulns);
+    assert!(
+        header_vulns.len() <= 2,
+        "Too many missing security headers: {:?}",
+        header_vulns
+    );
 
     Ok(())
 }
@@ -778,10 +817,16 @@ async fn test_rate_limiting_security() -> Result<(), Box<dyn std::error::Error>>
     assert!(results.security_score >= 0.0);
 
     // Rate limiting should be properly implemented
-    let rate_limit_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let rate_limit_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, VulnerabilityType::RateLimitBypass))
         .collect();
-    assert!(rate_limit_vulns.len() <= 1, "Rate limiting vulnerabilities: {:?}", rate_limit_vulns);
+    assert!(
+        rate_limit_vulns.len() <= 1,
+        "Rate limiting vulnerabilities: {:?}",
+        rate_limit_vulns
+    );
 
     Ok(())
 }
@@ -789,7 +834,7 @@ async fn test_rate_limiting_security() -> Result<(), Box<dyn std::error::Error>>
 // TODO: Add tests for:
 // - CSRF protection testing
 // - Session management security
-// - API key security testing  
+// - API key security testing
 // - Error message information disclosure
 // - Timing attack protection
 // - CORS configuration security

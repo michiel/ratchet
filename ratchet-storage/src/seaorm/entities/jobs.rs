@@ -261,8 +261,7 @@ impl Model {
             // Schedule retry with exponential backoff
             self.status = JobStatus::Retrying;
             let delay_seconds = self.retry_delay_seconds * (2_i32.pow(self.retry_count as u32 - 1));
-            self.process_at =
-                Some(chrono::Utc::now() + chrono::Duration::seconds(delay_seconds as i64));
+            self.process_at = Some(chrono::Utc::now() + chrono::Duration::seconds(delay_seconds as i64));
             true // Will retry
         } else {
             // No more retries

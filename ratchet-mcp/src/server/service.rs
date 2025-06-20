@@ -14,9 +14,7 @@ use ratchet_storage::seaorm::repositories::{
 };
 
 use crate::security::{AuditLogger, McpAuthManager, SecurityConfig};
-use crate::server::{
-    McpServer, McpServerConfig, McpServerTransport, RatchetMcpAdapter, RatchetToolRegistry,
-};
+use crate::server::{McpServer, McpServerConfig, McpServerTransport, RatchetMcpAdapter, RatchetToolRegistry};
 use crate::{McpAuth, McpError, McpResult};
 
 /// MCP service configuration
@@ -65,12 +63,7 @@ impl McpService {
     ) -> McpResult<Self> {
         // Create the MCP adapter
         let adapter = if let Some(log_path) = &config.log_file_path {
-            RatchetMcpAdapter::with_log_file(
-                task_executor,
-                task_repository,
-                execution_repository,
-                log_path.clone(),
-            )
+            RatchetMcpAdapter::with_log_file(task_executor, task_repository, execution_repository, log_path.clone())
         } else {
             RatchetMcpAdapter::new(task_executor, task_repository, execution_repository)
         };
@@ -111,10 +104,7 @@ impl McpService {
             }
             McpServerTransport::Sse { host, port, .. } => {
                 // For SSE transport, spawn a background task
-                info!(
-                    "Starting MCP server with SSE transport on {}:{}",
-                    host, port
-                );
+                info!("Starting MCP server with SSE transport on {}:{}", host, port);
 
                 let server = self.server.clone();
 
@@ -155,10 +145,7 @@ impl McpService {
         } else {
             // For stdio transport, we can't easily check
             // Assume it's running if we haven't explicitly stopped it
-            matches!(
-                self.config.server_config.transport,
-                McpServerTransport::Stdio
-            )
+            matches!(self.config.server_config.transport, McpServerTransport::Stdio)
         }
     }
 
@@ -195,8 +182,7 @@ impl Service for McpService {
         // This would need the repositories and executor to be passed somehow
         // For now, return an error as we can't create a complete service without dependencies
         Err(McpServiceError::InitializationFailed(
-            "McpService requires repositories and executor - use McpService::new instead"
-                .to_string(),
+            "McpService requires repositories and executor - use McpService::new instead".to_string(),
         ))
     }
 
@@ -299,26 +285,21 @@ impl McpServiceBuilder {
 
     /// Build the MCP service
     pub async fn build(self) -> Result<McpService, McpServiceError> {
-        let task_executor = self.task_executor.ok_or_else(|| {
-            McpServiceError::InitializationFailed("Task executor is required".to_string())
-        })?;
+        let task_executor = self
+            .task_executor
+            .ok_or_else(|| McpServiceError::InitializationFailed("Task executor is required".to_string()))?;
 
-        let task_repository = self.task_repository.ok_or_else(|| {
-            McpServiceError::InitializationFailed("Task repository is required".to_string())
-        })?;
+        let task_repository = self
+            .task_repository
+            .ok_or_else(|| McpServiceError::InitializationFailed("Task repository is required".to_string()))?;
 
-        let execution_repository = self.execution_repository.ok_or_else(|| {
-            McpServiceError::InitializationFailed("Execution repository is required".to_string())
-        })?;
+        let execution_repository = self
+            .execution_repository
+            .ok_or_else(|| McpServiceError::InitializationFailed("Execution repository is required".to_string()))?;
 
-        McpService::new(
-            self.config,
-            task_executor,
-            task_repository,
-            execution_repository,
-        )
-        .await
-        .map_err(Into::into)
+        McpService::new(self.config, task_executor, task_repository, execution_repository)
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -414,4 +395,3 @@ impl McpService {
         unimplemented!("Legacy config support will be re-enabled in Phase 3")
     }
 }
-

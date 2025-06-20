@@ -15,10 +15,7 @@ pub struct RegistryConfig {
     pub sources: Vec<RegistrySourceConfig>,
 
     /// Default polling interval for sources
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_polling_interval"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_polling_interval")]
     pub default_polling_interval: Duration,
 
     /// Cache configuration for registry data
@@ -122,10 +119,7 @@ pub struct FilesystemSourceConfig {
 #[serde(default)]
 pub struct HttpSourceConfig {
     /// Request timeout
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_http_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_http_timeout")]
     pub timeout: Duration,
 
     /// Custom headers
@@ -176,10 +170,7 @@ pub struct GitSourceConfig {
     pub allowed_refs: Option<Vec<String>>,
 
     /// Git operation timeout
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_git_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_git_timeout")]
     pub timeout: Duration,
 
     /// Maximum repository size
@@ -189,10 +180,7 @@ pub struct GitSourceConfig {
     pub local_cache_path: Option<String>,
 
     /// Cache TTL
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_cache_ttl"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_cache_ttl")]
     pub cache_ttl: Duration,
 
     /// Keep Git history
@@ -227,10 +215,7 @@ pub struct S3SourceConfig {
     pub prefix: Option<String>,
 
     /// Request timeout
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_s3_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_s3_timeout")]
     pub timeout: Duration,
 }
 
@@ -243,10 +228,7 @@ pub struct RegistryCacheConfig {
     pub enabled: bool,
 
     /// Cache TTL for registry metadata
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_cache_ttl"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_cache_ttl")]
     pub ttl: Duration,
 
     /// Maximum cache size in entries
@@ -421,10 +403,7 @@ impl RegistrySourceConfig {
                 if !self.uri.starts_with("file://") && !std::path::Path::new(&self.uri).exists() {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "registry".to_string(),
-                        message: format!(
-                            "{}: filesystem path does not exist: {}",
-                            context, self.uri
-                        ),
+                        message: format!("{}: filesystem path does not exist: {}", context, self.uri),
                     });
                 }
             }
@@ -484,19 +463,14 @@ impl RegistryAuthConfig {
             Self::GitToken { token } => {
                 validate_required_string(token, "token", "registry")?;
             }
-            Self::SshKey {
-                private_key_path, ..
-            } => {
+            Self::SshKey { private_key_path, .. } => {
                 validate_required_string(private_key_path, "private_key_path", "registry")?;
 
                 // Check if private key file exists
                 if !std::path::Path::new(private_key_path).exists() {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "registry".to_string(),
-                        message: format!(
-                            "{}: private key file not found: {}",
-                            context, private_key_path
-                        ),
+                        message: format!("{}: private key file not found: {}", context, private_key_path),
                     });
                 }
             }
@@ -532,20 +506,14 @@ impl RegistryAuthConfig {
                 if !std::path::Path::new(cert_path).exists() {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "registry".to_string(),
-                        message: format!(
-                            "{}: client certificate file not found: {}",
-                            context, cert_path
-                        ),
+                        message: format!("{}: client certificate file not found: {}", context, cert_path),
                     });
                 }
 
                 if !std::path::Path::new(key_path).exists() {
                     return Err(crate::error::ConfigError::DomainError {
                         domain: "registry".to_string(),
-                        message: format!(
-                            "{}: client key file not found: {}",
-                            context, key_path
-                        ),
+                        message: format!("{}: client key file not found: {}", context, key_path),
                     });
                 }
 
@@ -553,10 +521,7 @@ impl RegistryAuthConfig {
                     if !std::path::Path::new(ca_path).exists() {
                         return Err(crate::error::ConfigError::DomainError {
                             domain: "registry".to_string(),
-                            message: format!(
-                                "{}: CA certificate file not found: {}",
-                                context, ca_path
-                            ),
+                            message: format!("{}: CA certificate file not found: {}", context, ca_path),
                         });
                     }
                 }
@@ -662,9 +627,7 @@ mod tests {
         };
         assert!(auth.validate_with_name("test").is_ok());
 
-        let invalid_auth = RegistryAuthConfig::Bearer {
-            token: String::new(),
-        };
+        let invalid_auth = RegistryAuthConfig::Bearer { token: String::new() };
         assert!(invalid_auth.validate_with_name("test").is_err());
     }
 

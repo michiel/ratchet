@@ -30,7 +30,7 @@
 //!     .layer(error_handler_layer())
 //!     .layer(request_id_layer())
 //!     .layer(cors_layer());
-//! 
+//!
 //! // Start the server (axum 0.7)
 //! let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 //! axum::serve(listener, app)
@@ -39,20 +39,16 @@
 //! # }
 //! ```
 
-pub mod middleware;
-pub mod extractors;
-pub mod utils;
 pub mod errors;
+pub mod extractors;
+pub mod middleware;
+pub mod utils;
 
 // Re-export commonly used types and functions
 pub use errors::{WebError, WebResult};
-pub use middleware::{
-    cors_layer, error_handler_layer, request_id_layer,
-    pagination_response_layer, rate_limit_layer
-};
 pub use extractors::{
-    QueryParams, PaginationQuery, SortQuery, FilterQuery,
-    extract_task_filters, extract_execution_filters, 
-    extract_job_filters, extract_schedule_filters
+    extract_execution_filters, extract_job_filters, extract_schedule_filters, extract_task_filters, FilterQuery,
+    PaginationQuery, QueryParams, SortQuery,
 };
+pub use middleware::{cors_layer, error_handler_layer, pagination_response_layer, rate_limit_layer, request_id_layer};
 pub use utils::{ApiResponse, ResponseBuilder};

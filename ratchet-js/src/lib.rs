@@ -1,5 +1,5 @@
 //! JavaScript execution engine for Ratchet
-//! 
+//!
 //! This crate provides JavaScript execution capabilities using the Boa engine,
 //! including HTTP fetch API integration, error handling, and schema validation.
 
@@ -19,7 +19,7 @@ pub use conversion::{convert_js_result_to_json, prepare_input_argument};
 pub use error_handling::{parse_js_error, register_error_types};
 pub use execution::{execute_js_file, execute_js_with_content};
 pub use js_task::JsTaskRunner;
-pub use task_loader::{FileSystemTask, TaskLoadError, load_and_execute_task};
+pub use task_loader::{load_and_execute_task, FileSystemTask, TaskLoadError};
 pub use types::{ExecutionContext, JsTask};
 
 #[cfg(feature = "http")]
@@ -114,10 +114,7 @@ pub enum JsExecutionError {
     TypedJsError(JsErrorType),
 
     #[error("JavaScript error: {error_type} - {message}")]
-    JsError {
-        error_type: JsErrorType,
-        message: String,
-    },
+    JsError { error_type: JsErrorType, message: String },
 
     #[error("Ratchet error: {0}")]
     RatchetError(#[from] ratchet_core::error::RatchetError),

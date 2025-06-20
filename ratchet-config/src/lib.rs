@@ -9,7 +9,6 @@ pub mod validation;
 
 // Legacy compatibility layer removed - migration complete
 
-
 // Domain-specific configuration modules
 pub mod domains;
 
@@ -17,13 +16,10 @@ pub mod domains;
 pub use error::{ConfigError, ConfigResult};
 pub use loader::ConfigLoader;
 
-
-
 // Re-export domain configurations
 pub use domains::{
-    cache::CacheConfig, database::DatabaseConfig, execution::ExecutionConfig, http::HttpConfig,
-    logging::LoggingConfig, mcp::McpConfig, output::OutputConfig, registry::RegistryConfig,
-    server::ServerConfig, RatchetConfig,
+    cache::CacheConfig, database::DatabaseConfig, execution::ExecutionConfig, http::HttpConfig, logging::LoggingConfig,
+    mcp::McpConfig, output::OutputConfig, registry::RegistryConfig, server::ServerConfig, RatchetConfig,
 };
 
 // Re-export utilities

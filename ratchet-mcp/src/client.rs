@@ -48,8 +48,7 @@ impl McpClient {
     pub async fn connect(&mut self, _server_id: &str) -> McpResult<()> {
         // This will be implemented when JavaScript integration is prioritized
         Err(McpError::Generic {
-            message: "MCP client implementation is deprioritized. Use MCP server instead."
-                .to_string(),
+            message: "MCP client implementation is deprioritized. Use MCP server instead.".to_string(),
         })
     }
 
@@ -57,8 +56,7 @@ impl McpClient {
     pub async fn list_tools(&self, _server_id: &str) -> McpResult<Vec<crate::protocol::Tool>> {
         // This will be implemented when JavaScript integration is prioritized
         Err(McpError::Generic {
-            message: "MCP client implementation is deprioritized. Use MCP server instead."
-                .to_string(),
+            message: "MCP client implementation is deprioritized. Use MCP server instead.".to_string(),
         })
     }
 
@@ -71,8 +69,7 @@ impl McpClient {
     ) -> McpResult<crate::protocol::ToolsCallResult> {
         // This will be implemented when JavaScript integration is prioritized
         Err(McpError::Generic {
-            message: "MCP client implementation is deprioritized. Use MCP server instead."
-                .to_string(),
+            message: "MCP client implementation is deprioritized. Use MCP server instead.".to_string(),
         })
     }
 }

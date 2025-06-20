@@ -1,6 +1,6 @@
 #[cfg(feature = "gitoxide")]
 mod gitoxide_tests {
-    use ratchet_registry::config::{TaskSource, GitConfig, GitAuth, GitAuthType};
+    use ratchet_registry::config::{GitAuth, GitAuthType, GitConfig, TaskSource};
     use ratchet_registry::loaders::git::GitoxideLoader;
     use ratchet_registry::loaders::TaskLoader;
     use std::env;
@@ -9,7 +9,7 @@ mod gitoxide_tests {
     #[tokio::test]
     async fn test_gitoxide_public_repo_clone() {
         let loader = GitoxideLoader::new();
-        
+
         // Test with a small, stable public repository
         let source = TaskSource::Git {
             url: "https://github.com/octocat/Hello-World.git".to_string(),
@@ -24,7 +24,7 @@ mod gitoxide_tests {
 
         // This should work without authentication for public repos
         let result = loader.discover_tasks(&source).await;
-        
+
         // We expect this to work (even if no tasks are found, the clone should succeed)
         match result {
             Ok(_tasks) => {
@@ -41,7 +41,7 @@ mod gitoxide_tests {
     #[tokio::test]
     async fn test_gitoxide_token_auth_setup() {
         let _temp_dir = TempDir::new().expect("Failed to create temp dir");
-        
+
         // Test token authentication setup (without actually cloning)
         let auth = GitAuth {
             auth_type: GitAuthType::Token {
@@ -61,10 +61,10 @@ mod gitoxide_tests {
         env::remove_var("GIT_ASKPASS");
 
         let loader = GitoxideLoader::new();
-        
+
         // This will fail because it's not a real repo, but we can check if auth was configured
         let _result = loader.discover_tasks(&source).await;
-        
+
         // Check if the authentication environment variables were set
         // Note: In a real implementation, we'd want to test this more thoroughly
         // but for now we just verify the auth setup doesn't panic
@@ -88,10 +88,10 @@ mod gitoxide_tests {
         };
 
         let loader = GitoxideLoader::new();
-        
+
         // This will fail because it's not a real repo, but we can check if auth was configured
         let _result = loader.discover_tasks(&source).await;
-        
+
         // Check that basic auth setup doesn't panic
         assert!(true, "Basic auth setup completed without panic");
     }
@@ -113,39 +113,45 @@ mod gitoxide_tests {
         };
 
         let loader = GitoxideLoader::new();
-        
+
         // This should fail because the SSH key doesn't exist
         let result = loader.discover_tasks(&source).await;
-        
+
         // We expect this to fail with an error about the missing key
         assert!(result.is_err(), "SSH auth with nonexistent key should fail");
-        
+
         let error_msg = format!("{:?}", result.unwrap_err());
-        assert!(error_msg.contains("SSH private key not found") || error_msg.contains("key"), 
-                "Error should mention SSH key issue: {}", error_msg);
+        assert!(
+            error_msg.contains("SSH private key not found") || error_msg.contains("key"),
+            "Error should mention SSH key issue: {}",
+            error_msg
+        );
     }
 
     #[tokio::test]
     async fn test_gitoxide_supports_source() {
         let loader = GitoxideLoader::new();
-        
+
         // Test Git source support
         let git_source = TaskSource::Git {
             url: "https://github.com/example/repo.git".to_string(),
             auth: None,
             config: GitConfig::default(),
         };
-        
+
         assert!(loader.supports_source(&git_source).await, "Should support Git sources");
-        
+
         // Test non-Git source
         let http_source = TaskSource::Http {
             url: "https://example.com/tasks".to_string(),
             auth: None,
             polling_interval: std::time::Duration::from_secs(300),
         };
-        
-        assert!(!loader.supports_source(&http_source).await, "Should not support HTTP sources");
+
+        assert!(
+            !loader.supports_source(&http_source).await,
+            "Should not support HTTP sources"
+        );
     }
 }
 

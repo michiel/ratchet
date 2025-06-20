@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ratchet_execution::{ExecutionError, ProcessTaskExecutor, TaskExecutionResult, ExecutionBridge};
+use ratchet_execution::{ExecutionBridge, ExecutionError, ProcessTaskExecutor, TaskExecutionResult};
 use ratchet_interfaces::execution::TaskExecutor as InterfaceTaskExecutor;
 use ratchet_interfaces::logging::{LogEvent, LogLevel};
 use ratchet_runtime::executor::TaskExecutor;
@@ -40,20 +40,19 @@ impl ExecutorType {
     ) -> Result<TaskExecutionResult, ExecutionError> {
         match self {
             ExecutorType::Process(executor) => {
-                executor.execute_task_direct(task_id, task_path, input_data, context).await
+                executor
+                    .execute_task_direct(task_id, task_path, input_data, context)
+                    .await
             }
             ExecutorType::Bridge(executor) => {
                 // Use the bridge's execute_task method with interface-style parameters
                 use ratchet_interfaces::execution::ExecutionContext;
                 use std::time::Duration;
-                
+
                 // Convert task_id to string and create execution context if provided
                 let task_id_str = task_id.to_string();
-                let exec_context = context.map(|_| {
-                    ExecutionContext::new()
-                        .with_timeout(Duration::from_secs(300))
-                });
-                
+                let exec_context = context.map(|_| ExecutionContext::new().with_timeout(Duration::from_secs(300)));
+
                 // Execute using the bridge interface
                 match executor.execute_task(&task_id_str, input_data, exec_context).await {
                     Ok(result) => {
@@ -61,12 +60,14 @@ impl ExecutorType {
                         use chrono::Utc;
                         let now = Utc::now();
                         let started_at = now - chrono::Duration::milliseconds(result.execution_time_ms as i64);
-                        
+
                         Ok(TaskExecutionResult {
                             success: result.status.is_success(),
                             output: Some(result.output),
                             error_message: match result.status {
-                                ratchet_interfaces::execution::ExecutionStatus::Failed { error_message } => Some(error_message),
+                                ratchet_interfaces::execution::ExecutionStatus::Failed { error_message } => {
+                                    Some(error_message)
+                                }
                                 _ => None,
                             },
                             error_details: result.trace,
@@ -216,18 +217,13 @@ impl McpTaskExecutor for RatchetMcpAdapter {
 
         // Create an execution context
         use ratchet_execution::ipc::ExecutionContext;
-        let context = ExecutionContext::new(
-            uuid::Uuid::new_v4(),
-            None,
-            task.uuid,
-            task.version.clone(),
-        );
+        let context = ExecutionContext::new(uuid::Uuid::new_v4(), None, task.uuid, task.version.clone());
 
         // Execute the task using the process executor
         match self
             .executor
             .execute_task_direct(
-                task.id, // Database task ID
+                task.id,                         // Database task ID
                 format!("/tasks/{}", task.uuid), // Use UUID as task path
                 input,
                 Some(context),
@@ -312,12 +308,7 @@ impl McpTaskExecutor for RatchetMcpAdapter {
             .collect())
     }
 
-    async fn get_execution_logs(
-        &self,
-        execution_id: &str,
-        level: &str,
-        limit: usize,
-    ) -> Result<String, String> {
+    async fn get_execution_logs(&self, execution_id: &str, level: &str, limit: usize) -> Result<String, String> {
         // Parse the log level
         let min_level = match level.to_lowercase().as_str() {
             "trace" => LogLevel::Trace,
@@ -334,10 +325,7 @@ impl McpTaskExecutor for RatchetMcpAdapter {
                 Ok(Some(execution)) => {
                     // First check if we have a recording path (most detailed logs)
                     if let Some(recording_path) = &execution.recording_path {
-                        if let Ok(logs) = self
-                            .get_logs_from_recording(recording_path, &min_level, limit)
-                            .await
-                        {
+                        if let Ok(logs) = self.get_logs_from_recording(recording_path, &min_level, limit).await {
                             return Ok(logs);
                         }
                     }
@@ -345,12 +333,7 @@ impl McpTaskExecutor for RatchetMcpAdapter {
                     // Fallback to searching log files if available
                     if let Some(log_path) = &self.log_file_path {
                         if let Ok(logs) = self
-                            .search_log_file_for_execution(
-                                log_path,
-                                execution_id,
-                                &min_level,
-                                limit,
-                            )
+                            .search_log_file_for_execution(log_path, execution_id, &min_level, limit)
                             .await
                         {
                             return Ok(logs);
@@ -368,8 +351,7 @@ impl McpTaskExecutor for RatchetMcpAdapter {
                         "logs": [],
                         "message": "Detailed logs not available - no log file or recording path configured"
                     });
-                    Ok(serde_json::to_string_pretty(&log_info)
-                        .unwrap_or_else(|_| log_info.to_string()))
+                    Ok(serde_json::to_string_pretty(&log_info).unwrap_or_else(|_| log_info.to_string()))
                 }
                 Ok(None) => Err(format!("Execution not found: {}", execution_id)),
                 Err(e) => Err(format!("Database error: {}", e)),
@@ -420,12 +402,10 @@ impl McpTaskExecutor for RatchetMcpAdapter {
                             "current_step": "completed",
                             "percentage": 100
                         })),
-                        ExecutionStatus::Failed | ExecutionStatus::Cancelled => {
-                            Some(serde_json::json!({
-                                "current_step": status_str,
-                                "percentage": null
-                            }))
-                        }
+                        ExecutionStatus::Failed | ExecutionStatus::Cancelled => Some(serde_json::json!({
+                            "current_step": status_str,
+                            "percentage": null
+                        })),
                     };
 
                     Ok(McpExecutionStatus {
@@ -470,8 +450,7 @@ impl RatchetMcpAdapter {
             "message": "Recording-based log retrieval not yet implemented - HAR parsing needed"
         });
 
-        Ok(serde_json::to_string_pretty(&recording_info)
-            .unwrap_or_else(|_| recording_info.to_string()))
+        Ok(serde_json::to_string_pretty(&recording_info).unwrap_or_else(|_| recording_info.to_string()))
     }
 
     /// Search log file for execution-specific logs
@@ -482,8 +461,7 @@ impl RatchetMcpAdapter {
         min_level: &LogLevel,
         limit: usize,
     ) -> Result<String, String> {
-        let file = File::open(log_path)
-            .map_err(|e| format!("Cannot open log file {}: {}", log_path.display(), e))?;
+        let file = File::open(log_path).map_err(|e| format!("Cannot open log file {}: {}", log_path.display(), e))?;
 
         let reader = BufReader::new(file);
         let mut matching_logs = Vec::new();
@@ -493,8 +471,7 @@ impl RatchetMcpAdapter {
         for (line_num, line) in reader.lines().enumerate() {
             total_lines += 1;
 
-            let line =
-                line.map_err(|e| format!("Error reading log file at line {}: {}", line_num, e))?;
+            let line = line.map_err(|e| format!("Error reading log file at line {}: {}", line_num, e))?;
 
             // Skip empty lines
             if line.trim().is_empty() {
@@ -507,13 +484,8 @@ impl RatchetMcpAdapter {
                     // Check if this log is related to our execution
                     let is_related = log_event.trace_id.as_deref() == Some(execution_id)
                         || log_event.span_id.as_deref() == Some(execution_id)
-                        || log_event
-                            .fields
-                            .get("execution_id")
-                            .and_then(|v| v.as_str())
-                            == Some(execution_id)
-                        || log_event.fields.get("exec_id").and_then(|v| v.as_str())
-                            == Some(execution_id)
+                        || log_event.fields.get("execution_id").and_then(|v| v.as_str()) == Some(execution_id)
+                        || log_event.fields.get("exec_id").and_then(|v| v.as_str()) == Some(execution_id)
                         || log_event.message.contains(execution_id);
 
                     if is_related && log_event.level >= *min_level {
@@ -630,9 +602,7 @@ impl RatchetMcpAdapterBuilder {
     pub fn build(self) -> Result<RatchetMcpAdapter, String> {
         let executor = self.executor.ok_or("Executor is required")?;
         let task_repo = self.task_repository.ok_or("Task repository is required")?;
-        let exec_repo = self
-            .execution_repository
-            .ok_or("Execution repository is required")?;
+        let exec_repo = self.execution_repository.ok_or("Execution repository is required")?;
 
         Ok(RatchetMcpAdapter {
             executor,

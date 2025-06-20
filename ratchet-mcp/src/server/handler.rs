@@ -8,9 +8,8 @@ use std::sync::Arc;
 use super::tools::ToolExecutionContext;
 use super::{BatchProcessor, McpServerConfig, ToolRegistry};
 use crate::protocol::{
-    BatchParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse, ResourcesListParams,
-    ResourcesListResult, ResourcesReadParams, ResourcesReadResult, ToolsCallParams,
-    ToolsListParams, ToolsListResult,
+    BatchParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse, ResourcesListParams, ResourcesListResult,
+    ResourcesReadParams, ResourcesReadResult, ToolsCallParams, ToolsListParams, ToolsListResult,
 };
 use crate::security::{AuditLogger, McpAuthManager, PermissionChecker, SecurityContext};
 use crate::{McpError, McpResult};
@@ -69,11 +68,7 @@ impl McpRequestHandler {
     }
 
     /// Handle tools/list request
-    pub async fn handle_tools_list(
-        &self,
-        params: Option<Value>,
-        security_ctx: &SecurityContext,
-    ) -> McpResult<Value> {
+    pub async fn handle_tools_list(&self, params: Option<Value>, security_ctx: &SecurityContext) -> McpResult<Value> {
         let _params: Option<ToolsListParams> = if let Some(p) = params {
             Some(serde_json::from_value(p)?)
         } else {
@@ -109,27 +104,18 @@ impl McpRequestHandler {
     }
 
     /// Handle tools/call request
-    pub async fn handle_tools_call(
-        &self,
-        params: Option<Value>,
-        security_ctx: &SecurityContext,
-    ) -> McpResult<Value> {
-        let params: ToolsCallParams =
-            TryFromValue::try_into(params.ok_or_else(|| McpError::InvalidParams {
-                method: "tools/call".to_string(),
-                details: "Missing parameters".to_string(),
-            })?)
-            .map_err(|e: serde_json::Error| McpError::InvalidParams {
-                method: "tools/call".to_string(),
-                details: e.to_string(),
-            })?;
+    pub async fn handle_tools_call(&self, params: Option<Value>, security_ctx: &SecurityContext) -> McpResult<Value> {
+        let params: ToolsCallParams = TryFromValue::try_into(params.ok_or_else(|| McpError::InvalidParams {
+            method: "tools/call".to_string(),
+            details: "Missing parameters".to_string(),
+        })?)
+        .map_err(|e: serde_json::Error| McpError::InvalidParams {
+            method: "tools/call".to_string(),
+            details: e.to_string(),
+        })?;
 
         // Check if client can access this tool
-        if !self
-            .tool_registry
-            .can_access_tool(&params.name, security_ctx)
-            .await
-        {
+        if !self.tool_registry.can_access_tool(&params.name, security_ctx).await {
             return Err(McpError::AuthorizationDenied {
                 reason: format!("Access denied to tool: {}", params.name),
             });
@@ -145,10 +131,7 @@ impl McpRequestHandler {
         };
 
         // Execute the tool
-        let result = self
-            .tool_registry
-            .execute_tool(&params.name, execution_context)
-            .await;
+        let result = self.tool_registry.execute_tool(&params.name, execution_context).await;
 
         let duration = start_time.elapsed();
 
@@ -199,15 +182,14 @@ impl McpRequestHandler {
         params: Option<Value>,
         security_ctx: &SecurityContext,
     ) -> McpResult<Value> {
-        let params: ResourcesReadParams =
-            TryFromValue::try_into(params.ok_or_else(|| McpError::InvalidParams {
-                method: "resources/read".to_string(),
-                details: "Missing parameters".to_string(),
-            })?)
-            .map_err(|e: serde_json::Error| McpError::InvalidParams {
-                method: "resources/read".to_string(),
-                details: e.to_string(),
-            })?;
+        let params: ResourcesReadParams = TryFromValue::try_into(params.ok_or_else(|| McpError::InvalidParams {
+            method: "resources/read".to_string(),
+            details: "Missing parameters".to_string(),
+        })?)
+        .map_err(|e: serde_json::Error| McpError::InvalidParams {
+            method: "resources/read".to_string(),
+            details: e.to_string(),
+        })?;
 
         // Validate the resource URI
         if !crate::security::InputSanitizer::validate_resource_uri(&params.uri) {
@@ -229,62 +211,54 @@ impl McpRequestHandler {
     }
 
     /// Handle batch request
-    pub async fn handle_batch(
-        &self,
-        params: Option<Value>,
-        security_ctx: &SecurityContext,
-    ) -> McpResult<Value> {
+    pub async fn handle_batch(&self, params: Option<Value>, security_ctx: &SecurityContext) -> McpResult<Value> {
         // Check if batch processing is enabled
-        let batch_processor =
-            self.batch_processor
-                .as_ref()
-                .ok_or_else(|| McpError::MethodNotFound {
-                    method: "batch".to_string(),
-                })?;
+        let batch_processor = self.batch_processor.as_ref().ok_or_else(|| McpError::MethodNotFound {
+            method: "batch".to_string(),
+        })?;
 
-        let params: BatchParams =
-            TryFromValue::try_into(params.ok_or_else(|| McpError::InvalidParams {
-                method: "batch".to_string(),
-                details: "Missing parameters".to_string(),
-            })?)
-            .map_err(|e: serde_json::Error| McpError::InvalidParams {
-                method: "batch".to_string(),
-                details: e.to_string(),
-            })?;
+        let params: BatchParams = TryFromValue::try_into(params.ok_or_else(|| McpError::InvalidParams {
+            method: "batch".to_string(),
+            details: "Missing parameters".to_string(),
+        })?)
+        .map_err(|e: serde_json::Error| McpError::InvalidParams {
+            method: "batch".to_string(),
+            details: e.to_string(),
+        })?;
 
         // Validate batch size against client permissions
         let batch_size = params.requests.len() as u64;
-        PermissionChecker::validate_request_size(&security_ctx.client.permissions, batch_size)
-            .map_err(|msg| McpError::Validation {
+        PermissionChecker::validate_request_size(&security_ctx.client.permissions, batch_size).map_err(|msg| {
+            McpError::Validation {
                 field: "batch_size".to_string(),
                 message: msg,
-            })?;
+            }
+        })?;
 
         // Create a request handler for the batch processor
         let handler = self.clone();
         let security_ctx_clone = security_ctx.clone();
 
-        let handler_fn: Arc<super::batch::BatchRequestHandler> =
-            Arc::new(move |request: JsonRpcRequest| {
-                let handler = handler.clone();
-                let security_ctx = security_ctx_clone.clone();
-                Box::pin(async move {
-                    match handler.handle_single_request(&request, &security_ctx).await {
-                        Ok(result) => JsonRpcResponse {
-                            jsonrpc: "2.0".to_string(),
-                            result: Some(result),
-                            error: None,
-                            id: request.id,
-                        },
-                        Err(e) => JsonRpcResponse {
-                            jsonrpc: "2.0".to_string(),
-                            result: None,
-                            error: Some(e.into()),
-                            id: request.id,
-                        },
-                    }
-                }) as Pin<Box<dyn Future<Output = JsonRpcResponse> + Send>>
-            });
+        let handler_fn: Arc<super::batch::BatchRequestHandler> = Arc::new(move |request: JsonRpcRequest| {
+            let handler = handler.clone();
+            let security_ctx = security_ctx_clone.clone();
+            Box::pin(async move {
+                match handler.handle_single_request(&request, &security_ctx).await {
+                    Ok(result) => JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        result: Some(result),
+                        error: None,
+                        id: request.id,
+                    },
+                    Err(e) => JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        result: None,
+                        error: Some(e.into()),
+                        id: request.id,
+                    },
+                }
+            }) as Pin<Box<dyn Future<Output = JsonRpcResponse> + Send>>
+        });
 
         // Process the batch
         let result = batch_processor
@@ -303,9 +277,7 @@ impl McpRequestHandler {
                 result.stats.failed_requests == 0,
                 Some(format!(
                     "success:{}, failed:{}, skipped:{}",
-                    result.stats.successful_requests,
-                    result.stats.failed_requests,
-                    result.stats.skipped_requests
+                    result.stats.successful_requests, result.stats.failed_requests, result.stats.skipped_requests
                 )),
             )
             .await;
@@ -320,22 +292,10 @@ impl McpRequestHandler {
         security_ctx: &SecurityContext,
     ) -> McpResult<Value> {
         match request.method.as_str() {
-            "tools/list" => {
-                self.handle_tools_list(request.params.clone(), security_ctx)
-                    .await
-            }
-            "tools/call" => {
-                self.handle_tools_call(request.params.clone(), security_ctx)
-                    .await
-            }
-            "resources/list" => {
-                self.handle_resources_list(request.params.clone(), security_ctx)
-                    .await
-            }
-            "resources/read" => {
-                self.handle_resources_read(request.params.clone(), security_ctx)
-                    .await
-            }
+            "tools/list" => self.handle_tools_list(request.params.clone(), security_ctx).await,
+            "tools/call" => self.handle_tools_call(request.params.clone(), security_ctx).await,
+            "resources/list" => self.handle_resources_list(request.params.clone(), security_ctx).await,
+            "resources/read" => self.handle_resources_read(request.params.clone(), security_ctx).await,
             _ => Err(McpError::MethodNotFound {
                 method: request.method.clone(),
             }),
@@ -344,18 +304,15 @@ impl McpRequestHandler {
 
     /// Validate request size against quotas
     #[allow(dead_code)]
-    fn validate_request_size(
-        &self,
-        security_ctx: &SecurityContext,
-        params: &Value,
-    ) -> McpResult<()> {
+    fn validate_request_size(&self, security_ctx: &SecurityContext, params: &Value) -> McpResult<()> {
         let request_size = params.to_string().len() as u64;
 
-        PermissionChecker::validate_request_size(&security_ctx.client.permissions, request_size)
-            .map_err(|msg| McpError::Validation {
+        PermissionChecker::validate_request_size(&security_ctx.client.permissions, request_size).map_err(|msg| {
+            McpError::Validation {
                 field: "request_size".to_string(),
                 message: msg,
-            })?;
+            }
+        })?;
 
         Ok(())
     }
@@ -380,9 +337,7 @@ impl From<McpError> for JsonRpcError {
             McpError::MethodNotFound { method } => JsonRpcError::method_not_found(&method),
             McpError::InvalidParams { method: _, details } => JsonRpcError::invalid_params(details),
             McpError::Validation { field: _, message } => JsonRpcError::invalid_params(message),
-            McpError::ServerTimeout { timeout: _ } => {
-                JsonRpcError::server_error(-32001, "Request timeout", None)
-            }
+            McpError::ServerTimeout { timeout: _ } => JsonRpcError::server_error(-32001, "Request timeout", None),
             McpError::Internal { message } => JsonRpcError::internal_error(message),
             _ => JsonRpcError::internal_error(err.to_string()),
         }
@@ -519,9 +474,7 @@ mod tests {
             "uri": "ratchet://config/settings"
         });
 
-        let result = handler
-            .handle_resources_read(Some(params), &security_ctx)
-            .await;
+        let result = handler.handle_resources_read(Some(params), &security_ctx).await;
         assert!(result.is_ok());
     }
 
@@ -534,9 +487,7 @@ mod tests {
             "uri": "../../../etc/passwd"
         });
 
-        let result = handler
-            .handle_resources_read(Some(params), &security_ctx)
-            .await;
+        let result = handler.handle_resources_read(Some(params), &security_ctx).await;
         assert!(result.is_err());
     }
 }

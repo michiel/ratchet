@@ -7,39 +7,36 @@ use axum::{
     Json,
 };
 use ratchet_api_types::ApiId;
+use ratchet_core::validation::{ErrorSanitizer, InputValidator};
 use ratchet_interfaces::ExecutionFilters;
-use ratchet_web::{QueryParams, ApiResponse, extract_execution_filters};
-use ratchet_core::validation::{InputValidator, ErrorSanitizer};
+use ratchet_web::{extract_execution_filters, ApiResponse, QueryParams};
 use tracing::{info, warn};
 
 use crate::{
     context::TasksContext,
     errors::{RestError, RestResult},
     models::{
-        executions::{CreateExecutionRequest, UpdateExecutionRequest, RetryExecutionRequest, ExecutionStats},
-        common::StatsResponse
+        common::StatsResponse,
+        executions::{CreateExecutionRequest, ExecutionStats, RetryExecutionRequest, UpdateExecutionRequest},
     },
 };
 
 /// List all executions with optional filtering and pagination
 
-pub async fn list_executions(
-    State(ctx): State<TasksContext>,
-    query: QueryParams,
-) -> RestResult<impl IntoResponse> {
+pub async fn list_executions(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing executions with query: {:?}", query.0);
-    
+
     let list_input = query.0.to_list_input();
-    
+
     // Extract filters from query parameters
     let filters = extract_execution_filters(&query.0.filters);
-    
+
     let execution_repo = ctx.repositories.execution_repository();
     let list_response = execution_repo
         .find_with_list_input(filters, list_input)
         .await
         .map_err(RestError::Database)?;
-    
+
     Ok(Json(ApiResponse::from(list_response)))
 }
 
@@ -50,7 +47,7 @@ pub async fn get_execution(
     Path(execution_id): Path<String>,
 ) -> RestResult<impl IntoResponse> {
     info!("Getting execution with ID: {}", execution_id);
-    
+
     // Validate execution ID input
     let validator = InputValidator::new();
     if let Err(validation_err) = validator.validate_string(&execution_id, "execution_id") {
@@ -59,10 +56,10 @@ pub async fn get_execution(
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     let api_id = ApiId::from_string(execution_id.clone());
     let execution_repo = ctx.repositories.execution_repository();
-    
+
     let execution = execution_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
         .await
@@ -72,7 +69,7 @@ pub async fn get_execution(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Execution", &execution_id))?;
-    
+
     Ok(Json(ApiResponse::new(execution)))
 }
 
@@ -83,11 +80,11 @@ pub async fn create_execution(
     Json(request): Json<CreateExecutionRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Creating execution for task: {:?}", request.task_id);
-    
+
     // Validate the request input
     let validator = InputValidator::new();
     let sanitizer = ErrorSanitizer::default();
-    
+
     // Validate input JSON
     let input_str = serde_json::to_string(&request.input)
         .map_err(|e| RestError::BadRequest(format!("Invalid input JSON: {}", e)))?;
@@ -96,7 +93,7 @@ pub async fn create_execution(
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     // Validate that task exists
     let task_repo = ctx.repositories.task_repository();
     let _task = task_repo
@@ -107,7 +104,7 @@ pub async fn create_execution(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Task", &request.task_id.to_string()))?;
-    
+
     // Create UnifiedExecution from request
     let unified_execution = ratchet_api_types::UnifiedExecution {
         id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
@@ -128,12 +125,14 @@ pub async fn create_execution(
         can_cancel: true,
         progress: None,
     };
-    
+
     // Create the execution using the repository
     let execution_repo = ctx.repositories.execution_repository();
-    let created_execution = execution_repo.create(unified_execution).await
+    let created_execution = execution_repo
+        .create(unified_execution)
+        .await
         .map_err(|e| RestError::InternalError(format!("Failed to create execution: {}", e)))?;
-    
+
     Ok((StatusCode::CREATED, Json(ApiResponse::new(created_execution))))
 }
 
@@ -145,28 +144,28 @@ pub async fn update_execution(
     Json(request): Json<UpdateExecutionRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Updating execution with ID: {}", execution_id);
-    
+
     // Validate execution ID input
     let validator = InputValidator::new();
     let sanitizer = ErrorSanitizer::default();
-    
+
     if let Err(validation_err) = validator.validate_string(&execution_id, "execution_id") {
         warn!("Invalid execution ID provided: {}", validation_err);
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     // Validate output JSON if provided
     if let Some(ref output) = request.output {
-        let output_str = serde_json::to_string(output)
-            .map_err(|e| RestError::BadRequest(format!("Invalid output JSON: {}", e)))?;
+        let output_str =
+            serde_json::to_string(output).map_err(|e| RestError::BadRequest(format!("Invalid output JSON: {}", e)))?;
         if let Err(validation_err) = validator.validate_json(&output_str) {
             warn!("Invalid execution output provided: {}", validation_err);
             let sanitized_error = sanitizer.sanitize_error(&validation_err);
             return Err(RestError::BadRequest(sanitized_error.message));
         }
     }
-    
+
     // Validate error message if provided
     if let Some(ref error_message) = request.error_message {
         if let Err(validation_err) = validator.validate_string(error_message, "error_message") {
@@ -175,10 +174,10 @@ pub async fn update_execution(
             return Err(RestError::BadRequest(sanitized_error.message));
         }
     }
-    
+
     let api_id = ApiId::from_string(execution_id.clone());
     let execution_repo = ctx.repositories.execution_repository();
-    
+
     // Get the existing execution
     let mut existing_execution = execution_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
@@ -188,14 +187,14 @@ pub async fn update_execution(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Execution", &execution_id))?;
-    
+
     // Apply updates
     if let Some(output) = request.output {
         existing_execution.output = Some(output);
     }
     if let Some(status) = request.status {
         existing_execution.status = status;
-        
+
         // Update timestamps based on status
         match status {
             ratchet_api_types::ExecutionStatus::Running => {
@@ -203,9 +202,9 @@ pub async fn update_execution(
                     existing_execution.started_at = Some(chrono::Utc::now());
                 }
             }
-            ratchet_api_types::ExecutionStatus::Completed | 
-            ratchet_api_types::ExecutionStatus::Failed | 
-            ratchet_api_types::ExecutionStatus::Cancelled => {
+            ratchet_api_types::ExecutionStatus::Completed
+            | ratchet_api_types::ExecutionStatus::Failed
+            | ratchet_api_types::ExecutionStatus::Cancelled => {
                 if existing_execution.completed_at.is_none() {
                     existing_execution.completed_at = Some(chrono::Utc::now());
                 }
@@ -227,11 +226,13 @@ pub async fn update_execution(
     if let Some(progress) = request.progress {
         existing_execution.progress = Some(progress);
     }
-    
+
     // Update the execution using the repository
-    let updated_execution = execution_repo.update(existing_execution).await
+    let updated_execution = execution_repo
+        .update(existing_execution)
+        .await
         .map_err(|e| RestError::InternalError(format!("Failed to update execution: {}", e)))?;
-    
+
     Ok(Json(ApiResponse::new(updated_execution)))
 }
 
@@ -242,7 +243,7 @@ pub async fn delete_execution(
     Path(execution_id): Path<String>,
 ) -> RestResult<impl IntoResponse> {
     info!("Deleting execution with ID: {}", execution_id);
-    
+
     // Validate execution ID input
     let validator = InputValidator::new();
     if let Err(validation_err) = validator.validate_string(&execution_id, "execution_id") {
@@ -251,10 +252,10 @@ pub async fn delete_execution(
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     let api_id = ApiId::from_string(execution_id.clone());
     let execution_repo = ctx.repositories.execution_repository();
-    
+
     // Check if execution exists
     let _execution = execution_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
@@ -265,7 +266,7 @@ pub async fn delete_execution(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Execution", &execution_id))?;
-    
+
     // Delete the execution
     execution_repo
         .delete(api_id.as_i32().unwrap_or(0))
@@ -275,7 +276,7 @@ pub async fn delete_execution(
             let sanitized_error = sanitizer.sanitize_error(&db_err);
             RestError::InternalError(sanitized_error.message)
         })?;
-    
+
     Ok(Json(serde_json::json!({
         "success": true,
         "message": format!("Execution {} deleted successfully", execution_id)
@@ -289,15 +290,15 @@ pub async fn cancel_execution(
     Path(execution_id): Path<String>,
 ) -> RestResult<impl IntoResponse> {
     info!("Cancelling execution with ID: {}", execution_id);
-    
+
     let api_id = ApiId::from_string(execution_id.clone());
     let execution_repo = ctx.repositories.execution_repository();
-    
+
     execution_repo
         .mark_failed(api_id, "Cancelled by user".to_string(), None)
         .await
         .map_err(RestError::Database)?;
-    
+
     Ok(Json(serde_json::json!({
         "success": true,
         "message": format!("Execution {} cancelled", execution_id)
@@ -312,7 +313,7 @@ pub async fn retry_execution(
     Json(request): Json<RetryExecutionRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Retrying execution with ID: {}", execution_id);
-    
+
     // Validate execution ID
     let validator = InputValidator::new();
     if let Err(validation_err) = validator.validate_string(&execution_id, "execution_id") {
@@ -321,10 +322,10 @@ pub async fn retry_execution(
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     let api_id = ApiId::from_string(execution_id.clone());
     let execution_repo = ctx.repositories.execution_repository();
-    
+
     // Find the original execution
     let original_execution = execution_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
@@ -335,17 +336,17 @@ pub async fn retry_execution(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Execution", &execution_id))?;
-    
+
     // Check if execution can be retried (only retry failed executions)
     if !matches!(original_execution.status, ratchet_api_types::ExecutionStatus::Failed) {
         return Err(RestError::BadRequest(
-            "Only failed executions can be retried".to_string()
+            "Only failed executions can be retried".to_string(),
         ));
     }
-    
+
     // Use new input if provided, otherwise use original input
     let input_data = request.input.unwrap_or(original_execution.input);
-    
+
     // Create new execution from the original
     let new_execution = ratchet_api_types::UnifiedExecution {
         id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
@@ -366,13 +367,15 @@ pub async fn retry_execution(
         can_cancel: true,
         progress: None,
     };
-    
+
     // Create the new execution
-    let created_execution = execution_repo.create(new_execution).await
+    let created_execution = execution_repo
+        .create(new_execution)
+        .await
         .map_err(|e| RestError::InternalError(format!("Failed to create retry execution: {}", e)))?;
-    
+
     info!("Created retry execution with ID: {}", created_execution.id);
-    
+
     Ok(Json(ApiResponse::new(created_execution)))
 }
 
@@ -383,14 +386,14 @@ pub async fn get_execution_logs(
     Path(execution_id): Path<String>,
 ) -> RestResult<impl IntoResponse> {
     info!("Getting logs for execution: {}", execution_id);
-    
+
     // For now, return placeholder logs
     // In a full implementation, this would:
     // 1. Validate execution exists
     // 2. Retrieve logs from logging system
     // 3. Support real-time streaming if requested
     // 4. Return formatted log entries
-    
+
     Ok(Json(serde_json::json!({
         "execution_id": execution_id,
         "logs": [
@@ -402,7 +405,7 @@ pub async fn get_execution_logs(
             },
             {
                 "timestamp": "2023-12-07T14:30:15.145Z",
-                "level": "info", 
+                "level": "info",
                 "message": "Processing input data",
                 "source": "task_executor"
             }
@@ -413,29 +416,27 @@ pub async fn get_execution_logs(
 
 /// Get execution statistics
 
-pub async fn get_execution_stats(
-    State(ctx): State<TasksContext>,
-) -> RestResult<impl IntoResponse> {
+pub async fn get_execution_stats(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Getting execution statistics");
-    
+
     let execution_repo = ctx.repositories.execution_repository();
-    
+
     // Get basic counts
     let total_executions = execution_repo.count().await.map_err(RestError::Database)?;
-    
+
     // For now, return basic stats
     // In a full implementation, this would query for more detailed metrics
     let stats = ExecutionStats {
         total_executions,
-        pending_executions: 0,   // TODO: Implement
-        running_executions: 0,   // TODO: Implement  
-        completed_executions: 0, // TODO: Implement
-        failed_executions: 0,    // TODO: Implement
-        cancelled_executions: 0, // TODO: Implement
+        pending_executions: 0,     // TODO: Implement
+        running_executions: 0,     // TODO: Implement
+        completed_executions: 0,   // TODO: Implement
+        failed_executions: 0,      // TODO: Implement
+        cancelled_executions: 0,   // TODO: Implement
         average_duration_ms: None, // TODO: Implement
-        success_rate: 0.0,       // TODO: Implement
-        executions_last_24h: 0,  // TODO: Implement
+        success_rate: 0.0,         // TODO: Implement
+        executions_last_24h: 0,    // TODO: Implement
     };
-    
+
     Ok(Json(StatsResponse::new(stats)))
 }

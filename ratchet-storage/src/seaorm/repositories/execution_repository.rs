@@ -3,12 +3,11 @@ use crate::database::{
     DatabaseConnection, DatabaseError,
 };
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Filters for execution queries
 #[derive(Debug, Clone, Default)]
@@ -65,9 +64,7 @@ impl ExecutionRepository {
 
     /// Find execution by ID
     pub async fn find_by_id(&self, id: i32) -> Result<Option<Execution>, DatabaseError> {
-        let execution = Executions::find_by_id(id)
-            .one(self.db.get_connection())
-            .await?;
+        let execution = Executions::find_by_id(id).one(self.db.get_connection()).await?;
         Ok(execution)
     }
 
@@ -91,10 +88,7 @@ impl ExecutionRepository {
     }
 
     /// Find executions by status
-    pub async fn find_by_status(
-        &self,
-        status: ExecutionStatus,
-    ) -> Result<Vec<Execution>, DatabaseError> {
+    pub async fn find_by_status(&self, status: ExecutionStatus) -> Result<Vec<Execution>, DatabaseError> {
         let executions = Executions::find()
             .filter(executions::Column::Status.eq(status))
             .order_by(executions::Column::QueuedAt, Order::Desc)
@@ -131,11 +125,7 @@ impl ExecutionRepository {
     }
 
     /// Update execution status
-    pub async fn update_status(
-        &self,
-        id: i32,
-        status: ExecutionStatus,
-    ) -> Result<(), DatabaseError> {
+    pub async fn update_status(&self, id: i32, status: ExecutionStatus) -> Result<(), DatabaseError> {
         let mut active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(status),
@@ -170,18 +160,20 @@ impl ExecutionRepository {
         duration_ms: Option<i32>,
     ) -> Result<(), DatabaseError> {
         let completed_at = chrono::Utc::now();
-        
+
         // If duration not provided, calculate from started_at
         let final_duration = if duration_ms.is_none() {
             if let Ok(Some(execution)) = self.find_by_id(id).await {
-                execution.started_at.map(|started_at| (completed_at - started_at).num_milliseconds() as i32)
+                execution
+                    .started_at
+                    .map(|started_at| (completed_at - started_at).num_milliseconds() as i32)
             } else {
                 None
             }
         } else {
             duration_ms
         };
-        
+
         let active_model = ExecutionActiveModel {
             id: Set(id),
             status: Set(ExecutionStatus::Completed),
@@ -217,9 +209,7 @@ impl ExecutionRepository {
 
     /// Delete execution
     pub async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        Executions::delete_by_id(id)
-            .exec(self.db.get_connection())
-            .await?;
+        Executions::delete_by_id(id).exec(self.db.get_connection()).await?;
         Ok(())
     }
 
@@ -254,17 +244,20 @@ impl ExecutionRepository {
         if let Ok(Some(execution)) = self.find_by_id(id).await {
             let mut output = execution.output.unwrap_or_else(|| serde_json::json!({}));
             if let Some(output_obj) = output.as_object_mut() {
-                output_obj.insert("progress".to_string(), serde_json::Value::Number(
-                    serde_json::Number::from_f64(progress as f64).unwrap_or(serde_json::Number::from(0))
-                ));
+                output_obj.insert(
+                    "progress".to_string(),
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(progress as f64).unwrap_or(serde_json::Number::from(0)),
+                    ),
+                );
             }
-            
+
             let active_model = ExecutionActiveModel {
                 id: Set(id),
                 output: Set(Some(output)),
                 ..Default::default()
             };
-            
+
             active_model.update(self.db.get_connection()).await?;
         }
         Ok(())
@@ -282,15 +275,15 @@ impl ExecutionRepository {
         if let Some(task_id) = filters.task_id {
             query = query.filter(executions::Column::TaskId.eq(task_id));
         }
-        
+
         if let Some(status) = filters.status {
             query = query.filter(executions::Column::Status.eq(status));
         }
-        
+
         if let Some(queued_after) = filters.queued_after {
             query = query.filter(executions::Column::QueuedAt.gte(queued_after));
         }
-        
+
         if let Some(completed_after) = filters.completed_after {
             query = query.filter(executions::Column::CompletedAt.gte(Some(completed_after)));
         }
@@ -299,7 +292,7 @@ impl ExecutionRepository {
         if let Some(limit) = pagination.limit {
             query = query.limit(limit);
         }
-        
+
         if let Some(offset) = pagination.offset {
             query = query.offset(offset);
         }
@@ -307,7 +300,11 @@ impl ExecutionRepository {
         // Apply ordering
         query = query.order_by(
             pagination.order_by.unwrap_or(executions::Column::QueuedAt),
-            if pagination.order_desc.unwrap_or(true) { Order::Desc } else { Order::Asc }
+            if pagination.order_desc.unwrap_or(true) {
+                Order::Desc
+            } else {
+                Order::Asc
+            },
         );
 
         let executions = query.all(self.db.get_connection()).await?;
@@ -322,15 +319,15 @@ impl ExecutionRepository {
         if let Some(task_id) = filters.task_id {
             query = query.filter(executions::Column::TaskId.eq(task_id));
         }
-        
+
         if let Some(status) = filters.status {
             query = query.filter(executions::Column::Status.eq(status));
         }
-        
+
         if let Some(queued_after) = filters.queued_after {
             query = query.filter(executions::Column::QueuedAt.gte(queued_after));
         }
-        
+
         if let Some(completed_after) = filters.completed_after {
             query = query.filter(executions::Column::CompletedAt.gte(Some(completed_after)));
         }

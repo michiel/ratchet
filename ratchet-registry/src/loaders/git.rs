@@ -5,6 +5,10 @@
 #[cfg(feature = "git")]
 use async_trait::async_trait;
 #[cfg(feature = "git")]
+use chrono::Utc;
+#[cfg(feature = "git")]
+use gix::clone;
+#[cfg(feature = "git")]
 use std::collections::HashMap;
 #[cfg(feature = "git")]
 use std::path::{Path, PathBuf};
@@ -15,14 +19,10 @@ use tokio::fs;
 #[cfg(feature = "git")]
 use tracing::{info, warn};
 #[cfg(feature = "git")]
-use chrono::Utc;
-#[cfg(feature = "git")]
 use uuid::Uuid;
-#[cfg(feature = "git")]
-use gix::clone;
 
 #[cfg(feature = "git")]
-use crate::config::{TaskSource, GitConfig, GitAuth, GitAuthType};
+use crate::config::{GitAuth, GitAuthType, GitConfig, TaskSource};
 #[cfg(feature = "git")]
 use crate::error::{RegistryError, Result};
 #[cfg(feature = "git")]
@@ -73,15 +73,15 @@ impl GitLoader {
     }
 
     async fn ensure_repository_synced(&self, source: &TaskSource) -> Result<PathBuf> {
-        let url = source.git_url().ok_or_else(|| {
-            RegistryError::Configuration("Source is not a Git repository".to_string())
-        })?;
-        
+        let url = source
+            .git_url()
+            .ok_or_else(|| RegistryError::Configuration("Source is not a Git repository".to_string()))?;
+
         let config = source.git_config().unwrap();
         let auth = source.git_auth();
-        
+
         let repo_path = self.cache.get_repository_path(url).await?;
-        
+
         if !repo_path.exists() {
             // Clone repository
             info!("Cloning Git repository: {}", url);
@@ -93,7 +93,7 @@ impl GitLoader {
                 self.git_client.sync_repository(&repo_path, config, auth).await?;
             }
         }
-        
+
         Ok(repo_path)
     }
 
@@ -113,52 +113,55 @@ impl GitLoader {
         self.discover_tasks_in_directory(&tasks_dir).await
     }
 
-    fn discover_tasks_in_directory<'a>(&'a self, dir: &'a Path) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<DiscoveredTask>>> + Send + 'a>> {
+    fn discover_tasks_in_directory<'a>(
+        &'a self,
+        dir: &'a Path,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<DiscoveredTask>>> + Send + 'a>> {
         Box::pin(async move {
-        let mut discovered = Vec::new();
-        let mut entries = fs::read_dir(dir).await?;
+            let mut discovered = Vec::new();
+            let mut entries = fs::read_dir(dir).await?;
 
-        while let Some(entry) = entries.next_entry().await? {
-            let entry_path = entry.path();
-            let metadata = entry.metadata().await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let entry_path = entry.path();
+                let metadata = entry.metadata().await?;
 
-            if metadata.is_dir() {
-                let metadata_file = entry_path.join("metadata.json");
-                if metadata_file.exists() {
-                    // This is a task directory
-                    match self.load_task_metadata(&entry_path).await {
-                        Ok(task_metadata) => {
-                            let task_ref = TaskReference {
-                                name: task_metadata.name.clone(),
-                                version: task_metadata.version.clone(),
-                                source: format!("git://{}", entry_path.display()),
-                            };
+                if metadata.is_dir() {
+                    let metadata_file = entry_path.join("metadata.json");
+                    if metadata_file.exists() {
+                        // This is a task directory
+                        match self.load_task_metadata(&entry_path).await {
+                            Ok(task_metadata) => {
+                                let task_ref = TaskReference {
+                                    name: task_metadata.name.clone(),
+                                    version: task_metadata.version.clone(),
+                                    source: format!("git://{}", entry_path.display()),
+                                };
 
-                            discovered.push(DiscoveredTask {
-                                task_ref,
-                                metadata: task_metadata,
-                                discovered_at: Utc::now(),
-                            });
+                                discovered.push(DiscoveredTask {
+                                    task_ref,
+                                    metadata: task_metadata,
+                                    discovered_at: Utc::now(),
+                                });
+                            }
+                            Err(e) => {
+                                warn!("Failed to load task metadata from {:?}: {}", entry_path, e);
+                            }
                         }
-                        Err(e) => {
-                            warn!("Failed to load task metadata from {:?}: {}", entry_path, e);
-                        }
-                    }
-                } else {
-                    // Recursively scan subdirectories
-                    match self.discover_tasks_in_directory(&entry_path).await {
-                        Ok(mut subdiscovered) => {
-                            discovered.append(&mut subdiscovered);
-                        }
-                        Err(e) => {
-                            warn!("Failed to scan subdirectory {:?}: {}", entry_path, e);
+                    } else {
+                        // Recursively scan subdirectories
+                        match self.discover_tasks_in_directory(&entry_path).await {
+                            Ok(mut subdiscovered) => {
+                                discovered.append(&mut subdiscovered);
+                            }
+                            Err(e) => {
+                                warn!("Failed to scan subdirectory {:?}: {}", entry_path, e);
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Ok(discovered)
+            Ok(discovered)
         })
     }
 
@@ -179,8 +182,7 @@ impl GitLoader {
             .to_string();
 
         let uuid = if let Some(uuid_str) = metadata["uuid"].as_str() {
-            Uuid::parse_str(uuid_str)
-                .map_err(|e| RegistryError::ValidationError(format!("Invalid UUID: {}", e)))?
+            Uuid::parse_str(uuid_str).map_err(|e| RegistryError::ValidationError(format!("Invalid UUID: {}", e)))?
         } else {
             Uuid::new_v4() // Generate if not present
         };
@@ -188,11 +190,7 @@ impl GitLoader {
         let description = metadata["description"].as_str().map(|s| s.to_string());
         let tags = metadata["tags"]
             .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
             .unwrap_or_default();
 
         let now = Utc::now();
@@ -243,7 +241,7 @@ impl GitLoader {
             script,
             input_schema,
             output_schema,
-            dependencies: Vec::new(), // TODO: Extract from metadata
+            dependencies: Vec::new(),    // TODO: Extract from metadata
             environment: HashMap::new(), // TODO: Extract from metadata
         })
     }
@@ -271,7 +269,7 @@ impl TaskLoader for GitLoader {
         if let Ok(Some(index)) = self.load_registry_index(&repo_path).await {
             info!("Using registry index for fast task discovery");
             let mut discovered = Vec::new();
-            
+
             for task_info in index.tasks {
                 let task_path = repo_path.join(&task_info.path);
                 if task_path.exists() {
@@ -300,13 +298,14 @@ impl TaskLoader for GitLoader {
                     });
                 }
             }
-            
+
             return Ok(discovered);
         }
 
         // Fall back to directory scanning
         info!("Scanning repository directory for tasks");
-        self.scan_tasks_directory(&repo_path, config.subdirectory.as_deref()).await
+        self.scan_tasks_directory(&repo_path, config.subdirectory.as_deref())
+            .await
     }
 
     async fn load_task(&self, task_ref: &TaskReference) -> Result<TaskDefinition> {
@@ -370,7 +369,6 @@ struct CollectionInfo {
     tasks: Vec<String>,
 }
 
-
 // ============================================================================
 // Git Client Configuration
 // ============================================================================
@@ -411,7 +409,7 @@ impl GitRepositoryCache {
             .unwrap_or_else(|| PathBuf::from("/tmp"))
             .join("ratchet")
             .join("git-repos");
-            
+
         Self { cache_root }
     }
 
@@ -422,15 +420,11 @@ impl GitRepositoryCache {
     pub async fn get_repository_path(&self, url: &str) -> Result<PathBuf> {
         // Create a safe directory name from the URL
         let url_hash = format!("{:x}", md5::compute(url.as_bytes()));
-        let repo_name = url
-            .split('/')
-            .next_back()
-            .unwrap_or("unknown")
-            .replace(".git", "");
-        
+        let repo_name = url.split('/').next_back().unwrap_or("unknown").replace(".git", "");
+
         let repo_dir = format!("{}_{}", repo_name, url_hash);
         let repo_path = self.cache_root.join(repo_dir);
-        
+
         Ok(repo_path)
     }
 
@@ -576,7 +570,7 @@ impl GitoxideClient {
             // Configure authentication if provided
             if let Some(auth_type) = auth_info {
                 match Self::setup_gix_auth(&mut clone_options, &auth_type) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => return Err(format!("Auth setup failed: {}", e)),
                 }
             }
@@ -605,7 +599,11 @@ impl GitoxideClient {
                 .main_worktree(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)
                 .map_err(|e| format!("Checkout failed: {}", e))?;
 
-            info!("Successfully cloned repository {} to {}", url_clone, path_clone.display());
+            info!(
+                "Successfully cloned repository {} to {}",
+                url_clone,
+                path_clone.display()
+            );
             Ok::<(), String>(())
         })
         .await?;
@@ -613,12 +611,7 @@ impl GitoxideClient {
         result.map_err(RegistryError::GitError)
     }
 
-    pub async fn sync_repository(
-        &self,
-        repo_path: &Path,
-        config: &GitConfig,
-        auth: Option<&GitAuth>,
-    ) -> Result<()> {
+    pub async fn sync_repository(&self, repo_path: &Path, config: &GitConfig, auth: Option<&GitAuth>) -> Result<()> {
         let repo_path_buf = repo_path.to_path_buf();
         let git_ref = config.branch.clone();
         let auth_info = auth.map(|a| a.auth_type.clone());
@@ -626,8 +619,7 @@ impl GitoxideClient {
         let result = tokio::task::spawn_blocking(move || {
             let repo_path_str = repo_path_buf.display().to_string();
             // Open the repository
-            let repo = gix::discover(&repo_path_buf)
-                .map_err(|e| format!("Failed to open repository: {}", e))?;
+            let repo = gix::discover(&repo_path_buf).map_err(|e| format!("Failed to open repository: {}", e))?;
 
             // Get the remote
             let remote = repo
@@ -638,7 +630,7 @@ impl GitoxideClient {
             // Configure authentication if provided
             if let Some(auth_type) = auth_info {
                 match Self::setup_gix_sync_auth(&auth_type) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => return Err(format!("Auth setup failed for sync: {}", e)),
                 }
             }
@@ -662,7 +654,10 @@ impl GitoxideClient {
             Self::checkout_gix_ref(&repo, &git_ref)
                 .map_err(|e| format!("Failed to checkout ref '{}': {}", git_ref, e))?;
 
-            info!("Successfully synced repository at {} (branch: {})", repo_path_str, git_ref);
+            info!(
+                "Successfully synced repository at {} (branch: {})",
+                repo_path_str, git_ref
+            );
             Ok::<(), String>(())
         })
         .await?;
@@ -684,7 +679,10 @@ impl GitoxideClient {
                 info!("Setting up basic authentication for gitoxide");
                 Self::setup_basic_auth(clone_options, username, password)
             }
-            GitAuthType::SshKey { private_key_path, passphrase } => {
+            GitAuthType::SshKey {
+                private_key_path,
+                passphrase,
+            } => {
                 info!("Setting up SSH key authentication for gitoxide");
                 Self::setup_ssh_auth(clone_options, private_key_path, passphrase.as_deref())
             }
@@ -695,16 +693,13 @@ impl GitoxideClient {
         }
     }
 
-    fn setup_token_auth(
-        _clone_options: &mut clone::PrepareFetch,
-        token: &str,
-    ) -> std::result::Result<(), String> {
+    fn setup_token_auth(_clone_options: &mut clone::PrepareFetch, token: &str) -> std::result::Result<(), String> {
         // For HTTP clone operations with tokens, gix typically handles this through URL credentials
         // or environment variables. For now, we'll configure the credential helper approach.
         std::env::set_var("GIT_ASKPASS", "echo");
         std::env::set_var("GIT_USERNAME", token);
         std::env::set_var("GIT_PASSWORD", "");
-        
+
         info!("Configured token-based authentication via environment");
         Ok(())
     }
@@ -718,7 +713,7 @@ impl GitoxideClient {
         std::env::set_var("GIT_ASKPASS", "echo");
         std::env::set_var("GIT_USERNAME", username);
         std::env::set_var("GIT_PASSWORD", password);
-        
+
         info!("Configured basic authentication for user: {}", username);
         Ok(())
     }
@@ -734,15 +729,18 @@ impl GitoxideClient {
         }
 
         // Set up SSH authentication via environment variables
-        std::env::set_var("GIT_SSH_COMMAND", format!(
-            "ssh -i {} -o StrictHostKeyChecking=no{}",
-            private_key_path,
-            if passphrase.is_some() {
-                " -o PasswordAuthentication=yes"
-            } else {
-                " -o PasswordAuthentication=no"
-            }
-        ));
+        std::env::set_var(
+            "GIT_SSH_COMMAND",
+            format!(
+                "ssh -i {} -o StrictHostKeyChecking=no{}",
+                private_key_path,
+                if passphrase.is_some() {
+                    " -o PasswordAuthentication=yes"
+                } else {
+                    " -o PasswordAuthentication=no"
+                }
+            ),
+        );
 
         if let Some(_passphrase) = passphrase {
             // For SSH keys with passphrase, we'd need a more sophisticated approach
@@ -758,15 +756,12 @@ impl GitoxideClient {
     fn setup_gix_sync_auth(auth_type: &GitAuthType) -> std::result::Result<(), String> {
         // For sync operations, we use the same auth setup as clone
         match auth_type {
-            GitAuthType::Token { token } => {
-                Self::setup_sync_token_auth(token)
-            }
-            GitAuthType::Basic { username, password } => {
-                Self::setup_sync_basic_auth(username, password)
-            }
-            GitAuthType::SshKey { private_key_path, passphrase } => {
-                Self::setup_sync_ssh_auth(private_key_path, passphrase.as_deref())
-            }
+            GitAuthType::Token { token } => Self::setup_sync_token_auth(token),
+            GitAuthType::Basic { username, password } => Self::setup_sync_basic_auth(username, password),
+            GitAuthType::SshKey {
+                private_key_path,
+                passphrase,
+            } => Self::setup_sync_ssh_auth(private_key_path, passphrase.as_deref()),
             GitAuthType::GitHubApp { .. } => {
                 Err("GitHub App authentication not yet implemented for sync - use token instead".to_string())
             }
@@ -794,15 +789,18 @@ impl GitoxideClient {
             return Err(format!("SSH private key not found: {}", private_key_path));
         }
 
-        std::env::set_var("GIT_SSH_COMMAND", format!(
-            "ssh -i {} -o StrictHostKeyChecking=no{}",
-            private_key_path,
-            if passphrase.is_some() {
-                " -o PasswordAuthentication=yes"
-            } else {
-                " -o PasswordAuthentication=no"
-            }
-        ));
+        std::env::set_var(
+            "GIT_SSH_COMMAND",
+            format!(
+                "ssh -i {} -o StrictHostKeyChecking=no{}",
+                private_key_path,
+                if passphrase.is_some() {
+                    " -o PasswordAuthentication=yes"
+                } else {
+                    " -o PasswordAuthentication=no"
+                }
+            ),
+        );
 
         if let Some(_passphrase) = passphrase {
             warn!("SSH key passphrase provided for sync but automated handling not fully implemented");
@@ -819,11 +817,11 @@ impl GitoxideClient {
 
         // Try multiple reference patterns to find the desired ref
         let ref_patterns = vec![
-            git_ref.to_string(),                              // Direct ref (e.g., "main")
-            format!("refs/heads/{}", git_ref),                // Local branch
-            format!("refs/remotes/origin/{}", git_ref),       // Remote tracking branch
-            format!("refs/tags/{}", git_ref),                 // Tag
-            format!("origin/{}", git_ref),                    // Short remote ref
+            git_ref.to_string(),                        // Direct ref (e.g., "main")
+            format!("refs/heads/{}", git_ref),          // Local branch
+            format!("refs/remotes/origin/{}", git_ref), // Remote tracking branch
+            format!("refs/tags/{}", git_ref),           // Tag
+            format!("origin/{}", git_ref),              // Short remote ref
         ];
 
         let mut reference = None;
@@ -838,9 +836,8 @@ impl GitoxideClient {
             }
         }
 
-        let reference = reference.ok_or_else(|| {
-            format!("Reference '{}' not found. Tried patterns: {:?}", git_ref, ref_patterns)
-        })?;
+        let reference = reference
+            .ok_or_else(|| format!("Reference '{}' not found. Tried patterns: {:?}", git_ref, ref_patterns))?;
 
         // Get the target commit
         let target = reference.target();
@@ -853,7 +850,8 @@ impl GitoxideClient {
         // Update HEAD to point to the commit
         let head_ref = repo.head_ref().map_err(|e| format!("Failed to get HEAD: {}", e))?;
         if let Some(mut head_ref) = head_ref {
-            head_ref.set_target_id(commit_id, format!("checkout ref {}", git_ref))
+            head_ref
+                .set_target_id(commit_id, format!("checkout ref {}", git_ref))
                 .map_err(|e| format!("Failed to set HEAD to commit: {}", e))?;
             info!("Updated HEAD to commit: {}", commit_id);
         } else {
@@ -906,15 +904,15 @@ impl GitoxideLoader {
     }
 
     async fn ensure_repository_synced(&self, source: &TaskSource) -> Result<PathBuf> {
-        let url = source.git_url().ok_or_else(|| {
-            RegistryError::Configuration("Source is not a Git repository".to_string())
-        })?;
-        
+        let url = source
+            .git_url()
+            .ok_or_else(|| RegistryError::Configuration("Source is not a Git repository".to_string()))?;
+
         let config = source.git_config().unwrap();
         let auth = source.git_auth();
-        
+
         let repo_path = self.cache.get_repository_path(url).await?;
-        
+
         if !repo_path.exists() {
             // Clone repository
             info!("Cloning Git repository with gitoxide: {}", url);
@@ -926,7 +924,7 @@ impl GitoxideLoader {
                 self.git_client.sync_repository(&repo_path, config, auth).await?;
             }
         }
-        
+
         Ok(repo_path)
     }
 
@@ -1035,15 +1033,16 @@ impl TaskLoader for GitoxideLoader {
 
         // Fallback to directory scanning (registry index support can be added later)
         info!("Scanning directory for tasks with gitoxide");
-        self.scan_tasks_directory(&repo_path, config.subdirectory.as_deref()).await
+        self.scan_tasks_directory(&repo_path, config.subdirectory.as_deref())
+            .await
     }
 
     async fn load_task(&self, task_ref: &TaskReference) -> Result<TaskDefinition> {
         // Parse the git:// source path
-        let source_path = task_ref.source.strip_prefix("git://")
-            .ok_or_else(|| RegistryError::Configuration(
-                format!("Invalid git source format: {}", task_ref.source)
-            ))?;
+        let source_path = task_ref
+            .source
+            .strip_prefix("git://")
+            .ok_or_else(|| RegistryError::Configuration(format!("Invalid git source format: {}", task_ref.source)))?;
 
         let task_path = Path::new(source_path);
         self.load_task_definition_from_path(task_path).await

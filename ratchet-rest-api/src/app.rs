@@ -1,23 +1,21 @@
 //! Main application configuration and router setup
 
 use axum::{
-    response::{Json, Html, IntoResponse},
+    response::{Html, IntoResponse, Json},
     routing::{get, post},
     Router,
 };
-use ratchet_interfaces::{RepositoryFactory, TaskRegistry, RegistryManager, TaskValidator};
-use ratchet_web::{
-    middleware::{
-        audit_middleware, cors_layer, error_handler_layer, request_id_layer, security_headers_middleware,
-        rate_limit_middleware, create_rate_limit_middleware, session_middleware, create_session_manager,
-        AuditConfig, SecurityConfig, RateLimitConfig, SessionConfig, RateLimiter,
-    },
+use ratchet_interfaces::{RegistryManager, RepositoryFactory, TaskRegistry, TaskValidator};
+use ratchet_web::middleware::{
+    audit_middleware, cors_layer, create_rate_limit_middleware, create_session_manager, error_handler_layer,
+    rate_limit_middleware, request_id_layer, security_headers_middleware, session_middleware, AuditConfig,
+    RateLimitConfig, RateLimiter, SecurityConfig, SessionConfig,
 };
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    context::{TasksContext, ExecutionsContext, JobsContext, SchedulesContext, WorkersContext},
+    context::{ExecutionsContext, JobsContext, SchedulesContext, TasksContext, WorkersContext},
     handlers,
     // openapi_spec, // temporarily disabled
 };
@@ -88,7 +86,7 @@ impl AppConfig {
             api_prefix: "/api/v1".to_string(),
         }
     }
-    
+
     /// Create a development configuration
     pub fn development() -> Self {
         Self {
@@ -126,12 +124,7 @@ impl AppContext {
         validator: Arc<dyn TaskValidator>,
     ) -> Self {
         Self {
-            tasks: TasksContext::new(
-                repositories.clone(),
-                registry,
-                registry_manager,
-                validator,
-            ),
+            tasks: TasksContext::new(repositories.clone(), registry, registry_manager, validator),
             executions: ExecutionsContext::new(repositories.clone()),
             jobs: JobsContext::new(repositories.clone()),
             schedules: SchedulesContext::new(repositories.clone()),
@@ -161,64 +154,78 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
 
     // Add middleware layers (applied in reverse order)
     let mut app = app;
-    
+
     // Security headers (applied first, affects all responses)
     if config.enable_security_headers {
         let security_config = config.security_config.clone();
-        app = app.layer(axum::middleware::from_fn(move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
-            let config = security_config.clone();
-            async move {
-                req.extensions_mut().insert(config);
-                security_headers_middleware(req, next).await
-            }
-        }));
+        app = app.layer(axum::middleware::from_fn(
+            move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+                let config = security_config.clone();
+                async move {
+                    req.extensions_mut().insert(config);
+                    security_headers_middleware(req, next).await
+                }
+            },
+        ));
     }
-    
+
     // Rate limiting (applied early to prevent abuse)
     if config.enable_rate_limiting {
         let rate_limiter = create_rate_limit_middleware(config.rate_limit_config.clone());
-        app = app.layer(axum::middleware::from_fn(move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
-            let rate_limiter = rate_limiter.clone();
-            async move {
-                // Extract ConnectInfo from request extensions if available
-                let connect_info = req.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().cloned();
-                let mut req = req;
-                req.extensions_mut().insert(rate_limiter);
-                match rate_limit_middleware(connect_info, req, next).await {
-                    Ok(response) => response,
-                    Err(err) => err.into_response(),
+        app = app.layer(axum::middleware::from_fn(
+            move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+                let rate_limiter = rate_limiter.clone();
+                async move {
+                    // Extract ConnectInfo from request extensions if available
+                    let connect_info = req
+                        .extensions()
+                        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+                        .cloned();
+                    let mut req = req;
+                    req.extensions_mut().insert(rate_limiter);
+                    match rate_limit_middleware(connect_info, req, next).await {
+                        Ok(response) => response,
+                        Err(err) => err.into_response(),
+                    }
                 }
-            }
-        }));
+            },
+        ));
     }
-    
+
     // Session management (applied after rate limiting but before other middleware)
     if config.enable_session_management {
         let session_manager = create_session_manager(config.session_config.clone());
-        app = app.layer(axum::middleware::from_fn(move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
-            let session_manager = session_manager.clone();
-            async move {
-                req.extensions_mut().insert(session_manager);
-                session_middleware(req, next).await
-            }
-        }));
+        app = app.layer(axum::middleware::from_fn(
+            move |mut req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+                let session_manager = session_manager.clone();
+                async move {
+                    req.extensions_mut().insert(session_manager);
+                    session_middleware(req, next).await
+                }
+            },
+        ));
     }
-    
+
     // Audit logging (should be one of the first middleware to capture all requests)
     if config.enable_audit_logging {
         let audit_config = config.audit_config.clone();
-        app = app.layer(axum::middleware::from_fn(move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
-            let config = audit_config.clone();
-            async move {
-                // Extract ConnectInfo from request extensions if available
-                let connect_info = req.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().cloned();
-                let mut req = req;
-                req.extensions_mut().insert(config);
-                audit_middleware(connect_info, req, next).await
-            }
-        }));
+        app = app.layer(axum::middleware::from_fn(
+            move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+                let config = audit_config.clone();
+                async move {
+                    // Extract ConnectInfo from request extensions if available
+                    let connect_info = req
+                        .extensions()
+                        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+                        .cloned();
+                    let mut req = req;
+                    req.extensions_mut().insert(config);
+                    audit_middleware(connect_info, req, next).await
+                }
+            },
+        ));
     }
-    
+
     // CORS handling
     if config.enable_cors {
         app = app.layer(cors_layer());
@@ -247,7 +254,6 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
 
 /// Serve Swagger UI HTML page
 async fn serve_swagger_ui() -> impl IntoResponse {
-    
     let html = r#"<!DOCTYPE html>
 <html>
 <head>
@@ -338,7 +344,10 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/auth/logout", post(handlers::auth::logout))
         .route("/auth/change-password", post(handlers::auth::change_password))
         // Task endpoints
-        .route("/tasks", get(handlers::tasks::list_tasks).post(handlers::tasks::create_task))
+        .route(
+            "/tasks",
+            get(handlers::tasks::list_tasks).post(handlers::tasks::create_task),
+        )
         .route("/tasks/stats", get(handlers::tasks::get_task_stats))
         .route("/tasks/sync", post(handlers::tasks::sync_tasks))
         .route(
@@ -350,7 +359,10 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/tasks/{id}/enable", post(handlers::tasks::enable_task))
         .route("/tasks/{id}/disable", post(handlers::tasks::disable_task))
         // Execution endpoints
-        .route("/executions", get(handlers::executions::list_executions).post(handlers::executions::create_execution))
+        .route(
+            "/executions",
+            get(handlers::executions::list_executions).post(handlers::executions::create_execution),
+        )
         .route("/executions/stats", get(handlers::executions::get_execution_stats))
         .route(
             "/executions/{id}",
@@ -373,7 +385,10 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/jobs/{id}/cancel", post(handlers::jobs::cancel_job))
         .route("/jobs/{id}/retry", post(handlers::jobs::retry_job))
         // Schedule endpoints
-        .route("/schedules", get(handlers::schedules::list_schedules).post(handlers::schedules::create_schedule))
+        .route(
+            "/schedules",
+            get(handlers::schedules::list_schedules).post(handlers::schedules::create_schedule),
+        )
         .route("/schedules/stats", get(handlers::schedules::get_schedule_stats))
         .route(
             "/schedules/{id}",
@@ -386,18 +401,19 @@ fn create_api_router() -> Router<TasksContext> {
         .route("/schedules/{id}/trigger", post(handlers::schedules::trigger_schedule))
         // MCP task development endpoints
         .route("/mcp/tasks", post(handlers::mcp_create_task))
-        .route("/mcp/tasks/{name}", 
-            get(handlers::mcp_edit_task)  // For getting current task config before editing
-            .patch(handlers::mcp_edit_task)
-            .delete(handlers::mcp_delete_task))
+        .route(
+            "/mcp/tasks/{name}",
+            get(handlers::mcp_edit_task) // For getting current task config before editing
+                .patch(handlers::mcp_edit_task)
+                .delete(handlers::mcp_delete_task),
+        )
         .route("/mcp/tasks/{name}/test", post(handlers::mcp_test_task))
         .route("/mcp/results", post(handlers::mcp_store_result))
         .route("/mcp/results/{name}", get(handlers::mcp_get_results))
-        // Worker endpoints  
+        // Worker endpoints
         .route("/workers", get(handlers::workers::list_workers))
         .route("/workers/stats", get(handlers::workers::get_worker_stats))
 }
-
 
 /// Placeholder handler for unimplemented endpoints
 async fn placeholder_handler() -> axum::response::Json<serde_json::Value> {
@@ -417,10 +433,10 @@ mod tests {
     async fn test_health_endpoint() {
         // This test would require mock implementations
         // For now, just test that the router can be created
-        
+
         // let context = AppContext::new(...); // Would need mock implementations
         // let app = create_rest_app(context, AppConfig::default());
-        
+
         // let response = app
         //     .oneshot(
         //         axum::http::Request::builder()
@@ -430,7 +446,7 @@ mod tests {
         //     )
         //     .await
         //     .unwrap();
-        
+
         // assert_eq!(response.status(), StatusCode::OK);
     }
 }

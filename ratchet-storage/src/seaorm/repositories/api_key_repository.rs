@@ -2,18 +2,15 @@
 
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
-    PaginatorTrait,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 
-use ratchet_api_types::{ApiId, PaginationInput, ListResponse, UnifiedApiKey, ApiKeyPermissions};
-use ratchet_interfaces::{
-    DatabaseError, CrudRepository, FilteredRepository, Repository,
-    database::ApiKeyRepository,
-};
+use ratchet_api_types::{ApiId, ApiKeyPermissions, ListResponse, PaginationInput, UnifiedApiKey};
+use ratchet_interfaces::{database::ApiKeyRepository, CrudRepository, DatabaseError, FilteredRepository, Repository};
 
-use crate::seaorm::{entities::{api_keys, ApiKeys}, connection::DatabaseConnection};
+use crate::seaorm::{
+    connection::DatabaseConnection,
+    entities::{api_keys, ApiKeys},
+};
 
 /// SeaORM implementation of the ApiKeyRepository
 #[derive(Clone)]
@@ -104,8 +101,8 @@ impl Repository for SeaOrmApiKeyRepository {
             .limit(1)
             .all(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("API key repository health check failed: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("API key repository health check failed: {}", e),
             })?;
         Ok(())
     }
@@ -119,12 +116,14 @@ impl CrudRepository<UnifiedApiKey> for SeaOrmApiKeyRepository {
         // For now, we'll generate a placeholder hash
         let placeholder_hash = format!("hash_{}", api_key.key_prefix);
         let active_model = Self::to_active_model_for_create(&api_key, &placeholder_hash);
-        
-        let result = active_model.insert(self.db.get_connection()).await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to create API key: {}", e) 
+
+        let result = active_model
+            .insert(self.db.get_connection())
+            .await
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to create API key: {}", e),
             })?;
-        
+
         Ok(Self::to_unified_api_key(result))
     }
 
@@ -132,8 +131,8 @@ impl CrudRepository<UnifiedApiKey> for SeaOrmApiKeyRepository {
         let model = ApiKeys::find_by_id(id)
             .one(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to find API key by id: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to find API key by id: {}", e),
             })?;
 
         Ok(model.map(Self::to_unified_api_key))
@@ -146,12 +145,14 @@ impl CrudRepository<UnifiedApiKey> for SeaOrmApiKeyRepository {
 
     async fn update(&self, api_key: UnifiedApiKey) -> Result<UnifiedApiKey, DatabaseError> {
         let active_model = Self::to_active_model_for_update(api_key.id.as_i32().unwrap_or(0), &api_key);
-        
-        let result = active_model.update(self.db.get_connection()).await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to update API key: {}", e) 
+
+        let result = active_model
+            .update(self.db.get_connection())
+            .await
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to update API key: {}", e),
             })?;
-        
+
         Ok(Self::to_unified_api_key(result))
     }
 
@@ -159,20 +160,19 @@ impl CrudRepository<UnifiedApiKey> for SeaOrmApiKeyRepository {
         ApiKeys::delete_by_id(id)
             .exec(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to delete API key: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to delete API key: {}", e),
             })?;
 
         Ok(())
     }
 
-
     async fn count(&self) -> Result<u64, DatabaseError> {
         ApiKeys::find()
             .count(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to count API keys: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to count API keys: {}", e),
             })
     }
 }
@@ -201,12 +201,9 @@ impl FilteredRepository<UnifiedApiKey, ()> for SeaOrmApiKeyRepository {
                 message: format!("Failed to fetch API keys: {}", e),
             })?;
 
-        let total = paginator
-            .num_items()
-            .await
-            .map_err(|e| DatabaseError::Internal {
-                message: format!("Failed to count API keys: {}", e),
-            })?;
+        let total = paginator.num_items().await.map_err(|e| DatabaseError::Internal {
+            message: format!("Failed to count API keys: {}", e),
+        })?;
 
         let items: Vec<UnifiedApiKey> = api_keys.into_iter().map(Self::to_unified_api_key).collect();
 
@@ -246,8 +243,8 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
             .filter(api_keys::Column::IsActive.eq(true))
             .one(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to find API key by hash: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to find API key by hash: {}", e),
             })?;
 
         // Check expiration if key exists
@@ -268,8 +265,8 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
             .order_by_desc(api_keys::Column::CreatedAt)
             .all(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to find API keys by user_id: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to find API keys by user_id: {}", e),
             })?;
 
         Ok(models.into_iter().map(Self::to_unified_api_key).collect())
@@ -284,7 +281,7 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
         permissions: &str,
     ) -> Result<UnifiedApiKey, DatabaseError> {
         let now = Utc::now();
-        
+
         // Parse permissions string
         let permissions_enum = match permissions {
             "full" => api_keys::ApiKeyPermissions::Full,
@@ -293,7 +290,7 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
             "admin" => api_keys::ApiKeyPermissions::Admin,
             _ => api_keys::ApiKeyPermissions::ReadOnly, // Default to read-only
         };
-        
+
         let active_model = api_keys::ActiveModel {
             id: Default::default(), // Auto-generated
             key_hash: Set(key_hash.to_string()),
@@ -308,9 +305,11 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
             usage_count: Set(0),
         };
 
-        let result = active_model.insert(self.db.get_connection()).await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to create API key: {}", e) 
+        let result = active_model
+            .insert(self.db.get_connection())
+            .await
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to create API key: {}", e),
             })?;
 
         Ok(Self::to_unified_api_key(result))
@@ -320,17 +319,19 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
         let api_key = ApiKeys::find_by_id(api_key_id.as_i32().unwrap_or(0))
             .one(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to find API key for last_used update: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to find API key for last_used update: {}", e),
             })?;
 
         if let Some(api_key) = api_key {
             let mut active_model: api_keys::ActiveModel = api_key.into();
             active_model.last_used_at = Set(Some(Utc::now()));
-            
-            active_model.update(self.db.get_connection()).await
-                .map_err(|e| DatabaseError::Internal { 
-                    message: format!("Failed to update API key last_used: {}", e) 
+
+            active_model
+                .update(self.db.get_connection())
+                .await
+                .map_err(|e| DatabaseError::Internal {
+                    message: format!("Failed to update API key last_used: {}", e),
                 })?;
         }
 
@@ -341,18 +342,20 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
         let api_key = ApiKeys::find_by_id(api_key_id.as_i32().unwrap_or(0))
             .one(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to find API key for usage increment: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to find API key for usage increment: {}", e),
             })?;
 
         if let Some(api_key) = api_key {
             let mut active_model: api_keys::ActiveModel = api_key.into();
             active_model.usage_count = Set(active_model.usage_count.unwrap() + 1);
             active_model.last_used_at = Set(Some(Utc::now()));
-            
-            active_model.update(self.db.get_connection()).await
-                .map_err(|e| DatabaseError::Internal { 
-                    message: format!("Failed to increment API key usage: {}", e) 
+
+            active_model
+                .update(self.db.get_connection())
+                .await
+                .map_err(|e| DatabaseError::Internal {
+                    message: format!("Failed to increment API key usage: {}", e),
                 })?;
         }
 
@@ -363,17 +366,19 @@ impl ApiKeyRepository for SeaOrmApiKeyRepository {
         let api_key = ApiKeys::find_by_id(api_key_id.as_i32().unwrap_or(0))
             .one(self.db.get_connection())
             .await
-            .map_err(|e| DatabaseError::Internal { 
-                message: format!("Failed to find API key for active status update: {}", e) 
+            .map_err(|e| DatabaseError::Internal {
+                message: format!("Failed to find API key for active status update: {}", e),
             })?;
 
         if let Some(api_key) = api_key {
             let mut active_model: api_keys::ActiveModel = api_key.into();
             active_model.is_active = Set(is_active);
-            
-            active_model.update(self.db.get_connection()).await
-                .map_err(|e| DatabaseError::Internal { 
-                    message: format!("Failed to update API key active status: {}", e) 
+
+            active_model
+                .update(self.db.get_connection())
+                .await
+                .map_err(|e| DatabaseError::Internal {
+                    message: format!("Failed to update API key active status: {}", e),
                 })?;
         }
 

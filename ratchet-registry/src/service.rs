@@ -5,7 +5,7 @@ use tracing::{error, info};
 
 use crate::config::{RegistryConfig, TaskSource};
 use crate::error::{RegistryError, Result};
-use crate::loaders::{filesystem::FilesystemLoader, http::HttpLoader, git::GitLoader, TaskLoader};
+use crate::loaders::{filesystem::FilesystemLoader, git::GitLoader, http::HttpLoader, TaskLoader};
 use crate::registry::DefaultTaskRegistry;
 use crate::sync::DatabaseSync;
 use crate::types::{DiscoveredTask, SyncResult, TaskDefinition, TaskReference};
@@ -54,15 +54,9 @@ impl DefaultRegistryService {
         info!("Discovering tasks from source: {:?}", source);
 
         let discovered = match source {
-            TaskSource::Filesystem { .. } => {
-                self.filesystem_loader.discover_tasks(source).await?
-            }
-            TaskSource::Http { .. } => {
-                self.http_loader.discover_tasks(source).await?
-            }
-            TaskSource::Git { .. } => {
-                self.git_loader.discover_tasks(source).await?
-            }
+            TaskSource::Filesystem { .. } => self.filesystem_loader.discover_tasks(source).await?,
+            TaskSource::Http { .. } => self.http_loader.discover_tasks(source).await?,
+            TaskSource::Git { .. } => self.git_loader.discover_tasks(source).await?,
         };
 
         info!("Discovered {} tasks from source", discovered.len());
@@ -73,7 +67,7 @@ impl DefaultRegistryService {
         for task in discovered {
             // Load the full task definition
             let task_def = self.load_task(&task.task_ref).await?;
-            
+
             // Add to registry
             if let Err(e) = self.registry.add_task(task_def.clone()).await {
                 error!("Failed to add task to registry: {}", e);
@@ -133,16 +127,14 @@ impl RegistryService for DefaultRegistryService {
         if let Some(sync_service) = &self.sync_service {
             // Discover all tasks first
             let discovered = self.discover_all_tasks().await?;
-            
+
             // Load and add to registry
             self.load_discovered_tasks(discovered.clone()).await?;
-            
+
             // Sync to database
             sync_service.sync_discovered_tasks(discovered).await
         } else {
-            Err(RegistryError::Configuration(
-                "No sync service configured".to_string(),
-            ))
+            Err(RegistryError::Configuration("No sync service configured".to_string()))
         }
     }
 

@@ -59,11 +59,10 @@ pub mod metrics;
 pub mod template;
 
 pub use destination::{DeliveryContext, DeliveryResult, OutputDestination, TaskOutput};
-pub use destinations::{FilesystemDestination, WebhookDestination, StdioDestination, StdioConfig, StdStream};
+pub use destinations::{FilesystemDestination, StdStream, StdioConfig, StdioDestination, WebhookDestination};
 pub use errors::{ConfigError, DeliveryError, ValidationError};
 pub use manager::{OutputDeliveryManager, TestResult};
 pub use template::TemplateEngine;
-
 
 // Re-export HttpMethod from ratchet-http for consistency
 pub use ratchet_http::HttpMethod;
@@ -127,13 +126,13 @@ pub enum OutputDestinationConfig {
     #[serde(rename = "stdio")]
     Stdio {
         #[serde(default = "default_stdout_stream")]
-        stream: String,               // "stdout" or "stderr"
-        format: OutputFormat,         // Output format
+        stream: String, // "stdout" or "stderr"
+        format: OutputFormat, // Output format
         #[serde(default)]
-        include_metadata: bool,       // Include full task metadata
+        include_metadata: bool, // Include full task metadata
         #[serde(default = "default_true")]
-        line_buffered: bool,          // Line buffered output
-        prefix: Option<String>,       // Optional prefix template
+        line_buffered: bool, // Line buffered output
+        prefix: Option<String>, // Optional prefix template
     },
 }
 

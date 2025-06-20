@@ -69,10 +69,7 @@ impl FileSink {
         std::fs::rename(&self.path, &rotated_path)?;
 
         // Create new file
-        let new_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)?;
+        let new_file = OpenOptions::new().create(true).append(true).open(&self.path)?;
 
         let mut writer = self.writer.lock().unwrap();
         *writer = BufWriter::new(new_file);

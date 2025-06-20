@@ -28,7 +28,8 @@ impl DestinationMetrics {
         self.total_deliveries.fetch_add(1, Ordering::Relaxed);
         self.successful_deliveries.fetch_add(1, Ordering::Relaxed);
         self.total_bytes_delivered.fetch_add(bytes, Ordering::Relaxed);
-        self.total_delivery_time.fetch_add(delivery_time.as_millis() as u64, Ordering::Relaxed);
+        self.total_delivery_time
+            .fetch_add(delivery_time.as_millis() as u64, Ordering::Relaxed);
         self.last_delivery_time.store(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -42,7 +43,8 @@ impl DestinationMetrics {
     pub fn record_failure(&self, delivery_time: Duration) {
         self.total_deliveries.fetch_add(1, Ordering::Relaxed);
         self.failed_deliveries.fetch_add(1, Ordering::Relaxed);
-        self.total_delivery_time.fetch_add(delivery_time.as_millis() as u64, Ordering::Relaxed);
+        self.total_delivery_time
+            .fetch_add(delivery_time.as_millis() as u64, Ordering::Relaxed);
         self.last_delivery_time.store(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

@@ -7,50 +7,44 @@ use axum::{
     Json,
 };
 use ratchet_api_types::ApiId;
+use ratchet_core::validation::{ErrorSanitizer, InputValidator};
 use ratchet_interfaces::JobFilters;
-use ratchet_web::{QueryParams, ApiResponse, extract_job_filters};
-use ratchet_core::validation::{InputValidator, ErrorSanitizer};
+use ratchet_web::{extract_job_filters, ApiResponse, QueryParams};
 use tracing::{info, warn};
 
 use crate::{
     context::TasksContext,
     errors::{RestError, RestResult},
     models::{
-        jobs::{CreateJobRequest, UpdateJobRequest, JobStats},
-        common::StatsResponse
+        common::StatsResponse,
+        jobs::{CreateJobRequest, JobStats, UpdateJobRequest},
     },
 };
 
 /// List all jobs with optional filtering and pagination
 
-pub async fn list_jobs(
-    State(ctx): State<TasksContext>,
-    query: QueryParams,
-) -> RestResult<impl IntoResponse> {
+pub async fn list_jobs(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing jobs with query: {:?}", query.0);
-    
+
     let list_input = query.0.to_list_input();
-    
+
     // Extract filters from query parameters
     let filters = extract_job_filters(&query.0.filters);
-    
+
     let job_repo = ctx.repositories.job_repository();
     let list_response = job_repo
         .find_with_list_input(filters, list_input)
         .await
         .map_err(RestError::Database)?;
-    
+
     Ok(Json(ApiResponse::from(list_response)))
 }
 
 /// Get a specific job by ID
 
-pub async fn get_job(
-    State(ctx): State<TasksContext>,
-    Path(job_id): Path<String>,
-) -> RestResult<impl IntoResponse> {
+pub async fn get_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Getting job with ID: {}", job_id);
-    
+
     // Validate job ID input
     let validator = InputValidator::new();
     if let Err(validation_err) = validator.validate_string(&job_id, "job_id") {
@@ -59,10 +53,10 @@ pub async fn get_job(
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     let api_id = ApiId::from_string(job_id.clone());
     let job_repo = ctx.repositories.job_repository();
-    
+
     let job = job_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
         .await
@@ -72,7 +66,7 @@ pub async fn get_job(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Job", &job_id))?;
-    
+
     Ok(Json(ApiResponse::new(job)))
 }
 
@@ -83,11 +77,11 @@ pub async fn create_job(
     Json(request): Json<CreateJobRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Creating job for task: {:?}", request.task_id);
-    
+
     // Validate the request input
     let _validator = InputValidator::new();
     let sanitizer = ErrorSanitizer::default();
-    
+
     // Validate that task exists
     let task_repo = ctx.repositories.task_repository();
     let _task = task_repo
@@ -98,7 +92,7 @@ pub async fn create_job(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Task", &request.task_id.to_string()))?;
-    
+
     // Create UnifiedJob from request
     let unified_job = ratchet_api_types::UnifiedJob {
         id: ratchet_api_types::ApiId::from_i32(0), // Will be set by database
@@ -112,12 +106,14 @@ pub async fn create_job(
         error_message: None,
         output_destinations: request.output_destinations,
     };
-    
+
     // Create the job using the repository
     let job_repo = ctx.repositories.job_repository();
-    let created_job = job_repo.create(unified_job).await
+    let created_job = job_repo
+        .create(unified_job)
+        .await
         .map_err(|e| RestError::InternalError(format!("Failed to create job: {}", e)))?;
-    
+
     Ok((StatusCode::CREATED, Json(ApiResponse::new(created_job))))
 }
 
@@ -129,17 +125,17 @@ pub async fn update_job(
     Json(request): Json<UpdateJobRequest>,
 ) -> RestResult<impl IntoResponse> {
     info!("Updating job with ID: {}", job_id);
-    
+
     // Validate job ID input
     let validator = InputValidator::new();
     let sanitizer = ErrorSanitizer::default();
-    
+
     if let Err(validation_err) = validator.validate_string(&job_id, "job_id") {
         warn!("Invalid job ID provided: {}", validation_err);
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     // Validate error message if provided
     if let Some(ref error_message) = request.error_message {
         if let Err(validation_err) = validator.validate_string(error_message, "error_message") {
@@ -148,10 +144,10 @@ pub async fn update_job(
             return Err(RestError::BadRequest(sanitized_error.message));
         }
     }
-    
+
     let api_id = ApiId::from_string(job_id.clone());
     let job_repo = ctx.repositories.job_repository();
-    
+
     // Get the existing job
     let mut existing_job = job_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
@@ -161,7 +157,7 @@ pub async fn update_job(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Job", &job_id))?;
-    
+
     // Apply updates
     if let Some(priority) = request.priority {
         existing_job.priority = priority;
@@ -178,22 +174,21 @@ pub async fn update_job(
     if let Some(error_message) = request.error_message {
         existing_job.error_message = Some(error_message);
     }
-    
+
     // Update the job using the repository
-    let updated_job = job_repo.update(existing_job).await
+    let updated_job = job_repo
+        .update(existing_job)
+        .await
         .map_err(|e| RestError::InternalError(format!("Failed to update job: {}", e)))?;
-    
+
     Ok(Json(ApiResponse::new(updated_job)))
 }
 
 /// Delete a job
 
-pub async fn delete_job(
-    State(ctx): State<TasksContext>,
-    Path(job_id): Path<String>,
-) -> RestResult<impl IntoResponse> {
+pub async fn delete_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Deleting job with ID: {}", job_id);
-    
+
     // Validate job ID input
     let validator = InputValidator::new();
     if let Err(validation_err) = validator.validate_string(&job_id, "job_id") {
@@ -202,10 +197,10 @@ pub async fn delete_job(
         let sanitized_error = sanitizer.sanitize_error(&validation_err);
         return Err(RestError::BadRequest(sanitized_error.message));
     }
-    
+
     let api_id = ApiId::from_string(job_id.clone());
     let job_repo = ctx.repositories.job_repository();
-    
+
     // Check if job exists
     let _job = job_repo
         .find_by_id(api_id.as_i32().unwrap_or(0))
@@ -216,17 +211,14 @@ pub async fn delete_job(
             RestError::InternalError(sanitized_error.message)
         })?
         .ok_or_else(|| RestError::not_found("Job", &job_id))?;
-    
+
     // Delete the job
-    job_repo
-        .delete(api_id.as_i32().unwrap_or(0))
-        .await
-        .map_err(|db_err| {
-            let sanitizer = ErrorSanitizer::default();
-            let sanitized_error = sanitizer.sanitize_error(&db_err);
-            RestError::InternalError(sanitized_error.message)
-        })?;
-    
+    job_repo.delete(api_id.as_i32().unwrap_or(0)).await.map_err(|db_err| {
+        let sanitizer = ErrorSanitizer::default();
+        let sanitized_error = sanitizer.sanitize_error(&db_err);
+        RestError::InternalError(sanitized_error.message)
+    })?;
+
     Ok(Json(serde_json::json!({
         "success": true,
         "message": format!("Job {} deleted successfully", job_id)
@@ -235,20 +227,14 @@ pub async fn delete_job(
 
 /// Cancel a queued job
 
-pub async fn cancel_job(
-    State(ctx): State<TasksContext>,
-    Path(job_id): Path<String>,
-) -> RestResult<impl IntoResponse> {
+pub async fn cancel_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Cancelling job with ID: {}", job_id);
-    
+
     let api_id = ApiId::from_string(job_id.clone());
     let job_repo = ctx.repositories.job_repository();
-    
-    job_repo
-        .cancel(api_id)
-        .await
-        .map_err(RestError::Database)?;
-    
+
+    job_repo.cancel(api_id).await.map_err(RestError::Database)?;
+
     Ok(Json(serde_json::json!({
         "success": true,
         "message": format!("Job {} cancelled", job_id)
@@ -257,22 +243,19 @@ pub async fn cancel_job(
 
 /// Retry a failed job
 
-pub async fn retry_job(
-    State(ctx): State<TasksContext>,
-    Path(job_id): Path<String>,
-) -> RestResult<impl IntoResponse> {
+pub async fn retry_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Retrying job with ID: {}", job_id);
-    
+
     let api_id = ApiId::from_string(job_id.clone());
     let job_repo = ctx.repositories.job_repository();
-    
+
     // Schedule retry with current timestamp
     let retry_at = chrono::Utc::now();
     job_repo
         .schedule_retry(api_id, retry_at)
         .await
         .map_err(RestError::Database)?;
-    
+
     Ok(Json(serde_json::json!({
         "success": true,
         "message": format!("Job {} scheduled for retry", job_id),
@@ -282,29 +265,27 @@ pub async fn retry_job(
 
 /// Get job statistics
 
-pub async fn get_job_stats(
-    State(ctx): State<TasksContext>,
-) -> RestResult<impl IntoResponse> {
+pub async fn get_job_stats(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Getting job statistics");
-    
+
     let job_repo = ctx.repositories.job_repository();
-    
+
     // Get basic counts
     let total_jobs = job_repo.count().await.map_err(RestError::Database)?;
-    
+
     // For now, return basic stats
     // In a full implementation, this would query for more detailed metrics
     let stats = JobStats {
         total_jobs,
-        queued_jobs: 0,         // TODO: Implement
-        processing_jobs: 0,     // TODO: Implement  
-        completed_jobs: 0,      // TODO: Implement
-        failed_jobs: 0,         // TODO: Implement
-        cancelled_jobs: 0,      // TODO: Implement
-        retrying_jobs: 0,       // TODO: Implement
+        queued_jobs: 0,             // TODO: Implement
+        processing_jobs: 0,         // TODO: Implement
+        completed_jobs: 0,          // TODO: Implement
+        failed_jobs: 0,             // TODO: Implement
+        cancelled_jobs: 0,          // TODO: Implement
+        retrying_jobs: 0,           // TODO: Implement
         average_wait_time_ms: None, // TODO: Implement
-        jobs_last_24h: 0,       // TODO: Implement
+        jobs_last_24h: 0,           // TODO: Implement
     };
-    
+
     Ok(Json(StatsResponse::new(stats)))
 }

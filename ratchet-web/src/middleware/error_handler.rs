@@ -9,24 +9,21 @@ use tracing::error;
 use crate::errors::WebError;
 
 /// Error handling middleware that catches and converts errors to appropriate HTTP responses
-pub async fn error_handler_middleware(
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response {
+pub async fn error_handler_middleware(request: Request<axum::body::Body>, next: Next) -> Response {
     let response = next.run(request).await;
-    
+
     // If the response status indicates an error, we could add additional logging here
     if response.status().is_server_error() {
         error!("Server error occurred: {}", response.status());
     }
-    
+
     response
 }
 
 /// Global error handler for unhandled errors
 pub async fn handle_error(err: Box<dyn std::error::Error + Send + Sync>) -> impl IntoResponse {
     error!("Unhandled error: {}", err);
-    
+
     // Convert to WebError for consistent response format
     let web_error = WebError::internal(err.to_string());
     web_error.into_response()
@@ -39,10 +36,7 @@ pub async fn handle_not_found() -> impl IntoResponse {
 
 /// Handle method not allowed
 pub async fn handle_method_not_allowed() -> impl IntoResponse {
-    (
-        StatusCode::METHOD_NOT_ALLOWED,
-        "Method not allowed"
-    )
+    (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed")
 }
 
 /// Create error handling layer

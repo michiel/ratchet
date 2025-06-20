@@ -20,9 +20,7 @@ impl ConfigLoader {
 
     /// Create a new config loader with custom prefix
     pub fn with_prefix(prefix: impl Into<String>) -> Self {
-        Self {
-            prefix: prefix.into(),
-        }
+        Self { prefix: prefix.into() }
     }
 
     /// Load configuration from a YAML file with environment overrides
@@ -76,14 +74,11 @@ impl ConfigLoader {
     }
 
     /// Apply execution config overrides
-    fn apply_execution_overrides(
-        &self,
-        config: &mut crate::domains::execution::ExecutionConfig,
-    ) -> ConfigResult<()> {
+    fn apply_execution_overrides(&self, config: &mut crate::domains::execution::ExecutionConfig) -> ConfigResult<()> {
         if let Ok(max_exec) = self.get_env_var("MAX_EXECUTION_SECONDS") {
-            let seconds: u64 = max_exec.parse().map_err(|e| {
-                ConfigError::EnvError(format!("Invalid MAX_EXECUTION_SECONDS: {}", e))
-            })?;
+            let seconds: u64 = max_exec
+                .parse()
+                .map_err(|e| ConfigError::EnvError(format!("Invalid MAX_EXECUTION_SECONDS: {}", e)))?;
             config.max_execution_duration = std::time::Duration::from_secs(seconds);
         }
 
@@ -97,10 +92,7 @@ impl ConfigLoader {
     }
 
     /// Apply HTTP config overrides
-    fn apply_http_overrides(
-        &self,
-        config: &mut crate::domains::http::HttpConfig,
-    ) -> ConfigResult<()> {
+    fn apply_http_overrides(&self, config: &mut crate::domains::http::HttpConfig) -> ConfigResult<()> {
         if let Ok(timeout) = self.get_env_var("HTTP_TIMEOUT") {
             let seconds: u64 = timeout
                 .parse()
@@ -122,10 +114,7 @@ impl ConfigLoader {
     }
 
     /// Apply cache config overrides
-    fn apply_cache_overrides(
-        &self,
-        config: &mut crate::domains::cache::CacheConfig,
-    ) -> ConfigResult<()> {
+    fn apply_cache_overrides(&self, config: &mut crate::domains::cache::CacheConfig) -> ConfigResult<()> {
         if let Ok(cache_size) = self.get_env_var("CACHE_SIZE") {
             let size: usize = cache_size
                 .parse()
@@ -143,10 +132,7 @@ impl ConfigLoader {
     }
 
     /// Apply logging config overrides
-    fn apply_logging_overrides(
-        &self,
-        config: &mut crate::domains::logging::LoggingConfig,
-    ) -> ConfigResult<()> {
+    fn apply_logging_overrides(&self, config: &mut crate::domains::logging::LoggingConfig) -> ConfigResult<()> {
         if let Ok(log_level) = self.get_env_var("LOG_LEVEL") {
             use std::str::FromStr;
             config.level = crate::domains::logging::LogLevel::from_str(&log_level)
@@ -163,20 +149,17 @@ impl ConfigLoader {
     }
 
     /// Apply output config overrides
-    fn apply_output_overrides(
-        &self,
-        config: &mut crate::domains::output::OutputConfig,
-    ) -> ConfigResult<()> {
+    fn apply_output_overrides(&self, config: &mut crate::domains::output::OutputConfig) -> ConfigResult<()> {
         if let Ok(max_deliveries) = self.get_env_var("OUTPUT_MAX_CONCURRENT_DELIVERIES") {
-            config.max_concurrent_deliveries = max_deliveries.parse().map_err(|e| {
-                ConfigError::EnvError(format!("Invalid OUTPUT_MAX_CONCURRENT_DELIVERIES: {}", e))
-            })?;
+            config.max_concurrent_deliveries = max_deliveries
+                .parse()
+                .map_err(|e| ConfigError::EnvError(format!("Invalid OUTPUT_MAX_CONCURRENT_DELIVERIES: {}", e)))?;
         }
 
         if let Ok(timeout) = self.get_env_var("OUTPUT_DEFAULT_TIMEOUT") {
-            let seconds: u64 = timeout.parse().map_err(|e| {
-                ConfigError::EnvError(format!("Invalid OUTPUT_DEFAULT_TIMEOUT: {}", e))
-            })?;
+            let seconds: u64 = timeout
+                .parse()
+                .map_err(|e| ConfigError::EnvError(format!("Invalid OUTPUT_DEFAULT_TIMEOUT: {}", e)))?;
             config.default_timeout = std::time::Duration::from_secs(seconds);
         }
 
@@ -184,10 +167,7 @@ impl ConfigLoader {
     }
 
     /// Apply server config overrides
-    fn apply_server_overrides(
-        &self,
-        config: &mut crate::domains::server::ServerConfig,
-    ) -> ConfigResult<()> {
+    fn apply_server_overrides(&self, config: &mut crate::domains::server::ServerConfig) -> ConfigResult<()> {
         if let Ok(bind) = self.get_env_var("SERVER_BIND_ADDRESS") {
             config.bind_address = bind;
         }
@@ -202,10 +182,7 @@ impl ConfigLoader {
     }
 
     /// Apply MCP config overrides
-    fn apply_mcp_overrides(
-        &self,
-        config: &mut crate::domains::mcp::McpConfig,
-    ) -> ConfigResult<()> {
+    fn apply_mcp_overrides(&self, config: &mut crate::domains::mcp::McpConfig) -> ConfigResult<()> {
         if let Ok(enabled) = self.get_env_var("MCP_ENABLED") {
             config.enabled = enabled
                 .parse()

@@ -39,10 +39,7 @@ impl ConsoleSink {
 
             // Add error details if present
             if let Some(error) = &event.error {
-                output.push_str(&format!(
-                    "\n  Error: {} ({})",
-                    error.message, error.error_code
-                ));
+                output.push_str(&format!("\n  Error: {} ({})", error.message, error.error_code));
                 output.push_str(&format!("\n  Type: {}", error.error_type));
                 output.push_str(&format!("\n  Retryable: {}", error.is_retryable));
 
@@ -59,21 +56,14 @@ impl ConsoleSink {
                 let important_fields: Vec<(&str, &serde_json::Value)> = event
                     .fields
                     .iter()
-                    .filter(|(k, _)| {
-                        matches!(
-                            k.as_str(),
-                            "task_id" | "job_id" | "execution_id" | "error_count"
-                        )
-                    })
+                    .filter(|(k, _)| matches!(k.as_str(), "task_id" | "job_id" | "execution_id" | "error_count"))
                     .map(|(k, v)| (k.as_str(), v))
                     .collect();
 
                 if !important_fields.is_empty() {
                     output.push_str(" [");
-                    let field_strs: Vec<String> = important_fields
-                        .iter()
-                        .map(|(k, v)| format!("{}={}", k, v))
-                        .collect();
+                    let field_strs: Vec<String> =
+                        important_fields.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
                     output.push_str(&field_strs.join(" "));
                     output.push(']');
                 }

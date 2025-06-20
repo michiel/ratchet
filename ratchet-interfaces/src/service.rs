@@ -1,5 +1,5 @@
 //! Service interface definitions
-//! 
+//!
 //! Extracted from ratchet-lib/src/services/base.rs to break circular dependencies.
 //! This provides the core service traits that all Ratchet services implement.
 
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Base service trait that all services should implement
-/// 
+///
 /// This trait provides a common interface for service lifecycle management,
 /// health monitoring, and metrics collection across all Ratchet services.
 #[async_trait]
@@ -56,7 +56,7 @@ pub enum HealthStatus {
 }
 
 /// Service health information
-/// 
+///
 /// Contains detailed information about a service's current health status,
 /// including performance metrics and diagnostic metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,9 +83,7 @@ impl ServiceHealth {
     /// Create a degraded service status
     pub fn degraded(reason: impl Into<String>) -> Self {
         Self {
-            status: HealthStatus::Degraded {
-                reason: reason.into(),
-            },
+            status: HealthStatus::Degraded { reason: reason.into() },
             message: None,
             last_checked: Utc::now(),
             latency_ms: None,
@@ -96,9 +94,7 @@ impl ServiceHealth {
     /// Create an unhealthy service status
     pub fn unhealthy(reason: impl Into<String>) -> Self {
         Self {
-            status: HealthStatus::Unhealthy {
-                reason: reason.into(),
-            },
+            status: HealthStatus::Unhealthy { reason: reason.into() },
             message: None,
             last_checked: Utc::now(),
             latency_ms: None,
@@ -126,7 +122,7 @@ impl ServiceHealth {
 }
 
 /// Service metrics
-/// 
+///
 /// Contains performance and operational metrics for a service.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ServiceMetrics {

@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::ids::ApiId;
 use crate::enums::*;
+use crate::ids::ApiId;
 
 #[cfg(feature = "graphql")]
 use async_graphql::*;
@@ -136,19 +136,22 @@ pub struct UnifiedSchedule {
 ))]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedOutputDestination {
-    /// Type of destination: "webhook", "filesystem", or "database"
+    /// Type of destination: "webhook", "filesystem", "database", or "stdio"
     #[cfg_attr(feature = "openapi", schema(example = "webhook"))]
     pub destination_type: String,
-    
+
     /// Optional template for formatting output
     #[cfg_attr(feature = "openapi", schema(example = "Execution completed: {{status}}"))]
     pub template: Option<String>,
-    
+
     /// Filesystem configuration (when destination_type is "filesystem")
     pub filesystem: Option<UnifiedFilesystemConfig>,
-    
+
     /// Webhook configuration (when destination_type is "webhook")
     pub webhook: Option<UnifiedWebhookConfig>,
+
+    /// Stdio configuration (when destination_type is "stdio")
+    pub stdio: Option<UnifiedStdioConfig>,
 }
 
 /// Unified Filesystem Configuration
@@ -167,18 +170,18 @@ pub struct UnifiedOutputDestination {
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedFilesystemConfig {
     /// File path to write results to
-    #[cfg_attr(feature = "openapi", schema(
-        example = "/var/ratchet/outputs/results.json",
-        max_length = 4096
-    ))]
+    #[cfg_attr(
+        feature = "openapi",
+        schema(example = "/var/ratchet/outputs/results.json", max_length = 4096)
+    )]
     pub path: String,
-    
+
     /// Output format for the file
     pub format: OutputFormat,
-    
+
     /// Optional compression
     pub compression: Option<CompressionType>,
-    
+
     /// Optional file permissions
     #[cfg_attr(feature = "openapi", schema(example = "644"))]
     pub permissions: Option<String>,
@@ -212,30 +215,26 @@ pub struct UnifiedFilesystemConfig {
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedWebhookConfig {
     /// The webhook URL to send results to
-    #[cfg_attr(feature = "openapi", schema(
-        example = "https://your-webhook-endpoint.com/api/notifications",
-        max_length = 2048
-    ))]
+    #[cfg_attr(
+        feature = "openapi",
+        schema(example = "https://your-webhook-endpoint.com/api/notifications", max_length = 2048)
+    )]
     pub url: String,
-    
+
     /// HTTP method to use for the webhook
     pub method: HttpMethod,
-    
+
     /// Request timeout in seconds
-    #[cfg_attr(feature = "openapi", schema(
-        example = 30,
-        minimum = 1,
-        maximum = 300
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = 30, minimum = 1, maximum = 300))]
     pub timeout_seconds: i32,
-    
+
     /// Content type for the request
     #[cfg_attr(feature = "openapi", schema(example = "application/json"))]
     pub content_type: Option<String>,
-    
+
     /// Retry policy for failed requests
     pub retry_policy: Option<UnifiedRetryPolicy>,
-    
+
     /// Authentication configuration
     pub authentication: Option<UnifiedWebhookAuth>,
 }
@@ -256,27 +255,19 @@ pub struct UnifiedWebhookConfig {
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedRetryPolicy {
     /// Maximum number of retry attempts
-    #[cfg_attr(feature = "openapi", schema(
-        example = 3,
-        minimum = 1,
-        maximum = 10
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = 3, minimum = 1, maximum = 10))]
     pub max_attempts: i32,
-    
+
     /// Initial delay before first retry
     #[cfg_attr(feature = "openapi", schema(example = 1))]
     pub initial_delay_seconds: i32,
-    
+
     /// Maximum delay between retries
     #[cfg_attr(feature = "openapi", schema(example = 5))]
     pub max_delay_seconds: i32,
-    
+
     /// Backoff multiplier for exponential backoff
-    #[cfg_attr(feature = "openapi", schema(
-        example = 2.0,
-        minimum = 1.0,
-        maximum = 10.0
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = 2.0, minimum = 1.0, maximum = 10.0))]
     pub backoff_multiplier: f64,
 }
 
@@ -298,13 +289,13 @@ pub struct UnifiedWebhookAuth {
     /// Type of authentication: "bearer", "basic", or "api_key"
     #[cfg_attr(feature = "openapi", schema(example = "bearer"))]
     pub auth_type: String,
-    
+
     /// Bearer token authentication (when auth_type is "bearer")
     pub bearer: Option<UnifiedBearerAuth>,
-    
+
     /// Basic authentication (when auth_type is "basic")
     pub basic: Option<UnifiedBasicAuth>,
-    
+
     /// API key authentication (when auth_type is "api_key")
     pub api_key: Option<UnifiedApiKeyAuth>,
 }
@@ -321,10 +312,7 @@ pub struct UnifiedWebhookAuth {
 ))]
 pub struct UnifiedBearerAuth {
     /// The bearer token
-    #[cfg_attr(feature = "openapi", schema(
-        example = "your-bearer-token",
-        max_length = 1024
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = "your-bearer-token", max_length = 1024))]
     pub token: String,
 }
 
@@ -341,17 +329,11 @@ pub struct UnifiedBearerAuth {
 ))]
 pub struct UnifiedBasicAuth {
     /// Username for basic authentication
-    #[cfg_attr(feature = "openapi", schema(
-        example = "your-username",
-        max_length = 255
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = "your-username", max_length = 255))]
     pub username: String,
-    
+
     /// Password for basic authentication
-    #[cfg_attr(feature = "openapi", schema(
-        example = "your-password",
-        max_length = 255
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = "your-password", max_length = 255))]
     pub password: String,
 }
 
@@ -369,18 +351,48 @@ pub struct UnifiedBasicAuth {
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedApiKeyAuth {
     /// The API key value
-    #[cfg_attr(feature = "openapi", schema(
-        example = "your-api-key",
-        max_length = 1024
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = "your-api-key", max_length = 1024))]
     pub key: String,
-    
+
     /// The header name to send the API key in
-    #[cfg_attr(feature = "openapi", schema(
-        example = "X-API-Key",
-        max_length = 100
-    ))]
+    #[cfg_attr(feature = "openapi", schema(example = "X-API-Key", max_length = 100))]
     pub header_name: String,
+}
+
+/// Unified Stdio Configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    description = "Configuration for stdio output destinations",
+    example = json!({
+        "stream": "stdout",
+        "format": "JSON",
+        "includeMetadata": false,
+        "lineBuffered": true,
+        "prefix": "[HEARTBEAT] "
+    })
+))]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiedStdioConfig {
+    /// Stream to write to: "stdout" or "stderr"
+    #[cfg_attr(feature = "openapi", schema(example = "stdout"))]
+    pub stream: String,
+
+    /// Output format for the stream
+    pub format: OutputFormat,
+
+    /// Whether to include full task metadata
+    #[cfg_attr(feature = "openapi", schema(example = false))]
+    pub include_metadata: bool,
+
+    /// Whether to use line buffering
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    pub line_buffered: bool,
+
+    /// Optional prefix for each output line
+    #[cfg_attr(feature = "openapi", schema(example = "[HEARTBEAT] "))]
+    pub prefix: Option<String>,
 }
 
 /// Worker status representation

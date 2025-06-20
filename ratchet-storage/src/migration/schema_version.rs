@@ -4,7 +4,7 @@
 //! managing migration state, and ensuring compatibility between different
 //! versions of the database schema.
 
-use sea_orm::{DatabaseConnection, Statement, ConnectionTrait};
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
 
 use crate::migration::MigrationError;
@@ -14,16 +14,16 @@ use crate::migration::MigrationError;
 pub struct SchemaVersion {
     /// Version identifier (e.g., "1.0.0", "20241201_000005")
     pub version: String,
-    
+
     /// Human-readable description
     pub description: String,
-    
+
     /// When this version was applied
     pub applied_at: chrono::DateTime<chrono::Utc>,
-    
+
     /// Whether this is a ratchet-lib or ratchet-storage schema
     pub system: DatabaseSystem,
-    
+
     /// List of migrations that have been applied
     pub applied_migrations: Vec<String>,
 }
@@ -98,7 +98,7 @@ impl SchemaVersionDetector {
     pub async fn record_migration_metadata(&self, version: &SchemaVersion) -> Result<(), MigrationError> {
         // Create migration_metadata table if it doesn't exist
         self.create_migration_metadata_table().await?;
-        
+
         // Insert or update version information
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
@@ -111,9 +111,9 @@ impl SchemaVersionDetector {
                 version.applied_at.to_rfc3339(),
                 version.system,
                 serde_json::to_string(&version.applied_migrations)?
-            )
+            ),
         );
-        
+
         self.connection.execute(stmt).await?;
         Ok(())
     }
@@ -125,8 +125,9 @@ impl SchemaVersionDetector {
         target_version: &SchemaVersion,
     ) -> Result<bool, MigrationError> {
         // Check if source is legacy and target is modern
-        if source_version.system == DatabaseSystem::RatchetLib 
-            && target_version.system == DatabaseSystem::RatchetStorage {
+        if source_version.system == DatabaseSystem::RatchetLib
+            && target_version.system == DatabaseSystem::RatchetStorage
+        {
             return Ok(true);
         }
 
@@ -154,26 +155,26 @@ impl SchemaVersionDetector {
     async fn get_table_list(&self) -> Result<Vec<String>, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT name FROM sqlite_master WHERE type='table'".to_string()
+            "SELECT name FROM sqlite_master WHERE type='table'".to_string(),
         );
-        
+
         let results = self.connection.query_all(stmt).await?;
         let tables: Vec<String> = results
             .into_iter()
             .filter_map(|row| row.try_get("", "name").ok())
             .collect();
-        
+
         Ok(tables)
     }
 
     async fn get_version_from_metadata(&self) -> Result<SchemaVersion, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT * FROM migration_metadata ORDER BY applied_at DESC LIMIT 1".to_string()
+            "SELECT * FROM migration_metadata ORDER BY applied_at DESC LIMIT 1".to_string(),
         );
-        
+
         let result = self.connection.query_one(stmt).await?;
-        
+
         match result {
             Some(row) => {
                 let version: String = row.try_get("", "version")?;
@@ -181,19 +182,19 @@ impl SchemaVersionDetector {
                 let applied_at_str: String = row.try_get("", "applied_at")?;
                 let system_str: String = row.try_get("", "system")?;
                 let migrations_json: String = row.try_get("", "applied_migrations")?;
-                
+
                 let applied_at = chrono::DateTime::parse_from_rfc3339(&applied_at_str)
                     .map_err(|e| MigrationError::DataTransformation(e.to_string()))?
                     .with_timezone(&chrono::Utc);
-                
+
                 let system = match system_str.as_str() {
                     "ratchet-lib" => DatabaseSystem::RatchetLib,
                     "ratchet-storage" => DatabaseSystem::RatchetStorage,
                     _ => DatabaseSystem::Unknown,
                 };
-                
+
                 let applied_migrations: Vec<String> = serde_json::from_str(&migrations_json)?;
-                
+
                 Ok(SchemaVersion {
                     version,
                     description,
@@ -202,14 +203,16 @@ impl SchemaVersionDetector {
                     applied_migrations,
                 })
             }
-            None => Err(MigrationError::ValidationFailed("No migration metadata found".to_string())),
+            None => Err(MigrationError::ValidationFailed(
+                "No migration metadata found".to_string(),
+            )),
         }
     }
 
     async fn detect_version_from_schema(&self) -> Result<SchemaVersion, MigrationError> {
         let tables = self.get_table_list().await?;
         let applied_migrations = self.get_applied_migrations().await?;
-        
+
         // Determine system based on table structure and migration history
         let system = if self.has_seaorm_migration_table().await? {
             // Check if this looks like a ratchet-storage database
@@ -226,10 +229,7 @@ impl SchemaVersionDetector {
         };
 
         // Determine version based on latest migration
-        let version = applied_migrations
-            .last()
-            .unwrap_or(&"unknown".to_string())
-            .clone();
+        let version = applied_migrations.last().unwrap_or(&"unknown".to_string()).clone();
 
         Ok(SchemaVersion {
             version: version.clone(),
@@ -243,15 +243,15 @@ impl SchemaVersionDetector {
     async fn get_seaorm_migrations(&self) -> Result<Vec<String>, MigrationError> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
-            "SELECT version FROM seaql_migrations ORDER BY version".to_string()
+            "SELECT version FROM seaql_migrations ORDER BY version".to_string(),
         );
-        
+
         let results = self.connection.query_all(stmt).await?;
         let migrations: Vec<String> = results
             .into_iter()
             .filter_map(|row| row.try_get("", "version").ok())
             .collect();
-        
+
         Ok(migrations)
     }
 
@@ -289,9 +289,10 @@ impl SchemaVersionDetector {
                 applied_at TEXT NOT NULL,
                 system TEXT NOT NULL,
                 applied_migrations TEXT NOT NULL
-            )"#.to_string()
+            )"#
+            .to_string(),
         );
-        
+
         self.connection.execute(stmt).await?;
         Ok(())
     }
@@ -368,7 +369,7 @@ mod tests {
             .validate_migration_compatibility(&legacy_version, &modern_version)
             .await
             .unwrap();
-        
+
         assert!(compatible);
     }
 }

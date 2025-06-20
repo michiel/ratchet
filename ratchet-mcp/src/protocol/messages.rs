@@ -104,10 +104,7 @@ pub enum McpMethod {
 
     /// Custom method for extension
     #[serde(untagged)]
-    Custom {
-        method: String,
-        params: Option<Value>,
-    },
+    Custom { method: String, params: Option<Value> },
 }
 
 /// MCP request with typed method and parameters
@@ -526,10 +523,7 @@ pub struct ModelPreferences {
     pub speed_priority: Option<f32>,
 
     /// Intelligence priority (0.0 = least intelligent, 1.0 = most intelligent)
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        rename = "intelligencePriority"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "intelligencePriority")]
     pub intelligence_priority: Option<f32>,
 }
 

@@ -1,5 +1,5 @@
 //! HTTP request recording functionality
-//! 
+//!
 //! This module provides HAR (HTTP Archive) format recording capabilities
 //! for debugging and testing purposes.
 
@@ -143,10 +143,7 @@ pub fn record_http_request(
         });
 
         recording_state.entries.push(entry);
-        info!(
-            "Recorded HTTP request {} {} -> {}",
-            method, url, response_status
-        );
+        info!("Recorded HTTP request {} {} -> {}", method, url, response_status);
     }
 
     Ok(())
@@ -157,10 +154,7 @@ pub fn finalize_recording() -> Result<()> {
     let mut state = RECORDING_STATE.lock().unwrap();
 
     if let Some(recording_state) = state.take() {
-        debug!(
-            "Finalizing recording with {} entries",
-            recording_state.entries.len()
-        );
+        debug!("Finalizing recording with {} entries", recording_state.entries.len());
 
         let har = json!({
             "log": {

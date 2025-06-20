@@ -173,9 +173,7 @@ impl MigrationTrait for Migration {
         ];
 
         for index_name in indexes {
-            manager
-                .drop_index(Index::drop().name(index_name).to_owned())
-                .await?;
+            manager.drop_index(Index::drop().name(index_name).to_owned()).await?;
         }
 
         Ok(())

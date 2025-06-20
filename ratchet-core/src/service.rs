@@ -44,10 +44,8 @@ impl ServiceRegistry {
     where
         T: Send + Sync + 'static,
     {
-        self.singletons.insert(
-            TypeId::of::<T>(),
-            Arc::new(service) as Arc<dyn Any + Send + Sync>,
-        );
+        self.singletons
+            .insert(TypeId::of::<T>(), Arc::new(service) as Arc<dyn Any + Send + Sync>);
         self
     }
 
@@ -57,10 +55,8 @@ impl ServiceRegistry {
         T: Send + Sync + 'static,
         F: Fn() -> Result<T> + Send + Sync + 'static,
     {
-        self.factories.insert(
-            TypeId::of::<T>(),
-            Box::new(TypedServiceFactory::<T, F>::new(factory)),
-        );
+        self.factories
+            .insert(TypeId::of::<T>(), Box::new(TypedServiceFactory::<T, F>::new(factory)));
         self
     }
 
@@ -95,9 +91,9 @@ impl ServiceRegistry {
         // Check singletons first
         if let Some(service) = self.singletons.get(&type_id) {
             let any_arc = service.clone();
-            return any_arc.downcast::<T>().map_err(|_| {
-                ServiceError::NotFound(std::any::type_name::<T>().to_string()).into()
-            });
+            return any_arc
+                .downcast::<T>()
+                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
         }
 
         // Try factory
@@ -106,9 +102,7 @@ impl ServiceRegistry {
             return service
                 .downcast::<T>()
                 .map(|boxed| Arc::from(*boxed))
-                .map_err(|_| {
-                    ServiceError::NotFound(std::any::type_name::<T>().to_string()).into()
-                });
+                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
         }
 
         Err(ServiceError::NotFound(std::any::type_name::<T>().to_string()).into())
@@ -226,10 +220,8 @@ impl<'a> ServiceScope<'a> {
     where
         T: Send + Sync + 'static,
     {
-        self.scoped_services.insert(
-            TypeId::of::<T>(),
-            Arc::new(service) as Arc<dyn Any + Send + Sync>,
-        );
+        self.scoped_services
+            .insert(TypeId::of::<T>(), Arc::new(service) as Arc<dyn Any + Send + Sync>);
         self
     }
 
@@ -240,9 +232,9 @@ impl<'a> ServiceScope<'a> {
         // Check scoped services first
         if let Some(service) = self.scoped_services.get(&type_id) {
             let any_arc = service.clone();
-            return any_arc.downcast::<T>().map_err(|_| {
-                ServiceError::NotFound(std::any::type_name::<T>().to_string()).into()
-            });
+            return any_arc
+                .downcast::<T>()
+                .map_err(|_| ServiceError::NotFound(std::any::type_name::<T>().to_string()).into());
         }
 
         // Fall back to parent registry

@@ -37,11 +37,7 @@ impl JsonRpcRequest {
     }
 
     /// Create a new JSON-RPC request with string ID
-    pub fn with_id(
-        method: impl Into<String>,
-        params: Option<Value>,
-        id: impl Into<String>,
-    ) -> Self {
+    pub fn with_id(method: impl Into<String>, params: Option<Value>, id: impl Into<String>) -> Self {
         Self::new(method, params, Some(Value::String(id.into())))
     }
 
@@ -147,11 +143,7 @@ impl JsonRpcError {
 
     /// Create an invalid request error
     pub fn invalid_request(data: Option<Value>) -> Self {
-        Self::new(
-            JsonRpcErrorCode::InvalidRequest as i32,
-            "Invalid Request",
-            data,
-        )
+        Self::new(JsonRpcErrorCode::InvalidRequest as i32, "Invalid Request", data)
     }
 
     /// Create a method not found error
@@ -251,8 +243,7 @@ mod tests {
 
     #[test]
     fn test_jsonrpc_request_serialization() {
-        let request =
-            JsonRpcRequest::with_id("test_method", Some(json!({"param": "value"})), "123");
+        let request = JsonRpcRequest::with_id("test_method", Some(json!({"param": "value"})), "123");
 
         let serialized = serde_json::to_string(&request).unwrap();
         let deserialized: JsonRpcRequest = serde_json::from_str(&serialized).unwrap();
@@ -265,8 +256,7 @@ mod tests {
 
     #[test]
     fn test_jsonrpc_notification() {
-        let notification =
-            JsonRpcRequest::notification("notify_method", Some(json!({"data": "test"})));
+        let notification = JsonRpcRequest::notification("notify_method", Some(json!({"data": "test"})));
 
         assert!(notification.is_notification());
         assert_eq!(notification.id, None);

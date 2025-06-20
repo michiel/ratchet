@@ -1,7 +1,7 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredTask {
@@ -193,7 +193,7 @@ impl RepositoryStatus {
         self.last_sync_at = Some(Utc::now());
         self.error_count = result.errors.len();
         self.tasks_loaded = result.tasks_added + result.tasks_updated;
-        
+
         if result.errors.is_empty() {
             self.sync_state = SyncState::Synced;
             self.health_status = HealthStatus::Healthy;
@@ -202,7 +202,7 @@ impl RepositoryStatus {
             self.sync_state = SyncState::Error(error_msg.clone());
             self.health_status = HealthStatus::Error(error_msg);
         }
-        
+
         self.last_sync_result = Some(result);
     }
 

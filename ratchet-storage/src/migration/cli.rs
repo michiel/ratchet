@@ -6,10 +6,7 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use crate::migration::{
-    MigrationConfig, LegacyMigrator, SchemaVersionDetector,
-    MigrationError, MigrationSummary,
-};
+use crate::migration::{LegacyMigrator, MigrationConfig, MigrationError, MigrationSummary, SchemaVersionDetector};
 
 /// Migration CLI application
 #[derive(Parser)]
@@ -37,7 +34,7 @@ pub enum MigrationCommand {
         #[arg(short, long)]
         source: String,
 
-        /// Target database URL (ratchet-storage) 
+        /// Target database URL (ratchet-storage)
         #[arg(short, long)]
         target: String,
 
@@ -100,9 +97,7 @@ impl MigrationCliRunner {
     /// Run the CLI application
     pub async fn run(cli: MigrationCli) -> Result<(), MigrationError> {
         match cli.command {
-            MigrationCommand::Detect { database_url } => {
-                Self::detect_schema(&database_url).await
-            }
+            MigrationCommand::Detect { database_url } => Self::detect_schema(&database_url).await,
             MigrationCommand::Migrate {
                 source,
                 target,
@@ -129,33 +124,26 @@ impl MigrationCliRunner {
                 source,
                 target,
                 sample_size: _sample_size,
-            } => {
-                Self::validate_migration(&source, &target).await
-            }
-            MigrationCommand::Backup {
-                database_url,
-                output,
-            } => {
-                Self::create_backup(&database_url, &output).await
-            }
+            } => Self::validate_migration(&source, &target).await,
+            MigrationCommand::Backup { database_url, output } => Self::create_backup(&database_url, &output).await,
         }
     }
 
     async fn detect_schema(database_url: &str) -> Result<(), MigrationError> {
         println!("🔍 Detecting database schema...");
-        
+
         let db = sea_orm::Database::connect(database_url).await?;
         let detector = SchemaVersionDetector::new(db);
-        
+
         let version = detector.detect_version().await?;
-        
+
         println!("📋 Schema Information:");
         println!("  Version: {}", version.version);
         println!("  Description: {}", version.description);
         println!("  System: {}", version.system);
         println!("  Applied at: {}", version.applied_at.format("%Y-%m-%d %H:%M:%S UTC"));
         println!("  Applied migrations: {}", version.applied_migrations.len());
-        
+
         if !version.applied_migrations.is_empty() {
             println!("\n📝 Applied Migrations:");
             for migration in &version.applied_migrations {
@@ -189,60 +177,85 @@ impl MigrationCliRunner {
         println!("  Validate: {}", config.validate);
         println!("  Create backup: {}", config.create_backup);
         println!("  Continue on error: {}", config.continue_on_error);
-        
+
         let migrator = LegacyMigrator::new(config).await?;
         let summary = migrator.migrate().await?;
-        
+
         Self::print_migration_summary(&summary);
-        
+
         if summary.success {
             println!("✅ Migration completed successfully!");
         } else {
             println!("❌ Migration failed or completed with errors");
             return Err(MigrationError::ValidationFailed("Migration not successful".to_string()));
         }
-        
+
         Ok(())
     }
 
     async fn validate_migration(source_url: &str, target_url: &str) -> Result<(), MigrationError> {
         println!("🔍 Validating migration integrity...");
-        
+
         let source_db = sea_orm::Database::connect(source_url).await?;
         let target_db = sea_orm::Database::connect(target_url).await?;
-        
+
         let validator = crate::migration::MigrationValidator::new(source_db, target_db);
         let report = validator.validate_migration().await?;
-        
+
         println!("📋 Validation Report:");
         println!("  Overall success: {}", report.success);
         println!("  Validation duration: {}ms", report.validation_duration_ms);
-        
+
         println!("\n📊 Record Counts:");
-        println!("  Tasks: {} → {} ({})", 
-            report.record_counts.tasks.source, 
+        println!(
+            "  Tasks: {} → {} ({})",
+            report.record_counts.tasks.source,
             report.record_counts.tasks.target,
-            if report.record_counts.tasks.matches { "✅" } else { "❌" }
+            if report.record_counts.tasks.matches {
+                "✅"
+            } else {
+                "❌"
+            }
         );
-        println!("  Executions: {} → {} ({})", 
-            report.record_counts.executions.source, 
+        println!(
+            "  Executions: {} → {} ({})",
+            report.record_counts.executions.source,
             report.record_counts.executions.target,
-            if report.record_counts.executions.matches { "✅" } else { "❌" }
+            if report.record_counts.executions.matches {
+                "✅"
+            } else {
+                "❌"
+            }
         );
-        println!("  Jobs: {} → {} ({})", 
-            report.record_counts.jobs.source, 
+        println!(
+            "  Jobs: {} → {} ({})",
+            report.record_counts.jobs.source,
             report.record_counts.jobs.target,
-            if report.record_counts.jobs.matches { "✅" } else { "❌" }
+            if report.record_counts.jobs.matches {
+                "✅"
+            } else {
+                "❌"
+            }
         );
-        println!("  Schedules: {} → {} ({})", 
-            report.record_counts.schedules.source, 
+        println!(
+            "  Schedules: {} → {} ({})",
+            report.record_counts.schedules.source,
             report.record_counts.schedules.target,
-            if report.record_counts.schedules.matches { "✅" } else { "❌" }
+            if report.record_counts.schedules.matches {
+                "✅"
+            } else {
+                "❌"
+            }
         );
-        println!("  Delivery Results: {} → {} ({})", 
-            report.record_counts.delivery_results.source, 
+        println!(
+            "  Delivery Results: {} → {} ({})",
+            report.record_counts.delivery_results.source,
             report.record_counts.delivery_results.target,
-            if report.record_counts.delivery_results.matches { "✅" } else { "❌" }
+            if report.record_counts.delivery_results.matches {
+                "✅"
+            } else {
+                "❌"
+            }
         );
 
         if !report.integrity_checks.is_empty() {
@@ -260,15 +273,17 @@ impl MigrationCliRunner {
             println!("\n📋 Entity Validations:");
             for validation in &report.entity_validations {
                 let status = if validation.matches { "✅" } else { "❌" };
-                println!("  {} {}: {} → {}", 
-                    status, validation.entity_type, 
-                    validation.source_count, validation.target_count
+                println!(
+                    "  {} {}: {} → {}",
+                    status, validation.entity_type, validation.source_count, validation.target_count
                 );
-                
+
                 if let Some(sample) = &validation.sample_comparison {
                     if sample.matching_records < sample.sample_size {
-                        println!("    Sample: {}/{} records match", 
-                            sample.matching_records, sample.sample_size);
+                        println!(
+                            "    Sample: {}/{} records match",
+                            sample.matching_records, sample.sample_size
+                        );
                         if !sample.mismatched_fields.is_empty() {
                             println!("    Mismatched fields: {}", sample.mismatched_fields.join(", "));
                         }
@@ -290,13 +305,13 @@ impl MigrationCliRunner {
             println!("\n❌ Validation failed!");
             return Err(MigrationError::ValidationFailed("Validation checks failed".to_string()));
         }
-        
+
         Ok(())
     }
 
     async fn create_backup(database_url: &str, output_path: &PathBuf) -> Result<(), MigrationError> {
         println!("💾 Creating database backup...");
-        
+
         // For SQLite databases, this is a simple file copy
         if database_url.starts_with("sqlite://") {
             let source_path = database_url.trim_start_matches("sqlite://");
@@ -304,10 +319,10 @@ impl MigrationCliRunner {
             println!("✅ Backup created: {}", output_path.display());
         } else {
             return Err(MigrationError::ValidationFailed(
-                "Backup currently only supported for SQLite databases".to_string()
+                "Backup currently only supported for SQLite databases".to_string(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -321,7 +336,7 @@ impl MigrationCliRunner {
         println!("  Total migrated: {}", summary.total_migrated());
         println!("  Total failed: {}", summary.total_failed());
         println!("  Success rate: {:.1}%", summary.overall_success_rate() * 100.0);
-        
+
         if let Some(backup_path) = &summary.backup_path {
             println!("  Backup: {}", backup_path);
         }
@@ -335,7 +350,7 @@ impl MigrationCliRunner {
                 println!("    Failed: {}", report.failed_count);
                 println!("    Duration: {}ms", report.duration_ms);
                 println!("    Success rate: {:.1}%", report.success_rate() * 100.0);
-                
+
                 if !report.errors.is_empty() && report.errors.len() <= 5 {
                     println!("    Errors:");
                     for error in &report.errors {
@@ -359,13 +374,9 @@ mod tests {
     #[test]
     fn test_cli_parsing() {
         // Test detect command
-        let cli = MigrationCli::try_parse_from([
-            "ratchet-migrate", 
-            "detect", 
-            "--database-url", 
-            "sqlite://test.db"
-        ]).unwrap();
-        
+        let cli =
+            MigrationCli::try_parse_from(["ratchet-migrate", "detect", "--database-url", "sqlite://test.db"]).unwrap();
+
         match cli.command {
             MigrationCommand::Detect { database_url } => {
                 assert_eq!(database_url, "sqlite://test.db");
@@ -375,16 +386,25 @@ mod tests {
 
         // Test migrate command with flags
         let cli = MigrationCli::try_parse_from([
-            "ratchet-migrate", 
+            "ratchet-migrate",
             "migrate",
-            "--source", "sqlite://legacy.db",
-            "--target", "sqlite://modern.db", 
+            "--source",
+            "sqlite://legacy.db",
+            "--target",
+            "sqlite://modern.db",
             "--force",
-            "--continue-on-error"
-        ]).unwrap();
-        
+            "--continue-on-error",
+        ])
+        .unwrap();
+
         match cli.command {
-            MigrationCommand::Migrate { source, target, force, continue_on_error, .. } => {
+            MigrationCommand::Migrate {
+                source,
+                target,
+                force,
+                continue_on_error,
+                ..
+            } => {
                 assert_eq!(source, "sqlite://legacy.db");
                 assert_eq!(target, "sqlite://modern.db");
                 assert!(force);

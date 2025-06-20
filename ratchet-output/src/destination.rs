@@ -12,11 +12,7 @@ use crate::errors::{DeliveryError, ValidationError};
 #[async_trait]
 pub trait OutputDestination: Send + Sync {
     /// Deliver output to this destination
-    async fn deliver(
-        &self,
-        output: &TaskOutput,
-        context: &DeliveryContext,
-    ) -> Result<DeliveryResult, DeliveryError>;
+    async fn deliver(&self, output: &TaskOutput, context: &DeliveryContext) -> Result<DeliveryResult, DeliveryError>;
 
     /// Validate destination configuration
     fn validate_config(&self) -> Result<(), ValidationError>;

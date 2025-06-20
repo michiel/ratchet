@@ -40,12 +40,7 @@ impl Validatable for McpConfig {
     fn validate(&self) -> ConfigResult<()> {
         // Validate transport type
         let valid_transports = ["stdio", "sse"];
-        crate::validation::validate_enum_choice(
-            &self.transport,
-            &valid_transports,
-            "transport",
-            self.domain_name(),
-        )?;
+        crate::validation::validate_enum_choice(&self.transport, &valid_transports, "transport", self.domain_name())?;
 
         // Validate port range if using SSE
         if self.transport == "sse" {

@@ -3,14 +3,13 @@
 //! This module provides the main migration logic for transforming data from
 //! the legacy ratchet-lib database format to the modern ratchet-storage format.
 
-use sea_orm::{DatabaseConnection, EntityTrait, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait};
 use std::time::Instant;
 use uuid::Uuid;
 
 use crate::migration::{
-    MigrationConfig, MigrationError, MigrationReport, MigrationSummary,
-    SchemaVersionDetector, SchemaVersion, DatabaseSystem,
-    MigrationValidator,
+    DatabaseSystem, MigrationConfig, MigrationError, MigrationReport, MigrationSummary, MigrationValidator,
+    SchemaVersion, SchemaVersionDetector,
 };
 
 /// Main legacy data migrator
@@ -27,13 +26,13 @@ impl LegacyMigrator {
     pub async fn new(config: MigrationConfig) -> Result<Self, MigrationError> {
         // Connect to source database
         let source_db = sea_orm::Database::connect(&config.source_db_url).await?;
-        
-        // Connect to target database  
+
+        // Connect to target database
         let target_db = sea_orm::Database::connect(&config.target_db_url).await?;
 
         // Create schema detector for source database
         let schema_detector = SchemaVersionDetector::new(source_db.clone());
-        
+
         // Create validator
         let validator = MigrationValidator::new(source_db.clone(), target_db.clone());
 
@@ -60,7 +59,7 @@ impl LegacyMigrator {
 
         // Migrate each entity type in dependency order
         let migration_order = ["tasks", "executions", "jobs", "schedules", "delivery_results"];
-        
+
         for entity_type in &migration_order {
             let report = match *entity_type {
                 "tasks" => self.migrate_tasks().await?,
@@ -73,9 +72,9 @@ impl LegacyMigrator {
 
             // Stop on first failure if not configured to continue
             let should_stop = !self.config.continue_on_error && report.failed_count > 0;
-            
+
             summary.reports.push(report);
-            
+
             if should_stop {
                 summary.complete(false);
                 return Ok(summary);
@@ -87,9 +86,10 @@ impl LegacyMigrator {
             let validation_report = self.validator.validate_migration().await?;
             if !validation_report.success {
                 summary.complete(false);
-                return Err(MigrationError::ValidationFailed(
-                    format!("Post-migration validation failed: {:?}", validation_report.errors)
-                ));
+                return Err(MigrationError::ValidationFailed(format!(
+                    "Post-migration validation failed: {:?}",
+                    validation_report.errors
+                )));
             }
         }
 
@@ -107,14 +107,14 @@ impl LegacyMigrator {
 
         // Get all tasks from source database
         let source_tasks = self.get_legacy_tasks().await?;
-        
+
         for task in source_tasks {
             match self.migrate_single_task(task).await {
                 Ok(_) => report.migrated_count += 1,
                 Err(e) => {
                     report.failed_count += 1;
                     report.errors.push(format!("Task {}: {}", report.failed_count, e));
-                    
+
                     if !self.config.continue_on_error {
                         break;
                     }
@@ -133,14 +133,14 @@ impl LegacyMigrator {
 
         // Get all executions from source database
         let source_executions = self.get_legacy_executions().await?;
-        
+
         for execution in source_executions {
             match self.migrate_single_execution(execution).await {
                 Ok(_) => report.migrated_count += 1,
                 Err(e) => {
                     report.failed_count += 1;
                     report.errors.push(format!("Execution {}: {}", report.failed_count, e));
-                    
+
                     if !self.config.continue_on_error {
                         break;
                     }
@@ -159,14 +159,14 @@ impl LegacyMigrator {
 
         // Get all jobs from source database
         let source_jobs = self.get_legacy_jobs().await?;
-        
+
         for job in source_jobs {
             match self.migrate_single_job(job).await {
                 Ok(_) => report.migrated_count += 1,
                 Err(e) => {
                     report.failed_count += 1;
                     report.errors.push(format!("Job {}: {}", report.failed_count, e));
-                    
+
                     if !self.config.continue_on_error {
                         break;
                     }
@@ -185,14 +185,14 @@ impl LegacyMigrator {
 
         // Get all schedules from source database
         let source_schedules = self.get_legacy_schedules().await?;
-        
+
         for schedule in source_schedules {
             match self.migrate_single_schedule(schedule).await {
                 Ok(_) => report.migrated_count += 1,
                 Err(e) => {
                     report.failed_count += 1;
                     report.errors.push(format!("Schedule {}: {}", report.failed_count, e));
-                    
+
                     if !self.config.continue_on_error {
                         break;
                     }
@@ -211,14 +211,16 @@ impl LegacyMigrator {
 
         // Get all delivery results from source database
         let source_results = self.get_legacy_delivery_results().await?;
-        
+
         for result in source_results {
             match self.migrate_single_delivery_result(result).await {
                 Ok(_) => report.migrated_count += 1,
                 Err(e) => {
                     report.failed_count += 1;
-                    report.errors.push(format!("DeliveryResult {}: {}", report.failed_count, e));
-                    
+                    report
+                        .errors
+                        .push(format!("DeliveryResult {}: {}", report.failed_count, e));
+
                     if !self.config.continue_on_error {
                         break;
                     }
@@ -254,14 +256,11 @@ impl LegacyMigrator {
     async fn create_backup(&self) -> Result<String, MigrationError> {
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
         let backup_path = format!("backup_{}_{}.db", "ratchet_migration", timestamp);
-        
+
         // For SQLite, we can use the backup API or simple file copy
         // This is a simplified implementation
-        std::fs::copy(
-            self.config.source_db_url.trim_start_matches("sqlite://"),
-            &backup_path
-        )?;
-        
+        std::fs::copy(self.config.source_db_url.trim_start_matches("sqlite://"), &backup_path)?;
+
         Ok(backup_path)
     }
 
@@ -274,7 +273,7 @@ impl LegacyMigrator {
             system: DatabaseSystem::RatchetStorage,
             applied_migrations: vec![], // Would be populated from target schema
         };
-        
+
         target_detector.record_migration_metadata(&version).await?;
         Ok(())
     }
@@ -394,7 +393,7 @@ impl DataTransformer {
     pub fn transform_task_metadata(legacy_metadata: &serde_json::Value) -> Result<serde_json::Value, MigrationError> {
         // Convert field mappings from legacy to modern format
         let mut modern_metadata = serde_json::Map::new();
-        
+
         if let Some(obj) = legacy_metadata.as_object() {
             // Map legacy fields to modern equivalents
             if let Some(label) = obj.get("label") {
@@ -410,14 +409,13 @@ impl DataTransformer {
                 }
             }
         }
-        
+
         Ok(serde_json::Value::Object(modern_metadata))
     }
 
     /// Validate JSON field integrity
     pub fn validate_json_field(json_str: &str) -> Result<serde_json::Value, MigrationError> {
-        serde_json::from_str(json_str)
-            .map_err(|e| MigrationError::DataTransformation(format!("Invalid JSON: {}", e)))
+        serde_json::from_str(json_str).map_err(|e| MigrationError::DataTransformation(format!("Invalid JSON: {}", e)))
     }
 }
 
@@ -450,7 +448,7 @@ mod tests {
         });
 
         let modern_metadata = DataTransformer::transform_task_metadata(&legacy_metadata).unwrap();
-        
+
         assert_eq!(modern_metadata["name"], "My Task");
         assert_eq!(modern_metadata["description"], "A test task");
         assert_eq!(modern_metadata["version"], "1.0.0");

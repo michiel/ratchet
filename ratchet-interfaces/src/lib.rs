@@ -1,7 +1,7 @@
 //! # Ratchet Interfaces
-//! 
+//!
 //! Core interfaces and traits for Ratchet modular architecture.
-//! 
+//!
 //! This crate provides the fundamental interfaces that are shared across
 //! the entire Ratchet ecosystem, breaking circular dependencies between
 //! the legacy ratchet-lib and new modular crates.
@@ -18,29 +18,24 @@
 //! - [`TaskExecutor`] - Core task execution interface
 //! - [`StructuredLogger`] - Logging interface for structured events
 
-pub mod service;
+pub mod database;
 pub mod execution;
 pub mod logging;
-pub mod database;
 pub mod registry;
 pub mod scheduler;
+pub mod service;
 
 // Re-export commonly used types
-pub use service::{Service, ServiceHealth, ServiceMetrics, HealthStatus};
-pub use execution::{TaskExecutor, ExecutionResult, ExecutionContext};
-pub use logging::{LogEvent, LogLevel, StructuredLogger};
 pub use database::{
-    Repository, CrudRepository, FilteredRepository, RepositoryFactory,
-    TaskRepository, ExecutionRepository, JobRepository, ScheduleRepository,
-    UserRepository, SessionRepository, ApiKeyRepository,
-    TaskFilters, ExecutionFilters, JobFilters, ScheduleFilters, UserFilters,
-    DatabaseError, TransactionContext, TransactionManager
+    ApiKeyRepository, CrudRepository, DatabaseError, ExecutionFilters, ExecutionRepository, FilteredRepository,
+    JobFilters, JobRepository, Repository, RepositoryFactory, ScheduleFilters, ScheduleRepository, SessionRepository,
+    TaskFilters, TaskRepository, TransactionContext, TransactionManager, UserFilters, UserRepository,
 };
+pub use execution::{ExecutionContext, ExecutionResult, TaskExecutor};
+pub use logging::{LogEvent, LogLevel, StructuredLogger};
 pub use registry::{
-    TaskRegistry, FilesystemRegistry, HttpRegistry, RegistryManager,
-    TaskValidator, TaskMetadata, RegistryError, ValidationResult,
-    SyncResult, HttpCredentials
+    FilesystemRegistry, HttpCredentials, HttpRegistry, RegistryError, RegistryManager, SyncResult, TaskMetadata,
+    TaskRegistry, TaskValidator, ValidationResult,
 };
-pub use scheduler::{
-    SchedulerService, SchedulerError, ScheduleStatus
-};
+pub use scheduler::{ScheduleStatus, SchedulerError, SchedulerService};
+pub use service::{HealthStatus, Service, ServiceHealth, ServiceMetrics};

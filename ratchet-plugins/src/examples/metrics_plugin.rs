@@ -83,19 +83,13 @@ impl Plugin for MetricsPlugin {
             }
         });
 
-        info!(
-            "📈 Metrics collected: execution #{}, total: {}",
-            count, count
-        );
+        info!("📈 Metrics collected: execution #{}, total: {}", count, count);
         Ok(result)
     }
 
     async fn shutdown(&mut self, context: &mut PluginContext) -> PluginResult<()> {
         let final_count = self.execution_count.load(Ordering::Relaxed);
-        info!(
-            "📊 Shutting down Metrics Plugin (final count: {})",
-            final_count
-        );
+        info!("📊 Shutting down Metrics Plugin (final count: {})", final_count);
 
         // Call parent shutdown
         Plugin::shutdown(self, context).await?;
@@ -134,11 +128,7 @@ mod tests {
     #[tokio::test]
     async fn test_metrics_plugin_execution() {
         let mut plugin = MetricsPlugin::new();
-        let mut context = PluginContext::new(
-            Uuid::new_v4(),
-            serde_json::json!({}),
-            RatchetConfig::default(),
-        );
+        let mut context = PluginContext::new(Uuid::new_v4(), serde_json::json!({}), RatchetConfig::default());
 
         // Initial count should be 0
         assert_eq!(plugin.get_execution_count(), 0);

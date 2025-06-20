@@ -132,10 +132,7 @@ impl ShutdownCoordinator {
 
         let remaining_tasks = self.active_task_count().await;
         if remaining_tasks > 0 {
-            warn!(
-                "Forced shutdown completed with {} tasks still active",
-                remaining_tasks
-            );
+            warn!("Forced shutdown completed with {} tasks still active", remaining_tasks);
             Err(ShutdownError::TasksRemaining(remaining_tasks))
         } else {
             info!("Forced shutdown completed successfully");
@@ -341,10 +338,7 @@ impl ProcessShutdownManager {
             {
                 // On Windows, we'll try to terminate gracefully first
                 // This is less graceful than Unix signals but better than nothing
-                warn!(
-                    "Windows graceful shutdown: sending terminate signal to process {}",
-                    id
-                );
+                warn!("Windows graceful shutdown: sending terminate signal to process {}", id);
             }
         }
 

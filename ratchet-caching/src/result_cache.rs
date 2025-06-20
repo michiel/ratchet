@@ -26,11 +26,7 @@ pub struct ResultCacheKey {
 
 impl ResultCacheKey {
     /// Create a new result cache key
-    pub fn new(
-        task_id: impl Into<String>,
-        task_version: impl Into<String>,
-        input_data: &serde_json::Value,
-    ) -> Self {
+    pub fn new(task_id: impl Into<String>, task_version: impl Into<String>, input_data: &serde_json::Value) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
@@ -257,8 +253,7 @@ mod tests {
 
         let key = ResultCacheKey::new("task1", "1.0.0", &input);
 
-        let result =
-            CachedResult::success(uuid::Uuid::new_v4(), serde_json::json!({"sum": 30}), 100);
+        let result = CachedResult::success(uuid::Uuid::new_v4(), serde_json::json!({"sum": 30}), 100);
 
         // Put and get
         cache.put(key.clone(), result).await.unwrap();
@@ -284,8 +279,7 @@ mod tests {
         let input = serde_json::json!({"test": true});
         let key = ResultCacheKey::new("task1", "1.0.0", &input);
 
-        let failed_result =
-            CachedResult::failure(uuid::Uuid::new_v4(), "Task failed".to_string(), 50);
+        let failed_result = CachedResult::failure(uuid::Uuid::new_v4(), "Task failed".to_string(), 50);
 
         // Put failed result
         cache.put(key.clone(), failed_result).await.unwrap();

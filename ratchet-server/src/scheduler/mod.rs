@@ -5,8 +5,7 @@ pub mod repository_bridge;
 // pub mod sqlite_storage;
 pub mod tokio_scheduler;
 
-pub use ratchet_interfaces::{SchedulerService, SchedulerError, ScheduleStatus};
+pub use ratchet_interfaces::{ScheduleStatus, SchedulerError, SchedulerService};
 pub use repository_bridge::RepositoryBridge;
 // pub use sqlite_storage::SqliteMetadataStore;
-pub use tokio_scheduler::{TokioCronSchedulerService, TokioCronSchedulerConfig};
-
+pub use tokio_scheduler::{TokioCronSchedulerConfig, TokioCronSchedulerService};

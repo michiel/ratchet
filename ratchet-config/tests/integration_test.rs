@@ -27,10 +27,7 @@ fn test_config_loader_from_env() {
         assert_eq!(config.http.timeout, Duration::from_secs(60));
         assert_eq!(config.cache.task_cache.task_content_cache_size, 200);
         assert_eq!(config.logging.level, LogLevel::Debug);
-        assert_eq!(
-            config.execution.max_execution_duration,
-            Duration::from_secs(600)
-        );
+        assert_eq!(config.execution.max_execution_duration, Duration::from_secs(600));
     });
 }
 
@@ -157,10 +154,7 @@ fn test_validation_errors() {
 
 #[test]
 fn test_custom_prefix_loader() {
-    let vars = vec![
-        ("CUSTOM_HTTP_TIMEOUT", Some("120")),
-        ("CUSTOM_CACHE_SIZE", Some("300")),
-    ];
+    let vars = vec![("CUSTOM_HTTP_TIMEOUT", Some("120")), ("CUSTOM_CACHE_SIZE", Some("300"))];
 
     with_vars(vars, || {
         let loader = ConfigLoader::with_prefix("CUSTOM");

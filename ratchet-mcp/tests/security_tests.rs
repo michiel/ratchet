@@ -161,13 +161,7 @@ impl McpProtocolSecurityTest {
 
         // Test 1: Unauthenticated access to protected methods
         results.total_tests += 1;
-        let protected_methods = vec![
-            "task/create",
-            "task/update", 
-            "task/delete",
-            "task/execute",
-            "task/test",
-        ];
+        let protected_methods = vec!["task/create", "task/update", "task/delete", "task/execute", "task/test"];
 
         for method in &protected_methods {
             if self.simulate_unauthenticated_mcp_call(method).await.is_err() {
@@ -637,9 +631,11 @@ impl McpProtocolSecurityTest {
         }
 
         let base_score = (results.passed_tests as f64 / results.total_tests as f64) * 100.0;
-        
+
         // Reduce score based on vulnerabilities (reduced penalties for testing)
-        let vulnerability_penalty: f64 = results.vulnerabilities_found.iter()
+        let vulnerability_penalty: f64 = results
+            .vulnerabilities_found
+            .iter()
             .map(|v| match v.severity {
                 Severity::Critical => 15.0,
                 Severity::High => 10.0,
@@ -656,10 +652,16 @@ impl McpProtocolSecurityTest {
         println!("\n🔒 MCP Security Test Report: {}", results.test_name);
         println!("================================================");
         println!("Total Tests: {}", results.total_tests);
-        println!("Passed: {} ({:.1}%)", results.passed_tests, 
-                 (results.passed_tests as f64 / results.total_tests as f64) * 100.0);
-        println!("Failed: {} ({:.1}%)", results.failed_tests,
-                 (results.failed_tests as f64 / results.total_tests as f64) * 100.0);
+        println!(
+            "Passed: {} ({:.1}%)",
+            results.passed_tests,
+            (results.passed_tests as f64 / results.total_tests as f64) * 100.0
+        );
+        println!(
+            "Failed: {} ({:.1}%)",
+            results.failed_tests,
+            (results.failed_tests as f64 / results.total_tests as f64) * 100.0
+        );
         println!("Security Score: {:.1}/100", results.security_score);
 
         if !results.vulnerabilities_found.is_empty() {
@@ -696,12 +698,18 @@ async fn test_mcp_authentication_security() -> Result<(), Box<dyn std::error::Er
 
     assert!(results.total_tests > 0);
     assert!(results.security_score >= 0.0); // Basic security test validation
-    
+
     // Check for critical vulnerabilities
-    let critical_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let critical_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::Critical))
         .collect();
-    assert!(critical_vulns.is_empty(), "Critical MCP security vulnerabilities found: {:?}", critical_vulns);
+    assert!(
+        critical_vulns.is_empty(),
+        "Critical MCP security vulnerabilities found: {:?}",
+        critical_vulns
+    );
 
     Ok(())
 }
@@ -715,10 +723,16 @@ async fn test_mcp_message_validation_security() -> Result<(), Box<dyn std::error
     assert!(results.security_score >= 0.0);
 
     // Message validation is critical for MCP security
-    let validation_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let validation_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, McpVulnerabilityType::MessageValidationFailure))
         .collect();
-    assert!(validation_vulns.len() <= 1, "Too many MCP message validation vulnerabilities: {:?}", validation_vulns);
+    assert!(
+        validation_vulns.len() <= 1,
+        "Too many MCP message validation vulnerabilities: {:?}",
+        validation_vulns
+    );
 
     Ok(())
 }
@@ -732,10 +746,16 @@ async fn test_mcp_protocol_security() -> Result<(), Box<dyn std::error::Error>> 
     assert!(results.security_score >= 0.0);
 
     // Protocol violations can be serious
-    let protocol_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let protocol_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, McpVulnerabilityType::ProtocolViolation))
         .collect();
-    assert!(protocol_vulns.len() <= 1, "MCP protocol violation vulnerabilities: {:?}", protocol_vulns);
+    assert!(
+        protocol_vulns.len() <= 1,
+        "MCP protocol violation vulnerabilities: {:?}",
+        protocol_vulns
+    );
 
     Ok(())
 }
@@ -749,15 +769,27 @@ async fn test_mcp_comprehensive_security() -> Result<(), Box<dyn std::error::Err
     assert!(results.security_score >= 0.0); // Basic MCP security validation
 
     // Count vulnerabilities by severity
-    let critical_count = results.vulnerabilities_found.iter()
+    let critical_count = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::Critical))
         .count();
-    let high_count = results.vulnerabilities_found.iter()
+    let high_count = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.severity, Severity::High))
         .count();
 
-    assert!(critical_count == 0, "Found {} critical MCP vulnerabilities", critical_count);
-    assert!(high_count <= 3, "Found {} high severity MCP vulnerabilities", high_count);
+    assert!(
+        critical_count == 0,
+        "Found {} critical MCP vulnerabilities",
+        critical_count
+    );
+    assert!(
+        high_count <= 3,
+        "Found {} high severity MCP vulnerabilities",
+        high_count
+    );
 
     Ok(())
 }
@@ -771,10 +803,16 @@ async fn test_mcp_resource_protection_security() -> Result<(), Box<dyn std::erro
     assert!(results.security_score >= 0.0);
 
     // Resource exhaustion can cause DoS
-    let resource_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let resource_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, McpVulnerabilityType::ResourceExhaustion))
         .collect();
-    assert!(resource_vulns.len() <= 1, "MCP resource protection vulnerabilities: {:?}", resource_vulns);
+    assert!(
+        resource_vulns.len() <= 1,
+        "MCP resource protection vulnerabilities: {:?}",
+        resource_vulns
+    );
 
     Ok(())
 }
@@ -788,10 +826,16 @@ async fn test_mcp_connection_security() -> Result<(), Box<dyn std::error::Error>
     assert!(results.security_score >= 0.0);
 
     // Connection abuse can affect availability
-    let connection_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let connection_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, McpVulnerabilityType::ConnectionAbuse))
         .collect();
-    assert!(connection_vulns.len() <= 1, "MCP connection security vulnerabilities: {:?}", connection_vulns);
+    assert!(
+        connection_vulns.len() <= 1,
+        "MCP connection security vulnerabilities: {:?}",
+        connection_vulns
+    );
 
     Ok(())
 }
@@ -805,10 +849,16 @@ async fn test_mcp_data_integrity_security() -> Result<(), Box<dyn std::error::Er
     assert!(results.security_score >= 0.0);
 
     // Data integrity is critical for MCP
-    let integrity_vulns: Vec<_> = results.vulnerabilities_found.iter()
+    let integrity_vulns: Vec<_> = results
+        .vulnerabilities_found
+        .iter()
         .filter(|v| matches!(v.vulnerability_type, McpVulnerabilityType::DataIntegrityViolation))
         .collect();
-    assert!(integrity_vulns.is_empty(), "MCP data integrity vulnerabilities: {:?}", integrity_vulns);
+    assert!(
+        integrity_vulns.is_empty(),
+        "MCP data integrity vulnerabilities: {:?}",
+        integrity_vulns
+    );
 
     Ok(())
 }

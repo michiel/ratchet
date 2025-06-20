@@ -32,9 +32,7 @@ pub struct StaticPluginLoader {
 impl StaticPluginLoader {
     /// Create a new static plugin loader
     pub fn new() -> Self {
-        Self {
-            factories: Vec::new(),
-        }
+        Self { factories: Vec::new() }
     }
 
     /// Add a plugin factory
@@ -148,9 +146,8 @@ impl DynamicPluginLoader {
             let lib = libloading::Library::new(path)?;
 
             // Get the plugin factory function
-            let factory: libloading::Symbol<PluginFactory> = lib
-                .get(b"create_plugin")
-                .map_err(PluginError::DynamicLoadingError)?;
+            let factory: libloading::Symbol<PluginFactory> =
+                lib.get(b"create_plugin").map_err(PluginError::DynamicLoadingError)?;
 
             // Create the plugin
             let plugin = factory();
@@ -240,9 +237,7 @@ pub struct CompositePluginLoader {
 impl CompositePluginLoader {
     /// Create a new composite plugin loader
     pub fn new() -> Self {
-        Self {
-            loaders: Vec::new(),
-        }
+        Self { loaders: Vec::new() }
     }
 
     /// Add a plugin loader
@@ -470,10 +465,7 @@ mod tests {
             &self.metadata
         }
 
-        async fn execute(
-            &mut self,
-            _context: &mut PluginContext,
-        ) -> PluginResult<serde_json::Value> {
+        async fn execute(&mut self, _context: &mut PluginContext) -> PluginResult<serde_json::Value> {
             Ok(serde_json::json!({"status": "success"}))
         }
 

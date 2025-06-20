@@ -3,7 +3,7 @@ use ratchet_logging::{
     init_logger, logger,
     logger::LogSink,
     sinks::{ConsoleSink, FileSink},
-    LogContext, LogEvent, LogLevel, LoggerBuilder, ErrorInfo, ErrorSeverity,
+    ErrorInfo, ErrorSeverity, LogContext, LogEvent, LogLevel, LoggerBuilder,
 };
 use std::sync::Arc;
 use tempfile::tempdir;
@@ -36,8 +36,7 @@ fn test_error_logging() {
     let temp_dir = tempdir().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let file_sink =
-        Arc::new(FileSink::new(&log_path, LogLevel::Info).expect("Failed to create file sink"));
+    let file_sink = Arc::new(FileSink::new(&log_path, LogLevel::Info).expect("Failed to create file sink"));
 
     let logger = LoggerBuilder::new()
         .with_min_level(LogLevel::Info)
@@ -47,12 +46,9 @@ fn test_error_logging() {
         .build();
 
     // Test direct error info creation and logging
-    let error_info = ErrorInfo::new(
-        "TaskNotFound",
-        "TASK_NOT_FOUND", 
-        "Task 'test-task' not found"
-    ).with_context_value("task_name", "test-task");
-    
+    let error_info = ErrorInfo::new("TaskNotFound", "TASK_NOT_FOUND", "Task 'test-task' not found")
+        .with_context_value("task_name", "test-task");
+
     let log_event = LogEvent::new(LogLevel::Error, "Task not found")
         .with_error(error_info)
         .with_field("request_id", "req-123")
@@ -91,9 +87,7 @@ fn test_context_propagation() {
     contextualized_logger.log(event);
 
     // Create child context
-    let child_context = parent_context
-        .child()
-        .with_field("operation", "task_execution");
+    let child_context = parent_context.child().with_field("operation", "task_execution");
 
     let child_logger = logger.with_context(child_context);
     let event = LogEvent::new(LogLevel::Debug, "Child context test");
@@ -102,20 +96,15 @@ fn test_context_propagation() {
 
 #[test]
 fn test_structured_error_info() {
-
-    let error_info = ErrorInfo::new(
-        "DatabaseError",
-        "DB_CONN_TIMEOUT",
-        "Connection to database timed out",
-    )
-    .with_severity(ErrorSeverity::High)
-    .with_retryable(true)
-    .with_context_value("database", "postgres://localhost:5432/ratchet")
-    .with_context_value("timeout_ms", 5000)
-    .with_suggestion("Check database server is running")
-    .with_suggestion("Verify network connectivity")
-    .with_preventive_suggestion("Implement connection pooling")
-    .with_preventive_suggestion("Add circuit breaker for database calls");
+    let error_info = ErrorInfo::new("DatabaseError", "DB_CONN_TIMEOUT", "Connection to database timed out")
+        .with_severity(ErrorSeverity::High)
+        .with_retryable(true)
+        .with_context_value("database", "postgres://localhost:5432/ratchet")
+        .with_context_value("timeout_ms", 5000)
+        .with_suggestion("Check database server is running")
+        .with_suggestion("Verify network connectivity")
+        .with_preventive_suggestion("Implement connection pooling")
+        .with_preventive_suggestion("Add circuit breaker for database calls");
 
     // Verify serialization works
     let json = serde_json::to_string_pretty(&error_info).unwrap();
@@ -145,8 +134,7 @@ async fn test_async_context_scope() {
 
             // Log within the context
             if let Some(global_logger) = logger() {
-                let event = LogEvent::new(LogLevel::Info, "Async operation completed")
-                    .with_field("duration_ms", 10);
+                let event = LogEvent::new(LogLevel::Info, "Async operation completed").with_field("duration_ms", 10);
                 global_logger.log(event);
             }
 

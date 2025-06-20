@@ -18,26 +18,12 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(Schedules::Uuid)
-                            .string()
-                            .not_null()
-                            .unique_key(),
-                    )
+                    .col(ColumnDef::new(Schedules::Uuid).string().not_null().unique_key())
                     .col(ColumnDef::new(Schedules::TaskId).integer().not_null())
                     .col(ColumnDef::new(Schedules::Name).string().not_null())
-                    .col(
-                        ColumnDef::new(Schedules::CronExpression)
-                            .string()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Schedules::CronExpression).string().not_null())
                     .col(ColumnDef::new(Schedules::InputData).json().not_null())
-                    .col(
-                        ColumnDef::new(Schedules::Enabled)
-                            .boolean()
-                            .not_null()
-                            .default(true),
-                    )
+                    .col(ColumnDef::new(Schedules::Enabled).boolean().not_null().default(true))
                     .col(ColumnDef::new(Schedules::NextRunAt).timestamp_with_time_zone())
                     .col(ColumnDef::new(Schedules::LastRunAt).timestamp_with_time_zone())
                     .col(

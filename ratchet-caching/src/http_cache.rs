@@ -353,9 +353,6 @@ mod tests {
 
         let result = cache.put(key, large_response, None).await;
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            CacheError::CapacityExceeded(_)
-        ));
+        assert!(matches!(result.unwrap_err(), CacheError::CapacityExceeded(_)));
     }
 }

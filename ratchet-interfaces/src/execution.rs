@@ -1,5 +1,5 @@
 //! Execution interface definitions
-//! 
+//!
 //! Provides the core task execution interfaces that allow different
 //! execution engines to be used interchangeably.
 
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 /// Core task execution interface
-/// 
+///
 /// This trait abstracts the execution of tasks, allowing different
 /// execution engines (process-based, in-memory, distributed) to be
 /// used interchangeably throughout the Ratchet system.
@@ -18,12 +18,12 @@ pub trait TaskExecutor: Send + Sync {
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Execute a task with given input
-    /// 
+    ///
     /// # Arguments
     /// * `task_id` - Unique identifier for the task
     /// * `input` - JSON input data for the task
     /// * `context` - Optional execution context with timeout and metadata
-    /// 
+    ///
     /// # Returns
     /// Result containing execution output and metadata, or an error
     async fn execute_task(
@@ -48,7 +48,7 @@ pub trait TaskExecutor: Send + Sync {
 }
 
 /// Execution context for task runs
-/// 
+///
 /// Provides additional configuration and metadata for task execution.
 #[derive(Debug, Clone)]
 pub struct ExecutionContext {
@@ -96,7 +96,7 @@ impl ExecutionContext {
 }
 
 /// Task execution result
-/// 
+///
 /// Contains the output and metadata from a completed task execution.
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
@@ -141,7 +141,7 @@ impl ExecutionStatus {
 }
 
 /// Execution engine metrics
-/// 
+///
 /// Provides insights into the performance and health of the execution engine.
 #[derive(Debug, Clone, Default)]
 pub struct ExecutorMetrics {

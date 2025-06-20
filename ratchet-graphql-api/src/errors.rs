@@ -12,8 +12,8 @@ pub use ratchet_api_types::ApiError as UnifiedApiError;
 pub enum GraphQLError {
     #[error("Repository error: {0}")]
     Repository(#[from] ratchet_interfaces::DatabaseError),
-    
-    #[error("Registry error: {0}")]  
+
+    #[error("Registry error: {0}")]
     Registry(#[from] ratchet_interfaces::RegistryError),
 }
 
@@ -22,16 +22,14 @@ impl From<GraphQLError> for ApiError {
         // Apply error sanitization to prevent sensitive data leakage
         let sanitizer = ErrorSanitizer::default();
         let sanitized = sanitizer.sanitize_error(&error);
-        
+
         // Use sanitized error message and code
         ApiError::new(
-            sanitized.error_code.unwrap_or_else(|| {
-                match error {
-                    GraphQLError::Repository(_) => "DATABASE_ERROR".to_string(),
-                    GraphQLError::Registry(_) => "REGISTRY_ERROR".to_string(),
-                }
+            sanitized.error_code.unwrap_or_else(|| match error {
+                GraphQLError::Repository(_) => "DATABASE_ERROR".to_string(),
+                GraphQLError::Registry(_) => "REGISTRY_ERROR".to_string(),
             }),
-            sanitized.message
+            sanitized.message,
         )
     }
 }

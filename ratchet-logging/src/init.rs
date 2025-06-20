@@ -27,8 +27,7 @@ pub fn init_logging_from_config(config: &LoggingConfig) -> Result<()> {
         .build_logger()
         .map_err(|e| anyhow::anyhow!("Failed to build logger: {}", e))?;
 
-    init_logger(logger)
-        .map_err(|e| anyhow::anyhow!("Failed to initialize logger: {}", e))?;
+    init_logger(logger).map_err(|e| anyhow::anyhow!("Failed to initialize logger: {}", e))?;
 
     Ok(())
 }
@@ -64,7 +63,8 @@ pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<()> {
     if let Err(_) = tracing_subscriber::registry()
         .with(env_filter)
         .with(console_layer)
-        .try_init() {
+        .try_init()
+    {
         tracing::debug!("Global tracing subscriber already initialized, skipping");
     }
 
@@ -74,13 +74,11 @@ pub fn init_hybrid_logging(config: &LoggingConfig) -> Result<()> {
         .iter()
         .any(|s| !matches!(s, super::config::SinkConfig::Console { .. }))
     {
-        let logger = config.build_logger().map_err(|e| {
-            anyhow::anyhow!("Failed to build structured logger: {}", e)
-        })?;
+        let logger = config
+            .build_logger()
+            .map_err(|e| anyhow::anyhow!("Failed to build structured logger: {}", e))?;
 
-        init_logger(logger).map_err(|e| {
-            anyhow::anyhow!("Failed to initialize structured logger: {}", e)
-        })?;
+        init_logger(logger).map_err(|e| anyhow::anyhow!("Failed to initialize structured logger: {}", e))?;
     }
 
     Ok(())

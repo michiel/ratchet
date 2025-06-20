@@ -8,10 +8,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::error::ExecutionError;
-use crate::ipc::{
-    CoordinatorMessage, TaskExecutionResult,
-    WorkerMessage, WorkerStatus,
-};
+use crate::ipc::{CoordinatorMessage, TaskExecutionResult, WorkerMessage, WorkerStatus};
 
 /// Configuration for worker processes
 #[derive(Debug, Clone)]
@@ -97,7 +94,7 @@ impl WorkerProcess {
     /// Check worker health
     pub async fn health_check(&mut self) -> Result<WorkerStatus, ExecutionError> {
         self.last_health_check = Some(chrono::Utc::now());
-        
+
         Ok(WorkerStatus {
             worker_id: self.id.clone(),
             pid: self.pid.unwrap_or(0),
@@ -150,7 +147,7 @@ impl WorkerProcessManager {
         for i in 0..self.config.worker_count {
             let worker_id = format!("worker-{}", i);
             let mut worker = WorkerProcess::new(worker_id.clone());
-            
+
             worker.start().await?;
             self.workers.insert(worker_id, worker);
         }
@@ -181,15 +178,14 @@ impl WorkerProcessManager {
         _timeout: Duration,
     ) -> Result<CoordinatorMessage, ExecutionError> {
         // Find an available worker
-        let worker_id = self.find_available_worker()
+        let worker_id = self
+            .find_available_worker()
             .ok_or_else(|| ExecutionError::WorkerError("No available workers".to_string()))?;
 
         // For now, simulate task execution
         match message {
-            WorkerMessage::ExecuteTask { 
-                job_id, 
-                correlation_id, 
-                .. 
+            WorkerMessage::ExecuteTask {
+                job_id, correlation_id, ..
             } => {
                 // Simulate some work
                 tokio::time::sleep(Duration::from_millis(100)).await;
@@ -223,9 +219,7 @@ impl WorkerProcessManager {
                     Err(ExecutionError::WorkerError("Worker not found".to_string()))
                 }
             }
-            _ => {
-                Err(ExecutionError::WorkerError("Unsupported message type".to_string()))
-            }
+            _ => Err(ExecutionError::WorkerError("Unsupported message type".to_string())),
         }
     }
 

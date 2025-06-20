@@ -5,10 +5,10 @@ use chrono::Utc;
 use cron::Schedule;
 use std::str::FromStr;
 use std::sync::Arc;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
-use ratchet_interfaces::database::{RepositoryFactory, ScheduleFilters};
 use ratchet_api_types::PaginationInput;
+use ratchet_interfaces::database::{RepositoryFactory, ScheduleFilters};
 use ratchet_output::{OutputDeliveryManager, OutputDestinationConfig, OutputFormat};
 
 use crate::config::HeartbeatConfig;
@@ -50,21 +50,29 @@ impl HeartbeatService {
         // Validate and normalize cron schedule
         let normalized_cron = self.normalize_cron_schedule(&self.config.cron_schedule)?;
         if let Err(e) = Schedule::from_str(&normalized_cron) {
-            error!("Invalid heartbeat cron schedule '{}' (normalized: '{}'): {}", 
-                   self.config.cron_schedule, normalized_cron, e);
+            error!(
+                "Invalid heartbeat cron schedule '{}' (normalized: '{}'): {}",
+                self.config.cron_schedule, normalized_cron, e
+            );
             warn!("Heartbeat system will be disabled due to invalid cron schedule");
             return Ok(()); // Don't fail server startup
         }
 
         // Setup output destinations (non-fatal if it fails)
         if let Err(e) = self.setup_output_destinations().await {
-            warn!("Failed to setup heartbeat output destinations: {}. Continuing without heartbeat.", e);
+            warn!(
+                "Failed to setup heartbeat output destinations: {}. Continuing without heartbeat.",
+                e
+            );
             return Ok(());
         }
 
         // Create or update the heartbeat schedule (non-fatal if it fails)
         if let Err(e) = self.ensure_heartbeat_schedule().await {
-            warn!("Failed to create heartbeat schedule: {}. Heartbeat system will be unavailable.", e);
+            warn!(
+                "Failed to create heartbeat schedule: {}. Heartbeat system will be unavailable.",
+                e
+            );
             return Ok(());
         }
 
@@ -80,7 +88,7 @@ impl HeartbeatService {
     /// Normalize cron schedule to the expected format
     fn normalize_cron_schedule(&self, cron_expr: &str) -> Result<String> {
         let parts: Vec<&str> = cron_expr.split_whitespace().collect();
-        
+
         match parts.len() {
             5 => {
                 // Standard 5-field cron (min hour day month dow) - add seconds
@@ -93,13 +101,14 @@ impl HeartbeatService {
             _ => {
                 // Try some common patterns
                 match cron_expr {
-                    "*/5 * * * *" => Ok("0 */5 * * * *".to_string()), // Every 5 minutes
+                    "*/5 * * * *" => Ok("0 */5 * * * *".to_string()),   // Every 5 minutes
                     "*/10 * * * *" => Ok("0 */10 * * * *".to_string()), // Every 10 minutes
-                    "0 * * * *" => Ok("0 0 * * * *".to_string()), // Every hour
+                    "0 * * * *" => Ok("0 0 * * * *".to_string()),       // Every hour
                     _ => Err(anyhow::anyhow!(
-                        "Invalid cron expression format. Expected 5 or 6 fields, got {}: '{}'", 
-                        parts.len(), cron_expr
-                    ))
+                        "Invalid cron expression format. Expected 5 or 6 fields, got {}: '{}'",
+                        parts.len(),
+                        cron_expr
+                    )),
                 }
             }
         }
@@ -117,12 +126,12 @@ impl HeartbeatService {
                         line_buffered: true,
                         prefix: Some("[HEARTBEAT] ".to_string()),
                     };
-                    
+
                     self.output_manager
                         .add_destination("heartbeat_stdio".to_string(), config)
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to add stdio destination: {}", e))?;
-                    
+
                     debug!("Added stdio output destination for heartbeat");
                 }
                 name => {
@@ -162,38 +171,39 @@ impl HeartbeatService {
             is_due: None,
             overdue: None,
         };
-        let pagination = PaginationInput { 
-            page: Some(1), 
-            limit: Some(1), 
-            offset: None 
+        let pagination = PaginationInput {
+            page: Some(1),
+            limit: Some(1),
+            offset: None,
         };
-        
+
         match schedule_repo.find_with_filters(filters, pagination).await {
             Ok(response) if !response.items.is_empty() => {
                 let existing_schedule = &response.items[0];
                 debug!("Heartbeat schedule already exists with ID: {}", existing_schedule.id);
-                
+
                 // Update schedule if cron expression has changed
                 let normalized_cron = self.normalize_cron_schedule(&self.config.cron_schedule)?;
                 if existing_schedule.cron_expression != normalized_cron {
                     info!(
                         "Updating heartbeat schedule cron from '{}' to '{}'",
-                        existing_schedule.cron_expression,
-                        normalized_cron
+                        existing_schedule.cron_expression, normalized_cron
                     );
-                    
+
                     let mut updated_schedule = existing_schedule.clone();
                     updated_schedule.cron_expression = normalized_cron.clone();
                     updated_schedule.updated_at = Utc::now();
-                    
+
                     // Calculate next run time
                     if let Ok(schedule) = Schedule::from_str(&normalized_cron) {
                         if let Some(next_run) = schedule.upcoming(Utc).next() {
                             updated_schedule.next_run = Some(next_run);
                         }
                     }
-                    
-                    schedule_repo.update(updated_schedule).await
+
+                    schedule_repo
+                        .update(updated_schedule)
+                        .await
                         .map_err(|e| anyhow::anyhow!("Failed to update heartbeat schedule: {}", e))?;
                 }
             }
@@ -234,10 +244,25 @@ impl HeartbeatService {
 
         // Normalize and parse cron schedule to get next run time
         let normalized_cron = self.normalize_cron_schedule(&self.config.cron_schedule)?;
-        let schedule = Schedule::from_str(&normalized_cron)
-            .map_err(|e| anyhow::anyhow!("Invalid cron schedule: {}", e))?;
-        
+        let schedule =
+            Schedule::from_str(&normalized_cron).map_err(|e| anyhow::anyhow!("Invalid cron schedule: {}", e))?;
+
         let next_run_at = schedule.upcoming(Utc).next();
+
+        // Create stdout output destination for heartbeat results
+        let stdout_destination = ratchet_api_types::UnifiedOutputDestination {
+            destination_type: "stdio".to_string(),
+            template: None,
+            filesystem: None,
+            webhook: None,
+            stdio: Some(ratchet_api_types::UnifiedStdioConfig {
+                stream: "stdout".to_string(),
+                format: ratchet_api_types::OutputFormat::Json,
+                include_metadata: true,
+                line_buffered: true,
+                prefix: Some("[HEARTBEAT] ".to_string()),
+            }),
+        };
 
         // Create the heartbeat schedule using the API types
         let heartbeat_schedule = ratchet_api_types::UnifiedSchedule {
@@ -251,16 +276,17 @@ impl HeartbeatService {
             last_run: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
-            output_destinations: None,
+            output_destinations: Some(vec![stdout_destination]),
         };
 
-        let created_schedule = schedule_repo.create(heartbeat_schedule).await
+        let created_schedule = schedule_repo
+            .create(heartbeat_schedule)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to create heartbeat schedule: {}", e))?;
 
         info!(
             "Created heartbeat schedule with ID {:?} - next run: {:?}",
-            created_schedule.id,
-            created_schedule.next_run
+            created_schedule.id, created_schedule.next_run
         );
 
         Ok(())
@@ -279,7 +305,7 @@ impl HeartbeatService {
     /// Get the next scheduled heartbeat time
     pub async fn next_heartbeat_time(&self) -> Result<Option<chrono::DateTime<Utc>>> {
         let schedule_repo = self.repositories.schedule_repository();
-        
+
         let filters = ScheduleFilters {
             task_id: None,
             enabled: None,
@@ -304,8 +330,12 @@ impl HeartbeatService {
             is_due: None,
             overdue: None,
         };
-        let pagination = PaginationInput { page: Some(1), limit: Some(1), offset: None };
-        
+        let pagination = PaginationInput {
+            page: Some(1),
+            limit: Some(1),
+            offset: None,
+        };
+
         match schedule_repo.find_with_filters(filters, pagination).await {
             Ok(response) if !response.items.is_empty() => Ok(response.items[0].next_run),
             Ok(_) => Ok(None),
@@ -316,7 +346,7 @@ impl HeartbeatService {
     /// Get heartbeat execution statistics
     pub async fn execution_stats(&self) -> Result<HeartbeatStats> {
         let schedule_repo = self.repositories.schedule_repository();
-        
+
         let filters = ScheduleFilters {
             task_id: None,
             enabled: None,
@@ -341,8 +371,12 @@ impl HeartbeatService {
             is_due: None,
             overdue: None,
         };
-        let pagination = PaginationInput { page: Some(1), limit: Some(1), offset: None };
-        
+        let pagination = PaginationInput {
+            page: Some(1),
+            limit: Some(1),
+            offset: None,
+        };
+
         match schedule_repo.find_with_filters(filters, pagination).await {
             Ok(response) if !response.items.is_empty() => {
                 let schedule = &response.items[0];
@@ -355,16 +389,14 @@ impl HeartbeatService {
                     cron_schedule: schedule.cron_expression.clone(),
                 })
             }
-            Ok(_) => {
-                Ok(HeartbeatStats {
-                    enabled: false,
-                    execution_count: 0,
-                    last_run_at: None,
-                    next_run_at: None,
-                    last_status: None,
-                    cron_schedule: "Not configured".to_string(),
-                })
-            }
+            Ok(_) => Ok(HeartbeatStats {
+                enabled: false,
+                execution_count: 0,
+                last_run_at: None,
+                next_run_at: None,
+                last_status: None,
+                cron_schedule: "Not configured".to_string(),
+            }),
             Err(e) => Err(anyhow::anyhow!("Failed to get heartbeat stats: {}", e)),
         }
     }
@@ -385,40 +417,40 @@ pub struct HeartbeatStats {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    
+
     // Simple mock for testing that doesn't panic on unimplemented methods
     struct TestRepositoryFactory;
-    
+
     #[async_trait]
     impl RepositoryFactory for TestRepositoryFactory {
         fn task_repository(&self) -> &dyn ratchet_interfaces::TaskRepository {
             unimplemented!("Not needed for these tests")
         }
-        
+
         fn execution_repository(&self) -> &dyn ratchet_interfaces::ExecutionRepository {
             unimplemented!("Not needed for these tests")
         }
-        
+
         fn job_repository(&self) -> &dyn ratchet_interfaces::JobRepository {
             unimplemented!("Not needed for these tests")
         }
-        
+
         fn schedule_repository(&self) -> &dyn ratchet_interfaces::ScheduleRepository {
             unimplemented!("Not needed for these tests")
         }
-        
+
         fn user_repository(&self) -> &dyn ratchet_interfaces::database::UserRepository {
             unimplemented!("Not needed for these tests")
         }
-        
+
         fn session_repository(&self) -> &dyn ratchet_interfaces::database::SessionRepository {
             unimplemented!("Not needed for these tests")
         }
-        
+
         fn api_key_repository(&self) -> &dyn ratchet_interfaces::database::ApiKeyRepository {
             unimplemented!("Not needed for these tests")
         }
-        
+
         async fn health_check(&self) -> Result<(), ratchet_interfaces::DatabaseError> {
             Ok(())
         }
@@ -429,14 +461,11 @@ mod tests {
         let config = HeartbeatConfig::default();
         let repositories = std::sync::Arc::new(TestRepositoryFactory);
         let output_manager = std::sync::Arc::new(ratchet_output::OutputDeliveryManager::new());
-        
+
         let service = HeartbeatService::new(config, repositories, output_manager);
 
         // Test 5-field cron (standard format)
-        assert_eq!(
-            service.normalize_cron_schedule("*/5 * * * *").unwrap(),
-            "0 */5 * * * *"
-        );
+        assert_eq!(service.normalize_cron_schedule("*/5 * * * *").unwrap(), "0 */5 * * * *");
 
         // Test 6-field cron (already normalized)
         assert_eq!(
@@ -450,10 +479,7 @@ mod tests {
             "0 */10 * * * *"
         );
 
-        assert_eq!(
-            service.normalize_cron_schedule("0 * * * *").unwrap(),
-            "0 0 * * * *"
-        );
+        assert_eq!(service.normalize_cron_schedule("0 * * * *").unwrap(), "0 0 * * * *");
 
         // Test invalid patterns
         assert!(service.normalize_cron_schedule("* * *").is_err());
@@ -465,20 +491,19 @@ mod tests {
         let config = HeartbeatConfig::default();
         let repositories = std::sync::Arc::new(TestRepositoryFactory);
         let output_manager = std::sync::Arc::new(ratchet_output::OutputDeliveryManager::new());
-        
+
         let service = HeartbeatService::new(config, repositories, output_manager);
 
         // Test valid cron schedules
-        let valid_schedules = vec![
-            "0 */5 * * * *",
-            "0 0 * * * *",
-            "0 */10 * * * *",
-            "0 0 0 * * *",
-        ];
+        let valid_schedules = vec!["0 */5 * * * *", "0 0 * * * *", "0 */10 * * * *", "0 0 0 * * *"];
 
         for schedule in valid_schedules {
             let normalized = service.normalize_cron_schedule(schedule).unwrap();
-            assert!(Schedule::from_str(&normalized).is_ok(), "Failed to parse: {}", normalized);
+            assert!(
+                Schedule::from_str(&normalized).is_ok(),
+                "Failed to parse: {}",
+                normalized
+            );
         }
     }
 }

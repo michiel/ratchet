@@ -138,11 +138,7 @@ pub trait Hook: Send + Sync {
     }
 
     /// Execute the hook
-    async fn execute(
-        &self,
-        context: &mut PluginContext,
-        data: &mut serde_json::Value,
-    ) -> PluginResult<()>;
+    async fn execute(&self, context: &mut PluginContext, data: &mut serde_json::Value) -> PluginResult<()>;
 
     /// Handle hook execution errors
     async fn handle_error(&self, error: &PluginError, context: &PluginContext) -> PluginResult<()> {
@@ -161,51 +157,31 @@ pub trait Hook: Send + Sync {
 #[async_trait]
 pub trait TaskHook: Hook {
     /// Called before task validation
-    async fn pre_validate(
-        &self,
-        context: &mut PluginContext,
-        data: &mut TaskExecutionData,
-    ) -> PluginResult<()> {
+    async fn pre_validate(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called before task execution
-    async fn pre_execute(
-        &self,
-        context: &mut PluginContext,
-        data: &mut TaskExecutionData,
-    ) -> PluginResult<()> {
+    async fn pre_execute(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called after task execution (success or failure)
-    async fn post_execute(
-        &self,
-        context: &mut PluginContext,
-        data: &mut TaskExecutionData,
-    ) -> PluginResult<()> {
+    async fn post_execute(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called when task execution succeeds
-    async fn on_success(
-        &self,
-        context: &mut PluginContext,
-        data: &mut TaskExecutionData,
-    ) -> PluginResult<()> {
+    async fn on_success(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
 
     /// Called when task execution fails
-    async fn on_failure(
-        &self,
-        context: &mut PluginContext,
-        data: &mut TaskExecutionData,
-    ) -> PluginResult<()> {
+    async fn on_failure(&self, context: &mut PluginContext, data: &mut TaskExecutionData) -> PluginResult<()> {
         let _ = (context, data);
         Ok(())
     }
@@ -227,31 +203,19 @@ pub trait ExecutionHook: Hook {
     }
 
     /// Called on configuration changes
-    async fn on_config_change(
-        &self,
-        context: &mut PluginContext,
-        config: &serde_json::Value,
-    ) -> PluginResult<()> {
+    async fn on_config_change(&self, context: &mut PluginContext, config: &serde_json::Value) -> PluginResult<()> {
         let _ = (context, config);
         Ok(())
     }
 
     /// Called on plugin loaded
-    async fn on_plugin_loaded(
-        &self,
-        context: &mut PluginContext,
-        plugin_id: &str,
-    ) -> PluginResult<()> {
+    async fn on_plugin_loaded(&self, context: &mut PluginContext, plugin_id: &str) -> PluginResult<()> {
         let _ = (context, plugin_id);
         Ok(())
     }
 
     /// Called on plugin unloaded
-    async fn on_plugin_unloaded(
-        &self,
-        context: &mut PluginContext,
-        plugin_id: &str,
-    ) -> PluginResult<()> {
+    async fn on_plugin_unloaded(&self, context: &mut PluginContext, plugin_id: &str) -> PluginResult<()> {
         let _ = (context, plugin_id);
         Ok(())
     }
@@ -474,10 +438,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -517,10 +478,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -560,10 +518,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -603,10 +558,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -646,10 +598,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -685,10 +634,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -724,10 +670,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -737,11 +680,7 @@ impl HookRegistry {
     }
 
     /// Execute plugin loaded hooks
-    pub async fn execute_plugin_loaded_hooks(
-        &self,
-        context: &mut PluginContext,
-        plugin_id: &str,
-    ) -> PluginResult<()> {
+    pub async fn execute_plugin_loaded_hooks(&self, context: &mut PluginContext, plugin_id: &str) -> PluginResult<()> {
         let hooks = self.execution_hooks.read().await;
 
         for (_, priority_hooks) in hooks.iter() {
@@ -767,10 +706,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -810,10 +746,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -853,10 +786,7 @@ impl HookRegistry {
                     Err(ref e) => {
                         hook_stats.record_failure(duration_us);
                         hook.handle_error(e, context).await?;
-                        return Err(PluginError::hook_execution_failed(
-                            &registration.name,
-                            e.to_string(),
-                        ));
+                        return Err(PluginError::hook_execution_failed(&registration.name, e.to_string()));
                     }
                 }
             }
@@ -897,8 +827,7 @@ impl HookRegistry {
         {
             let mut task_hooks = self.task_hooks.write().await;
             for (_, hooks) in task_hooks.iter_mut() {
-                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id)
-                {
+                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id) {
                     registration.enabled = enabled;
                     return Ok(true);
                 }
@@ -909,8 +838,7 @@ impl HookRegistry {
         {
             let mut execution_hooks = self.execution_hooks.write().await;
             for (_, hooks) in execution_hooks.iter_mut() {
-                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id)
-                {
+                if let Some((registration, _)) = hooks.iter_mut().find(|(reg, _)| reg.id == hook_id) {
                     registration.enabled = enabled;
                     return Ok(true);
                 }
@@ -957,11 +885,7 @@ mod tests {
             self.priority
         }
 
-        async fn execute(
-            &self,
-            _context: &mut PluginContext,
-            _data: &mut serde_json::Value,
-        ) -> PluginResult<()> {
+        async fn execute(&self, _context: &mut PluginContext, _data: &mut serde_json::Value) -> PluginResult<()> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -969,11 +893,7 @@ mod tests {
 
     #[async_trait]
     impl TaskHook for TestTaskHook {
-        async fn pre_execute(
-            &self,
-            _context: &mut PluginContext,
-            _data: &mut TaskExecutionData,
-        ) -> PluginResult<()> {
+        async fn pre_execute(&self, _context: &mut PluginContext, _data: &mut TaskExecutionData) -> PluginResult<()> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -988,18 +908,9 @@ mod tests {
         let hook3 = Arc::new(TestTaskHook::new("hook3", HookPriority::Normal));
 
         // Register hooks in different order
-        registry
-            .register_task_hook(hook1.clone(), "plugin1")
-            .await
-            .unwrap();
-        registry
-            .register_task_hook(hook2.clone(), "plugin2")
-            .await
-            .unwrap();
-        registry
-            .register_task_hook(hook3.clone(), "plugin3")
-            .await
-            .unwrap();
+        registry.register_task_hook(hook1.clone(), "plugin1").await.unwrap();
+        registry.register_task_hook(hook2.clone(), "plugin2").await.unwrap();
+        registry.register_task_hook(hook3.clone(), "plugin3").await.unwrap();
 
         let mut context = PluginContext::new(
             Uuid::new_v4(),
@@ -1026,10 +937,7 @@ mod tests {
         let hook = Arc::new(TestTaskHook::new("test-hook", HookPriority::Normal));
 
         // Register hook
-        let hook_id = registry
-            .register_task_hook(hook.clone(), "test-plugin")
-            .await
-            .unwrap();
+        let hook_id = registry.register_task_hook(hook.clone(), "test-plugin").await.unwrap();
 
         // List hooks
         let hooks = registry.list_hooks().await;
@@ -1050,10 +958,7 @@ mod tests {
         let registry = HookRegistry::new();
         let hook = Arc::new(TestTaskHook::new("test-hook", HookPriority::Normal));
 
-        let hook_id = registry
-            .register_task_hook(hook.clone(), "test-plugin")
-            .await
-            .unwrap();
+        let hook_id = registry.register_task_hook(hook.clone(), "test-plugin").await.unwrap();
 
         // Disable hook
         let success = registry.set_hook_enabled(hook_id, false).await.unwrap();
@@ -1123,10 +1028,7 @@ mod tests {
         let registry = HookRegistry::new();
         let hook = Arc::new(TestTaskHook::new("test-hook", HookPriority::Normal));
 
-        registry
-            .register_task_hook(hook.clone(), "test-plugin")
-            .await
-            .unwrap();
+        registry.register_task_hook(hook.clone(), "test-plugin").await.unwrap();
 
         let mut context = PluginContext::new(
             Uuid::new_v4(),

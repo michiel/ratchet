@@ -11,15 +11,10 @@ use crate::protocol::MessageEnvelope;
 #[async_trait]
 pub trait IpcTransport: Send + Sync {
     /// Send a message to the other end
-    async fn send<T: Serialize + Send + Sync>(
-        &mut self,
-        message: &MessageEnvelope<T>,
-    ) -> Result<(), IpcError>;
+    async fn send<T: Serialize + Send + Sync>(&mut self, message: &MessageEnvelope<T>) -> Result<(), IpcError>;
 
     /// Receive a message from the other end
-    async fn receive<T: for<'de> Deserialize<'de> + Send>(
-        &mut self,
-    ) -> Result<MessageEnvelope<T>, IpcError>;
+    async fn receive<T: for<'de> Deserialize<'de> + Send>(&mut self) -> Result<MessageEnvelope<T>, IpcError>;
 
     /// Close the transport
     async fn close(&mut self) -> Result<(), IpcError>;
@@ -49,12 +44,8 @@ impl Default for StdioTransport {
 
 #[async_trait]
 impl IpcTransport for StdioTransport {
-    async fn send<T: Serialize + Send + Sync>(
-        &mut self,
-        message: &MessageEnvelope<T>,
-    ) -> Result<(), IpcError> {
-        let json = serde_json::to_string(message)
-            .map_err(|e| IpcError::SerializationError(e.to_string()))?;
+    async fn send<T: Serialize + Send + Sync>(&mut self, message: &MessageEnvelope<T>) -> Result<(), IpcError> {
+        let json = serde_json::to_string(message).map_err(|e| IpcError::SerializationError(e.to_string()))?;
 
         // Send with newline delimiter
         let message_with_newline = format!("{}\n", json);
@@ -71,9 +62,7 @@ impl IpcTransport for StdioTransport {
         Ok(())
     }
 
-    async fn receive<T: for<'de> Deserialize<'de> + Send>(
-        &mut self,
-    ) -> Result<MessageEnvelope<T>, IpcError> {
+    async fn receive<T: for<'de> Deserialize<'de> + Send>(&mut self) -> Result<MessageEnvelope<T>, IpcError> {
         let mut reader = tokio::io::BufReader::new(&mut self.stdin);
         let mut line = String::new();
 
@@ -89,8 +78,8 @@ impl IpcTransport for StdioTransport {
         // Remove newline
         line.truncate(line.trim_end().len());
 
-        let envelope: MessageEnvelope<T> = serde_json::from_str(&line)
-            .map_err(|e| IpcError::DeserializationError(e.to_string()))?;
+        let envelope: MessageEnvelope<T> =
+            serde_json::from_str(&line).map_err(|e| IpcError::DeserializationError(e.to_string()))?;
 
         // Check protocol version compatibility
         if envelope.protocol_version != crate::protocol::IPC_PROTOCOL_VERSION {
@@ -127,17 +116,13 @@ impl ChildProcessTransport {
 
 #[async_trait]
 impl IpcTransport for ChildProcessTransport {
-    async fn send<T: Serialize + Send + Sync>(
-        &mut self,
-        message: &MessageEnvelope<T>,
-    ) -> Result<(), IpcError> {
+    async fn send<T: Serialize + Send + Sync>(&mut self, message: &MessageEnvelope<T>) -> Result<(), IpcError> {
         let stdin = self
             .stdin
             .as_mut()
             .ok_or_else(|| IpcError::IoError("stdin already closed".to_string()))?;
 
-        let json = serde_json::to_string(message)
-            .map_err(|e| IpcError::SerializationError(e.to_string()))?;
+        let json = serde_json::to_string(message).map_err(|e| IpcError::SerializationError(e.to_string()))?;
 
         let message_with_newline = format!("{}\n", json);
         stdin
@@ -145,17 +130,12 @@ impl IpcTransport for ChildProcessTransport {
             .await
             .map_err(|e| IpcError::IoError(e.to_string()))?;
 
-        stdin
-            .flush()
-            .await
-            .map_err(|e| IpcError::IoError(e.to_string()))?;
+        stdin.flush().await.map_err(|e| IpcError::IoError(e.to_string()))?;
 
         Ok(())
     }
 
-    async fn receive<T: for<'de> Deserialize<'de> + Send>(
-        &mut self,
-    ) -> Result<MessageEnvelope<T>, IpcError> {
+    async fn receive<T: for<'de> Deserialize<'de> + Send>(&mut self) -> Result<MessageEnvelope<T>, IpcError> {
         let stdout = self
             .stdout
             .as_mut()
@@ -175,8 +155,8 @@ impl IpcTransport for ChildProcessTransport {
 
         line.truncate(line.trim_end().len());
 
-        let envelope: MessageEnvelope<T> = serde_json::from_str(&line)
-            .map_err(|e| IpcError::DeserializationError(e.to_string()))?;
+        let envelope: MessageEnvelope<T> =
+            serde_json::from_str(&line).map_err(|e| IpcError::DeserializationError(e.to_string()))?;
 
         if envelope.protocol_version != crate::protocol::IPC_PROTOCOL_VERSION {
             return Err(IpcError::ProtocolVersionMismatch {
@@ -213,9 +193,6 @@ mod tests {
 
         // Verify it's valid JSON and can be deserialized
         let deserialized: MessageEnvelope<WorkerMessage> = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            deserialized.protocol_version,
-            crate::protocol::IPC_PROTOCOL_VERSION
-        );
+        assert_eq!(deserialized.protocol_version, crate::protocol::IPC_PROTOCOL_VERSION);
     }
 }

@@ -3,7 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use ratchet_api_types::{ListResponse, pagination::PaginationMeta};
+use ratchet_api_types::{pagination::PaginationMeta, ListResponse};
 use serde::{Deserialize, Serialize};
 
 /// Standard API response wrapper
@@ -33,10 +33,7 @@ impl<T> ApiResponse<T> {
 
     /// Create response with metadata
     pub fn with_meta(data: T, meta: ResponseMeta) -> Self {
-        Self {
-            data,
-            meta: Some(meta),
-        }
+        Self { data, meta: Some(meta) }
     }
 
     /// Create response with pagination metadata
@@ -110,10 +107,7 @@ impl<T> ResponseBuilder<T> {
             None
         };
 
-        let response = ApiResponse {
-            data: self.data,
-            meta,
-        };
+        let response = ApiResponse { data: self.data, meta };
 
         (self.status, Json(response))
     }
@@ -127,10 +121,7 @@ pub fn ok<T: Serialize>(data: T) -> impl IntoResponse {
 }
 
 /// Create a successful response with pagination
-pub fn ok_with_pagination<T: Serialize>(
-    data: T,
-    pagination: PaginationMeta,
-) -> impl IntoResponse {
+pub fn ok_with_pagination<T: Serialize>(data: T, pagination: PaginationMeta) -> impl IntoResponse {
     ResponseBuilder::new(data).pagination(pagination).build()
 }
 

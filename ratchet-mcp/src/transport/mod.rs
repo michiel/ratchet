@@ -204,9 +204,7 @@ impl TransportFactory {
                 auth,
                 timeout,
                 verify_ssl,
-            } => Ok(Box::new(SseTransport::new(
-                url, headers, auth, timeout, verify_ssl,
-            )?)),
+            } => Ok(Box::new(SseTransport::new(url, headers, auth, timeout, verify_ssl)?)),
         }
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! A minimal example showing basic configuration loading
 
-use ratchet_config::{ConfigError, ConfigResult, loader::ConfigLoader};
+use ratchet_config::{loader::ConfigLoader, ConfigError, ConfigResult};
 use std::fs;
 use tempfile::TempDir;
 
@@ -11,9 +11,8 @@ async fn main() -> ConfigResult<()> {
     println!("🚀 Simple Ratchet Configuration Demo");
 
     // Create temporary directory for demo files
-    let temp_dir = TempDir::new().map_err(|e| ConfigError::ValidationError(
-        format!("Failed to create temp directory: {}", e)
-    ))?;
+    let temp_dir =
+        TempDir::new().map_err(|e| ConfigError::ValidationError(format!("Failed to create temp directory: {}", e)))?;
 
     // Create a simple config file
     let config_path = temp_dir.path().join("config.yaml");
@@ -47,7 +46,11 @@ logging:
     let config = loader.from_file(&config_path)?;
 
     println!("✅ Configuration loaded successfully!");
-    println!("   Server: {}:{}", config.server.as_ref().unwrap().bind_address, config.server.as_ref().unwrap().port);
+    println!(
+        "   Server: {}:{}",
+        config.server.as_ref().unwrap().bind_address,
+        config.server.as_ref().unwrap().port
+    );
     println!("   Max concurrent tasks: {}", config.execution.max_concurrent_tasks);
     println!("   HTTP timeout: {}s", config.http.timeout.as_secs());
     println!("   Logging level: {:?}", config.logging.level);

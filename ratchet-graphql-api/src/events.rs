@@ -10,7 +10,7 @@ use std::task::{Context, Poll};
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
-use crate::types::{Execution, Job, Worker, GraphQLApiId};
+use crate::types::{Execution, GraphQLApiId, Job, Worker};
 
 /// Maximum number of events to buffer per subscription topic
 const EVENT_BUFFER_SIZE: usize = 1000;
@@ -41,8 +41,10 @@ impl EventBroadcaster {
     pub fn broadcast_execution(&self, execution: Execution) {
         match self.execution_tx.send(execution.clone()) {
             Ok(subscriber_count) => {
-                debug!("Broadcasted execution event to {} subscribers: execution_id={:?}", 
-                       subscriber_count, execution.id);
+                debug!(
+                    "Broadcasted execution event to {} subscribers: execution_id={:?}",
+                    subscriber_count, execution.id
+                );
             }
             Err(_) => {
                 debug!("No subscribers for execution events");
@@ -54,8 +56,10 @@ impl EventBroadcaster {
     pub fn broadcast_job(&self, job: Job) {
         match self.job_tx.send(job.clone()) {
             Ok(subscriber_count) => {
-                debug!("Broadcasted job event to {} subscribers: job_id={:?}", 
-                       subscriber_count, job.id);
+                debug!(
+                    "Broadcasted job event to {} subscribers: job_id={:?}",
+                    subscriber_count, job.id
+                );
             }
             Err(_) => {
                 debug!("No subscribers for job events");
@@ -67,8 +71,10 @@ impl EventBroadcaster {
     pub fn broadcast_worker(&self, worker: Worker) {
         match self.worker_tx.send(worker.clone()) {
             Ok(subscriber_count) => {
-                debug!("Broadcasted worker event to {} subscribers: worker_id={}", 
-                       subscriber_count, worker.id);
+                debug!(
+                    "Broadcasted worker event to {} subscribers: worker_id={}",
+                    subscriber_count, worker.id
+                );
             }
             Err(_) => {
                 debug!("No subscribers for worker events");
@@ -78,8 +84,8 @@ impl EventBroadcaster {
 
     /// Subscribe to execution events with optional task filtering
     pub fn subscribe_executions(
-        &self, 
-        task_id_filter: Option<GraphQLApiId>
+        &self,
+        task_id_filter: Option<GraphQLApiId>,
     ) -> Pin<Box<dyn Stream<Item = async_graphql::Result<Execution>> + Send>> {
         let rx = self.execution_tx.subscribe();
         let stream = ExecutionSubscriptionStream::new(rx, task_id_filter);
@@ -88,8 +94,8 @@ impl EventBroadcaster {
 
     /// Subscribe to job events with optional job filtering
     pub fn subscribe_jobs(
-        &self, 
-        job_id_filter: Option<GraphQLApiId>
+        &self,
+        job_id_filter: Option<GraphQLApiId>,
     ) -> Pin<Box<dyn Stream<Item = async_graphql::Result<Job>> + Send>> {
         let rx = self.job_tx.subscribe();
         let stream = JobSubscriptionStream::new(rx, job_id_filter);
@@ -98,8 +104,8 @@ impl EventBroadcaster {
 
     /// Subscribe to worker events with optional worker filtering
     pub fn subscribe_workers(
-        &self, 
-        worker_id_filter: Option<String>
+        &self,
+        worker_id_filter: Option<String>,
     ) -> Pin<Box<dyn Stream<Item = async_graphql::Result<Worker>> + Send>> {
         let rx = self.worker_tx.subscribe();
         let stream = WorkerSubscriptionStream::new(rx, worker_id_filter);

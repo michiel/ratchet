@@ -4,10 +4,7 @@ use crate::seaorm::{
     filters::{validation, SafeFilterBuilder},
 };
 use async_trait::async_trait;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -115,7 +112,7 @@ impl TaskRepository {
             input_schema: Set(task.input_schema),
             output_schema: Set(task.output_schema),
             enabled: Set(task.enabled),
-            created_at: Set(task.created_at), // Keep original creation time
+            created_at: Set(task.created_at),    // Keep original creation time
             updated_at: Set(chrono::Utc::now()), // Update the timestamp
             validated_at: Set(task.validated_at),
         };
@@ -158,8 +155,10 @@ impl TaskRepository {
             let mut metadata = task.metadata;
             if let Some(metadata_obj) = metadata.as_object_mut() {
                 metadata_obj.insert("in_sync".to_string(), serde_json::Value::Bool(in_sync));
-                metadata_obj.insert("last_sync_check".to_string(), 
-                    serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
+                metadata_obj.insert(
+                    "last_sync_check".to_string(),
+                    serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
+                );
             }
 
             let active_model = TaskActiveModel {
@@ -176,9 +175,7 @@ impl TaskRepository {
 
     /// Delete a task by ID
     pub async fn delete(&self, id: i32) -> Result<(), DatabaseError> {
-        Tasks::delete_by_id(id)
-            .exec(self.db.get_connection())
-            .await?;
+        Tasks::delete_by_id(id).exec(self.db.get_connection()).await?;
         Ok(())
     }
 

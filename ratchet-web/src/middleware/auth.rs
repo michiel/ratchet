@@ -1,19 +1,14 @@
 //! JWT Authentication middleware
 
-use axum::{
-    extract::Request,
-    http::HeaderMap,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::HeaderMap, middleware::Next, response::Response};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use ratchet_interfaces::RepositoryFactory;
 use ratchet_api_types::ApiId;
+use ratchet_interfaces::RepositoryFactory;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tracing::{debug, warn};
-use sha2::{Sha256, Digest};
 
 use crate::errors::WebError;
 
@@ -171,7 +166,7 @@ impl JwtManager {
         };
 
         let header = Header::new(Algorithm::HS256);
-        
+
         encode(&header, &claims, &self.encoding_key)
             .map_err(|e| WebError::internal(format!("Failed to generate JWT token: {}", e)))
     }
@@ -182,11 +177,10 @@ impl JwtManager {
         validation.set_issuer(&[&self.config.jwt_issuer]);
         validation.set_audience(&[&self.config.jwt_audience]);
 
-        let token_data = decode::<JwtClaims>(token, &self.decoding_key, &validation)
-            .map_err(|e| {
-                warn!("JWT verification failed: {}", e);
-                WebError::unauthorized("Invalid or expired token")
-            })?;
+        let token_data = decode::<JwtClaims>(token, &self.decoding_key, &validation).map_err(|e| {
+            warn!("JWT verification failed: {}", e);
+            WebError::unauthorized("Invalid or expired token")
+        })?;
 
         // Check if token is expired
         let now = Utc::now().timestamp();
@@ -201,7 +195,7 @@ impl JwtManager {
     /// Extract token from Authorization header
     fn extract_token(&self, headers: &HeaderMap) -> Option<String> {
         let auth_header = headers.get("Authorization")?.to_str().ok()?;
-        
+
         auth_header.strip_prefix("Bearer ").map(|token| token.to_string())
     }
 
@@ -260,21 +254,21 @@ impl JwtManager {
         if let Some(repositories) = &self.repositories {
             let api_key_repo = repositories.api_key_repository();
             let key_hash = self.hash_api_key(api_key);
-            
+
             match api_key_repo.find_by_key_hash(&key_hash).await {
                 Ok(Some(api_key_record)) => {
                     // Update last used timestamp
                     if let Err(e) = api_key_repo.update_last_used(api_key_record.id.clone()).await {
                         warn!("Failed to update API key last used: {}", e);
                     }
-                    
+
                     // Increment usage counter
                     if let Err(e) = api_key_repo.increment_usage(api_key_record.id.clone()).await {
                         warn!("Failed to increment API key usage: {}", e);
                     }
-                    
+
                     debug!("API key validated for user: {}", api_key_record.user_id);
-                    
+
                     // Convert permissions to role string
                     let role = match api_key_record.permissions {
                         ratchet_api_types::ApiKeyPermissions::Admin => "admin",
@@ -282,7 +276,7 @@ impl JwtManager {
                         ratchet_api_types::ApiKeyPermissions::ReadOnly => "readonly",
                         ratchet_api_types::ApiKeyPermissions::ExecuteOnly => "user",
                     };
-                    
+
                     Ok(Some((api_key_record.user_id, role.to_string())))
                 }
                 Ok(None) => {
@@ -321,11 +315,7 @@ impl JwtManager {
                     match self.validate_session(&claims.jti).await {
                         Ok(Some(_user_id)) => {
                             debug!("JWT authentication successful for user: {}", claims.sub);
-                            return Ok(AuthContext::authenticated(
-                                claims.sub,
-                                claims.role,
-                                claims.jti,
-                            ));
+                            return Ok(AuthContext::authenticated(claims.sub, claims.role, claims.jti));
                         }
                         Ok(None) => {
                             warn!("JWT token valid but session not found or expired");
@@ -367,11 +357,7 @@ impl JwtManager {
 }
 
 /// Authentication middleware
-pub async fn auth_middleware(
-    headers: HeaderMap,
-    mut request: Request,
-    next: Next,
-) -> Result<Response, WebError> {
+pub async fn auth_middleware(headers: HeaderMap, mut request: Request, next: Next) -> Result<Response, WebError> {
     // Extract JWT manager from request extensions
     let jwt_manager = request
         .extensions()
@@ -389,16 +375,11 @@ pub async fn auth_middleware(
 }
 
 /// Optional authentication middleware (doesn't fail on missing auth)
-pub async fn optional_auth_middleware(
-    headers: HeaderMap,
-    mut request: Request,
-    next: Next,
-) -> Response {
+pub async fn optional_auth_middleware(headers: HeaderMap, mut request: Request, next: Next) -> Response {
     // Extract JWT manager from request extensions
     if let Some(jwt_manager) = request.extensions().get::<Arc<JwtManager>>() {
         // Try to authenticate, but don't fail if it doesn't work
-        let auth_context = jwt_manager.authenticate(&headers).await
-            .unwrap_or_default();
+        let auth_context = jwt_manager.authenticate(&headers).await.unwrap_or_default();
 
         // Add auth context to request extensions
         request.extensions_mut().insert(auth_context);
@@ -469,9 +450,7 @@ mod tests {
         let jwt_manager = JwtManager::new(config);
 
         // Generate a token
-        let token = jwt_manager
-            .generate_token("user123", "admin", "session456")
-            .unwrap();
+        let token = jwt_manager.generate_token("user123", "admin", "session456").unwrap();
 
         // Verify the token
         let claims = jwt_manager.verify_token(&token).unwrap();
@@ -485,22 +464,16 @@ mod tests {
 
     #[test]
     fn test_auth_context_permissions() {
-        let admin_context = AuthContext::authenticated(
-            "admin123".to_string(),
-            "admin".to_string(),
-            "session123".to_string(),
-        );
+        let admin_context =
+            AuthContext::authenticated("admin123".to_string(), "admin".to_string(), "session123".to_string());
 
         assert!(admin_context.can_admin());
         assert!(admin_context.can_write());
         assert!(admin_context.can_read());
         assert!(admin_context.can_execute_tasks());
 
-        let user_context = AuthContext::authenticated(
-            "user123".to_string(),
-            "user".to_string(),
-            "session456".to_string(),
-        );
+        let user_context =
+            AuthContext::authenticated("user123".to_string(), "user".to_string(), "session456".to_string());
 
         assert!(!user_context.can_admin());
         assert!(user_context.can_write());
@@ -521,9 +494,7 @@ mod tests {
         let jwt_manager = JwtManager::new(config);
 
         // Create headers with valid JWT
-        let token = jwt_manager
-            .generate_token("user123", "admin", "session456")
-            .unwrap();
+        let token = jwt_manager.generate_token("user123", "admin", "session456").unwrap();
 
         let mut headers = HeaderMap::new();
         headers.insert(

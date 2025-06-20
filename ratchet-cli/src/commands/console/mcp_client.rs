@@ -1,9 +1,9 @@
 //! MCP client integration for console commands
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
-use reqwest::Client;
 use tokio::time::{timeout, Duration};
 
 use super::ConsoleConfig;
@@ -81,8 +81,9 @@ impl ConsoleMcpClient {
                 .json(&serde_json::json!({
                     "query": health_query
                 }))
-                .send()
-        ).await??;
+                .send(),
+        )
+        .await??;
 
         if response.status().is_success() {
             let result: Value = response.json().await?;
@@ -134,8 +135,9 @@ impl ConsoleMcpClient {
             self.http_client
                 .post(format!("{}/graphql", self.server_url))
                 .json(&request_body)
-                .send()
-        ).await??;
+                .send(),
+        )
+        .await??;
 
         if response.status().is_success() {
             let result: Value = response.json().await?;
@@ -283,7 +285,7 @@ impl ConsoleMcpClient {
     /// Execute a task via GraphQL
     pub async fn execute_task(&self, task_id: &str, input_data: Value, webhook_url: Option<String>) -> Result<Value> {
         let mut output_destinations = Vec::new();
-        
+
         if let Some(webhook) = webhook_url {
             output_destinations.push(serde_json::json!({
                 "destinationType": "WEBHOOK",

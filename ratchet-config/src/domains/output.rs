@@ -1,9 +1,7 @@
 //! Output destinations configuration
 
 use crate::error::ConfigResult;
-use crate::validation::{
-    validate_enum_choice, validate_positive, validate_required_string, validate_url, Validatable,
-};
+use crate::validation::{validate_enum_choice, validate_positive, validate_required_string, validate_url, Validatable};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -17,10 +15,7 @@ pub struct OutputConfig {
     pub max_concurrent_deliveries: usize,
 
     /// Default timeout for deliveries
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_delivery_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_delivery_timeout")]
     pub default_timeout: Duration,
 
     /// Whether to validate destination configurations on startup
@@ -146,10 +141,7 @@ pub struct DatabasePoolConfig {
     pub connection_timeout: Duration,
 
     /// Idle timeout
-    #[serde(
-        with = "crate::domains::utils::serde_duration",
-        default = "default_db_idle_timeout"
-    )]
+    #[serde(with = "crate::domains::utils::serde_duration", default = "default_db_idle_timeout")]
     pub idle_timeout: Duration,
 }
 
@@ -243,11 +235,7 @@ impl Validatable for OutputConfig {
             self.domain_name(),
         )?;
 
-        validate_positive(
-            self.default_timeout.as_secs(),
-            "default_timeout",
-            self.domain_name(),
-        )?;
+        validate_positive(self.default_timeout.as_secs(), "default_timeout", self.domain_name())?;
 
         self.default_retry_policy.validate()?;
         self.formatting.validate()?;
@@ -268,17 +256,11 @@ impl Validatable for OutputConfig {
 impl Validatable for RetryPolicyConfig {
     fn validate(&self) -> ConfigResult<()> {
         validate_positive(self.max_attempts, "max_attempts", self.domain_name())?;
-        validate_positive(
-            self.initial_delay_ms,
-            "initial_delay_ms",
-            self.domain_name(),
-        )?;
+        validate_positive(self.initial_delay_ms, "initial_delay_ms", self.domain_name())?;
         validate_positive(self.max_delay_ms, "max_delay_ms", self.domain_name())?;
 
         if self.max_delay_ms < self.initial_delay_ms {
-            return Err(self.validation_error(
-                "max_delay_ms must be greater than or equal to initial_delay_ms",
-            ));
+            return Err(self.validation_error("max_delay_ms must be greater than or equal to initial_delay_ms"));
         }
 
         if self.backoff_multiplier <= 1.0 {
@@ -295,11 +277,7 @@ impl Validatable for RetryPolicyConfig {
 
 impl Validatable for OutputFormattingConfig {
     fn validate(&self) -> ConfigResult<()> {
-        validate_required_string(
-            &self.timestamp_format,
-            "timestamp_format",
-            self.domain_name(),
-        )?;
+        validate_required_string(&self.timestamp_format, "timestamp_format", self.domain_name())?;
         Ok(())
     }
 
@@ -400,12 +378,7 @@ impl OutputDestinationConfigTemplate {
                     "GLACIER",
                     "DEEP_ARCHIVE",
                 ];
-                validate_enum_choice(
-                    storage_class,
-                    &valid_storage_classes,
-                    "storage_class",
-                    "output",
-                )?;
+                validate_enum_choice(storage_class, &valid_storage_classes, "storage_class", "output")?;
             }
         }
 
@@ -445,11 +418,7 @@ impl Validatable for DatabasePoolConfig {
             "connection_timeout",
             self.domain_name(),
         )?;
-        validate_positive(
-            self.idle_timeout.as_secs(),
-            "idle_timeout",
-            self.domain_name(),
-        )?;
+        validate_positive(self.idle_timeout.as_secs(), "idle_timeout", self.domain_name())?;
         Ok(())
     }
 
@@ -554,9 +523,7 @@ mod tests {
         };
         assert!(auth.validate().is_ok());
 
-        let invalid_auth = WebhookAuthConfig::Bearer {
-            token: String::new(),
-        };
+        let invalid_auth = WebhookAuthConfig::Bearer { token: String::new() };
         assert!(invalid_auth.validate().is_err());
     }
 }

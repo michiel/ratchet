@@ -154,16 +154,10 @@ pub enum TaskSource {
     File { path: String },
 
     /// Reference to a URL
-    Url {
-        url: String,
-        checksum: Option<String>,
-    },
+    Url { url: String, checksum: Option<String> },
 
     /// Plugin-based task
-    Plugin {
-        plugin_id: String,
-        task_name: String,
-    },
+    Plugin { plugin_id: String, task_name: String },
 }
 
 impl Task {

@@ -293,10 +293,7 @@ mod tests {
         let auth_manager = McpAuthManager::new(config);
 
         // Authenticate and create session
-        let client = auth_manager
-            .authenticate(Some("Bearer test-key-123"))
-            .await
-            .unwrap();
+        let client = auth_manager.authenticate(Some("Bearer test-key-123")).await.unwrap();
 
         // Get session
         let session = auth_manager.get_session(&client.session_id).await;

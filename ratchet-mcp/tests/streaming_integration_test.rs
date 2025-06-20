@@ -19,9 +19,7 @@ struct MockStreamingTaskExecutor {
 
 impl MockStreamingTaskExecutor {
     fn new() -> Self {
-        Self {
-            progress_manager: None,
-        }
+        Self { progress_manager: None }
     }
 
     fn with_progress_manager(mut self, manager: Arc<ProgressNotificationManager>) -> Self {
@@ -32,11 +30,7 @@ impl MockStreamingTaskExecutor {
 
 #[async_trait::async_trait]
 impl McpTaskExecutor for MockStreamingTaskExecutor {
-    async fn execute_task(
-        &self,
-        _task_path: &str,
-        input: serde_json::Value,
-    ) -> Result<serde_json::Value, String> {
+    async fn execute_task(&self, _task_path: &str, input: serde_json::Value) -> Result<serde_json::Value, String> {
         // Simulate a simple task
         tokio::time::sleep(Duration::from_millis(100)).await;
         Ok(json!({"result": "simple_execution", "input": input}))
@@ -105,10 +99,7 @@ impl McpTaskExecutor for MockStreamingTaskExecutor {
                 data: Some(json!({"final_result": "success"})),
                 timestamp: chrono::Utc::now(),
             };
-            manager
-                .send_progress_update(completion_update)
-                .await
-                .unwrap();
+            manager.send_progress_update(completion_update).await.unwrap();
         }
 
         let result = json!({
@@ -133,12 +124,7 @@ impl McpTaskExecutor for MockStreamingTaskExecutor {
         }])
     }
 
-    async fn get_execution_logs(
-        &self,
-        _execution_id: &str,
-        _level: &str,
-        _limit: usize,
-    ) -> Result<String, String> {
+    async fn get_execution_logs(&self, _execution_id: &str, _level: &str, _limit: usize) -> Result<String, String> {
         Ok("Mock logs".to_string())
     }
 
@@ -234,14 +220,8 @@ async fn test_progress_notification_system() {
         timestamp: chrono::Utc::now(),
     };
 
-    progress_manager
-        .send_progress_update(update1)
-        .await
-        .unwrap();
-    progress_manager
-        .send_progress_update(update2)
-        .await
-        .unwrap();
+    progress_manager.send_progress_update(update1).await.unwrap();
+    progress_manager.send_progress_update(update2).await.unwrap();
 
     // Give some time for async processing
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -252,9 +232,8 @@ async fn test_progress_notification_system() {
 
     // Verify notification content
     for notification in &notifications {
-        if let ratchet_mcp::protocol::messages::McpMethod::NotificationsTaskProgress(
-            task_progress,
-        ) = &notification.method
+        if let ratchet_mcp::protocol::messages::McpMethod::NotificationsTaskProgress(task_progress) =
+            &notification.method
         {
             assert_eq!(task_progress.execution_id, execution_id);
             assert_eq!(task_progress.task_id, "test-task");
@@ -268,21 +247,15 @@ async fn test_progress_notification_system() {
     }
 
     // Clean up
-    progress_manager
-        .unsubscribe(execution_id, &subscription_id)
-        .await;
-    assert_eq!(
-        progress_manager.get_subscription_count(execution_id).await,
-        0
-    );
+    progress_manager.unsubscribe(execution_id, &subscription_id).await;
+    assert_eq!(progress_manager.get_subscription_count(execution_id).await, 0);
 }
 
 #[tokio::test]
 async fn test_streaming_task_execution() {
     let progress_manager = Arc::new(ProgressNotificationManager::new());
     let connection = Arc::new(MockTransportConnection::new());
-    let executor =
-        Arc::new(MockStreamingTaskExecutor::new().with_progress_manager(progress_manager.clone()));
+    let executor = Arc::new(MockStreamingTaskExecutor::new().with_progress_manager(progress_manager.clone()));
 
     // The actual implementation would generate an execution ID and subscribe before execution
     // For this test, we'll execute the task which will send progress notifications
@@ -314,9 +287,8 @@ async fn test_streaming_task_execution() {
     // Verify progress sequence
     let mut last_progress = 0.0;
     for notification in &notifications {
-        if let ratchet_mcp::protocol::messages::McpMethod::NotificationsTaskProgress(
-            task_progress,
-        ) = &notification.method
+        if let ratchet_mcp::protocol::messages::McpMethod::NotificationsTaskProgress(task_progress) =
+            &notification.method
         {
             assert!(task_progress.progress >= last_progress);
             last_progress = task_progress.progress;
@@ -378,9 +350,8 @@ async fn test_progress_filtering() {
     assert_eq!(notifications.len(), 2); // Only the two "important" steps
 
     for notification in &notifications {
-        if let ratchet_mcp::protocol::messages::McpMethod::NotificationsTaskProgress(
-            task_progress,
-        ) = &notification.method
+        if let ratchet_mcp::protocol::messages::McpMethod::NotificationsTaskProgress(task_progress) =
+            &notification.method
         {
             assert_eq!(task_progress.step, Some("important".to_string()));
             assert!(task_progress.data.is_none()); // Data should be filtered out
@@ -404,12 +375,7 @@ async fn test_tool_registry_with_streaming() {
         .subscribe_to_execution("test-execution".to_string(), connection.clone(), None)
         .await;
 
-    assert_eq!(
-        progress_manager
-            .get_subscription_count("test-execution")
-            .await,
-        1
-    );
+    assert_eq!(progress_manager.get_subscription_count("test-execution").await, 1);
 }
 
 #[tokio::test]
@@ -418,9 +384,8 @@ async fn test_concurrent_progress_subscriptions() {
     let execution_id = "concurrent-test";
 
     // Create multiple connections
-    let connections: Vec<Arc<MockTransportConnection>> = (0..5)
-        .map(|_| Arc::new(MockTransportConnection::new()))
-        .collect();
+    let connections: Vec<Arc<MockTransportConnection>> =
+        (0..5).map(|_| Arc::new(MockTransportConnection::new())).collect();
 
     // Subscribe all connections
     let mut subscription_ids = Vec::new();
@@ -431,10 +396,7 @@ async fn test_concurrent_progress_subscriptions() {
         subscription_ids.push(sub_id);
     }
 
-    assert_eq!(
-        progress_manager.get_subscription_count(execution_id).await,
-        5
-    );
+    assert_eq!(progress_manager.get_subscription_count(execution_id).await, 5);
 
     // Send a progress update
     let update = ProgressUpdate {
@@ -463,9 +425,6 @@ async fn test_concurrent_progress_subscriptions() {
     // Clean up subscriptions
     for (i, sub_id) in subscription_ids.iter().enumerate() {
         progress_manager.unsubscribe(execution_id, sub_id).await;
-        assert_eq!(
-            progress_manager.get_subscription_count(execution_id).await,
-            5 - i - 1
-        );
+        assert_eq!(progress_manager.get_subscription_count(execution_id).await, 5 - i - 1);
     }
 }

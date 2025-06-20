@@ -7,7 +7,7 @@
 //! ## Features
 //!
 //! - `seaorm` - Enables SeaORM database integration with SQLite, PostgreSQL, and MySQL support
-//! - `testing` - Enables comprehensive testing utilities including mock repositories, 
+//! - `testing` - Enables comprehensive testing utilities including mock repositories,
 //!   test database fixtures, and builder patterns. Requires `seaorm` feature.
 //! - `database` - Core database functionality (included by `seaorm`)
 //!

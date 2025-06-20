@@ -100,11 +100,7 @@ impl Validatable for ExecutionConfig {
             self.domain_name(),
         )?;
 
-        validate_positive(
-            self.max_concurrent_tasks,
-            "max_concurrent_tasks",
-            self.domain_name(),
-        )?;
+        validate_positive(self.max_concurrent_tasks, "max_concurrent_tasks", self.domain_name())?;
 
         // Validate fetch variables
         self.fetch_variables.validate()?;

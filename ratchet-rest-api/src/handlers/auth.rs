@@ -1,21 +1,21 @@
 //! Authentication endpoints
 
 use axum::{
-    extract::{State, Extension},
+    extract::{Extension, State},
     response::IntoResponse,
     Json,
 };
 use bcrypt::{hash, verify, DEFAULT_COST};
-use chrono::{Utc, Duration};
+use chrono::{Duration, Utc};
+use ratchet_api_types::ApiId;
 use ratchet_web::{
     middleware::{AuthContext, JwtManager},
     ApiResponse,
 };
-use ratchet_api_types::ApiId;
 // Removed unused trait imports - using repositories via context
 use serde::{Deserialize, Serialize};
 // use utoipa::ToSchema; // temporarily disabled
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -116,13 +116,17 @@ pub async fn login(
                 }
                 Err(e) => {
                     error!("Database error during email lookup: {}", e);
-                    return Err(RestError::InternalError("Authentication service unavailable".to_string()));
+                    return Err(RestError::InternalError(
+                        "Authentication service unavailable".to_string(),
+                    ));
                 }
             }
         }
         Err(e) => {
             error!("Database error during username lookup: {}", e);
-            return Err(RestError::InternalError("Authentication service unavailable".to_string()));
+            return Err(RestError::InternalError(
+                "Authentication service unavailable".to_string(),
+            ));
         }
     };
 
@@ -154,7 +158,10 @@ pub async fn login(
     let jwt_id = Uuid::new_v4().to_string();
     let expires_at = Utc::now() + Duration::hours(if request.remember_me.unwrap_or(false) { 168 } else { 24 }); // 7 days or 24 hours
 
-    match session_repo.create_session(user.id.clone(), &session_id, &jwt_id, expires_at).await {
+    match session_repo
+        .create_session(user.id.clone(), &session_id, &jwt_id, expires_at)
+        .await
+    {
         Ok(_session) => {
             // Update user's last login timestamp
             if let Err(e) = user_repo.update_last_login(user.id.clone()).await {
@@ -220,9 +227,7 @@ pub async fn register(
     }
 
     if !request.email.contains('@') {
-        return Err(RestError::BadRequest(
-            "Invalid email address".to_string(),
-        ));
+        return Err(RestError::BadRequest("Invalid email address".to_string()));
     }
 
     let user_repo = ctx.repositories.user_repository();
@@ -230,9 +235,7 @@ pub async fn register(
     // Check if username already exists
     match user_repo.find_by_username(&request.username).await {
         Ok(Some(_)) => {
-            return Err(RestError::BadRequest(
-                "Username already exists".to_string(),
-            ));
+            return Err(RestError::BadRequest("Username already exists".to_string()));
         }
         Ok(None) => {
             // Username is available, continue
@@ -246,9 +249,7 @@ pub async fn register(
     // Check if email already exists
     match user_repo.find_by_email(&request.email).await {
         Ok(Some(_)) => {
-            return Err(RestError::BadRequest(
-                "Email address already registered".to_string(),
-            ));
+            return Err(RestError::BadRequest("Email address already registered".to_string()));
         }
         Ok(None) => {
             // Email is available, continue
@@ -264,12 +265,15 @@ pub async fn register(
         .map_err(|e| RestError::InternalError(format!("Failed to hash password: {}", e)))?;
 
     // Create user in database
-    match user_repo.create_user(
-        &request.username,
-        &request.email,
-        &password_hash,
-        "user", // Default role
-    ).await {
+    match user_repo
+        .create_user(
+            &request.username,
+            &request.email,
+            &password_hash,
+            "user", // Default role
+        )
+        .await
+    {
         Ok(user) => {
             let user_info = UserInfo {
                 id: user.id.to_string(),
@@ -281,11 +285,15 @@ pub async fn register(
                     ratchet_api_types::UserRole::User => "user",
                     ratchet_api_types::UserRole::ReadOnly => "readonly",
                     ratchet_api_types::UserRole::Service => "service",
-                }.to_string(),
+                }
+                .to_string(),
                 email_verified: user.email_verified,
             };
 
-            info!("Registration successful for user: {} (ID: {})", request.username, user.id);
+            info!(
+                "Registration successful for user: {} (ID: {})",
+                request.username, user.id
+            );
             Ok(Json(ApiResponse::new(serde_json::json!({
                 "message": "User registered successfully",
                 "user": user_info
@@ -332,7 +340,8 @@ pub async fn get_current_user(
                     ratchet_api_types::UserRole::User => "user",
                     ratchet_api_types::UserRole::ReadOnly => "readonly",
                     ratchet_api_types::UserRole::Service => "service",
-                }.to_string(),
+                }
+                .to_string(),
                 email_verified: user.email_verified,
             };
 
@@ -367,7 +376,10 @@ pub async fn logout(
         // Don't fail the logout request even if session invalidation fails
     }
 
-    info!("User logged out: {} (session: {})", auth_context.user_id, auth_context.session_id);
+    info!(
+        "User logged out: {} (session: {})",
+        auth_context.user_id, auth_context.session_id
+    );
 
     Ok(Json(ApiResponse::new(serde_json::json!({
         "message": "Logged out successfully"
@@ -414,7 +426,9 @@ pub async fn change_password(
         }
         Err(e) => {
             error!("Database error fetching user for password change: {}", e);
-            return Err(RestError::InternalError("Password change service unavailable".to_string()));
+            return Err(RestError::InternalError(
+                "Password change service unavailable".to_string(),
+            ));
         }
     };
 
@@ -430,9 +444,7 @@ pub async fn change_password(
 
     if !current_valid {
         warn!("Invalid current password for user: {}", auth_context.user_id);
-        return Err(RestError::BadRequest(
-            "Current password is incorrect".to_string(),
-        ));
+        return Err(RestError::BadRequest("Current password is incorrect".to_string()));
     }
 
     // Hash the new password

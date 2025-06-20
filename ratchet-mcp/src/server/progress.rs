@@ -168,10 +168,7 @@ impl ProgressNotificationManager {
     /// Get number of active subscriptions for an execution
     pub async fn get_subscription_count(&self, execution_id: &str) -> usize {
         let subscriptions = self.subscriptions.read().await;
-        subscriptions
-            .get(execution_id)
-            .map(|subs| subs.len())
-            .unwrap_or(0)
+        subscriptions.get(execution_id).map(|subs| subs.len()).unwrap_or(0)
     }
 
     /// Clean up subscriptions for completed executions
@@ -213,12 +210,7 @@ impl ProgressNotificationManager {
                         step_number: notification.update.step_number,
                         total_steps: notification.update.total_steps,
                         message: notification.update.message.clone(),
-                        data: if subscription
-                            .filter
-                            .as_ref()
-                            .map(|f| f.include_data)
-                            .unwrap_or(true)
-                        {
+                        data: if subscription.filter.as_ref().map(|f| f.include_data).unwrap_or(true) {
                             notification.update.data.clone()
                         } else {
                             None
@@ -232,11 +224,7 @@ impl ProgressNotificationManager {
                     };
 
                     // Send notification to client
-                    if let Err(e) = subscription
-                        .connection
-                        .send_notification(mcp_notification)
-                        .await
-                    {
+                    if let Err(e) = subscription.connection.send_notification(mcp_notification).await {
                         tracing::warn!(
                             "Failed to send progress notification to subscription {}: {}",
                             subscription.id,
@@ -283,11 +271,7 @@ pub struct TaskProgressTracker {
 
 impl TaskProgressTracker {
     /// Create a new progress tracker for a task execution
-    pub fn new(
-        execution_id: String,
-        task_id: String,
-        notification_manager: Arc<ProgressNotificationManager>,
-    ) -> Self {
+    pub fn new(execution_id: String, task_id: String, notification_manager: Arc<ProgressNotificationManager>) -> Self {
         Self {
             execution_id,
             task_id,
@@ -333,9 +317,7 @@ impl TaskProgressTracker {
             timestamp: chrono::Utc::now(),
         };
 
-        self.notification_manager
-            .send_progress_update(update)
-            .await?;
+        self.notification_manager.send_progress_update(update).await?;
         self.last_progress = progress;
 
         Ok(())
@@ -343,18 +325,13 @@ impl TaskProgressTracker {
 
     /// Mark task as completed
     pub async fn complete(&mut self, message: Option<String>) -> Result<(), String> {
-        self.update_progress(1.0, Some("completed".to_string()), message)
-            .await
+        self.update_progress(1.0, Some("completed".to_string()), message).await
     }
 
     /// Mark task as failed
     pub async fn fail(&mut self, error_message: String) -> Result<(), String> {
-        self.update_progress(
-            self.last_progress,
-            Some("failed".to_string()),
-            Some(error_message),
-        )
-        .await
+        self.update_progress(self.last_progress, Some("failed".to_string()), Some(error_message))
+            .await
     }
 
     /// Get current progress
@@ -449,29 +426,18 @@ mod tests {
     #[tokio::test]
     async fn test_task_progress_tracker() {
         let manager = Arc::new(ProgressNotificationManager::new());
-        let mut tracker = TaskProgressTracker::new(
-            "test-execution".to_string(),
-            "test-task".to_string(),
-            manager.clone(),
-        );
+        let mut tracker =
+            TaskProgressTracker::new("test-execution".to_string(), "test-task".to_string(), manager.clone());
 
         // Test progress updates
         assert!(tracker
-            .update_progress(
-                0.25,
-                Some("step1".to_string()),
-                Some("Starting".to_string())
-            )
+            .update_progress(0.25, Some("step1".to_string()), Some("Starting".to_string()))
             .await
             .is_ok());
         assert_eq!(tracker.get_progress(), 0.25);
 
         assert!(tracker
-            .update_progress(
-                0.75,
-                Some("step2".to_string()),
-                Some("Almost done".to_string())
-            )
+            .update_progress(0.75, Some("step2".to_string()), Some("Almost done".to_string()))
             .await
             .is_ok());
         assert_eq!(tracker.get_progress(), 0.75);

@@ -1,12 +1,9 @@
 //! GraphQL context types for dependency injection
 
-use std::sync::Arc;
-use ratchet_interfaces::{
-    RepositoryFactory, TaskRegistry, RegistryManager, 
-    TaskValidator
-};
-use ratchet_mcp::server::adapter::RatchetMcpAdapter;
 use crate::events::EventBroadcaster;
+use ratchet_interfaces::{RegistryManager, RepositoryFactory, TaskRegistry, TaskValidator};
+use ratchet_mcp::server::adapter::RatchetMcpAdapter;
+use std::sync::Arc;
 
 /// Main GraphQL context containing all service dependencies
 #[derive(Clone)]

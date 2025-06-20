@@ -120,27 +120,15 @@ async fn test_sse_transport_invalid_url() {
     );
 
     assert!(transport.is_err());
-    assert!(matches!(
-        transport.unwrap_err(),
-        McpError::Configuration { .. }
-    ));
+    assert!(matches!(transport.unwrap_err(), McpError::Configuration { .. }));
 }
 
 #[tokio::test]
 async fn test_sse_transport_empty_url() {
-    let transport = SseTransport::new(
-        "".to_string(),
-        HashMap::new(),
-        None,
-        Duration::from_secs(30),
-        false,
-    );
+    let transport = SseTransport::new("".to_string(), HashMap::new(), None, Duration::from_secs(30), false);
 
     assert!(transport.is_err());
-    assert!(matches!(
-        transport.unwrap_err(),
-        McpError::Configuration { .. }
-    ));
+    assert!(matches!(transport.unwrap_err(), McpError::Configuration { .. }));
 }
 
 #[tokio::test]
@@ -236,14 +224,8 @@ fn test_sse_endpoint_structure() {
     let expected_message_url = format!("{}/message/{}", base_url, session_id);
     let expected_health_url = format!("{}/health", base_url);
 
-    assert_eq!(
-        expected_sse_url,
-        "http://localhost:8080/sse/test-session-123"
-    );
-    assert_eq!(
-        expected_message_url,
-        "http://localhost:8080/message/test-session-123"
-    );
+    assert_eq!(expected_sse_url, "http://localhost:8080/sse/test-session-123");
+    assert_eq!(expected_message_url, "http://localhost:8080/message/test-session-123");
     assert_eq!(expected_health_url, "http://localhost:8080/health");
 }
 
