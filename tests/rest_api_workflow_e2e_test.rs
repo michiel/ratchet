@@ -554,15 +554,17 @@ async fn test_task_crud_operations() -> Result<()> {
     
     assert_eq!(status, StatusCode::CREATED, "Create task should return 201");
     let task = created_task.expect("Created task should be returned");
-    let task_id = task.get("id").expect("Task should have ID").as_str().unwrap();
+    let task_data = task.get("data").expect("Response should have data field");
+    let task_id = task_data.get("id").expect("Task should have ID").as_str().unwrap();
 
     // Step 3: Get the created task
     let (status, retrieved_task): (StatusCode, Option<Value>) = ctx.get(&format!("/tasks/{}", task_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get task should return 200");
     
     let retrieved = retrieved_task.expect("Retrieved task should be present");
+    let retrieved_data = retrieved.get("data").expect("Response should have data field");
     assert_eq!(
-        retrieved.get("name").unwrap().as_str().unwrap(),
+        retrieved_data.get("name").unwrap().as_str().unwrap(),
         "test-task",
         "Retrieved task name should match"
     );
@@ -577,8 +579,9 @@ async fn test_task_crud_operations() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "Update task should return 200");
     
     let updated = updated_task.expect("Updated task should be returned");
+    let updated_data = updated.get("data").expect("Response should have data field");
     assert_eq!(
-        updated.get("description").unwrap().as_str().unwrap(),
+        updated_data.get("description").unwrap().as_str().unwrap(),
         "Updated test task description",
         "Task description should be updated"
     );
@@ -675,7 +678,7 @@ async fn test_job_queue_operations() -> Result<()> {
         "input": {
             "data": "test data"
         },
-        "priority": "high",
+        "priority": "HIGH",
         "maxRetries": 3
     });
 

@@ -2,6 +2,7 @@
 
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     response::IntoResponse,
     Json,
 };
@@ -222,7 +223,7 @@ pub async fn create_task(
     let created_task = task_repo.create(unified_task).await
         .map_err(|e| RestError::InternalError(format!("Failed to create task: {}", e)))?;
     
-    Ok(Json(ApiResponse::new(created_task)))
+    Ok((StatusCode::CREATED, Json(ApiResponse::new(created_task))))
 }
 
 /// Update an existing task
@@ -407,10 +408,7 @@ pub async fn delete_task(
     task_repo.delete(api_id.as_i32().unwrap_or(0)).await
         .map_err(|e| RestError::InternalError(format!("Failed to delete task: {}", e)))?;
     
-    Ok(Json(serde_json::json!({
-        "success": true,
-        "message": format!("Task {} deleted successfully", task_id)
-    })))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Enable a task

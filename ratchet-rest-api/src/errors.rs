@@ -6,7 +6,7 @@ use axum::{
     Json,
 };
 use ratchet_api_types::errors::ApiError;
-use ratchet_core::validation::error_sanitization::ErrorSanitizer;
+use ratchet_core::validation::{error_sanitization::ErrorSanitizer, InputValidationError};
 use ratchet_interfaces::DatabaseError;
 use ratchet_web::WebError;
 use serde_json::json;
@@ -50,6 +50,9 @@ pub enum RestError {
 
     #[error("Validation error: {message}")]
     Validation { message: String },
+
+    #[error("Input validation error")]
+    InputValidation(#[from] InputValidationError),
 }
 
 /// Result type for REST operations
@@ -95,6 +98,7 @@ impl RestError {
                 RestError::Database(_) => "DATABASE_ERROR".to_string(),
                 RestError::Web(_) => "WEB_ERROR".to_string(),
                 RestError::Validation { .. } => "VALIDATION_ERROR".to_string(),
+                RestError::InputValidation(_) => "BAD_REQUEST".to_string(),
             }
         });
         
