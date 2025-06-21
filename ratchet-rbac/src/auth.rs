@@ -111,7 +111,7 @@ impl AuthContext {
         let mut roles = Vec::new();
         for (tenant_id, tenant_roles) in &self.tenant_roles {
             for role in tenant_roles {
-                roles.push(*tenant_id, role.clone());
+                roles.push((*tenant_id, role.clone()));
             }
         }
         roles

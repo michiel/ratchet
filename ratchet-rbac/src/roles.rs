@@ -325,7 +325,7 @@ impl<'a> CustomRoleBuilder<'a> {
     }
 
     /// Add permission from string
-    pub fn permission_str(mut self, perm_str: &str) -> RbacResult<Self> {
+    pub fn permission_str(self, perm_str: &str) -> RbacResult<Self> {
         let permission = self.manager.parse_permission_string(perm_str)?;
         Ok(self.permission(permission))
     }

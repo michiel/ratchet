@@ -44,7 +44,7 @@ pub use user_tenants::{
     ActiveModel as UserTenantActiveModel, Column as UserTenantColumn, Entity as UserTenants, Model as UserTenant,
 };
 pub use user_roles::{
-    ActiveModel as UserRoleActiveModel, Column as UserRoleColumn, Entity as UserRoles, Model as UserRole,
+    ActiveModel as UserRoleActiveModel, Column as UserRoleColumn, Entity as UserRoles, Model as UserRoleModel,
 };
 pub use tenant_custom_roles::{
     ActiveModel as TenantCustomRoleActiveModel, Column as TenantCustomRoleColumn, Entity as TenantCustomRoles, Model as TenantCustomRole,

@@ -303,7 +303,7 @@ impl TenantCustomRole {
 }
 
 /// Resource types for permission checking
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ResourceType {
     Task,
     Execution,
@@ -338,7 +338,7 @@ impl ResourceType {
 }
 
 /// Action types for permission checking
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ActionType {
     Create,
     Read,

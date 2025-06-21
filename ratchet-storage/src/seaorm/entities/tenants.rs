@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -50,11 +51,5 @@ impl ActiveModelBehavior for ActiveModel {
         }
     }
 
-    fn before_save<C>(mut self, _: &C, _: bool) -> Result<Self, DbErr>
-    where
-        C: ConnectionTrait,
-    {
-        self.updated_at = Set(Utc::now());
-        Ok(self)
-    }
+    // Note: updated_at field is managed manually when updating
 }

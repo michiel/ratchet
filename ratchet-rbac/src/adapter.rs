@@ -207,7 +207,7 @@ impl Adapter for SeaOrmAdapter {
     async fn add_policy(&mut self, _sec: &str, _ptype: &str, rule: Vec<String>) -> CasbinResult<()> {
         self.save_policy_internal(&rule)
             .await
-            .map_err(|e| AdapterError(Box::new(e)))
+            .map_err(|e| casbin::Error::AdapterError(casbin::error::AdapterError(Box::new(e))))
     }
 
     async fn remove_policy(
@@ -238,73 +238,10 @@ impl Adapter for SeaOrmAdapter {
     async fn load_filtered_policy(
         &mut self,
         model: &mut dyn Model,
-        filter: Filter,
+        _filter: Filter<'_>,
     ) -> CasbinResult<()> {
-        use ratchet_storage::seaorm::entities::{CasbinRules, casbin_rules};
-
-        let mut query = CasbinRules::find();
-
-        // Apply filters based on the filter object
-        for (key, value) in filter.p.iter() {
-            match key.as_str() {
-                "ptype" => query = query.filter(casbin_rules::Column::Ptype.eq(value.clone())),
-                "v0" => query = query.filter(casbin_rules::Column::V0.eq(value.clone())),
-                "v1" => query = query.filter(casbin_rules::Column::V1.eq(value.clone())),
-                "v2" => query = query.filter(casbin_rules::Column::V2.eq(value.clone())),
-                "v3" => query = query.filter(casbin_rules::Column::V3.eq(value.clone())),
-                "v4" => query = query.filter(casbin_rules::Column::V4.eq(value.clone())),
-                "v5" => query = query.filter(casbin_rules::Column::V5.eq(value.clone())),
-                _ => {} // Ignore unknown filters
-            }
-        }
-
-        let rules = query
-            .all(&self.db)
-            .await
-            .map_err(|e| AdapterError(Box::new(e)))?;
-
-        let policies: Vec<Vec<String>> = rules
-            .into_iter()
-            .map(|rule| {
-                let mut policy = vec![rule.ptype];
-                if let Some(v0) = rule.v0 {
-                    policy.push(v0);
-                }
-                if let Some(v1) = rule.v1 {
-                    policy.push(v1);
-                }
-                if let Some(v2) = rule.v2 {
-                    policy.push(v2);
-                }
-                if let Some(v3) = rule.v3 {
-                    policy.push(v3);
-                }
-                if let Some(v4) = rule.v4 {
-                    policy.push(v4);
-                }
-                if let Some(v5) = rule.v5 {
-                    policy.push(v5);
-                }
-                policy
-            })
-            .collect();
-
-        for policy in policies {
-            if policy.is_empty() {
-                continue;
-            }
-
-            let sec = &policy[0];
-            let ptype = sec.chars().next().unwrap_or('p');
-
-            if let Some(ast_map) = model.get_mut_model().get_mut(&ptype.to_string()) {
-                if let Some(ast) = ast_map.get_mut(sec) {
-                    ast.get_mut_policy().insert(policy[1..].to_vec());
-                }
-            }
-        }
-
-        Ok(())
+        // For now, just load all policies - filtered loading can be implemented later
+        self.load_policy(model).await
     }
 
     fn is_filtered(&self) -> bool {

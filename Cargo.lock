@@ -5500,6 +5500,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tower",
+ "tracing",
  "uuid",
 ]
 

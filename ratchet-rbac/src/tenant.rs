@@ -1,6 +1,6 @@
 //! Tenant management utilities
 
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, Set, ActiveModelTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, Set, ActiveModelTrait, ColumnTrait};
 use uuid::Uuid;
 
 use crate::{
@@ -58,7 +58,7 @@ impl TenantManager {
 
     /// Get tenant by ID
     pub async fn get_tenant(&self, tenant_id: i32) -> RbacResult<Option<Tenant>> {
-        use ratchet_storage::seaorm::entities::Tenants;
+        use ratchet_storage::seaorm::entities::{Tenants, tenants};
 
         let tenant = Tenants::find_by_id(tenant_id)
             .one(&self.db)
@@ -84,8 +84,7 @@ impl TenantManager {
 
     /// Get tenant by name
     pub async fn get_tenant_by_name(&self, name: &str) -> RbacResult<Option<Tenant>> {
-        use ratchet_storage::seaorm::entities::prelude::*;
-        use ratchet_storage::seaorm::entities::tenants;
+        use ratchet_storage::seaorm::entities::{Tenants, tenants};
 
         let tenant = Tenants::find()
             .filter(tenants::Column::Name.eq(name))
@@ -112,8 +111,7 @@ impl TenantManager {
 
     /// List all active tenants
     pub async fn list_tenants(&self, only_active: bool) -> RbacResult<Vec<Tenant>> {
-        use ratchet_storage::seaorm::entities::prelude::*;
-        use ratchet_storage::seaorm::entities::tenants;
+        use ratchet_storage::seaorm::entities::{Tenants, tenants};
 
         let mut query = Tenants::find();
         
@@ -148,8 +146,8 @@ impl TenantManager {
         description: Option<String>,
         is_active: Option<bool>,
     ) -> RbacResult<()> {
-        use ratchet_storage::seaorm::entities::prelude::*;
-        use ratchet_storage::seaorm::entities::tenants;
+        use ratchet_storage::seaorm::entities::{Tenants, tenants};
+        use sea_orm::{Set, ActiveModelTrait};
 
         let tenant = Tenants::find_by_id(tenant_id)
             .one(&self.db)
@@ -186,7 +184,8 @@ impl TenantManager {
         tenant_id: i32,
         added_by: Option<i32>,
     ) -> RbacResult<()> {
-        use ratchet_storage::seaorm::entities::user_tenants;
+        use ratchet_storage::seaorm::entities::{UserTenants, user_tenants};
+        use sea_orm::{Set, ActiveModelTrait};
 
         // Check if tenant exists and is active
         let tenant = self.get_tenant(tenant_id).await?
@@ -201,7 +200,7 @@ impl TenantManager {
         }
 
         // Check if user is already a member
-        let existing = user_tenants::Entity::find()
+        let existing = UserTenants::find()
             .filter(user_tenants::Column::UserId.eq(user_id))
             .filter(user_tenants::Column::TenantId.eq(tenant_id))
             .one(&self.db)
@@ -228,8 +227,7 @@ impl TenantManager {
         user_id: i32,
         tenant_id: i32,
     ) -> RbacResult<()> {
-        use ratchet_storage::seaorm::entities::prelude::*;
-        use ratchet_storage::seaorm::entities::user_tenants;
+        use ratchet_storage::seaorm::entities::{UserTenants, user_tenants, UserRoles, user_roles};
 
         // Remove tenant membership
         UserTenants::delete_many()
@@ -239,7 +237,6 @@ impl TenantManager {
             .await?;
 
         // Remove user roles in this tenant
-        use ratchet_storage::seaorm::entities::user_roles;
         UserRoles::delete_many()
             .filter(user_roles::Column::UserId.eq(user_id))
             .filter(user_roles::Column::TenantId.eq(tenant_id))
@@ -251,8 +248,7 @@ impl TenantManager {
 
     /// Get users in tenant
     pub async fn get_tenant_users(&self, tenant_id: i32) -> RbacResult<Vec<i32>> {
-        use ratchet_storage::seaorm::entities::prelude::*;
-        use ratchet_storage::seaorm::entities::user_tenants;
+        use ratchet_storage::seaorm::entities::{UserTenants, user_tenants};
 
         let users = UserTenants::find()
             .filter(user_tenants::Column::TenantId.eq(tenant_id))
@@ -264,8 +260,7 @@ impl TenantManager {
 
     /// Get tenants for user
     pub async fn get_user_tenants(&self, user_id: i32) -> RbacResult<Vec<i32>> {
-        use ratchet_storage::seaorm::entities::prelude::*;
-        use ratchet_storage::seaorm::entities::user_tenants;
+        use ratchet_storage::seaorm::entities::{UserTenants, user_tenants};
 
         let tenants = UserTenants::find()
             .filter(user_tenants::Column::UserId.eq(user_id))
@@ -281,8 +276,7 @@ impl TenantManager {
         user_id: i32,
         tenant_id: i32,
     ) -> RbacResult<bool> {
-        use ratchet_storage::seaorm::entities::prelude::*;
-        use ratchet_storage::seaorm::entities::user_tenants;
+        use ratchet_storage::seaorm::entities::{UserTenants, user_tenants};
 
         let exists = UserTenants::find()
             .filter(user_tenants::Column::UserId.eq(user_id))
@@ -347,76 +341,6 @@ pub struct TenantStats {
     pub schedule_count: u32,
 }
 
-// We need to define the tenant-related entities that match our migration
-pub mod tenants {
-    use sea_orm::entity::prelude::*;
-    use chrono::{DateTime, Utc};
-    use uuid::Uuid;
-
-    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-    #[sea_orm(table_name = "tenants")]
-    pub struct Model {
-        #[sea_orm(primary_key)]
-        pub id: i32,
-        pub uuid: Uuid,
-        pub name: String,
-        pub display_name: String,
-        pub description: Option<String>,
-        pub settings: serde_json::Value,
-        pub is_active: bool,
-        pub created_at: DateTime<Utc>,
-        pub updated_at: DateTime<Utc>,
-        pub created_by: Option<i32>,
-    }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
-}
-
-pub mod user_tenants {
-    use sea_orm::entity::prelude::*;
-    use chrono::{DateTime, Utc};
-
-    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-    #[sea_orm(table_name = "user_tenants")]
-    pub struct Model {
-        #[sea_orm(primary_key)]
-        pub id: i32,
-        pub user_id: i32,
-        pub tenant_id: i32,
-        pub joined_at: DateTime<Utc>,
-        pub joined_by: Option<i32>,
-    }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
-}
-
-pub mod user_roles {
-    use sea_orm::entity::prelude::*;
-    use chrono::{DateTime, Utc};
-
-    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-    #[sea_orm(table_name = "user_roles")]
-    pub struct Model {
-        #[sea_orm(primary_key)]
-        pub id: i32,
-        pub user_id: i32,
-        pub tenant_id: Option<i32>,
-        pub role_name: String,
-        pub assigned_at: DateTime<Utc>,
-        pub assigned_by: Option<i32>,
-    }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
-}
 
 #[cfg(test)]
 mod tests {

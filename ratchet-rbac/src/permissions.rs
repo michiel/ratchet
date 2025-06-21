@@ -300,7 +300,7 @@ impl PermissionChecker {
 
         // Check if user has required permission
         let has_permission = self
-            .check(auth_context, resource, action, Some(tenant_id))
+            .check(auth_context, resource.clone(), action.clone(), Some(tenant_id))
             .await?;
 
         if !has_permission {
