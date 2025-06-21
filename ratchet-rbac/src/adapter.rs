@@ -2,7 +2,7 @@
 
 use casbin::{error::AdapterError, Adapter, Filter, Model, Result as CasbinResult};
 use sea_orm::{
-    entity::prelude::*, query::*, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect,
+    entity::prelude::*, DatabaseConnection, EntityTrait, QueryFilter, Set,
 };
 use std::collections::HashMap;
 
@@ -204,10 +204,11 @@ impl Adapter for SeaOrmAdapter {
         Ok(())
     }
 
-    async fn add_policy(&mut self, _sec: &str, _ptype: &str, rule: Vec<String>) -> CasbinResult<()> {
+    async fn add_policy(&mut self, _sec: &str, _ptype: &str, rule: Vec<String>) -> CasbinResult<bool> {
         self.save_policy_internal(&rule)
             .await
-            .map_err(|e| casbin::Error::AdapterError(casbin::error::AdapterError(Box::new(e))))
+            .map_err(|e| casbin::Error::AdapterError(casbin::error::AdapterError(Box::new(e))))?;
+        Ok(true)
     }
 
     async fn remove_policy(
@@ -215,11 +216,11 @@ impl Adapter for SeaOrmAdapter {
         _sec: &str,
         _ptype: &str,
         rule: Vec<String>,
-    ) -> CasbinResult<()> {
-        self.remove_policy_internal(&rule)
+    ) -> CasbinResult<bool> {
+        let removed = self.remove_policy_internal(&rule)
             .await
             .map_err(|e| AdapterError(Box::new(e)))?;
-        Ok(())
+        Ok(removed)
     }
 
     async fn remove_filtered_policy(
@@ -228,17 +229,17 @@ impl Adapter for SeaOrmAdapter {
         _ptype: &str,
         field_index: usize,
         field_values: Vec<String>,
-    ) -> CasbinResult<()> {
-        self.remove_filtered_policy_internal(field_index, field_values)
+    ) -> CasbinResult<bool> {
+        let removed = self.remove_filtered_policy_internal(field_index, field_values)
             .await
             .map_err(|e| AdapterError(Box::new(e)))?;
-        Ok(())
+        Ok(removed)
     }
 
-    async fn load_filtered_policy(
+    async fn load_filtered_policy<'a>(
         &mut self,
         model: &mut dyn Model,
-        _filter: Filter<'_>,
+        _filter: Filter<'a>,
     ) -> CasbinResult<()> {
         // For now, just load all policies - filtered loading can be implemented later
         self.load_policy(model).await
@@ -246,6 +247,45 @@ impl Adapter for SeaOrmAdapter {
 
     fn is_filtered(&self) -> bool {
         false
+    }
+
+    async fn clear_policy(&mut self) -> CasbinResult<()> {
+        use ratchet_storage::seaorm::entities::CasbinRules;
+        CasbinRules::delete_many()
+            .exec(&self.db)
+            .await
+            .map_err(|e| AdapterError(Box::new(e)))?;
+        Ok(())
+    }
+
+    async fn add_policies(
+        &mut self,
+        _sec: &str,
+        _ptype: &str,
+        rules: Vec<Vec<String>>,
+    ) -> CasbinResult<bool> {
+        for rule in rules {
+            self.save_policy_internal(&rule)
+                .await
+                .map_err(|e| AdapterError(Box::new(e)))?;
+        }
+        Ok(true)
+    }
+
+    async fn remove_policies(
+        &mut self,
+        _sec: &str,
+        _ptype: &str,
+        rules: Vec<Vec<String>>,
+    ) -> CasbinResult<bool> {
+        let mut removed = false;
+        for rule in rules {
+            let result = self.remove_policy_internal(&rule)
+                .await
+                .map_err(|e| AdapterError(Box::new(e)))?;
+            removed = removed || result;
+        }
+        Ok(removed)
     }
 }
 

@@ -1,6 +1,6 @@
 //! RBAC Enforcer using Casbin
 
-use casbin::{Enforcer, MgmtApi, RbacApi};
+use casbin::{Enforcer, MgmtApi, RbacApi, CoreApi};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -27,10 +27,8 @@ impl RbacEnforcer {
         
         // Create Casbin enforcer with model and adapter
         let model_text = config.get_model_config();
-        let mut enforcer = Enforcer::new(
-            casbin::Model::from_str(&model_text).map_err(|e| RbacError::Casbin(e))?,
-            adapter,
-        ).await.map_err(|e| RbacError::Casbin(e))?;
+        let model = casbin::DefaultModel::from_str(&model_text).await.map_err(|e| RbacError::Casbin(e))?;
+        let mut enforcer = Enforcer::new(model, adapter).await.map_err(|e| RbacError::Casbin(e))?;
 
         // Load policy from database
         enforcer.load_policy().await.map_err(|e| RbacError::Casbin(e))?;
@@ -94,9 +92,7 @@ impl RbacEnforcer {
         let domain = format!("tenant_{}", tenant_id);
         
         // Check if user has any roles in this tenant
-        let roles = enforcer
-            .get_roles_for_user_in_domain(&subject, &domain)
-            .map_err(|e| RbacError::Casbin(e))?;
+        let roles = enforcer.get_roles_for_user(&subject, Some(&domain));
             
         Ok(!roles.is_empty())
     }
@@ -112,7 +108,7 @@ impl RbacEnforcer {
         let subject = format!("user_{}", user_id);
         
         enforcer
-            .add_role_for_user_in_domain(&subject, role, domain)
+            .add_role_for_user(&subject, role, Some(domain))
             .await
             .map_err(|e| RbacError::Casbin(e))?;
             
@@ -130,7 +126,7 @@ impl RbacEnforcer {
         let subject = format!("user_{}", user_id);
         
         enforcer
-            .delete_role_for_user_in_domain(&subject, role, domain)
+            .delete_role_for_user(&subject, role, Some(domain))
             .await
             .map_err(|e| RbacError::Casbin(e))?;
             
@@ -146,9 +142,7 @@ impl RbacEnforcer {
         let enforcer = self.enforcer.read().await;
         let subject = format!("user_{}", user_id);
         
-        let roles = enforcer
-            .get_roles_for_user_in_domain(&subject, domain)
-            .map_err(|e| RbacError::Casbin(e))?;
+        let roles = enforcer.get_roles_for_user(&subject, Some(domain));
             
         Ok(roles)
     }
@@ -161,9 +155,7 @@ impl RbacEnforcer {
     ) -> RbacResult<Vec<i32>> {
         let enforcer = self.enforcer.read().await;
         
-        let users = enforcer
-            .get_users_for_role_in_domain(role, domain)
-            .map_err(|e| RbacError::Casbin(e))?;
+        let users = enforcer.get_users_for_role(role, Some(domain));
             
         // Convert user strings back to IDs
         let user_ids: Vec<i32> = users
@@ -253,7 +245,7 @@ impl RbacEnforcer {
         // Add role inheritance if specified
         for parent_role in &role.inherits_from {
             enforcer
-                .add_link(&role.name, parent_role, Some(domain))
+                .add_role_for_user(&role.name, parent_role, Some(domain))
                 .await
                 .map_err(|e| RbacError::Casbin(e))?;
         }

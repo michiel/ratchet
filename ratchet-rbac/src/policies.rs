@@ -109,7 +109,7 @@ impl PolicyManager {
     }
 
     /// Get all policies for a domain
-    pub async fn get_domain_policies(&self, domain: &str) -> RbacResult<Vec<PolicyRule>> {
+    pub async fn get_domain_policies(&self, _domain: &str) -> RbacResult<Vec<PolicyRule>> {
         // This would require access to the underlying Casbin enforcer's policy data
         // For now, return empty - this would need to be implemented with direct Casbin access
         Ok(Vec::new())

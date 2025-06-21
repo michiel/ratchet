@@ -31,7 +31,7 @@ impl RbacMiddleware {
     /// Middleware function for route-level authorization
     pub async fn authorize_request(
         State(middleware): State<Arc<RbacMiddleware>>,
-        mut request: Request<Body>,
+        request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
         // Extract auth context from request extensions
@@ -72,7 +72,7 @@ impl RbacMiddleware {
     /// Middleware for tenant-specific authorization
     pub async fn authorize_tenant_request(
         State(middleware): State<Arc<RbacMiddleware>>,
-        mut request: Request<Body>,
+        request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
         let auth_context = request
@@ -112,7 +112,7 @@ impl RbacMiddleware {
     /// Middleware for platform-only operations
     pub async fn authorize_platform_request(
         State(middleware): State<Arc<RbacMiddleware>>,
-        mut request: Request<Body>,
+        request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
         let auth_context = request
@@ -138,7 +138,7 @@ impl RbacMiddleware {
     /// Middleware for admin-only operations
     pub async fn authorize_admin_request(
         State(middleware): State<Arc<RbacMiddleware>>,
-        mut request: Request<Body>,
+        request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
         let auth_context = request
