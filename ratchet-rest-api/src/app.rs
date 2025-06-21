@@ -6,6 +6,7 @@ use axum::{
     Router,
 };
 use ratchet_interfaces::{RegistryManager, RepositoryFactory, TaskRegistry, TaskValidator};
+use ratchet_core::config::DevelopmentConfig;
 use ratchet_web::middleware::{
     audit_middleware, cors_layer, create_rate_limit_middleware, create_session_manager, error_handler_layer,
     rate_limit_middleware, request_id_layer, security_headers_middleware, session_middleware, AuditConfig,
@@ -122,9 +123,10 @@ impl AppContext {
         registry: Arc<dyn TaskRegistry>,
         registry_manager: Arc<dyn RegistryManager>,
         validator: Arc<dyn TaskValidator>,
+        development_config: DevelopmentConfig,
     ) -> Self {
         Self {
-            tasks: TasksContext::new(repositories.clone(), registry, registry_manager, validator),
+            tasks: TasksContext::new(repositories.clone(), registry, registry_manager, validator, development_config),
             executions: ExecutionsContext::new(repositories.clone()),
             jobs: JobsContext::new(repositories.clone()),
             schedules: SchedulesContext::new(repositories.clone()),

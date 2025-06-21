@@ -5620,6 +5620,7 @@ dependencies = [
  "cron",
  "ratchet-api-types",
  "ratchet-config",
+ "ratchet-core",
  "ratchet-graphql-api",
  "ratchet-http",
  "ratchet-interfaces",

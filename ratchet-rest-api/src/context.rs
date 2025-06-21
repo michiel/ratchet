@@ -6,6 +6,7 @@
 
 use ratchet_interfaces::{RegistryManager, RepositoryFactory, SchedulerService, TaskRegistry, TaskValidator};
 use ratchet_mcp::server::task_dev_tools::TaskDevelopmentService;
+use ratchet_core::config::DevelopmentConfig;
 use std::sync::Arc;
 
 /// Context for task-related endpoints
@@ -25,6 +26,8 @@ pub struct TasksContext {
     pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
     /// Optional scheduler service for schedule management integration
     pub scheduler_service: Option<Arc<dyn SchedulerService>>,
+    /// Development configuration for development-mode features
+    pub development_config: DevelopmentConfig,
 }
 
 impl TasksContext {
@@ -33,6 +36,7 @@ impl TasksContext {
         registry: Arc<dyn TaskRegistry>,
         registry_manager: Arc<dyn RegistryManager>,
         validator: Arc<dyn TaskValidator>,
+        development_config: DevelopmentConfig,
     ) -> Self {
         Self {
             repositories,
@@ -41,6 +45,7 @@ impl TasksContext {
             validator,
             mcp_task_service: None,
             scheduler_service: None,
+            development_config,
         }
     }
 
@@ -51,6 +56,7 @@ impl TasksContext {
         registry_manager: Arc<dyn RegistryManager>,
         validator: Arc<dyn TaskValidator>,
         mcp_task_service: Arc<TaskDevelopmentService>,
+        development_config: DevelopmentConfig,
     ) -> Self {
         Self {
             repositories,
@@ -59,6 +65,7 @@ impl TasksContext {
             validator,
             mcp_task_service: Some(mcp_task_service),
             scheduler_service: None,
+            development_config,
         }
     }
 
@@ -69,6 +76,7 @@ impl TasksContext {
         registry_manager: Arc<dyn RegistryManager>,
         validator: Arc<dyn TaskValidator>,
         scheduler_service: Arc<dyn SchedulerService>,
+        development_config: DevelopmentConfig,
     ) -> Self {
         Self {
             repositories,
@@ -77,6 +85,7 @@ impl TasksContext {
             validator,
             mcp_task_service: None,
             scheduler_service: Some(scheduler_service),
+            development_config,
         }
     }
 
@@ -88,6 +97,7 @@ impl TasksContext {
         validator: Arc<dyn TaskValidator>,
         mcp_task_service: Arc<TaskDevelopmentService>,
         scheduler_service: Arc<dyn SchedulerService>,
+        development_config: DevelopmentConfig,
     ) -> Self {
         Self {
             repositories,
@@ -96,6 +106,7 @@ impl TasksContext {
             validator,
             mcp_task_service: Some(mcp_task_service),
             scheduler_service: Some(scheduler_service),
+            development_config,
         }
     }
 }

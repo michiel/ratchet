@@ -23,7 +23,7 @@ use crate::{
 use ratchet_api_types::UnifiedOutputDestination;
 
 /// Validate output destinations configuration
-fn validate_output_destinations(destinations: &[UnifiedOutputDestination]) -> Result<(), RestError> {
+fn validate_output_destinations(destinations: &[UnifiedOutputDestination], development_config: &ratchet_core::config::DevelopmentConfig) -> Result<(), RestError> {
     if destinations.is_empty() {
         return Err(RestError::BadRequest(
             "Output destinations array cannot be empty".to_string(),
@@ -66,15 +66,17 @@ fn validate_output_destinations(destinations: &[UnifiedOutputDestination]) -> Re
                         )));
                     }
 
-                    // Prevent localhost and private IPs in production
-                    if webhook.url.contains("localhost")
-                        || webhook.url.contains("127.0.0.1")
-                        || webhook.url.contains("::1")
-                    {
-                        return Err(RestError::BadRequest(format!(
-                            "{}: Localhost URLs not allowed for webhooks",
-                            context
-                        )));
+                    // Prevent localhost and private IPs unless in development mode
+                    if !development_config.enabled || !development_config.allow_localhost_webhooks {
+                        if webhook.url.contains("localhost")
+                            || webhook.url.contains("127.0.0.1")
+                            || webhook.url.contains("::1")
+                        {
+                            return Err(RestError::BadRequest(format!(
+                                "{}: Localhost URLs not allowed for webhooks",
+                                context
+                            )));
+                        }
                     }
 
                     // Validate timeout
@@ -394,7 +396,7 @@ pub async fn create_schedule(
 
     // Validate output destinations if provided
     if let Some(ref destinations) = request.output_destinations {
-        if let Err(validation_err) = validate_output_destinations(destinations) {
+        if let Err(validation_err) = validate_output_destinations(destinations, &ctx.development_config) {
             warn!("Invalid output destinations provided: {}", validation_err);
             return Err(validation_err);
         }
@@ -544,7 +546,7 @@ pub async fn update_schedule(
     }
     if let Some(destinations) = request.output_destinations {
         // Validate the new output destinations
-        if let Err(validation_err) = validate_output_destinations(&destinations) {
+        if let Err(validation_err) = validate_output_destinations(&destinations, &ctx.development_config) {
             warn!("Invalid output destinations provided in update: {}", validation_err);
             return Err(validation_err);
         }

@@ -315,7 +315,12 @@ async fn setup_test_environment() -> Result<RestApiTestContext> {
 
     // Start the ratchet server
     println!("🚀 Starting ratchet server for full e2e testing...");
-    let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
+    let mut server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
+    
+    // Enable development mode for webhook localhost testing
+    server_config.development.enabled = true;
+    server_config.development.allow_localhost_webhooks = true;
+    
     let server = Server::new(server_config).await?;
     let app = server.build_app();
 

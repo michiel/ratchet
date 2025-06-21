@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
+// Re-export DevelopmentConfig from ratchet-core
+pub use ratchet_core::config::DevelopmentConfig;
+
 /// Complete server configuration combining all subsystems
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerConfig {
@@ -14,6 +17,7 @@ pub struct ServerConfig {
     pub database: DatabaseConfig,
     pub registry: RegistryConfig,
     pub heartbeat: HeartbeatConfig,
+    pub development: DevelopmentConfig,
 }
 
 /// HTTP server configuration
@@ -281,6 +285,7 @@ impl ServerConfig {
                 enable_validation: true,                       // Default enabled
             },
             heartbeat: HeartbeatConfig::default(),
+            development: DevelopmentConfig::default(),
         })
     }
 }

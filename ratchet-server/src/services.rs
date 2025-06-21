@@ -39,6 +39,7 @@ pub struct ServiceContainer {
     pub scheduler_service: Option<Arc<dyn SchedulerService>>,
     pub job_processor_service: Option<Arc<dyn JobProcessor>>,
     pub heartbeat_service: Arc<HeartbeatService>,
+    pub development_config: ratchet_core::config::DevelopmentConfig,
 }
 
 impl ServiceContainer {
@@ -87,6 +88,7 @@ impl ServiceContainer {
             scheduler_service,
             job_processor_service,
             heartbeat_service,
+            development_config: config.development.clone(),
         })
     }
 
@@ -108,6 +110,7 @@ impl ServiceContainer {
                 self.validator.clone(),
                 mcp.clone(),
                 scheduler.clone(),
+                self.development_config.clone(),
             )
         } else if let Some(mcp) = &self.mcp_task_service {
             TasksContext::with_mcp_service(
@@ -116,6 +119,7 @@ impl ServiceContainer {
                 self.registry_manager.clone(),
                 self.validator.clone(),
                 mcp.clone(),
+                self.development_config.clone(),
             )
         } else if let Some(scheduler) = &self.scheduler_service {
             TasksContext::with_scheduler(
@@ -124,6 +128,7 @@ impl ServiceContainer {
                 self.registry_manager.clone(),
                 self.validator.clone(),
                 scheduler.clone(),
+                self.development_config.clone(),
             )
         } else {
             TasksContext::new(
@@ -131,6 +136,7 @@ impl ServiceContainer {
                 self.registry.clone(),
                 self.registry_manager.clone(),
                 self.validator.clone(),
+                self.development_config.clone(),
             )
         }
     }
