@@ -281,10 +281,10 @@ pub enum DatabaseError {
 **One-line installation** for all platforms:
 ```bash
 # Linux/macOS
-curl -fsSL https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ratchet-runner/ratchet/master/scripts/install.sh | bash
 
 # Windows PowerShell
-irm https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/ratchet-runner/ratchet/master/scripts/install.ps1 | iex
 ```
 
 #### ✅ **Comprehensive Learning Resources**

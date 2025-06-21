@@ -15,7 +15,7 @@ mod https_git_tests {
         let clone_path = temp_dir.path().join("test_clone");
 
         // Use a small, reliable public repository for testing
-        let test_repo_url = "https://github.com/michiel/ratchet-repo-samples";
+        let test_repo_url = "https://github.com/ratchet-runner/ratchet-repo-samples";
 
         let git_config = GitConfig {
             branch: "main".to_string(),

@@ -110,7 +110,7 @@ authors = ["Michiel Kalkman <michiel@nosuchtype.com>"]
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/michiel/ratchet-workspace"
+repository = "https://github.com/ratchet-runner/ratchet-workspace"
 
 # Speed up compilation in debug mode
 [profile.dev]

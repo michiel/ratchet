@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO="michiel/ratchet"
+REPO="ratchet-runner/ratchet"
 GITHUB_API="https://api.github.com/repos/${REPO}"
 GITHUB_RELEASES="${GITHUB_API}/releases/latest"
 INSTALL_DIR="$HOME/.local/bin"

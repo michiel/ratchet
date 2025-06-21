@@ -45,7 +45,7 @@ mod git_tests {
         };
 
         let source = TaskSource::Git {
-            url: "https://github.com/michiel/ratchet-repo-samples.git".to_string(),
+            url: "https://github.com/ratchet-runner/ratchet-repo-samples.git".to_string(),
             auth: None,
             config: git_config,
         };

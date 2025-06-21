@@ -40,8 +40,8 @@ LABEL org.opencontainers.image.created="$BUILD_DATE"
 LABEL org.opencontainers.image.revision="$VCS_REF"
 LABEL org.opencontainers.image.vendor="Ratchet Project"
 LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
-LABEL org.opencontainers.image.source="https://github.com/michiel/ratchet-workspace"
-LABEL org.opencontainers.image.documentation="https://github.com/michiel/ratchet-workspace"
+LABEL org.opencontainers.image.source="https://github.com/ratchet-runner/ratchet-workspace"
+LABEL org.opencontainers.image.documentation="https://github.com/ratchet-runner/ratchet-workspace"
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \

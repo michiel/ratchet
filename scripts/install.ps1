@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$Repo = "michiel/ratchet"
+$Repo = "ratchet-runner/ratchet"
 $GitHubApi = "https://api.github.com/repos/$Repo"
 $GitHubReleases = "$GitHubApi/releases/latest"
 $BinaryName = "ratchet.exe"
@@ -65,7 +65,7 @@ function Show-Help {
     Write-Host "  .\install.ps1 -InstallDir C:\tools\bin          # Install to custom directory"
     Write-Host ""
     Write-Host "Remote execution:"
-    Write-Host "  irm https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.ps1 | iex"
+    Write-Host "  irm https://raw.githubusercontent.com/ratchet-runner/ratchet/master/scripts/install.ps1 | iex"
     Write-Host ""
 }
 

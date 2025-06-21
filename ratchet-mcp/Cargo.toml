@@ -4,7 +4,7 @@ version = "0.0.6"
 edition = "2021"
 description = "Model Context Protocol (MCP) implementation for Ratchet"
 license = "MIT"
-repository = "https://github.com/michiel/ratchet"
+repository = "https://github.com/ratchet-runner/ratchet"
 authors = ["Ratchet Contributors"]
 
 [dependencies]

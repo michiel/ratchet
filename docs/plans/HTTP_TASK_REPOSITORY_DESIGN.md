@@ -184,7 +184,7 @@ registry:
 registry:
   sources:
     - name: "github-public-tasks"
-      uri: "https://github.com/michiel/ratchet-repo-samples"
+      uri: "https://github.com/ratchet-runner/ratchet-repo-samples"
       source_type: "git"
       config:
         git:
@@ -587,7 +587,7 @@ resilience:
 registry:
   sources:
     - name: "community-tasks"
-      uri: "https://github.com/michiel/ratchet-repo-samples"
+      uri: "https://github.com/ratchet-runner/ratchet-repo-samples"
       source_type: "git"
       enabled: true
       config:
@@ -633,7 +633,7 @@ registry:
   sources:
     # Community tasks from GitHub
     - name: "github-community"
-      uri: "https://github.com/michiel/ratchet-repo-samples"
+      uri: "https://github.com/ratchet-runner/ratchet-repo-samples"
       source_type: "git"
       enabled: true
       config:

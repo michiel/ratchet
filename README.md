@@ -25,13 +25,13 @@ The easiest way to install Ratchet is using our install script:
 **Linux/macOS:**
 ```bash
 # Install latest release directly from GitHub
-curl -fsSL https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ratchet-runner/ratchet/master/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
 # Install latest release directly from GitHub
-irm https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/ratchet-runner/ratchet/master/scripts/install.ps1 | iex
 ```
 
 This script will:
@@ -48,7 +48,7 @@ This script will:
 
 ```bash
 # Clone the repository
-git clone https://github.com/michiel/ratchet.git
+git clone https://github.com/ratchet-runner/ratchet.git
 cd ratchet
 
 # Build the project
@@ -61,7 +61,7 @@ cargo build --release
 <details>
 <summary>Download Pre-built Binary</summary>
 
-1. Go to [GitHub Releases](https://github.com/michiel/ratchet/releases)
+1. Go to [GitHub Releases](https://github.com/ratchet-runner/ratchet/releases)
 2. Download the appropriate archive for your platform
 3. Extract and place the `ratchet` binary in your PATH
 </details>
@@ -71,10 +71,10 @@ cargo build --release
 
 ```bash
 # Install to custom directory
-RATCHET_INSTALL_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh | bash
+RATCHET_INSTALL_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/ratchet-runner/ratchet/master/scripts/install.sh | bash
 
 # Download and run locally for inspection
-curl -O https://raw.githubusercontent.com/michiel/ratchet/master/scripts/install.sh
+curl -O https://raw.githubusercontent.com/ratchet-runner/ratchet/master/scripts/install.sh
 chmod +x install.sh
 ./install.sh --help
 ```

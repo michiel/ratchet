@@ -32,7 +32,7 @@ impl BridgeTaskRegistry {
     pub async fn new(config: &crate::config::ServerConfig) -> anyhow::Result<Self> {
         // Create a Git source pointing to the default repository
         let git_source = ratchet_registry::TaskSource::Git {
-            url: "https://github.com/michiel/ratchet-repo-samples.git".to_string(),
+            url: "https://github.com/ratchet-runner/ratchet-repo-samples.git".to_string(),
             auth: None,
             config: ratchet_registry::config::GitConfig {
                 branch: "main".to_string(),

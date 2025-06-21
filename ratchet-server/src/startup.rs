@@ -711,14 +711,14 @@ async fn admin_handler() -> Html<String> {
     <title>Ratchet Admin Dashboard</title>
     
     <!-- CDN Assets with cache busting -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/style.css?t={}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/ratchet-runner/ratchet-ui@main-build/style.css?t={}">
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     
     <!-- CDN JavaScript with cache busting -->
-    <script src="https://cdn.jsdelivr.net/gh/michiel/ratchet-ui@main-build/script.js?t={}"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ratchet-runner/ratchet-ui@main-build/script.js?t={}"></script>
   </body>
 </html>"##,
         timestamp, timestamp

@@ -39,7 +39,7 @@ git2 = { version = "0.18", optional = true, default-features = false }
 registry:
   sources:
     - name: "community-tasks"
-      uri: "https://github.com/michiel/ratchet-repo-samples"  # BROKEN
+      uri: "https://github.com/ratchet-runner/ratchet-repo-samples"  # BROKEN
     - name: "corporate-tasks" 
       uri: "https://github.com/corp/ratchet-tasks.git"           # BROKEN
     - name: "gitlab-tasks"
