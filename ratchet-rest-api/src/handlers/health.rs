@@ -13,7 +13,14 @@ use crate::{
 /// Health check endpoint
 ///
 /// Returns the overall health status of the API and its dependencies.
-
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "Health status", body = HealthResponse)
+    ),
+    tag = "health"
+)]
 pub async fn health_check() -> impl IntoResponse {
     info!("Health check requested");
 

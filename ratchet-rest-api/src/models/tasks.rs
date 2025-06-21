@@ -1,10 +1,10 @@
 //! Task-related request and response models
 
 use serde::{Deserialize, Serialize};
-// use utoipa::ToSchema; // temporarily disabled
+use utoipa::ToSchema;
 
 /// Request to create a new task
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTaskRequest {
     /// Unique name for the task (alphanumeric characters, hyphens, and underscores only)
@@ -30,7 +30,7 @@ pub struct CreateTaskRequest {
 }
 
 /// Request to update an existing task
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateTaskRequest {
     /// Updated name for the task
@@ -56,7 +56,7 @@ pub struct UpdateTaskRequest {
 }
 
 /// Task validation request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidateTaskRequest {
     /// Input data to validate against the task's input schema
@@ -64,7 +64,7 @@ pub struct ValidateTaskRequest {
 }
 
 /// Task validation response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidateTaskResponse {
     /// Whether the input data is valid according to the task schema
@@ -78,7 +78,7 @@ pub struct ValidateTaskResponse {
 }
 
 /// Validation error detail
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationErrorDetail {
     /// The field name that failed validation (optional for global errors)
@@ -92,7 +92,7 @@ pub struct ValidationErrorDetail {
 }
 
 /// Validation warning detail
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationWarningDetail {
     /// The field name that generated the warning (optional for global warnings)
@@ -106,7 +106,7 @@ pub struct ValidationWarningDetail {
 }
 
 /// Task synchronization response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncTasksResponse {
     /// Names of tasks that were added during synchronization
@@ -123,7 +123,7 @@ pub struct SyncTasksResponse {
 }
 
 /// Task synchronization error
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskSyncError {
     /// Name of the task that failed to synchronize
@@ -134,7 +134,7 @@ pub struct TaskSyncError {
 }
 
 /// Task statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskStats {
     /// Total number of tasks in the system

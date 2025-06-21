@@ -1,11 +1,11 @@
 //! Execution-related request and response models
 
 use serde::{Deserialize, Serialize};
-// use utoipa::ToSchema; // temporarily disabled
+use utoipa::ToSchema;
 use ratchet_api_types::{ApiId, ExecutionStatus};
 
 /// Request to create a new execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateExecutionRequest {
     /// ID of the task to execute
@@ -22,7 +22,7 @@ pub struct CreateExecutionRequest {
 }
 
 /// Request to update execution status
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateExecutionRequest {
     /// New execution status
@@ -42,7 +42,7 @@ pub struct UpdateExecutionRequest {
 }
 
 /// Execution retry request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetryExecutionRequest {
     /// Optional new input data for the retry (uses original input if not provided)
@@ -50,7 +50,7 @@ pub struct RetryExecutionRequest {
 }
 
 /// Execution statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionStats {
     /// Total number of executions in the system

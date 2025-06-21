@@ -1,6 +1,7 @@
 //! Common types for REST API requests and responses
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Standard API response wrapper
 pub use ratchet_web::ApiResponse;
@@ -10,7 +11,7 @@ pub use ratchet_web::extractors::{ListQuery, PaginationParams};
 pub use ratchet_web::{FilterQuery, PaginationQuery, QueryParams, SortQuery};
 
 /// Health check response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HealthResponse {
     pub status: String,
     pub timestamp: chrono::DateTime<chrono::Utc>,
@@ -19,7 +20,7 @@ pub struct HealthResponse {
 }
 
 /// Individual health check result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HealthCheckResult {
     pub status: HealthStatus,
     pub message: Option<String>,
@@ -27,7 +28,7 @@ pub struct HealthCheckResult {
 }
 
 /// Health check status
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum HealthStatus {
     Healthy,
@@ -70,7 +71,7 @@ impl HealthResponse {
 }
 
 /// Statistics response wrapper
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StatsResponse<T> {
     pub stats: T,
     pub timestamp: chrono::DateTime<chrono::Utc>,

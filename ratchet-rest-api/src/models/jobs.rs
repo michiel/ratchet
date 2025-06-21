@@ -1,11 +1,11 @@
 //! Job-related request and response models
 
 use serde::{Deserialize, Serialize};
-// use utoipa::ToSchema; // temporarily disabled
+use utoipa::ToSchema;
 use ratchet_api_types::{ApiId, JobPriority, JobStatus};
 
 /// Request to create a new job
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateJobRequest {
     /// ID of the task to queue for execution
@@ -28,7 +28,7 @@ pub struct CreateJobRequest {
 }
 
 /// Request to update job status
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateJobRequest {
     /// New job status
@@ -48,7 +48,7 @@ pub struct UpdateJobRequest {
 }
 
 /// Job statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct JobStats {
     /// Total number of jobs in the system

@@ -17,7 +17,7 @@ use tower_http::trace::TraceLayer;
 use crate::{
     context::{ExecutionsContext, JobsContext, SchedulesContext, TasksContext, WorkersContext},
     handlers,
-    // openapi_spec, // temporarily disabled
+    openapi_spec,
 };
 
 /// Application configuration
@@ -145,8 +145,8 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
         .route("/metrics", get(handlers::metrics::get_metrics))
         .route("/metrics/prometheus", get(handlers::metrics::get_prometheus_metrics))
         // OpenAPI documentation endpoints (no context needed)
-        // .route("/api-docs/openapi.json", get(serve_openapi_spec)) // temporarily disabled
-        // .route("/docs", get(serve_swagger_ui)) // temporarily disabled
+        .route("/api-docs/openapi.json", get(serve_openapi_spec))
+        .route("/docs", get(serve_swagger_ui))
         // API routes with prefix
         .nest(&config.api_prefix, create_api_router())
         // Add application context for all routes
@@ -248,9 +248,9 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
 }
 
 /// Serve OpenAPI specification as JSON
-// async fn serve_openapi_spec() -> impl IntoResponse {
-//     Json(openapi_spec())
-// }
+async fn serve_openapi_spec() -> impl IntoResponse {
+    Json(openapi_spec())
+}
 
 /// Serve Swagger UI HTML page
 async fn serve_swagger_ui() -> impl IntoResponse {

@@ -1,11 +1,11 @@
 //! Schedule-related request and response models
 
 use serde::{Deserialize, Serialize};
-// use utoipa::ToSchema; // temporarily disabled
+use utoipa::ToSchema;
 use ratchet_api_types::{ApiId, UnifiedOutputDestination};
 
 /// Request to create a new schedule
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateScheduleRequest {
     /// ID of the task to schedule
@@ -29,7 +29,7 @@ pub struct CreateScheduleRequest {
 }
 
 /// Request to update a schedule
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateScheduleRequest {
     /// Updated name for the schedule
@@ -50,7 +50,7 @@ pub struct UpdateScheduleRequest {
 }
 
 /// Schedule statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleStats {
     /// Total number of schedules in the system
