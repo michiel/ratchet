@@ -353,6 +353,8 @@ async fn mcp_serve_command_with_config(
 #[cfg(feature = "server")]
 async fn server_command(
     config_path: Option<&PathBuf>,
+    dev_mode: bool,
+    prod_mode: bool,
     rest_port: Option<u16>,
     graphql_port: Option<u16>,
     mcp_port: Option<u16>,
@@ -369,8 +371,37 @@ async fn server_command(
     // Note: GraphQL and MCP port configuration would be handled via config file
 
     // Convert RatchetConfig to ratchet-server ServerConfig
-    let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(ratchet_config)
+    let mut server_config = ratchet_server::config::ServerConfig::from_ratchet_config(ratchet_config)
         .context("Failed to convert configuration to server config")?;
+
+    // Handle development/production mode flags
+    if dev_mode {
+        info!("🚀 Starting server in DEVELOPMENT mode");
+        server_config.development.enabled = true;
+        server_config.development.allow_localhost_webhooks = true;
+        server_config.development.allow_http_webhooks = true;
+        server_config.development.skip_webhook_ssl_verification = true;
+        server_config.development.verbose_errors = true;
+        server_config.development.disable_rbac = true;
+    } else if prod_mode {
+        info!("🔒 Starting server in PRODUCTION mode");
+        server_config.development.enabled = false;
+        server_config.development.allow_localhost_webhooks = false;
+        server_config.development.allow_http_webhooks = false;
+        server_config.development.skip_webhook_ssl_verification = false;
+        server_config.development.verbose_errors = false;
+        server_config.development.disable_rbac = false;
+    } else if config_path.is_none() {
+        // Default to development mode when no config file is specified
+        info!("🔧 No config file specified - defaulting to DEVELOPMENT mode");
+        info!("   Use --prod flag to enable production mode");
+        server_config.development.enabled = true;
+        server_config.development.allow_localhost_webhooks = true;
+        server_config.development.allow_http_webhooks = true;
+        server_config.development.skip_webhook_ssl_verification = true;
+        server_config.development.verbose_errors = true;
+        server_config.development.disable_rbac = true;
+    }
 
     // Create and start the unified server
     info!("Creating Ratchet unified server...");
@@ -387,6 +418,8 @@ async fn server_command(
 #[cfg(not(feature = "server"))]
 async fn server_command(
     _config_path: Option<&PathBuf>,
+    _dev_mode: bool,
+    _prod_mode: bool,
     _rest_port: Option<u16>,
     _graphql_port: Option<u16>,
     _mcp_port: Option<u16>,
@@ -1298,9 +1331,9 @@ async fn main() -> Result<()> {
         }) => {
             mcp_serve_command(config.as_ref(), &transport, &host, port).await?;
         }
-        Some(Commands::Serve { config }) => {
+        Some(Commands::Serve { config, dev, prod }) => {
             // Updated to match the new CLI structure - no port arguments
-            server_command(config.as_ref(), None, None, None).await?;
+            server_command(config.as_ref(), dev, prod, None, None, None).await?;
         }
         Some(Commands::RunOnce {
             from_fs,

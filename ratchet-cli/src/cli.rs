@@ -48,6 +48,14 @@ pub enum Commands {
         /// Path to configuration file
         #[arg(long, value_name = "PATH")]
         config: Option<PathBuf>,
+        
+        /// Enable development mode (overrides config file)
+        #[arg(long, conflicts_with = "prod")]
+        dev: bool,
+        
+        /// Enable production mode (overrides config file)
+        #[arg(long, conflicts_with = "dev")]
+        prod: bool,
     },
 
     /// Start the MCP (Model Context Protocol) server

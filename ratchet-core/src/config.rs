@@ -36,6 +36,8 @@ pub struct DevelopmentConfig {
     pub skip_webhook_ssl_verification: bool,
     /// Enable verbose error messages with stack traces
     pub verbose_errors: bool,
+    /// Disable RBAC authorization (allows all operations in development)
+    pub disable_rbac: bool,
 }
 
 impl Default for DevelopmentConfig {
@@ -46,6 +48,7 @@ impl Default for DevelopmentConfig {
             allow_http_webhooks: false,
             skip_webhook_ssl_verification: false,
             verbose_errors: false,
+            disable_rbac: false,
         }
     }
 }

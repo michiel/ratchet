@@ -683,6 +683,36 @@ mcp:
           token: "${AUDIT_TOKEN}"
 
 # =============================================================================
+# DEVELOPMENT CONFIGURATION
+# Controls development mode features for testing and debugging
+# WARNING: These settings should NEVER be enabled in production!
+# =============================================================================
+development:
+  # Enable development mode features (default: false)
+  # When enabled, allows insecure configurations for easier testing
+  enabled: false
+  
+  # Allow webhooks to use localhost URLs (default: false)
+  # Security risk: In production, webhooks should only target external services
+  allow_localhost_webhooks: false
+  
+  # Allow insecure HTTP webhooks (default: false)
+  # Security risk: In production, all webhooks should use HTTPS
+  allow_http_webhooks: false
+  
+  # Skip SSL certificate verification for webhooks (default: false)
+  # Security risk: In production, SSL certificates should always be verified
+  skip_webhook_ssl_verification: false
+  
+  # Enable verbose error messages with stack traces (default: false)
+  # Security risk: Detailed errors may leak sensitive information in production
+  verbose_errors: false
+  
+  # Disable RBAC authorization (default: false)
+  # Security risk: In production, RBAC should always be enabled for access control
+  disable_rbac: false
+
+# =============================================================================
 # REGISTRY CONFIGURATION
 # Controls task discovery and loading from various sources
 # =============================================================================

@@ -126,7 +126,7 @@ impl AppContext {
         development_config: DevelopmentConfig,
     ) -> Self {
         Self {
-            tasks: TasksContext::new(repositories.clone(), registry, registry_manager, validator, development_config),
+            tasks: TasksContext::new(repositories.clone(), registry, registry_manager, validator, development_config.clone()),
             executions: ExecutionsContext::new(repositories.clone()),
             jobs: JobsContext::new(repositories.clone()),
             schedules: SchedulesContext::new(repositories.clone()),
@@ -137,6 +137,9 @@ impl AppContext {
 
 /// Create the complete REST API application
 pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
+    // Capture development config before moving context
+    let rbac_disabled = context.tasks.development_config.disable_rbac;
+    
     let app = Router::new()
         // Health endpoints (no prefix) - need context for detailed checks
         .route("/health", get(handlers::health::health_check))
@@ -226,6 +229,17 @@ pub fn create_rest_app(context: AppContext, config: AppConfig) -> Router<()> {
                 }
             },
         ));
+    }
+
+    // RBAC authorization - only enabled if not disabled in development mode
+    if !rbac_disabled {
+        tracing::info!("🔒 RBAC authorization enabled");
+        // TODO: Add actual RBAC middleware here when implemented
+        // For now, we just log that RBAC would be enabled
+    } else {
+        tracing::warn!("🚨 RBAC authorization DISABLED in development mode");
+        tracing::warn!("   This allows unrestricted access to all API endpoints");
+        tracing::warn!("   DO NOT use in production!");
     }
 
     // CORS handling
