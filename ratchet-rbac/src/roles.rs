@@ -494,11 +494,16 @@ mod tests {
         let manager = create_test_manager();
         
         // This would create a cycle: role_a -> role_b -> role_a
+        let permission = Permission::new(
+            "tasks".to_string(),
+            "read".to_string(),
+            PermissionScope::Tenant,
+        );
         let mut role = Role::new_tenant_role(
             "role_a".to_string(),
             "Role A".to_string(),
             100,
-            vec![],
+            vec![permission],
         );
         role.inherits_from.push("role_b".to_string());
         
