@@ -22,7 +22,14 @@ use crate::{
 };
 
 /// List all jobs with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/jobs",
+    responses(
+        (status = 200, description = "List of jobs", body = Vec<ratchet_api_types::UnifiedJob>)
+    ),
+    tag = "jobs"
+)]
 pub async fn list_jobs(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing jobs with query: {:?}", query.0);
 
@@ -41,7 +48,18 @@ pub async fn list_jobs(State(ctx): State<TasksContext>, query: QueryParams) -> R
 }
 
 /// Get a specific job by ID
-
+#[utoipa::path(
+    get,
+    path = "/jobs/{id}",
+    params(
+        ("id" = String, Path, description = "Job ID")
+    ),
+    responses(
+        (status = 200, description = "Job details", body = ratchet_api_types::UnifiedJob),
+        (status = 404, description = "Job not found")
+    ),
+    tag = "jobs"
+)]
 pub async fn get_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Getting job with ID: {}", job_id);
 
@@ -71,7 +89,16 @@ pub async fn get_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>
 }
 
 /// Create a new job
-
+#[utoipa::path(
+    post,
+    path = "/jobs",
+    request_body = CreateJobRequest,
+    responses(
+        (status = 201, description = "Job created successfully", body = ratchet_api_types::UnifiedJob),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "jobs"
+)]
 pub async fn create_job(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateJobRequest>,
@@ -118,7 +145,20 @@ pub async fn create_job(
 }
 
 /// Update an existing job
-
+#[utoipa::path(
+    patch,
+    path = "/jobs/{id}",
+    params(
+        ("id" = String, Path, description = "Job ID")
+    ),
+    request_body = UpdateJobRequest,
+    responses(
+        (status = 200, description = "Job updated successfully", body = ratchet_api_types::UnifiedJob),
+        (status = 404, description = "Job not found"),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "jobs"
+)]
 pub async fn update_job(
     State(ctx): State<TasksContext>,
     Path(job_id): Path<String>,
@@ -185,7 +225,18 @@ pub async fn update_job(
 }
 
 /// Delete a job
-
+#[utoipa::path(
+    delete,
+    path = "/jobs/{id}",
+    params(
+        ("id" = String, Path, description = "Job ID")
+    ),
+    responses(
+        (status = 200, description = "Job deleted successfully"),
+        (status = 404, description = "Job not found")
+    ),
+    tag = "jobs"
+)]
 pub async fn delete_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Deleting job with ID: {}", job_id);
 
@@ -226,7 +277,18 @@ pub async fn delete_job(State(ctx): State<TasksContext>, Path(job_id): Path<Stri
 }
 
 /// Cancel a queued job
-
+#[utoipa::path(
+    post,
+    path = "/jobs/{id}/cancel",
+    params(
+        ("id" = String, Path, description = "Job ID")
+    ),
+    responses(
+        (status = 200, description = "Job cancelled successfully"),
+        (status = 404, description = "Job not found")
+    ),
+    tag = "jobs"
+)]
 pub async fn cancel_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Cancelling job with ID: {}", job_id);
 
@@ -242,7 +304,18 @@ pub async fn cancel_job(State(ctx): State<TasksContext>, Path(job_id): Path<Stri
 }
 
 /// Retry a failed job
-
+#[utoipa::path(
+    post,
+    path = "/jobs/{id}/retry",
+    params(
+        ("id" = String, Path, description = "Job ID")
+    ),
+    responses(
+        (status = 200, description = "Job retry scheduled successfully"),
+        (status = 404, description = "Job not found")
+    ),
+    tag = "jobs"
+)]
 pub async fn retry_job(State(ctx): State<TasksContext>, Path(job_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Retrying job with ID: {}", job_id);
 
@@ -264,7 +337,14 @@ pub async fn retry_job(State(ctx): State<TasksContext>, Path(job_id): Path<Strin
 }
 
 /// Get job statistics
-
+#[utoipa::path(
+    get,
+    path = "/jobs/stats",
+    responses(
+        (status = 200, description = "Job statistics", body = JobStats)
+    ),
+    tag = "jobs"
+)]
 pub async fn get_job_stats(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Getting job statistics");
 

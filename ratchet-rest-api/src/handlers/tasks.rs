@@ -23,7 +23,14 @@ use crate::{
 };
 
 /// List all tasks with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/tasks",
+    responses(
+        (status = 200, description = "List of tasks", body = Vec<ratchet_api_types::UnifiedTask>)
+    ),
+    tag = "tasks"
+)]
 pub async fn list_tasks(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing tasks with query: {:?}", query.0);
 
@@ -42,7 +49,18 @@ pub async fn list_tasks(State(ctx): State<TasksContext>, query: QueryParams) -> 
 }
 
 /// Get a specific task by ID
-
+#[utoipa::path(
+    get,
+    path = "/tasks/{id}",
+    params(
+        ("id" = String, Path, description = "Task ID")
+    ),
+    responses(
+        (status = 200, description = "Task details", body = ratchet_api_types::UnifiedTask),
+        (status = 404, description = "Task not found")
+    ),
+    tag = "tasks"
+)]
 pub async fn get_task(State(ctx): State<TasksContext>, Path(task_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Getting task with ID: {}", task_id);
 
@@ -86,7 +104,16 @@ pub async fn get_task(State(ctx): State<TasksContext>, Path(task_id): Path<Strin
 }
 
 /// Create a new task
-
+#[utoipa::path(
+    post,
+    path = "/tasks",
+    request_body = CreateTaskRequest,
+    responses(
+        (status = 201, description = "Task created successfully", body = ratchet_api_types::UnifiedTask),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "tasks"
+)]
 pub async fn create_task(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateTaskRequest>,
@@ -173,7 +200,20 @@ pub async fn create_task(
 }
 
 /// Update an existing task
-
+#[utoipa::path(
+    patch,
+    path = "/tasks/{id}",
+    params(
+        ("id" = String, Path, description = "Task ID")
+    ),
+    request_body = UpdateTaskRequest,
+    responses(
+        (status = 200, description = "Task updated successfully", body = ratchet_api_types::UnifiedTask),
+        (status = 404, description = "Task not found"),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "tasks"
+)]
 pub async fn update_task(
     State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
@@ -290,7 +330,18 @@ pub async fn update_task(
 }
 
 /// Delete a task
-
+#[utoipa::path(
+    delete,
+    path = "/tasks/{id}",
+    params(
+        ("id" = String, Path, description = "Task ID")
+    ),
+    responses(
+        (status = 204, description = "Task deleted successfully"),
+        (status = 404, description = "Task not found")
+    ),
+    tag = "tasks"
+)]
 pub async fn delete_task(
     State(ctx): State<TasksContext>,
     Path(task_id): Path<String>,
@@ -385,7 +436,14 @@ pub async fn sync_tasks(State(ctx): State<TasksContext>) -> RestResult<impl Into
 }
 
 /// Get task statistics
-
+#[utoipa::path(
+    get,
+    path = "/tasks/stats",
+    responses(
+        (status = 200, description = "Task statistics", body = TaskStats)
+    ),
+    tag = "tasks"
+)]
 pub async fn get_task_stats(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Getting task statistics");
 

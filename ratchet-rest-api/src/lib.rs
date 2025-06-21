@@ -84,6 +84,39 @@ use utoipa::OpenApi;
         // Monitoring and metrics  
         handlers::metrics::get_metrics,
         handlers::metrics::get_prometheus_metrics,
+
+        // Task management
+        handlers::tasks::list_tasks,
+        handlers::tasks::create_task,
+        handlers::tasks::get_task,
+        handlers::tasks::update_task,
+        handlers::tasks::delete_task,
+        handlers::tasks::get_task_stats,
+
+        // Execution management
+        handlers::executions::list_executions,
+        handlers::executions::create_execution,
+        handlers::executions::get_execution,
+        handlers::executions::update_execution,
+        handlers::executions::delete_execution,
+        handlers::executions::cancel_execution,
+        handlers::executions::get_execution_stats,
+
+        // Job management
+        handlers::jobs::list_jobs,
+        handlers::jobs::create_job,
+        handlers::jobs::get_job,
+        handlers::jobs::update_job,
+        handlers::jobs::delete_job,
+        handlers::jobs::get_job_stats,
+
+        // Schedule management
+        handlers::schedules::list_schedules,
+        handlers::schedules::create_schedule,
+        handlers::schedules::get_schedule,
+        handlers::schedules::update_schedule,
+        handlers::schedules::delete_schedule,
+        handlers::schedules::get_schedule_stats,
     ),
     components(
         schemas(
@@ -115,6 +148,10 @@ use utoipa::OpenApi;
             models::schedules::ScheduleStats,
 
             // Domain types from ratchet-api-types
+            ratchet_api_types::UnifiedTask,
+            ratchet_api_types::UnifiedExecution,
+            ratchet_api_types::UnifiedJob,
+            ratchet_api_types::UnifiedSchedule,
             ratchet_api_types::UnifiedOutputDestination,
             ratchet_api_types::UnifiedWebhookConfig,
             ratchet_api_types::UnifiedRetryPolicy,

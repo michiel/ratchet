@@ -274,7 +274,14 @@ fn validate_output_destinations(destinations: &[UnifiedOutputDestination]) -> Re
 }
 
 /// List all schedules with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/schedules",
+    responses(
+        (status = 200, description = "List of schedules", body = Vec<ratchet_api_types::UnifiedSchedule>)
+    ),
+    tag = "schedules"
+)]
 pub async fn list_schedules(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing schedules with query: {:?}", query.0);
 
@@ -293,7 +300,18 @@ pub async fn list_schedules(State(ctx): State<TasksContext>, query: QueryParams)
 }
 
 /// Get a specific schedule by ID
-
+#[utoipa::path(
+    get,
+    path = "/schedules/{id}",
+    params(
+        ("id" = String, Path, description = "Schedule ID")
+    ),
+    responses(
+        (status = 200, description = "Schedule details", body = ratchet_api_types::UnifiedSchedule),
+        (status = 404, description = "Schedule not found")
+    ),
+    tag = "schedules"
+)]
 pub async fn get_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -326,7 +344,16 @@ pub async fn get_schedule(
 }
 
 /// Create a new schedule
-
+#[utoipa::path(
+    post,
+    path = "/schedules",
+    request_body = CreateScheduleRequest,
+    responses(
+        (status = 201, description = "Schedule created successfully", body = ratchet_api_types::UnifiedSchedule),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "schedules"
+)]
 pub async fn create_schedule(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateScheduleRequest>,
@@ -426,7 +453,20 @@ pub async fn create_schedule(
 }
 
 /// Update an existing schedule
-
+#[utoipa::path(
+    patch,
+    path = "/schedules/{id}",
+    params(
+        ("id" = String, Path, description = "Schedule ID")
+    ),
+    request_body = UpdateScheduleRequest,
+    responses(
+        (status = 200, description = "Schedule updated successfully", body = ratchet_api_types::UnifiedSchedule),
+        (status = 404, description = "Schedule not found"),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "schedules"
+)]
 pub async fn update_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -538,7 +578,18 @@ pub async fn update_schedule(
 }
 
 /// Delete a schedule
-
+#[utoipa::path(
+    delete,
+    path = "/schedules/{id}",
+    params(
+        ("id" = String, Path, description = "Schedule ID")
+    ),
+    responses(
+        (status = 200, description = "Schedule deleted successfully"),
+        (status = 404, description = "Schedule not found")
+    ),
+    tag = "schedules"
+)]
 pub async fn delete_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -571,7 +622,18 @@ pub async fn delete_schedule(
 }
 
 /// Enable a schedule
-
+#[utoipa::path(
+    post,
+    path = "/schedules/{id}/enable",
+    params(
+        ("id" = String, Path, description = "Schedule ID")
+    ),
+    responses(
+        (status = 200, description = "Schedule enabled successfully"),
+        (status = 404, description = "Schedule not found")
+    ),
+    tag = "schedules"
+)]
 pub async fn enable_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -610,7 +672,18 @@ pub async fn enable_schedule(
 }
 
 /// Disable a schedule
-
+#[utoipa::path(
+    post,
+    path = "/schedules/{id}/disable",
+    params(
+        ("id" = String, Path, description = "Schedule ID")
+    ),
+    responses(
+        (status = 200, description = "Schedule disabled successfully"),
+        (status = 404, description = "Schedule not found")
+    ),
+    tag = "schedules"
+)]
 pub async fn disable_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -643,7 +716,19 @@ pub async fn disable_schedule(
 }
 
 /// Trigger a schedule manually
-
+#[utoipa::path(
+    post,
+    path = "/schedules/{id}/trigger",
+    params(
+        ("id" = String, Path, description = "Schedule ID")
+    ),
+    responses(
+        (status = 200, description = "Schedule triggered successfully"),
+        (status = 400, description = "Schedule is disabled or invalid"),
+        (status = 404, description = "Schedule not found")
+    ),
+    tag = "schedules"
+)]
 pub async fn trigger_schedule(
     State(ctx): State<TasksContext>,
     Path(schedule_id): Path<String>,
@@ -731,7 +816,14 @@ pub async fn trigger_schedule(
 }
 
 /// Get schedule statistics
-
+#[utoipa::path(
+    get,
+    path = "/schedules/stats",
+    responses(
+        (status = 200, description = "Schedule statistics", body = ScheduleStats)
+    ),
+    tag = "schedules"
+)]
 pub async fn get_schedule_stats(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Getting schedule statistics");
 

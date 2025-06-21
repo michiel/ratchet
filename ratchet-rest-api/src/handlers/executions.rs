@@ -22,7 +22,14 @@ use crate::{
 };
 
 /// List all executions with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/executions",
+    responses(
+        (status = 200, description = "List of executions", body = Vec<ratchet_api_types::UnifiedExecution>)
+    ),
+    tag = "executions"
+)]
 pub async fn list_executions(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing executions with query: {:?}", query.0);
 
@@ -41,7 +48,18 @@ pub async fn list_executions(State(ctx): State<TasksContext>, query: QueryParams
 }
 
 /// Get a specific execution by ID
-
+#[utoipa::path(
+    get,
+    path = "/executions/{id}",
+    params(
+        ("id" = String, Path, description = "Execution ID")
+    ),
+    responses(
+        (status = 200, description = "Execution details", body = ratchet_api_types::UnifiedExecution),
+        (status = 404, description = "Execution not found")
+    ),
+    tag = "executions"
+)]
 pub async fn get_execution(
     State(ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
@@ -74,7 +92,16 @@ pub async fn get_execution(
 }
 
 /// Create a new execution
-
+#[utoipa::path(
+    post,
+    path = "/executions",
+    request_body = CreateExecutionRequest,
+    responses(
+        (status = 201, description = "Execution created successfully", body = ratchet_api_types::UnifiedExecution),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "executions"
+)]
 pub async fn create_execution(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateExecutionRequest>,
@@ -137,7 +164,20 @@ pub async fn create_execution(
 }
 
 /// Update an existing execution
-
+#[utoipa::path(
+    patch,
+    path = "/executions/{id}",
+    params(
+        ("id" = String, Path, description = "Execution ID")
+    ),
+    request_body = UpdateExecutionRequest,
+    responses(
+        (status = 200, description = "Execution updated successfully", body = ratchet_api_types::UnifiedExecution),
+        (status = 404, description = "Execution not found"),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "executions"
+)]
 pub async fn update_execution(
     State(ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
@@ -237,7 +277,18 @@ pub async fn update_execution(
 }
 
 /// Delete an execution
-
+#[utoipa::path(
+    delete,
+    path = "/executions/{id}",
+    params(
+        ("id" = String, Path, description = "Execution ID")
+    ),
+    responses(
+        (status = 200, description = "Execution deleted successfully"),
+        (status = 404, description = "Execution not found")
+    ),
+    tag = "executions"
+)]
 pub async fn delete_execution(
     State(ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
@@ -284,7 +335,18 @@ pub async fn delete_execution(
 }
 
 /// Cancel a running execution
-
+#[utoipa::path(
+    post,
+    path = "/executions/{id}/cancel",
+    params(
+        ("id" = String, Path, description = "Execution ID")
+    ),
+    responses(
+        (status = 200, description = "Execution cancelled successfully"),
+        (status = 404, description = "Execution not found")
+    ),
+    tag = "executions"
+)]
 pub async fn cancel_execution(
     State(ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
@@ -306,7 +368,19 @@ pub async fn cancel_execution(
 }
 
 /// Retry a failed execution
-
+#[utoipa::path(
+    post,
+    path = "/executions/{id}/retry",
+    params(
+        ("id" = String, Path, description = "Execution ID")
+    ),
+    request_body = RetryExecutionRequest,
+    responses(
+        (status = 200, description = "Execution retry created successfully", body = ratchet_api_types::UnifiedExecution),
+        (status = 400, description = "Invalid request or execution cannot be retried")
+    ),
+    tag = "executions"
+)]
 pub async fn retry_execution(
     State(ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
@@ -380,7 +454,18 @@ pub async fn retry_execution(
 }
 
 /// Get execution logs
-
+#[utoipa::path(
+    get,
+    path = "/executions/{id}/logs",
+    params(
+        ("id" = String, Path, description = "Execution ID")
+    ),
+    responses(
+        (status = 200, description = "Execution logs"),
+        (status = 404, description = "Execution not found")
+    ),
+    tag = "executions"
+)]
 pub async fn get_execution_logs(
     State(_ctx): State<TasksContext>,
     Path(execution_id): Path<String>,
@@ -415,7 +500,14 @@ pub async fn get_execution_logs(
 }
 
 /// Get execution statistics
-
+#[utoipa::path(
+    get,
+    path = "/executions/stats",
+    responses(
+        (status = 200, description = "Execution statistics", body = ExecutionStats)
+    ),
+    tag = "executions"
+)]
 pub async fn get_execution_stats(State(ctx): State<TasksContext>) -> RestResult<impl IntoResponse> {
     info!("Getting execution statistics");
 
