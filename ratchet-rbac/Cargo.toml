@@ -1,0 +1,34 @@
+[package]
+name = "ratchet-rbac"
+version = "0.1.0"
+edition = "2021"
+description = "Role-Based Access Control for Ratchet using Casbin"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+casbin = { version = "2.1", features = ["runtime-tokio"] }
+async-trait = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.0"
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+
+# Internal dependencies
+ratchet-api-types = { path = "../ratchet-api-types" }
+ratchet-storage = { path = "../ratchet-storage" }
+
+# Database dependencies
+sea-orm = { version = "1.0", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite", 
+    "runtime-tokio-rustls",
+    "macros"
+] }
+
+[dev-dependencies]
+tokio-test = "0.4"
