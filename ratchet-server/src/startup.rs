@@ -316,12 +316,26 @@ impl Server {
             // Don't fail server startup for this
         }
 
+        // Create shutdown channel to coordinate background services
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel::<()>(1);
+        
         // Start scheduler service as background task AFTER schedules are initialized
         if let Some(scheduler_service) = &self.services.scheduler_service {
             let scheduler_clone = scheduler_service.clone();
+            let mut shutdown_rx = shutdown_tx.subscribe();
             tokio::spawn(async move {
-                if let Err(e) = scheduler_clone.start().await {
-                    tracing::error!("Scheduler service failed: {}", e);
+                tokio::select! {
+                    result = scheduler_clone.start() => {
+                        if let Err(e) = result {
+                            tracing::error!("Scheduler service failed: {}", e);
+                        }
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::info!("Scheduler service received shutdown signal");
+                        if let Err(e) = scheduler_clone.stop().await {
+                            tracing::error!("Failed to stop scheduler service: {}", e);
+                        }
+                    }
                 }
             });
             tracing::info!("Started background scheduler service");
@@ -330,9 +344,18 @@ impl Server {
         // Start job processor service as background task
         if let Some(job_processor_service) = &self.services.job_processor_service {
             let job_processor_clone = job_processor_service.clone();
+            let mut shutdown_rx = shutdown_tx.subscribe();
             tokio::spawn(async move {
-                if let Err(e) = job_processor_clone.start().await {
-                    tracing::error!("Job processor service failed: {}", e);
+                tokio::select! {
+                    result = job_processor_clone.start() => {
+                        if let Err(e) = result {
+                            tracing::error!("Job processor service failed: {}", e);
+                        }
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::info!("Job processor service received shutdown signal");
+                        job_processor_clone.stop().await;
+                    }
                 }
             });
             tracing::info!("Started background job processor service");
@@ -344,10 +367,10 @@ impl Server {
         // Start the server with TLS if configured
         if let Some(tls_config) = &self.config.server.tls {
             tracing::info!("Starting HTTPS server with TLS on {}", addr);
-            self.start_tls_server(app, addr, tls_config).await?;
+            self.start_tls_server(app, addr, tls_config, shutdown_tx).await?;
         } else {
             tracing::info!("Starting HTTP server on {}", addr);
-            self.start_http_server(app, addr).await?;
+            self.start_http_server(app, addr, shutdown_tx).await?;
         }
 
         tracing::info!("Server shutdown complete");
@@ -355,10 +378,10 @@ impl Server {
     }
 
     /// Start HTTP server
-    async fn start_http_server(&self, app: Router<()>, addr: std::net::SocketAddr) -> Result<()> {
+    async fn start_http_server(&self, app: Router<()>, addr: std::net::SocketAddr, shutdown_tx: tokio::sync::broadcast::Sender<()>) -> Result<()> {
         let listener = tokio::net::TcpListener::bind(&addr).await?;
         axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
+            .with_graceful_shutdown(shutdown_signal_with_services(shutdown_tx))
             .await?;
         Ok(())
     }
@@ -369,6 +392,7 @@ impl Server {
         app: Router<()>,
         addr: std::net::SocketAddr,
         tls_config: &crate::config::TlsConfig,
+        shutdown_tx: tokio::sync::broadcast::Sender<()>,
     ) -> Result<()> {
         // Load TLS certificates
         let cert_pem = fs::read(&tls_config.cert_path)
@@ -395,11 +419,18 @@ impl Server {
         // Create axum-server RustlsConfig
         let axum_tls_config = axum_server::tls_rustls::RustlsConfig::from_config(Arc::new(rustls_config));
 
-        // Start HTTPS server using axum-server
-        axum_server::bind_rustls(addr, axum_tls_config)
-            .serve(app.into_make_service())
-            .await
-            .map_err(|e| anyhow::anyhow!("HTTPS server error: {}", e))?;
+        // Start HTTPS server using axum-server with shutdown coordination
+        let server_future = axum_server::bind_rustls(addr, axum_tls_config)
+            .serve(app.into_make_service());
+        
+        tokio::select! {
+            result = server_future => {
+                result.map_err(|e| anyhow::anyhow!("HTTPS server error: {}", e))?;
+            }
+            _ = shutdown_signal_with_services(shutdown_tx) => {
+                tracing::info!("HTTPS server shutting down due to signal");
+            }
+        }
 
         Ok(())
     }
@@ -786,4 +817,19 @@ async fn shutdown_signal() {
     }
 
     tracing::info!("Shutdown signal received, starting graceful shutdown...");
+}
+
+async fn shutdown_signal_with_services(shutdown_tx: tokio::sync::broadcast::Sender<()>) {
+    // Wait for shutdown signal
+    shutdown_signal().await;
+    
+    // Signal background services to stop
+    tracing::info!("Signaling background services to shutdown...");
+    if let Err(e) = shutdown_tx.send(()) {
+        tracing::warn!("Failed to send shutdown signal to background services: {}", e);
+    }
+    
+    // Give services a moment to shut down cleanly
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    tracing::info!("Background services shutdown coordination complete");
 }
