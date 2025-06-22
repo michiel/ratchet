@@ -598,16 +598,19 @@ impl McpServer {
                 "version": env!("CARGO_PKG_VERSION"),
                 "transport": "sse",
                 "instructions": {
-                    "step1": "POST /mcp/session to create a new session",
-                    "step2": "Connect to the SSE endpoint with the session_id",
-                    "step3": "Send JSON-RPC messages to the message endpoint"
+                    "step1": "GET /mcp/ with Accept: text/event-stream to establish SSE connection",
+                    "step2": "POST /mcp/ with JSON-RPC messages and mcp-session-id header",
+                    "step3": "Session ID is provided in response header for initialize requests"
                 },
                 "endpoints": {
-                    "create_session": "POST /mcp/session",
-                    "sse_endpoint": "GET /mcp/sse/{session_id}",
-                    "message_endpoint": "POST /mcp/message/{session_id}",
-                    "health": "GET /mcp/health"
-                }
+                    "main": "GET/POST/DELETE /mcp/",
+                    "health": "GET /mcp/health",
+                    "info": "GET /mcp/info",
+                    "legacy_create_session": "POST /mcp/session",
+                    "legacy_sse": "GET /mcp/sse/{session_id}",
+                    "legacy_message": "POST /mcp/message/{session_id}"
+                },
+                "claude_compatible": true
             }))
         }
 
@@ -623,13 +626,17 @@ impl McpServer {
 
             // Validate Origin header for DNS rebinding protection
             if let Some(origin) = headers.get("origin").and_then(|h| h.to_str().ok()) {
-                // Only allow localhost origins for security
+                // Allow localhost origins and Claude application origins
                 if !origin.starts_with("http://localhost")
                     && !origin.starts_with("https://localhost")
                     && !origin.starts_with("http://127.0.0.1")
                     && !origin.starts_with("https://127.0.0.1")
                     && !origin.starts_with("http://[::1]")
                     && !origin.starts_with("https://[::1]")
+                    && !origin.starts_with("claude://")
+                    && !origin.starts_with("vscode://")
+                    && !origin.starts_with("code://")
+                    && origin != "null" // Allow null origin for local applications
                 {
                     tracing::warn!("Rejected request from disallowed origin: {}", origin);
                     return StatusCode::FORBIDDEN.into_response();
@@ -643,7 +650,9 @@ impl McpServer {
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| {
                     // Generate a new session ID if none provided
-                    uuid::Uuid::new_v4().to_string()
+                    let new_id = uuid::Uuid::new_v4().to_string();
+                    tracing::debug!("Generated new session ID: {}", new_id);
+                    new_id
                 });
 
             match method {
@@ -694,6 +703,12 @@ impl McpServer {
                         }
                     } else {
                         tracing::info!("New MCP SSE connection established for session: {}", session_id);
+                        
+                        // Track this session as server-issued for future validation
+                        {
+                            let mut server_sessions = state.server_issued_sessions.write().await;
+                            server_sessions.insert(session_id.clone());
+                        }
                     }
 
                     let session_id_clone = session_id.clone();
@@ -794,30 +809,23 @@ impl McpServer {
                     }
 
                     // Check if session ID is required for non-initialize requests
-                    // Only require session ID if the server has previously issued one
-                    let requires_session = json_value.get("method").and_then(|m| m.as_str()) != Some("initialize");
-                    if requires_session {
-                        let server_sessions = state.server_issued_sessions.read().await;
-                        let has_session_header = headers.contains_key("mcp-session-id");
+                    // For Claude compatibility, we'll be more lenient with session validation
+                    let is_initialize = json_value.get("method").and_then(|m| m.as_str()) == Some("initialize");
+                    
+                    // For Claude compatibility, accept any session ID and track it
+                    // This allows Claude to reconnect with the same session ID
+                    if !is_initialize && headers.contains_key("mcp-session-id") {
+                        let provided_session = headers
+                            .get("mcp-session-id")
+                            .and_then(|h| h.to_str().ok())
+                            .unwrap_or("");
 
-                        // If we have issued sessions and client doesn't provide one, that's an error
-                        if !server_sessions.is_empty() && !has_session_header {
-                            tracing::warn!(
-                                "Request requires session ID but none provided (server has issued sessions)"
-                            );
-                            return StatusCode::BAD_REQUEST.into_response();
-                        }
-
-                        // If client provides session ID, verify it's one we issued
-                        if has_session_header && !server_sessions.is_empty() {
-                            let provided_session = headers
-                                .get("mcp-session-id")
-                                .and_then(|h| h.to_str().ok())
-                                .unwrap_or("");
-
-                            if !server_sessions.contains(provided_session) {
-                                tracing::warn!("Invalid session ID provided: {}", provided_session);
-                                return StatusCode::NOT_FOUND.into_response();
+                        // Always accept and track session IDs from Claude
+                        if !provided_session.is_empty() {
+                            let mut sessions = state.server_issued_sessions.write().await;
+                            if !sessions.contains(provided_session) {
+                                tracing::info!("Accepting new session ID from Claude: {}", provided_session);
+                                sessions.insert(provided_session.to_string());
                             }
                         }
                     }

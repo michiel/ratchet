@@ -150,6 +150,23 @@ impl Server {
                 // Create and nest MCP SSE routes
                 let mcp_routes = mcp_server.create_sse_routes();
                 app = app.nest(&self.config.mcp_api.endpoint, mcp_routes);
+                
+                // Add trailing slash handler for Claude compatibility - redirect /mcp/ to /mcp
+                let mcp_endpoint_with_slash = format!("{}/", self.config.mcp_api.endpoint);
+                let mcp_endpoint_target = self.config.mcp_api.endpoint.clone();
+                app = app.route(&mcp_endpoint_with_slash, 
+                    axum::routing::get({
+                        let target = mcp_endpoint_target.clone(); 
+                        move || async move { axum::response::Redirect::permanent(&target) }
+                    })
+                    .post({
+                        let target = mcp_endpoint_target.clone();
+                        move || async move { axum::response::Redirect::permanent(&target) }
+                    })
+                    .delete({
+                        let target = mcp_endpoint_target.clone();
+                        move || async move { axum::response::Redirect::permanent(&target) }
+                    }));
             }
 
             #[cfg(not(feature = "mcp"))]
