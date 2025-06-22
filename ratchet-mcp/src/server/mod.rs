@@ -977,6 +977,28 @@ impl McpServer {
             mcp_endpoint_handler(axum::http::Method::DELETE, headers, State(state), None).await
         }
 
+        // OAuth endpoints for Claude compatibility
+        async fn oauth_register_handler() -> axum::response::Json<serde_json::Value> {
+            axum::response::Json(serde_json::json!({
+                "error": "unsupported_grant_type",
+                "error_description": "OAuth2 Dynamic Client Registration not implemented. Use direct MCP SSE connection instead."
+            }))
+        }
+        
+        async fn oauth_token_handler() -> axum::response::Json<serde_json::Value> {
+            axum::response::Json(serde_json::json!({
+                "error": "unsupported_grant_type", 
+                "error_description": "OAuth2 not implemented. Use direct MCP SSE connection instead."
+            }))
+        }
+        
+        async fn oauth_authorize_handler() -> axum::response::Json<serde_json::Value> {
+            axum::response::Json(serde_json::json!({
+                "error": "unsupported_response_type",
+                "error_description": "OAuth2 not implemented. Use direct MCP SSE connection instead."
+            }))
+        }
+
         // Build the MCP routes - single endpoint as per protocol
         Router::new()
             .route(
@@ -985,6 +1007,10 @@ impl McpServer {
             )
             .route("/health", get(mcp_health_handler)) // Keep health for debugging
             .route("/info", get(connection_info_handler)) // Keep info for debugging
+            // OAuth stub endpoints to prevent 404 errors
+            .route("/oauth/register", axum::routing::post(oauth_register_handler))
+            .route("/oauth/token", axum::routing::post(oauth_token_handler))
+            .route("/oauth/authorize", get(oauth_authorize_handler))
             .with_state(state)
     }
 

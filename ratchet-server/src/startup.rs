@@ -79,6 +79,10 @@ impl Server {
         // Add admin UI handler
         app = app.route("/admin", get(admin_handler));
 
+        // Add OAuth discovery endpoints for Claude MCP compatibility
+        app = app.route("/.well-known/oauth-authorization-server", get(oauth_authorization_server_metadata));
+        app = app.route("/.well-known/oauth-protected-resource", get(oauth_protected_resource_metadata));
+
         // Add GraphQL API if enabled
         if self.config.graphql_api.enabled {
             tracing::info!("GraphQL API enabled, creating schema and routes");
@@ -832,4 +836,31 @@ async fn shutdown_signal_with_services(shutdown_tx: tokio::sync::broadcast::Send
     // Give services a moment to shut down cleanly
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     tracing::info!("Background services shutdown coordination complete");
+}
+
+/// OAuth authorization server metadata for Claude MCP compatibility
+async fn oauth_authorization_server_metadata() -> axum::response::Json<serde_json::Value> {
+    axum::response::Json(serde_json::json!({
+        "issuer": "http://localhost:8080",
+        "authorization_endpoint": "http://localhost:8080/oauth/authorize",
+        "token_endpoint": "http://localhost:8080/oauth/token", 
+        "registration_endpoint": "http://localhost:8080/oauth/register",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "scopes_supported": ["mcp"],
+        "ui_locales_supported": ["en"]
+    }))
+}
+
+/// OAuth protected resource metadata for Claude MCP compatibility  
+async fn oauth_protected_resource_metadata() -> axum::response::Json<serde_json::Value> {
+    axum::response::Json(serde_json::json!({
+        "resource": "http://localhost:8080/mcp",
+        "authorization_servers": ["http://localhost:8080"],
+        "scopes_supported": ["mcp"],
+        "bearer_methods_supported": ["header", "query"],
+        "resource_documentation": "http://localhost:8080/mcp/info"
+    }))
 }
