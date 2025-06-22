@@ -1,5 +1,5 @@
 # Multi-stage build for optimal image size
-FROM rust:1.85-bookworm as builder
+FROM rust:1.86-bookworm as builder
 
 # Build arguments
 ARG VERSION=dev
