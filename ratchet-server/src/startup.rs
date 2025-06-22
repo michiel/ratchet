@@ -658,9 +658,9 @@ impl Server {
         if self.config.mcp_api.enabled {
             tracing::info!("   🤖 MCP Server-Sent Events API:");
             tracing::info!(
-                "      • Base Endpoint:    http://{}:{}{}",
-                self.config.mcp_api.host,
-                self.config.mcp_api.port,
+                "      • Base Endpoint:    {}://{}{}",
+                protocol,
+                self.config.server.bind_address,
                 self.config.mcp_api.endpoint
             );
 

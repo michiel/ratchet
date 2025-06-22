@@ -605,10 +605,7 @@ impl McpServer {
                 "endpoints": {
                     "main": "GET/POST/DELETE /mcp/",
                     "health": "GET /mcp/health",
-                    "info": "GET /mcp/info",
-                    "legacy_create_session": "POST /mcp/session",
-                    "legacy_sse": "GET /mcp/sse/{session_id}",
-                    "legacy_message": "POST /mcp/message/{session_id}"
+                    "info": "GET /mcp/info"
                 },
                 "claude_compatible": true
             }))
