@@ -136,8 +136,13 @@ impl Server {
             {
                 use crate::mcp_handler::{mcp_get_handler, mcp_post_handler, mcp_delete_handler, mcp_health_handler, McpEndpointState};
 
-                // Create MCP endpoint state
-                let mcp_state = match McpEndpointState::new(self.config.mcp_api.clone()) {
+                // Create MCP endpoint state with dependencies
+                let mcp_state = match McpEndpointState::new_with_dependencies(
+                    self.config.mcp_api.clone(),
+                    self.services.repositories.clone(),
+                    self.services.mcp_task_service.clone(),
+                    self.services.storage_factory.clone(),
+                ) {
                     Ok(state) => state,
                     Err(e) => {
                         tracing::error!("Failed to create MCP endpoint state: {}", e);

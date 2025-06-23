@@ -53,10 +53,15 @@ ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-execution = { path = "../ratchet-execution" }
 ratchet-http = { path = "../ratchet-http" }
+ratchet-js = { path = "../ratchet-js", features = ["javascript", "http"] }
+
+# Direct dependency for JavaScript execution
+boa_engine = { version = "0.20", optional = true }
 # ratchet_lib = { path = "../ratchet-lib" }  # REMOVED - replaced by ratchet-interfaces
 
 [features]
-default = ["server", "client", "transport-stdio", "transport-sse", "transport-streamable-http"]
+default = ["server", "client", "transport-stdio", "transport-sse", "transport-streamable-http", "javascript"]
+javascript = ["boa_engine"]
 server = []
 client = []
 transport-stdio = []

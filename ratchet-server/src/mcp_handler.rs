@@ -13,13 +13,15 @@ use crate::config::{McpApiConfig, McpTransportMode};
 
 #[cfg(feature = "mcp")]
 use ratchet_mcp::{
-    server::{McpServer, RatchetToolRegistry, tools::{ToolExecutionContext, ToolRegistry}},
+    server::{McpServer, RatchetToolRegistry, tools::{ToolExecutionContext, ToolRegistry}, task_dev_tools::TaskDevelopmentService},
     transport::streamable_http::{
         EventStore, InMemoryEventStore, SessionManager, StreamableHttpTransport,
     },
     security::{AuditLogger, McpAuth, McpAuthManager, SecurityContext, SecurityConfig, ClientContext, permissions::ClientPermissions},
     server::McpServerConfig,
 };
+use ratchet_interfaces::RepositoryFactory;
+use ratchet_execution::{ExecutionBridge, ProcessTaskExecutor};
 
 /// MCP endpoint state for handling both SSE and StreamableHTTP
 #[derive(Clone)]
@@ -41,6 +43,96 @@ impl McpEndpointState {
         // Create MCP server
         let mcp_server_config = McpServerConfig::sse_with_host(config.port, &config.host);
         let tool_registry = Arc::new(RatchetToolRegistry::new());
+        let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
+        let audit_logger = Arc::new(AuditLogger::new(false));
+
+        let mcp_server = Arc::new(McpServer::new(
+            mcp_server_config,
+            Arc::clone(&tool_registry) as Arc<dyn ToolRegistry>,
+            auth_manager,
+            audit_logger,
+        ));
+
+        // Create session manager for StreamableHTTP if needed
+        let (session_manager, streamable_transport) = match config.transport {
+            McpTransportMode::StreamableHttp | McpTransportMode::Both => {
+                let event_store = Arc::new(InMemoryEventStore::new(
+                    config.max_events_per_session,
+                    Duration::from_secs(config.session_timeout_minutes as u64 * 60),
+                )) as Arc<dyn EventStore>;
+
+                let session_manager = Arc::new(SessionManager::new(
+                    event_store,
+                    Duration::from_secs(config.session_timeout_minutes as u64 * 60),
+                    Duration::from_secs(60), // cleanup interval
+                ));
+
+                let streamable_transport = Arc::new(tokio::sync::Mutex::new(
+                    StreamableHttpTransport::new(Arc::clone(&session_manager)),
+                ));
+
+                (Some(session_manager), Some(streamable_transport))
+            }
+            McpTransportMode::Sse => (None, None),
+        };
+
+        Ok(Self {
+            config,
+            mcp_server,
+            tool_registry,
+            session_manager,
+            streamable_transport,
+        })
+    }
+
+    #[cfg(feature = "mcp")]
+    pub fn new_with_dependencies(
+        config: McpApiConfig,
+        repositories: Arc<dyn RepositoryFactory>,
+        mcp_task_service: Option<Arc<TaskDevelopmentService>>,
+        storage_factory: Option<Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>>,
+    ) -> anyhow::Result<Self> {
+        // Create MCP server
+        let mcp_server_config = McpServerConfig::sse_with_host(config.port, &config.host);
+        let tool_registry = Arc::new(
+            RatchetToolRegistry::new()
+                .with_repositories(repositories)
+        );
+        
+        // Configure tool registry with task development service if available
+        let tool_registry = if let Some(task_dev_service) = mcp_task_service {
+            Arc::new(
+                Arc::try_unwrap(tool_registry)
+                    .map_err(|_| anyhow::anyhow!("Failed to unwrap tool registry"))?
+                    .with_task_dev_service(task_dev_service)
+            )
+        } else {
+            tool_registry
+        };
+        
+        // Create MCP task executor if storage factory is available
+        let tool_registry = if let Some(storage_fact) = storage_factory {
+            // Create an ExecutionBridge as the task executor
+            let executor_config = ratchet_execution::ProcessExecutorConfig::default();
+            let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
+            
+            // Create the MCP adapter using the ExecutionBridge
+            let mcp_adapter = ratchet_mcp::server::adapter::RatchetMcpAdapter::with_bridge_executor(
+                execution_bridge,
+                Arc::new(storage_fact.task_repository()),
+                Arc::new(storage_fact.execution_repository()),
+            );
+            
+            // Configure tool registry with the MCP adapter as task executor
+            Arc::new(
+                Arc::try_unwrap(tool_registry)
+                    .map_err(|_| anyhow::anyhow!("Failed to unwrap tool registry for executor configuration"))?
+                    .with_task_executor(Arc::new(mcp_adapter))
+            )
+        } else {
+            tool_registry
+        };
+        
         let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
         let audit_logger = Arc::new(AuditLogger::new(false));
 

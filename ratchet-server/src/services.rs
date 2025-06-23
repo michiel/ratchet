@@ -39,6 +39,7 @@ pub struct ServiceContainer {
     pub scheduler_service: Option<Arc<dyn SchedulerService>>,
     pub job_processor_service: Option<Arc<dyn JobProcessor>>,
     pub heartbeat_service: Arc<HeartbeatService>,
+    pub storage_factory: Option<Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>>,
 }
 
 impl ServiceContainer {
@@ -48,7 +49,7 @@ impl ServiceContainer {
         // In the future, these would be replaced with the new modular implementations
 
         // This is a bridge implementation during the migration
-        let (repositories, mcp_task_service, _seaorm_factory) = create_repository_factory_with_mcp(config).await?;
+        let (repositories, mcp_task_service, seaorm_factory) = create_repository_factory_with_mcp(config).await?;
         let registry = create_task_registry(config, repositories.clone()).await?;
         let registry_manager = create_registry_manager(config).await?;
         let validator = create_task_validator(config).await?;
@@ -87,6 +88,7 @@ impl ServiceContainer {
             scheduler_service,
             job_processor_service,
             heartbeat_service,
+            storage_factory: Some(seaorm_factory),
         })
     }
 

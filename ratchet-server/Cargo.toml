@@ -18,6 +18,7 @@ ratchet-storage = { path = "../ratchet-storage", features = ["seaorm"] }
 ratchet-registry = { path = "../ratchet-registry" }
 ratchet-http = { path = "../ratchet-http" }
 ratchet-output = { path = "../ratchet-output" }
+ratchet-execution = { path = "../ratchet-execution" }
 
 # Workspace dependencies - legacy during migration
 # ratchet_lib = { path = "../ratchet-lib" } # REMOVED - using modern modular components
