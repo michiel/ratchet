@@ -261,7 +261,7 @@ async fn handle_sse_request(
                                 "result": {
                                     "tools": [
                                         {
-                                            "name": "ratchet.execute_task",
+                                            "name": "ratchet_execute_task",
                                             "description": "Execute a Ratchet task with given input and optional progress streaming",
                                             "inputSchema": {
                                                 "type": "object",
@@ -279,7 +279,7 @@ async fn handle_sse_request(
                                             }
                                         },
                                         {
-                                            "name": "ratchet.list_available_tasks",
+                                            "name": "ratchet_list_available_tasks",
                                             "description": "List all available tasks with their schemas and pagination support",
                                             "inputSchema": {
                                                 "type": "object",
