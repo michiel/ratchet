@@ -13,11 +13,11 @@ use crate::config::{McpApiConfig, McpTransportMode};
 
 #[cfg(feature = "mcp")]
 use ratchet_mcp::{
-    server::{McpServer, RatchetToolRegistry},
+    server::{McpServer, RatchetToolRegistry, tools::{ToolExecutionContext, ToolRegistry}},
     transport::streamable_http::{
         EventStore, InMemoryEventStore, SessionManager, StreamableHttpTransport,
     },
-    security::{AuditLogger, McpAuth, McpAuthManager},
+    security::{AuditLogger, McpAuth, McpAuthManager, SecurityContext, SecurityConfig, ClientContext, permissions::ClientPermissions},
     server::McpServerConfig,
 };
 
@@ -27,6 +27,8 @@ pub struct McpEndpointState {
     pub config: McpApiConfig,
     #[cfg(feature = "mcp")]
     pub mcp_server: Arc<McpServer>,
+    #[cfg(feature = "mcp")]
+    pub tool_registry: Arc<RatchetToolRegistry>,
     #[cfg(feature = "mcp")]
     pub session_manager: Option<Arc<SessionManager>>,
     #[cfg(feature = "mcp")]
@@ -38,13 +40,13 @@ impl McpEndpointState {
     pub fn new(config: McpApiConfig) -> anyhow::Result<Self> {
         // Create MCP server
         let mcp_server_config = McpServerConfig::sse_with_host(config.port, &config.host);
-        let tool_registry = RatchetToolRegistry::new();
+        let tool_registry = Arc::new(RatchetToolRegistry::new());
         let auth_manager = Arc::new(McpAuthManager::new(McpAuth::default()));
         let audit_logger = Arc::new(AuditLogger::new(false));
 
         let mcp_server = Arc::new(McpServer::new(
             mcp_server_config,
-            Arc::new(tool_registry),
+            Arc::clone(&tool_registry) as Arc<dyn ToolRegistry>,
             auth_manager,
             audit_logger,
         ));
@@ -75,6 +77,7 @@ impl McpEndpointState {
         Ok(Self {
             config,
             mcp_server,
+            tool_registry,
             session_manager,
             streamable_transport,
         })
@@ -83,6 +86,74 @@ impl McpEndpointState {
     #[cfg(not(feature = "mcp"))]
     pub fn new(config: McpApiConfig) -> anyhow::Result<Self> {
         Ok(Self { config })
+    }
+}
+
+/// Create a default security context for MCP operations
+#[cfg(feature = "mcp")]
+fn create_default_security_context() -> SecurityContext {
+    let client = ClientContext {
+        id: "default-client".to_string(),
+        name: "Default MCP Client".to_string(),
+        permissions: ClientPermissions::default(),
+        authenticated_at: chrono::Utc::now(),
+        session_id: "default-session".to_string(),
+    };
+    SecurityContext::new(client, SecurityConfig::default())
+}
+
+/// Execute a tool from the registry and convert result to JSON-RPC format
+#[cfg(feature = "mcp")]
+async fn execute_tool_from_registry(
+    registry: &RatchetToolRegistry,
+    tool_name: &str,
+    arguments: serde_json::Value,
+    request_id: serde_json::Value,
+) -> Result<serde_json::Value, StatusCode> {
+    // Create security context (for now, using default - could be enhanced with actual auth)
+    let security_context = create_default_security_context();
+    
+    // Create tool execution context
+    let execution_context = ToolExecutionContext {
+        security: security_context.clone(),
+        arguments: Some(arguments),
+        request_id: request_id.as_str().map(|s| s.to_string()),
+    };
+    
+    // Check if tool exists and is accessible
+    if !registry.can_access_tool(tool_name, &security_context).await {
+        error!("Tool '{}' not found or not accessible", tool_name);
+        return Ok(serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32601,
+                "message": format!("Tool '{}' not found", tool_name)
+            },
+            "id": request_id
+        }));
+    }
+    
+    // Execute the tool
+    match registry.execute_tool(tool_name, execution_context).await {
+        Ok(result) => {
+            // Convert ToolsCallResult to JSON-RPC response
+            Ok(serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": result,
+                "id": request_id
+            }))
+        }
+        Err(e) => {
+            error!("Tool execution failed for '{}': {}", tool_name, e);
+            Ok(serde_json::json!({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": format!("Tool execution failed: {}", e)
+                },
+                "id": request_id
+            }))
+        }
     }
 }
 
@@ -189,7 +260,7 @@ async fn handle_sse_request(
     method: axum::http::Method,
     _headers: HeaderMap,
     _query: Query<HashMap<String, String>>,
-    _state: McpEndpointState,
+    state: McpEndpointState,
     body: Option<Vec<u8>>,
 ) -> Result<Response, StatusCode> {
     debug!("Handling SSE request with method: {}", method);
@@ -255,52 +326,30 @@ async fn handle_sse_request(
                             })).into_response())
                         }
                         "tools/list" => {
-                            // Return available tools
-                            Ok(Json(serde_json::json!({
-                                "jsonrpc": "2.0",
-                                "result": {
-                                    "tools": [
-                                        {
-                                            "name": "ratchet_execute_task",
-                                            "description": "Execute a Ratchet task with given input and optional progress streaming",
-                                            "inputSchema": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "task_id": {
-                                                        "type": "string",
-                                                        "description": "ID or name of the task to execute"
-                                                    },
-                                                    "input": {
-                                                        "type": "object",
-                                                        "description": "Input data for the task"
-                                                    }
-                                                },
-                                                "required": ["task_id", "input"]
-                                            }
+                            // Return available tools from registry
+                            let security_context = create_default_security_context();
+                            match state.tool_registry.list_tools(&security_context).await {
+                                Ok(tools) => {
+                                    Ok(Json(serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "result": {
+                                            "tools": tools
                                         },
-                                        {
-                                            "name": "ratchet_list_available_tasks",
-                                            "description": "List all available tasks with their schemas and pagination support",
-                                            "inputSchema": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "limit": {
-                                                        "type": "integer",
-                                                        "description": "Maximum number of tasks to return",
-                                                        "default": 50
-                                                    },
-                                                    "page": {
-                                                        "type": "integer", 
-                                                        "description": "Page number for pagination",
-                                                        "default": 0
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    ]
-                                },
-                                "id": request_id
-                            })).into_response())
+                                        "id": request_id
+                                    })).into_response())
+                                }
+                                Err(e) => {
+                                    error!("Failed to list tools: {}", e);
+                                    Ok(Json(serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "error": {
+                                            "code": -32603,
+                                            "message": format!("Failed to list tools: {}", e)
+                                        },
+                                        "id": request_id
+                                    })).into_response())
+                                }
+                            }
                         }
                         "resources/list" => {
                             // Return available resources
@@ -313,52 +362,14 @@ async fn handle_sse_request(
                             })).into_response())
                         }
                         "tools/call" => {
-                            // Handle tool execution
+                            // Handle tool execution using registry
                             let params = request_json.get("params").cloned().unwrap_or(serde_json::Value::Null);
                             let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
                             let arguments = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
                             
-                            match tool_name {
-                                "ratchet_list_available_tasks" => {
-                                    // Return mock list of available tasks for now
-                                    Ok(Json(serde_json::json!({
-                                        "jsonrpc": "2.0",
-                                        "result": {
-                                            "content": [
-                                                {
-                                                    "type": "text",
-                                                    "text": "Available Ratchet tasks:\n\n1. **heartbeat** - System heartbeat task\n2. **HTTP-enabled tasks** - Any JavaScript task can make HTTP requests using fetch() API\n\nFor HTTP functionality in Ratchet:\n- Use JavaScript tasks with the built-in fetch() API\n- HTTP client library (ratchet-http) provides request recording and mock support\n- Tasks can make REST API calls, handle authentication, and process responses\n\nExample task patterns:\n- weather-api: External API consumption\n- rest-call-sample: REST API integration\n- test-fetch: HTTP GET requests with headers"
-                                                }
-                                            ]
-                                        },
-                                        "id": request_id
-                                    })).into_response())
-                                }
-                                "ratchet_execute_task" => {
-                                    // Return message about task execution
-                                    Ok(Json(serde_json::json!({
-                                        "jsonrpc": "2.0",
-                                        "result": {
-                                            "content": [
-                                                {
-                                                    "type": "text",
-                                                    "text": "Task execution would require a full task runtime integration. Currently, this MCP server provides task discovery and management capabilities.\n\nTo execute HTTP-related tasks:\n1. Use the Ratchet CLI: `ratchet execute <task-name>`\n2. Tasks have access to fetch() API for HTTP requests\n3. Check available tasks with the list command"
-                                                }
-                                            ]
-                                        },
-                                        "id": request_id
-                                    })).into_response())
-                                }
-                                _ => {
-                                    Ok(Json(serde_json::json!({
-                                        "jsonrpc": "2.0",
-                                        "error": {
-                                            "code": -32601,
-                                            "message": format!("Tool '{}' not found", tool_name)
-                                        },
-                                        "id": request_id
-                                    })).into_response())
-                                }
+                            match execute_tool_from_registry(&state.tool_registry, tool_name, arguments, request_id.clone()).await {
+                                Ok(response) => Ok(Json(response).into_response()),
+                                Err(status_code) => Err(status_code),
                             }
                         }
                         _ => {
@@ -439,6 +450,57 @@ async fn handle_streamable_http_request(
     match method.as_str() {
         "POST" => {
             let request_body = body.unwrap_or_default();
+            
+            // Check if this is a tools/list or tools/call request that we should handle here
+            if let Ok(request_json) = serde_json::from_slice::<serde_json::Value>(&request_body) {
+                let method_name = request_json.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                let request_id = request_json.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                
+                match method_name {
+                    "tools/list" => {
+                        // Handle tools/list using registry
+                        let security_context = create_default_security_context();
+                        return match state.tool_registry.list_tools(&security_context).await {
+                            Ok(tools) => {
+                                Ok(Json(serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "result": {
+                                        "tools": tools
+                                    },
+                                    "id": request_id
+                                })).into_response())
+                            }
+                            Err(e) => {
+                                error!("Failed to list tools: {}", e);
+                                Ok(Json(serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "error": {
+                                        "code": -32603,
+                                        "message": format!("Failed to list tools: {}", e)
+                                    },
+                                    "id": request_id
+                                })).into_response())
+                            }
+                        };
+                    }
+                    "tools/call" => {
+                        // Handle tools/call using registry
+                        let params = request_json.get("params").cloned().unwrap_or(serde_json::Value::Null);
+                        let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                        let arguments = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+                        
+                        return match execute_tool_from_registry(&state.tool_registry, tool_name, arguments, request_id).await {
+                            Ok(response) => Ok(Json(response).into_response()),
+                            Err(status_code) => Err(status_code),
+                        };
+                    }
+                    _ => {
+                        // For other methods, delegate to the transport
+                    }
+                }
+            }
+            
+            // Fall back to transport handling for non-tool requests
             match transport.handle_post_request(&headers, request_body).await {
                 Ok(response) => Ok(response),
                 Err(e) => {
