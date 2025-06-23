@@ -128,34 +128,39 @@ impl Server {
             app = app.merge(graphql_router);
         }
 
-        // Add MCP SSE API if enabled
-        if self.config.mcp_api.enabled && self.config.mcp_api.sse_enabled {
-            tracing::info!("MCP SSE API enabled, creating MCP server and routes");
+        // Add MCP API if enabled
+        if self.config.mcp_api.enabled {
+            tracing::info!("MCP API enabled with transport: {:?}", self.config.mcp_api.transport);
 
             #[cfg(feature = "mcp")]
             {
-                // Create MCP server configuration
-                let mcp_server_config =
-                    McpServerConfig::sse_with_host(self.config.mcp_api.port, &self.config.mcp_api.host);
+                use crate::mcp_handler::{mcp_get_handler, mcp_post_handler, mcp_delete_handler, mcp_health_handler, McpEndpointState};
 
-                // Create MCP adapter (placeholder - would need actual task executor)
-                // For now, create a minimal MCP server with basic tools
-                let tool_registry = RatchetToolRegistry::new();
-                let auth_manager = std::sync::Arc::new(McpAuthManager::new(McpAuth::default()));
-                let audit_logger = std::sync::Arc::new(AuditLogger::new(false));
+                // Create MCP endpoint state
+                let mcp_state = match McpEndpointState::new(self.config.mcp_api.clone()) {
+                    Ok(state) => state,
+                    Err(e) => {
+                        tracing::error!("Failed to create MCP endpoint state: {}", e);
+                        return app;
+                    }
+                };
 
-                let mcp_server = McpServer::new(
-                    mcp_server_config,
-                    std::sync::Arc::new(tool_registry),
-                    auth_manager,
-                    audit_logger,
+                // Create unified MCP handler that supports both SSE and StreamableHTTP
+                app = app.route(
+                    &self.config.mcp_api.endpoint,
+                    axum::routing::get(mcp_get_handler)
+                        .post(mcp_post_handler)
+                        .delete(mcp_delete_handler)
+                        .with_state(mcp_state.clone()),
                 );
 
-                // Create and nest MCP SSE routes
-                let mcp_routes = mcp_server.create_sse_routes();
-                app = app.nest(&self.config.mcp_api.endpoint, mcp_routes);
-                
-                // Add trailing slash handler for Claude compatibility - redirect /mcp/ to /mcp
+                // Add health endpoint
+                app = app.route(
+                    &format!("{}/health", self.config.mcp_api.endpoint),
+                    axum::routing::get(mcp_health_handler).with_state(mcp_state.clone()),
+                );
+
+                // Add trailing slash handler for Claude compatibility
                 let mcp_endpoint_with_slash = format!("{}/", self.config.mcp_api.endpoint);
                 let mcp_endpoint_target = self.config.mcp_api.endpoint.clone();
                 app = app.route(&mcp_endpoint_with_slash, 
@@ -175,6 +180,8 @@ impl Server {
 
             #[cfg(not(feature = "mcp"))]
             {
+                use crate::mcp_handler::{mcp_placeholder_handler, mcp_health_handler};
+
                 tracing::warn!("MCP API enabled in config but mcp feature not available at compile time");
                 // Add placeholder endpoints
                 app = app.route(
@@ -779,24 +786,6 @@ async fn admin_handler() -> Html<String> {
     Html(html)
 }
 
-/// MCP SSE placeholder handler
-async fn mcp_placeholder_handler() -> axum::response::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "message": "MCP SSE API is enabled and ready",
-        "status": "placeholder",
-        "protocol": "Model Context Protocol over Server-Sent Events",
-        "note": "Full MCP SSE implementation will be added in future updates"
-    }))
-}
-
-/// MCP health handler
-async fn mcp_health_handler() -> axum::response::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "status": "healthy",
-        "service": "MCP SSE",
-        "timestamp": chrono::Utc::now().to_rfc3339()
-    }))
-}
 
 /// Graceful shutdown signal
 async fn shutdown_signal() {
@@ -842,9 +831,9 @@ async fn shutdown_signal_with_services(shutdown_tx: tokio::sync::broadcast::Send
 async fn oauth_authorization_server_metadata() -> axum::response::Json<serde_json::Value> {
     axum::response::Json(serde_json::json!({
         "issuer": "http://localhost:8080",
-        "authorization_endpoint": "http://localhost:8080/oauth/authorize",
-        "token_endpoint": "http://localhost:8080/oauth/token", 
-        "registration_endpoint": "http://localhost:8080/oauth/register",
+        "authorization_endpoint": "http://localhost:8080/mcp/oauth/authorize",
+        "token_endpoint": "http://localhost:8080/mcp/oauth/token", 
+        "registration_endpoint": "http://localhost:8080/mcp/oauth/register",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],
         "code_challenge_methods_supported": ["S256"],

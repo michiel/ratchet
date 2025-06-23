@@ -40,6 +40,7 @@ url = { workspace = true }
 tokio-stream = { workspace = true }
 humantime-serde = "1.1"
 serde_yaml = "0.9"
+serde_urlencoded = "0.7"
 
 # Internal dependencies
 ratchet-interfaces = { path = "../ratchet-interfaces" }
@@ -55,11 +56,12 @@ ratchet-http = { path = "../ratchet-http" }
 # ratchet_lib = { path = "../ratchet-lib" }  # REMOVED - replaced by ratchet-interfaces
 
 [features]
-default = ["server", "client", "transport-stdio", "transport-sse"]
+default = ["server", "client", "transport-stdio", "transport-sse", "transport-streamable-http"]
 server = []
 client = []
 transport-stdio = []
 transport-sse = ["ratchet-http/server"]
+transport-streamable-http = ["ratchet-http/server"]
 
 [dev-dependencies]
 tokio-test = "0.4"

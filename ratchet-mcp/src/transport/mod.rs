@@ -3,10 +3,12 @@
 pub mod connection;
 pub mod sse;
 pub mod stdio;
+pub mod streamable_http;
 
 pub use connection::{ConnectionHealth, ConnectionPool, HealthMonitor};
 pub use sse::SseTransport;
 pub use stdio::StdioTransport;
+pub use streamable_http::{StreamableHttpTransport, SessionManager, EventStore, InMemoryEventStore, McpEvent};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -60,6 +62,37 @@ pub enum TransportType {
         /// Whether to verify SSL certificates
         #[serde(default = "default_true")]
         verify_ssl: bool,
+    },
+
+    /// Streamable HTTP transport for Claude MCP compatibility
+    #[serde(rename = "streamable_http")]
+    StreamableHttp {
+        /// Base URL for the MCP endpoint
+        url: String,
+
+        /// HTTP headers to include
+        #[serde(default)]
+        headers: std::collections::HashMap<String, String>,
+
+        /// Authentication configuration
+        #[serde(skip_serializing_if = "Option::is_none")]
+        auth: Option<SseAuth>,
+
+        /// Connection timeout
+        #[serde(default = "default_timeout")]
+        timeout: Duration,
+
+        /// Whether to verify SSL certificates
+        #[serde(default = "default_true")]
+        verify_ssl: bool,
+
+        /// Maximum events per session
+        #[serde(default = "default_max_events")]
+        max_events_per_session: usize,
+
+        /// Session timeout
+        #[serde(default = "default_session_timeout")]
+        session_timeout: Duration,
     },
 }
 
@@ -205,6 +238,22 @@ impl TransportFactory {
                 timeout,
                 verify_ssl,
             } => Ok(Box::new(SseTransport::new(url, headers, auth, timeout, verify_ssl)?)),
+            TransportType::StreamableHttp {
+                max_events_per_session,
+                session_timeout,
+                ..
+            } => {
+                let event_store = std::sync::Arc::new(InMemoryEventStore::new(
+                    max_events_per_session,
+                    session_timeout,
+                ));
+                let session_manager = std::sync::Arc::new(SessionManager::new(
+                    event_store,
+                    session_timeout,
+                    Duration::from_secs(60), // cleanup interval
+                ));
+                Ok(Box::new(StreamableHttpTransport::new(session_manager)))
+            }
         }
     }
 }
@@ -235,6 +284,20 @@ impl TransportType {
                     });
                 }
             }
+            TransportType::StreamableHttp { url, .. } => {
+                if url.trim().is_empty() {
+                    return Err(McpError::Configuration {
+                        message: "StreamableHttp transport URL cannot be empty".to_string(),
+                    });
+                }
+
+                // Validate URL format
+                if let Err(e) = url::Url::parse(url) {
+                    return Err(McpError::Configuration {
+                        message: format!("Invalid StreamableHttp URL: {}", e),
+                    });
+                }
+            }
         }
         Ok(())
     }
@@ -244,6 +307,7 @@ impl TransportType {
         match self {
             TransportType::Stdio { .. } => "stdio",
             TransportType::Sse { .. } => "sse",
+            TransportType::StreamableHttp { .. } => "streamable_http",
         }
     }
 
@@ -252,6 +316,7 @@ impl TransportType {
         match self {
             TransportType::Stdio { .. } => true,
             TransportType::Sse { .. } => false, // SSE is typically unidirectional
+            TransportType::StreamableHttp { .. } => true, // POST + SSE = bidirectional
         }
     }
 }
@@ -263,6 +328,14 @@ fn default_timeout() -> Duration {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_max_events() -> usize {
+    1000
+}
+
+fn default_session_timeout() -> Duration {
+    Duration::from_secs(1800) // 30 minutes
 }
 
 #[cfg(test)]

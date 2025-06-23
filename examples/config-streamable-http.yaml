@@ -1,0 +1,60 @@
+# Example Ratchet Server Configuration with Streamable HTTP MCP
+# This configuration demonstrates the new streamable HTTP transport for MCP
+
+server:
+  host: "127.0.0.1"
+  port: 8080
+  workers: 4
+
+rest_api:
+  enabled: true
+  prefix: "/api/v1"
+  enable_health_checks: true
+  enable_detailed_health: true
+  enable_openapi_docs: true
+
+graphql_api:
+  enabled: true
+  endpoint: "/graphql"
+  enable_playground: true
+  enable_introspection: true
+  max_query_depth: 15
+  max_query_complexity: 1000
+  enable_apollo_tracing: false
+
+# MCP API with Streamable HTTP transport
+mcp_api:
+  enabled: true
+  transport: "streamable_http"  # Options: "sse", "streamable_http", "both"
+  host: "127.0.0.1"
+  port: 8090
+  endpoint: "/mcp"
+  max_sessions: 100
+  session_timeout_minutes: 30
+  max_events_per_session: 1000
+  cors_origins:
+    - "https://claude.ai"
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+
+logging:
+  level: "info"
+  format: "json"
+  targets:
+    - type: console
+
+database:
+  url: "sqlite://ratchet-streamable.db"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_seconds: 30
+  enable_migrations: true
+
+registry:
+  # You can configure embedded registry here
+  # For this example, we'll use the default embedded registry
+
+heartbeat:
+  enabled: true
+  interval_seconds: 30
+  max_failures: 3
