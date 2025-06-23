@@ -86,7 +86,7 @@ impl McpEndpointState {
     }
 
     #[cfg(feature = "mcp")]
-    pub fn new_with_dependencies(
+    pub async fn new_with_dependencies(
         config: McpApiConfig,
         repositories: Arc<dyn RepositoryFactory>,
         mcp_task_service: Option<Arc<TaskDevelopmentService>>,
@@ -115,6 +115,14 @@ impl McpEndpointState {
             // Create an ExecutionBridge as the task executor
             let executor_config = ratchet_execution::ProcessExecutorConfig::default();
             let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
+            
+            // Start the worker processes
+            if let Err(e) = execution_bridge.start().await {
+                tracing::warn!("Failed to start worker processes: {}", e);
+                tracing::info!("Task execution will not be available until workers are started");
+            } else {
+                tracing::info!("Worker processes started successfully for MCP task execution");
+            }
             
             // Create the MCP adapter using the ExecutionBridge
             let mcp_adapter = ratchet_mcp::server::adapter::RatchetMcpAdapter::with_bridge_executor(

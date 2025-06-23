@@ -45,7 +45,7 @@ impl Server {
     }
 
     /// Build the complete application router
-    pub fn build_app(&self) -> Router<()> {
+    pub async fn build_app(&self) -> Router<()> {
         // Create REST API context
         let rest_context = RestAppContext {
             tasks: self.services.rest_context(),
@@ -142,7 +142,7 @@ impl Server {
                     self.services.repositories.clone(),
                     self.services.mcp_task_service.clone(),
                     self.services.storage_factory.clone(),
-                ) {
+                ).await {
                     Ok(state) => state,
                     Err(e) => {
                         tracing::error!("Failed to create MCP endpoint state: {}", e);
@@ -315,7 +315,7 @@ impl Server {
 
     /// Start the server
     pub async fn start(self) -> Result<()> {
-        let app = self.build_app();
+        let app = self.build_app().await;
         let addr = self.config.server.bind_address;
 
         tracing::info!("Starting Ratchet server on {}", addr);
