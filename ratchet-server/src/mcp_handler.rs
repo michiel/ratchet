@@ -312,6 +312,55 @@ async fn handle_sse_request(
                                 "id": request_id
                             })).into_response())
                         }
+                        "tools/call" => {
+                            // Handle tool execution
+                            let params = request_json.get("params").cloned().unwrap_or(serde_json::Value::Null);
+                            let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                            let arguments = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+                            
+                            match tool_name {
+                                "ratchet_list_available_tasks" => {
+                                    // Return mock list of available tasks for now
+                                    Ok(Json(serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "result": {
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": "Available Ratchet tasks:\n\n1. **heartbeat** - System heartbeat task\n2. **HTTP-enabled tasks** - Any JavaScript task can make HTTP requests using fetch() API\n\nFor HTTP functionality in Ratchet:\n- Use JavaScript tasks with the built-in fetch() API\n- HTTP client library (ratchet-http) provides request recording and mock support\n- Tasks can make REST API calls, handle authentication, and process responses\n\nExample task patterns:\n- weather-api: External API consumption\n- rest-call-sample: REST API integration\n- test-fetch: HTTP GET requests with headers"
+                                                }
+                                            ]
+                                        },
+                                        "id": request_id
+                                    })).into_response())
+                                }
+                                "ratchet_execute_task" => {
+                                    // Return message about task execution
+                                    Ok(Json(serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "result": {
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": "Task execution would require a full task runtime integration. Currently, this MCP server provides task discovery and management capabilities.\n\nTo execute HTTP-related tasks:\n1. Use the Ratchet CLI: `ratchet execute <task-name>`\n2. Tasks have access to fetch() API for HTTP requests\n3. Check available tasks with the list command"
+                                                }
+                                            ]
+                                        },
+                                        "id": request_id
+                                    })).into_response())
+                                }
+                                _ => {
+                                    Ok(Json(serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "error": {
+                                            "code": -32601,
+                                            "message": format!("Tool '{}' not found", tool_name)
+                                        },
+                                        "id": request_id
+                                    })).into_response())
+                                }
+                            }
+                        }
                         _ => {
                             // Return JSON-RPC method not found error
                             Ok(Json(serde_json::json!({
