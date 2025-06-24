@@ -71,7 +71,7 @@ jobs:
           args: "--locked --release -p ratchet --features git"
           strip: true
       - name: Publish artifacts and release
-        uses: ratchet-runner/actions-rust-release@v0
+        uses: houseabsolute/actions-rust-release@v0
         with:
           executable-name: ratchet
           target: ${{ matrix.platform.target }}
