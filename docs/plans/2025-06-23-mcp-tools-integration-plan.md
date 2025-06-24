@@ -250,22 +250,67 @@ async fn execute_tool_from_registry(
 - ✅ **Production-Ready Features**: Breaking change detection, automated migration planning, test compatibility analysis, and comprehensive diff generation
 - 🔧 All implementations compile successfully and integrate properly with the MCP transport layer
 
-### Phase 4 Success Metrics
-- [ ] Production-ready error handling and recovery
-- [ ] Performance meets scalability requirements
-- [ ] Complete documentation with examples
-- [ ] Ready for Claude Code production use
+## Task Execution Capability Review (2025-06-23)
+
+**CRITICAL FINDING**: MCP tools CAN directly invoke real JavaScript tasks, but there are configuration gaps affecting task availability.
+
+### ✅ **Confirmed Capabilities**
+- **Real Task Execution**: MCP tools use `RatchetMcpAdapter` with `ExecutionBridge` to execute actual JavaScript tasks via Boa engine
+- **Full Execution Pipeline**: Task lookup → Database retrieval → Worker process execution → Real output
+- **Progress Streaming**: Support for long-running tasks with real-time progress updates
+- **Complete Integration**: MCP → Transport → ToolRegistry → TaskExecutor → ExecutionBridge → Worker Processes
+
+### ⚠️ **Configuration Gaps Identified**
+1. **Task Loading Pipeline**: `basic-config.yaml` lacks registry configuration for sample tasks
+2. **Sample Task Availability**: Tasks in `sample/js-tasks/` are not auto-loaded without registry config
+3. **Limited Default Tasks**: Only "heartbeat" embedded task and Git repository tasks available by default
+
+### 🔧 **Task Availability Resolution**
+- **Embedded Tasks**: ✅ "heartbeat" task always available
+- **Git Repository Tasks**: ✅ Available if internet accessible 
+- **Local Sample Tasks**: ❌ Require registry configuration to load
+- **Database Tasks**: ✅ Available after initial sync
+
+### 📋 **Phase 3.5: Task Loading Integration (New Phase)**
+Before Phase 4, address task loading gaps:
+
+#### 3.5.1 Enhanced Configuration Support
+- [ ] Update basic-config.yaml to include sample task registry
+- [ ] Add filesystem registry source for `sample/js-tasks/`
+- [ ] Implement automatic task discovery and loading
+- [ ] Create task loading validation and error handling
+
+#### 3.5.2 MCP Task Management Tools Enhancement  
+- [ ] Enhance `ratchet_import_tasks` for local filesystem import
+- [ ] Add `ratchet_discover_tasks` tool for task source scanning
+- [ ] Implement `ratchet_sync_registry` for on-demand task loading
+- [ ] Add task source management capabilities
+
+#### 3.5.3 Production Task Loading
+- [ ] Add registry health checks and monitoring
+- [ ] Implement task source fallback mechanisms
+- [ ] Create task versioning and update handling
+- [ ] Add task loading performance optimization
+
+### Phase 4 Success Metrics (Updated)
+- [ ] **Task Loading**: Sample tasks automatically discoverable and executable via MCP
+- [ ] **Registry Integration**: Multiple task sources (filesystem, git, embedded) working seamlessly
+- [ ] **Production-ready error handling**: Comprehensive error recovery and logging
+- [ ] **Performance optimization**: Task loading and execution meets scalability requirements
+- [ ] **Complete documentation**: End-to-end task execution examples through MCP
+- [ ] **Ready for Claude Code production**: Verified task invocation with real JavaScript execution
 
 ## Timeline and Resource Allocation
 
-### Total Estimated Time: 8-12 days
+### Total Estimated Time: 10-14 days (Updated)
 
-| Phase | Duration | Effort Level | Complexity |
-|-------|----------|--------------|------------|
-| Phase 1 | 2 days | High | Low |
-| Phase 2 | 4 days | High | Medium |
-| Phase 3 | 3 days | Medium | Medium |
-| Phase 4 | 2 days | Medium | Low |
+| Phase | Duration | Effort Level | Complexity | Status |
+|-------|----------|--------------|------------|--------|
+| Phase 1 | 2 days | High | Low | ✅ Complete |
+| Phase 2 | 4 days | High | Medium | ✅ Complete |
+| Phase 3 | 3 days | Medium | Medium | ✅ Complete |
+| **Phase 3.5** | **2 days** | **Medium** | **Low** | **🔄 New** |
+| Phase 4 | 2-3 days | Medium | Low | 📋 Pending |
 
 ### Critical Path
 1. **Phase 1** must complete before any other phase

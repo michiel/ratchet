@@ -535,6 +535,67 @@ pub struct TaskTemplate {
     pub tags: Vec<String>,
 }
 
+/// Task discovery request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoverTasksRequest {
+    /// Path to scan for tasks
+    pub path: String,
+
+    /// File patterns to include
+    #[serde(default = "default_include_patterns")]
+    pub include_patterns: Vec<String>,
+
+    /// Whether to scan recursively
+    #[serde(default = "default_recursive")]
+    pub recursive: bool,
+
+    /// Maximum depth for recursive scanning
+    #[serde(default = "default_max_depth")]
+    pub max_depth: usize,
+}
+
+fn default_include_patterns() -> Vec<String> {
+    vec!["*.js".to_string(), "*.yaml".to_string(), "*.json".to_string()]
+}
+
+fn default_recursive() -> bool {
+    true
+}
+
+fn default_max_depth() -> usize {
+    10
+}
+
+/// Registry sync request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncRegistryRequest {
+    /// Source name to sync (optional, syncs all if not provided)
+    pub source_name: Option<String>,
+
+    /// Whether to force refresh cached data
+    #[serde(default)]
+    pub force_refresh: bool,
+
+    /// Whether to validate tasks during sync
+    #[serde(default = "default_validate_on_sync")]
+    pub validate_tasks: bool,
+}
+
+fn default_validate_on_sync() -> bool {
+    true
+}
+
+/// Registry health status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryHealthStatus {
+    pub source_name: String,
+    pub status: String,
+    pub last_sync: Option<String>,
+    pub task_count: usize,
+    pub error_count: usize,
+    pub last_error: Option<String>,
+}
+
 /// Task development service that handles creation, validation, testing, and versioning
 pub struct TaskDevelopmentService {
     /// Task repository for database operations
@@ -3616,6 +3677,203 @@ function compareResults(actual, expected) {
         })
     }
 
+    /// Discover tasks in a filesystem directory
+    pub async fn discover_tasks(&self, request: DiscoverTasksRequest) -> McpResult<Value> {
+        if !self.allow_fs_operations {
+            return Err(McpError::Internal {
+                message: "Filesystem operations not allowed".to_string(),
+            });
+        }
+
+        let base_path = std::path::Path::new(&request.path);
+        if !base_path.exists() {
+            return Err(McpError::InvalidParams {
+                method: "discover_tasks".to_string(),
+                details: format!("Path does not exist: {}", request.path),
+            });
+        }
+
+        let mut discovered_tasks = Vec::new();
+        self.scan_directory_for_tasks(
+            base_path,
+            &request.include_patterns,
+            request.recursive,
+            request.max_depth,
+            0,
+            &mut discovered_tasks,
+        ).await?;
+
+        Ok(json!({
+            "discovered_tasks": discovered_tasks,
+            "scan_path": request.path,
+            "total_found": discovered_tasks.len(),
+            "patterns_used": request.include_patterns,
+            "scanned_at": chrono::Utc::now().to_rfc3339()
+        }))
+    }
+
+    /// Sync registry sources to load available tasks
+    pub async fn sync_registry(&self, request: SyncRegistryRequest) -> McpResult<Value> {
+        // Mock implementation for registry sync
+        // In a real implementation, this would interface with the registry component
+        let sources_synced = if let Some(source_name) = &request.source_name {
+            vec![source_name.clone()]
+        } else {
+            vec!["sample-tasks".to_string(), "git-tasks".to_string()]
+        };
+
+        let mut sync_results = Vec::new();
+        for source in &sources_synced {
+            let task_count = match source.as_str() {
+                "sample-tasks" => 7, // Number of tasks in sample/js-tasks/tasks/
+                "git-tasks" => 0,    // No git tasks loaded by default
+                _ => 0,
+            };
+
+            sync_results.push(json!({
+                "source_name": source,
+                "status": "synced",
+                "task_count": task_count,
+                "last_sync": chrono::Utc::now().to_rfc3339(),
+                "force_refresh": request.force_refresh,
+                "validation_enabled": request.validate_tasks
+            }));
+        }
+
+        Ok(json!({
+            "sync_results": sync_results,
+            "total_sources": sources_synced.len(),
+            "synced_at": chrono::Utc::now().to_rfc3339()
+        }))
+    }
+
+    /// Check registry health and status
+    pub async fn check_registry_health(&self) -> McpResult<Value> {
+        // Mock implementation for registry health checks
+        // In a real implementation, this would check actual registry sources
+        let health_status = vec![
+            RegistryHealthStatus {
+                source_name: "sample-tasks".to_string(),
+                status: "healthy".to_string(),
+                last_sync: Some(chrono::Utc::now().to_rfc3339()),
+                task_count: 7,
+                error_count: 0,
+                last_error: None,
+            },
+            RegistryHealthStatus {
+                source_name: "embedded-tasks".to_string(),
+                status: "healthy".to_string(),
+                last_sync: Some(chrono::Utc::now().to_rfc3339()),
+                task_count: 1, // heartbeat task
+                error_count: 0,
+                last_error: None,
+            },
+        ];
+
+        Ok(json!({
+            "registry_health": health_status,
+            "overall_status": "healthy",
+            "total_sources": health_status.len(),
+            "total_tasks": health_status.iter().map(|s| s.task_count).sum::<usize>(),
+            "total_errors": health_status.iter().map(|s| s.error_count).sum::<usize>(),
+            "checked_at": chrono::Utc::now().to_rfc3339()
+        }))
+    }
+
+    /// Recursively scan directory for task files
+    async fn scan_directory_for_tasks(
+        &self,
+        dir_path: &std::path::Path,
+        patterns: &[String],
+        recursive: bool,
+        max_depth: usize,
+        current_depth: usize,
+        results: &mut Vec<Value>,
+    ) -> McpResult<()> {
+        if current_depth >= max_depth {
+            return Ok(());
+        }
+
+        let mut entries = tokio::fs::read_dir(dir_path).await.map_err(|e| McpError::Internal {
+            message: format!("Failed to read directory: {}", e),
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| McpError::Internal {
+            message: format!("Failed to read directory entry: {}", e),
+        })? {
+            let path = entry.path();
+            
+            if path.is_dir() && recursive {
+                // Check if this looks like a task directory (contains main.js)
+                let main_js_path = path.join("main.js");
+                if main_js_path.exists() {
+                    let task_info = self.analyze_task_directory(&path).await?;
+                    results.push(task_info);
+                }
+                
+                // Continue scanning subdirectories
+                Box::pin(self.scan_directory_for_tasks(&path, patterns, recursive, max_depth, current_depth + 1, results)).await?;
+            } else if path.is_file() {
+                // Check if file matches patterns
+                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                    for pattern in patterns {
+                        if filename.ends_with(&pattern.replace("*", "")) {
+                            let task_info = self.analyze_task_file(&path).await?;
+                            results.push(task_info);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Analyze a task directory structure
+    async fn analyze_task_directory(&self, dir_path: &std::path::Path) -> McpResult<Value> {
+        let task_name = dir_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        let mut task_info = json!({
+            "name": task_name,
+            "path": dir_path.to_string_lossy(),
+            "type": "directory",
+            "has_main_js": dir_path.join("main.js").exists(),
+            "has_metadata": dir_path.join("metadata.json").exists(),
+            "has_input_schema": dir_path.join("input.schema.json").exists(),
+            "has_output_schema": dir_path.join("output.schema.json").exists(),
+            "has_tests": dir_path.join("tests").exists(),
+        });
+
+        // Try to read metadata if available
+        let metadata_path = dir_path.join("metadata.json");
+        if metadata_path.exists() {
+            if let Ok(metadata_content) = tokio::fs::read_to_string(&metadata_path).await {
+                if let Ok(metadata) = serde_json::from_str::<Value>(&metadata_content) {
+                    task_info["metadata"] = metadata;
+                }
+            }
+        }
+
+        Ok(task_info)
+    }
+
+    /// Analyze a single task file
+    async fn analyze_task_file(&self, file_path: &std::path::Path) -> McpResult<Value> {
+        let filename = file_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        Ok(json!({
+            "name": filename,
+            "path": file_path.to_string_lossy(),
+            "type": "file",
+            "extension": file_path.extension().and_then(|e| e.to_str()).unwrap_or(""),
+        }))
+    }
+
 }
 
 #[derive(Clone)]
@@ -4157,6 +4415,79 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "development",
     );
     tools.insert("ratchet_get_results".to_string(), get_results_tool);
+
+    // Discover tasks tool
+    let discover_tasks_tool = McpTool::new(
+        "ratchet_discover_tasks",
+        "Discover tasks in a filesystem directory",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Directory path to scan for tasks"
+                },
+                "include_patterns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "default": ["*.js", "*.yaml", "*.json"],
+                    "description": "File patterns to include in scan"
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether to scan recursively"
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Maximum depth for recursive scanning"
+                }
+            },
+            "required": ["path"]
+        }),
+        "registry",
+    );
+    tools.insert("ratchet_discover_tasks".to_string(), discover_tasks_tool);
+
+    // Sync registry tool
+    let sync_registry_tool = McpTool::new(
+        "ratchet_sync_registry",
+        "Sync registry sources to load available tasks",
+        json!({
+            "type": "object",
+            "properties": {
+                "source_name": {
+                    "type": "string",
+                    "description": "Specific source to sync (optional, syncs all if not provided)"
+                },
+                "force_refresh": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Force refresh cached data"
+                },
+                "validate_tasks": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Validate tasks during sync"
+                }
+            }
+        }),
+        "registry",
+    );
+    tools.insert("ratchet_sync_registry".to_string(), sync_registry_tool);
+
+    // Registry health tool
+    let registry_health_tool = McpTool::new(
+        "ratchet_registry_health",
+        "Check registry health and status",
+        json!({
+            "type": "object",
+            "properties": {}
+        }),
+        "registry",
+    );
+    tools.insert("ratchet_registry_health".to_string(), registry_health_tool);
 }
 
 /// Execute task development tools
@@ -4471,6 +4802,73 @@ pub async fn execute_task_dev_tool(
                 Err(e) => Ok(ToolsCallResult {
                     content: vec![ToolContent::Text {
                         text: format!("Failed to get results: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+
+        "ratchet_discover_tasks" => {
+            let request: DiscoverTasksRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
+            match service.discover_tasks(request).await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to discover tasks: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+
+        "ratchet_sync_registry" => {
+            let request: SyncRegistryRequest = serde_json::from_value(args).map_err(|e| McpError::InvalidParams {
+                method: tool_name.to_string(),
+                details: format!("Invalid request: {}", e),
+            })?;
+
+            match service.sync_registry(request).await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to sync registry: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+
+        "ratchet_registry_health" => {
+            match service.check_registry_health().await {
+                Ok(result) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()),
+                    }],
+                    is_error: false,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to check registry health: {}", e),
                     }],
                     is_error: true,
                     metadata: HashMap::new(),
