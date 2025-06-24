@@ -10,6 +10,7 @@ use std::sync::Arc;
 use ratchet_execution::{ExecutionBridge, ExecutionError, ProcessTaskExecutor, TaskExecutionResult};
 use ratchet_interfaces::execution::TaskExecutor as InterfaceTaskExecutor;
 use ratchet_interfaces::logging::{LogEvent, LogLevel};
+use ratchet_interfaces::{TaskService, TaskServiceFilters};
 use ratchet_runtime::executor::TaskExecutor;
 use ratchet_storage::seaorm::entities::ExecutionStatus;
 use ratchet_storage::seaorm::repositories::{
@@ -95,8 +96,8 @@ pub struct RatchetMcpAdapter {
     /// The task executor (either legacy or new runtime)
     executor: ExecutorType,
 
-    /// Task repository for task discovery
-    task_repository: Arc<TaskRepository>,
+    /// Unified task service for task discovery (replaces direct repository access)
+    task_service: Arc<dyn TaskService>,
 
     /// Execution repository for monitoring
     execution_repository: Arc<ExecutionRepository>,
@@ -109,12 +110,12 @@ impl RatchetMcpAdapter {
     /// Create a new adapter with ProcessTaskExecutor from ratchet-execution (legacy)
     pub fn new(
         executor: Arc<ProcessTaskExecutor>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn TaskService>,
         execution_repository: Arc<ExecutionRepository>,
     ) -> Self {
         Self {
             executor: ExecutorType::Process(executor),
-            task_repository,
+            task_service,
             execution_repository,
             log_file_path: None,
         }
@@ -123,12 +124,12 @@ impl RatchetMcpAdapter {
     /// Create a new adapter with ExecutionBridge (recommended for new implementations)
     pub fn with_bridge_executor(
         executor: Arc<ExecutionBridge>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn TaskService>,
         execution_repository: Arc<ExecutionRepository>,
     ) -> Self {
         Self {
             executor: ExecutorType::Bridge(executor),
-            task_repository,
+            task_service,
             execution_repository,
             log_file_path: None,
         }
@@ -137,12 +138,12 @@ impl RatchetMcpAdapter {
     /// Create a new adapter with new runtime TaskExecutor
     pub fn with_runtime_executor(
         executor: Arc<dyn TaskExecutor>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn TaskService>,
         execution_repository: Arc<ExecutionRepository>,
     ) -> Self {
         Self {
             executor: ExecutorType::Runtime(executor),
-            task_repository,
+            task_service,
             execution_repository,
             log_file_path: None,
         }
@@ -151,13 +152,13 @@ impl RatchetMcpAdapter {
     /// Create a new adapter with log file path for log retrieval (legacy)
     pub fn with_log_file(
         executor: Arc<ProcessTaskExecutor>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn TaskService>,
         execution_repository: Arc<ExecutionRepository>,
         log_file_path: PathBuf,
     ) -> Self {
         Self {
             executor: ExecutorType::Process(executor),
-            task_repository,
+            task_service,
             execution_repository,
             log_file_path: Some(log_file_path),
         }
@@ -166,13 +167,13 @@ impl RatchetMcpAdapter {
     /// Create a new adapter with ExecutionBridge and log file path for log retrieval
     pub fn with_bridge_executor_and_log_file(
         executor: Arc<ExecutionBridge>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn TaskService>,
         execution_repository: Arc<ExecutionRepository>,
         log_file_path: PathBuf,
     ) -> Self {
         Self {
             executor: ExecutorType::Bridge(executor),
-            task_repository,
+            task_service,
             execution_repository,
             log_file_path: Some(log_file_path),
         }
@@ -181,13 +182,13 @@ impl RatchetMcpAdapter {
     /// Create a new adapter with log file path for log retrieval (runtime)
     pub fn with_runtime_executor_and_log_file(
         executor: Arc<dyn TaskExecutor>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn TaskService>,
         execution_repository: Arc<ExecutionRepository>,
         log_file_path: PathBuf,
     ) -> Self {
         Self {
             executor: ExecutorType::Runtime(executor),
-            task_repository,
+            task_service,
             execution_repository,
             log_file_path: Some(log_file_path),
         }
@@ -197,33 +198,43 @@ impl RatchetMcpAdapter {
 #[async_trait]
 impl McpTaskExecutor for RatchetMcpAdapter {
     async fn execute_task(&self, task_path: &str, input: Value) -> Result<Value, String> {
-        // First, try to find the task by name in the database
-        let task = match self.task_repository.find_by_name(task_path).await {
+        // Use unified task service to find the task (abstracts storage location)
+        let task = match self.task_service.find_by_name(task_path).await {
             Ok(Some(task)) => task,
             Ok(None) => {
                 // Try to parse as UUID
                 if let Ok(uuid) = uuid::Uuid::parse_str(task_path) {
-                    match self.task_repository.find_by_uuid(uuid).await {
+                    match self.task_service.find_by_id(uuid).await {
                         Ok(Some(task)) => task,
                         Ok(None) => return Err(format!("Task not found: {}", task_path)),
-                        Err(e) => return Err(format!("Database error: {}", e)),
+                        Err(e) => return Err(format!("Task service error: {}", e)),
                     }
                 } else {
                     return Err(format!("Task not found: {}", task_path));
                 }
             }
-            Err(e) => return Err(format!("Database error: {}", e)),
+            Err(e) => return Err(format!("Task service error: {}", e)),
         };
 
         // Create an execution context
         use ratchet_execution::ipc::ExecutionContext;
         let context = ExecutionContext::new(uuid::Uuid::new_v4(), None, task.uuid, task.version.clone());
 
+        // Convert string ID to i32 for legacy execution interface
+        // For registry tasks, we'll use a synthetic ID since they're not stored in DB
+        let task_id = if task.registry_source {
+            // Use 0 as a placeholder for registry tasks (legacy executor won't use this for registry tasks)
+            0
+        } else {
+            // Parse database task ID
+            task.id.to_string().parse::<i32>().map_err(|e| format!("Invalid task ID format: {}", e))?
+        };
+
         // Execute the task using the process executor
         match self
             .executor
             .execute_task_direct(
-                task.id,                         // Database task ID
+                task_id,                         // Database task ID or 0 for registry
                 format!("/tasks/{}", task.uuid), // Use UUID as task path
                 input,
                 Some(context),
@@ -272,38 +283,38 @@ impl McpTaskExecutor for RatchetMcpAdapter {
     }
 
     async fn list_tasks(&self, filter: Option<&str>) -> Result<Vec<McpTaskInfo>, String> {
-        let filters = TaskFilters {
-            name: filter.map(|s| s.to_string()),
-            enabled: Some(true),
-            has_validation: None,
-            version: None,
-        };
-
-        let pagination = Pagination {
+        // Use unified task service for listing (abstracts storage location)
+        use ratchet_api_types::PaginationInput;
+        let pagination = Some(PaginationInput {
+            page: Some(0),
             limit: Some(100),
             offset: None,
-            order_by: Some("name".to_string()),
-            order_desc: Some(false),
-        };
+        });
 
-        let tasks = self
-            .task_repository
-            .find_with_filters(filters, pagination)
+        let filters = Some(TaskServiceFilters {
+            enabled_only: Some(true),
+            source_type: None, // Get tasks from all sources
+            name_contains: filter.map(|s| s.to_string()),
+        });
+
+        let response = self
+            .task_service
+            .list_tasks(pagination, filters)
             .await
             .map_err(|e| format!("Failed to list tasks: {}", e))?;
 
-        // Convert database tasks to MCP task info
-        Ok(tasks
+        // Convert unified tasks to MCP task info
+        Ok(response.items
             .into_iter()
             .map(|task| McpTaskInfo {
                 id: task.uuid.to_string(),
                 name: task.name.clone(),
                 version: task.version.clone(),
                 description: task.description.clone(),
-                tags: vec![], // Database entity doesn't have tags directly
+                tags: vec![], // UnifiedTask doesn't have tags field
                 enabled: task.enabled,
-                input_schema: Some(task.input_schema.clone()),
-                output_schema: Some(task.output_schema.clone()),
+                input_schema: task.input_schema.clone(),
+                output_schema: task.output_schema.clone(),
             })
             .collect())
     }
@@ -560,7 +571,7 @@ impl RatchetMcpAdapter {
 /// Builder for creating the MCP adapter with all required components
 pub struct RatchetMcpAdapterBuilder {
     executor: Option<ExecutorType>,
-    task_repository: Option<Arc<TaskRepository>>,
+    task_service: Option<Arc<dyn TaskService>>,
     execution_repository: Option<Arc<ExecutionRepository>>,
 }
 
@@ -569,7 +580,7 @@ impl RatchetMcpAdapterBuilder {
     pub fn new() -> Self {
         Self {
             executor: None,
-            task_repository: None,
+            task_service: None,
             execution_repository: None,
         }
     }
@@ -586,9 +597,9 @@ impl RatchetMcpAdapterBuilder {
         self
     }
 
-    /// Set the task repository
-    pub fn with_task_repository(mut self, repo: Arc<TaskRepository>) -> Self {
-        self.task_repository = Some(repo);
+    /// Set the task service
+    pub fn with_task_service(mut self, service: Arc<dyn TaskService>) -> Self {
+        self.task_service = Some(service);
         self
     }
 
@@ -601,12 +612,19 @@ impl RatchetMcpAdapterBuilder {
     /// Build the adapter
     pub fn build(self) -> Result<RatchetMcpAdapter, String> {
         let executor = self.executor.ok_or("Executor is required")?;
-        let task_repo = self.task_repository.ok_or("Task repository is required")?;
+        
+        // If no task service is provided, create a minimal stub for CLI compatibility
+        let task_service = if let Some(service) = self.task_service {
+            service
+        } else {
+            Arc::new(StubTaskService)
+        };
+        
         let exec_repo = self.execution_repository.ok_or("Execution repository is required")?;
 
         Ok(RatchetMcpAdapter {
             executor,
-            task_repository: task_repo,
+            task_service,
             execution_repository: exec_repo,
             log_file_path: None,
         })
@@ -616,5 +634,53 @@ impl RatchetMcpAdapterBuilder {
 impl Default for RatchetMcpAdapterBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Stub task service for CLI compatibility when no real task service is available
+struct StubTaskService;
+
+#[async_trait]
+impl ratchet_interfaces::TaskService for StubTaskService {
+    async fn find_by_id(&self, _id: uuid::Uuid) -> Result<Option<ratchet_api_types::UnifiedTask>, ratchet_interfaces::TaskServiceError> {
+        Err(ratchet_interfaces::TaskServiceError::Internal { 
+            message: "Task service not configured - use server mode for full functionality".to_string() 
+        })
+    }
+    
+    async fn find_by_name(&self, _name: &str) -> Result<Option<ratchet_api_types::UnifiedTask>, ratchet_interfaces::TaskServiceError> {
+        Err(ratchet_interfaces::TaskServiceError::Internal { 
+            message: "Task service not configured - use server mode for full functionality".to_string() 
+        })
+    }
+    
+    async fn list_tasks(
+        &self, 
+        _pagination: Option<ratchet_api_types::PaginationInput>, 
+        _filters: Option<ratchet_interfaces::TaskServiceFilters>
+    ) -> Result<ratchet_api_types::ListResponse<ratchet_api_types::UnifiedTask>, ratchet_interfaces::TaskServiceError> {
+        Err(ratchet_interfaces::TaskServiceError::Internal { 
+            message: "Task service not configured - use server mode for full functionality".to_string() 
+        })
+    }
+    
+    async fn get_task_metadata(&self, _id: uuid::Uuid) -> Result<Option<ratchet_interfaces::TaskServiceMetadata>, ratchet_interfaces::TaskServiceError> {
+        Err(ratchet_interfaces::TaskServiceError::Internal { 
+            message: "Task service not configured - use server mode for full functionality".to_string() 
+        })
+    }
+    
+    async fn execute_task(&self, _id: uuid::Uuid, _input: serde_json::Value) -> Result<serde_json::Value, ratchet_interfaces::TaskServiceError> {
+        Err(ratchet_interfaces::TaskServiceError::Internal { 
+            message: "Task service not configured - use server mode for full functionality".to_string() 
+        })
+    }
+    
+    async fn task_exists(&self, _id: uuid::Uuid) -> Result<bool, ratchet_interfaces::TaskServiceError> {
+        Ok(false)
+    }
+    
+    async fn get_task_source(&self, _id: uuid::Uuid) -> Result<Option<ratchet_interfaces::TaskSource>, ratchet_interfaces::TaskServiceError> {
+        Ok(None)
     }
 }

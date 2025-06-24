@@ -24,6 +24,7 @@ pub mod logging;
 pub mod registry;
 pub mod scheduler;
 pub mod service;
+pub mod tasks;
 
 // Re-export commonly used types
 pub use database::{
@@ -39,3 +40,4 @@ pub use registry::{
 };
 pub use scheduler::{ScheduleStatus, SchedulerError, SchedulerService};
 pub use service::{HealthStatus, Service, ServiceHealth, ServiceMetrics};
+pub use tasks::{TaskMetadata as TaskServiceMetadata, TaskService, TaskServiceError, TaskServiceFilters, TaskSource, TaskSourceType};

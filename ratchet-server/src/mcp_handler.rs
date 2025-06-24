@@ -91,6 +91,7 @@ impl McpEndpointState {
         repositories: Arc<dyn RepositoryFactory>,
         mcp_task_service: Option<Arc<TaskDevelopmentService>>,
         storage_factory: Option<Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>>,
+        task_service: Option<Arc<dyn ratchet_interfaces::TaskService>>,
     ) -> anyhow::Result<Self> {
         // Create MCP server
         let mcp_server_config = McpServerConfig::sse_with_host(config.port, &config.host);
@@ -110,8 +111,8 @@ impl McpEndpointState {
             tool_registry
         };
         
-        // Create MCP task executor if storage factory is available
-        let tool_registry = if let Some(storage_fact) = storage_factory {
+        // Create MCP task executor if storage factory and task service are available
+        let tool_registry = if let (Some(storage_fact), Some(task_svc)) = (storage_factory, task_service) {
             // Create an ExecutionBridge as the task executor
             let executor_config = ratchet_execution::ProcessExecutorConfig::default();
             let execution_bridge = Arc::new(ExecutionBridge::new(executor_config));
@@ -124,10 +125,10 @@ impl McpEndpointState {
                 tracing::info!("Worker processes started successfully for MCP task execution");
             }
             
-            // Create the MCP adapter using the ExecutionBridge
+            // Create the MCP adapter using the ExecutionBridge and unified TaskService
             let mcp_adapter = ratchet_mcp::server::adapter::RatchetMcpAdapter::with_bridge_executor(
                 execution_bridge,
-                Arc::new(storage_fact.task_repository()),
+                task_svc,
                 Arc::new(storage_fact.execution_repository()),
             );
             
