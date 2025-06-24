@@ -1,0 +1,63 @@
+# Example Ratchet Server Configuration with Both SSE and Streamable HTTP MCP
+# This configuration supports both transports for maximum compatibility
+
+server:
+  bind_address: "127.0.0.1:8080"
+  enable_cors: true
+  enable_request_id: true
+  enable_tracing: true
+  shutdown_timeout_seconds: 30
+
+rest_api:
+  enabled: true
+  prefix: "/api/v1"
+  enable_health_checks: true
+  enable_detailed_health: true
+  enable_openapi_docs: true
+
+graphql_api:
+  enabled: true
+  endpoint: "/graphql"
+  enable_playground: true
+  enable_introspection: true
+  max_query_depth: 15
+  max_query_complexity: 1000
+  enable_apollo_tracing: false
+
+# MCP API with both transports (recommended for production)
+mcp_api:
+  enabled: true
+  transport: "both"  # Supports both SSE and Streamable HTTP
+  host: "127.0.0.1"
+  port: 8090
+  endpoint: "/mcp"
+  max_sessions: 200
+  session_timeout_minutes: 45
+  max_events_per_session: 2000
+  cors_origins:
+    - "https://claude.ai"
+    - "https://api.claude.ai"
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+
+logging:
+  level: "debug"
+  format: "json"
+  enable_structured: true
+  enable_file_logging: true
+  file_path: "ratchet-mcp.log"
+
+database:
+  url: "sqlite://ratchet-dual-transport.db"
+  max_connections: 15
+  min_connections: 2
+  connection_timeout_seconds: 30
+  enable_migrations: true
+
+registry:
+  # Embedded registry configuration
+
+heartbeat:
+  enabled: true
+  interval_seconds: 30
+  max_failures: 5

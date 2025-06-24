@@ -61,10 +61,26 @@ pub struct GraphQLApiConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpApiConfig {
     pub enabled: bool,
-    pub sse_enabled: bool,
+    pub transport: McpTransportMode,
     pub host: String,
     pub port: u16,
     pub endpoint: String,
+    pub max_sessions: u32,
+    pub session_timeout_minutes: u32,
+    pub max_events_per_session: usize,
+    pub cors_origins: Vec<String>,
+}
+
+/// MCP transport mode configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum McpTransportMode {
+    /// Only Server-Sent Events
+    Sse,
+    /// Only Streamable HTTP
+    StreamableHttp,
+    /// Both SSE and Streamable HTTP
+    Both,
 }
 
 /// Logging configuration
@@ -158,10 +174,17 @@ impl Default for McpApiConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            sse_enabled: true,
+            transport: McpTransportMode::Both,
             host: "127.0.0.1".to_string(),
             port: 8090,
             endpoint: "/mcp".to_string(),
+            max_sessions: 100,
+            session_timeout_minutes: 30,
+            max_events_per_session: 1000,
+            cors_origins: vec![
+                "https://claude.ai".to_string(),
+                "http://localhost:3000".to_string(),
+            ],
         }
     }
 }
@@ -251,13 +274,27 @@ impl ServerConfig {
             },
             mcp_api: McpApiConfig {
                 enabled: config.mcp.as_ref().is_none_or(|mcp| mcp.enabled), // Default enabled unless explicitly disabled
-                sse_enabled: config.mcp.as_ref().is_none_or(|mcp| mcp.transport == "sse"), // Default SSE enabled
+                transport: config.mcp.as_ref().map_or(McpTransportMode::Both, |mcp| {
+                    match mcp.transport.as_str() {
+                        "sse" => McpTransportMode::Sse,
+                        "streamable_http" => McpTransportMode::StreamableHttp,
+                        "both" => McpTransportMode::Both,
+                        _ => McpTransportMode::Both, // Default fallback
+                    }
+                }),
                 host: config
                     .mcp
                     .as_ref()
                     .map_or("127.0.0.1".to_string(), |mcp| mcp.host.clone()),
                 port: config.mcp.as_ref().map_or(8090, |mcp| mcp.port),
                 endpoint: "/mcp".to_string(), // Default endpoint
+                max_sessions: 100,
+                session_timeout_minutes: 30,
+                max_events_per_session: 1000,
+                cors_origins: vec![
+                    "https://claude.ai".to_string(),
+                    "http://localhost:3000".to_string(),
+                ],
             },
             logging: LoggingConfig {
                 level: format!("{:?}", config.logging.level).to_lowercase(),

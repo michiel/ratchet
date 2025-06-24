@@ -39,6 +39,7 @@ ratchet-http = { path = "../ratchet-http", optional = true }
 ratchet-output = { path = "../ratchet-output", optional = true }
 ratchet-server = { path = "../ratchet-server", optional = true }
 ratchet-registry = { path = "../ratchet-registry", optional = true }
+ratchet-interfaces = { path = "../ratchet-interfaces", optional = true }
 ratchet-cli-tools = { path = "../ratchet-cli-tools", features = ["javascript", "recording", "http"] }
 
 # Binary-specific dependencies (commented out for now due to network issues)
@@ -70,7 +71,7 @@ complete = ["server", "database", "mcp-server", "plugins", "javascript", "output
 developer = ["complete", "caching", "resilience"]
 
 # Server components
-server = ["rest-api", "graphql-api", "dep:ratchet-execution", "dep:ratchet-server", "dep:ratchet-registry", "dep:futures", "dep:tokio-stream"]
+server = ["rest-api", "graphql-api", "dep:ratchet-execution", "dep:ratchet-server", "dep:ratchet-registry", "dep:ratchet-interfaces", "dep:futures", "dep:tokio-stream"]
 rest-api = []
 graphql-api = []
 

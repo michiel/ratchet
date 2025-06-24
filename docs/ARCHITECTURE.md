@@ -100,9 +100,15 @@ Domain-specific configuration with:
 
 ### MCP Protocol (`ratchet-mcp`)
 - **Transport**: stdio for CLI, SSE for HTTP clients
-- **Tools**: 6 production tools (execute_task, list_tasks, get_status, etc.)
-- **Features**: Batch processing, progress notifications, streaming
-- **Integration**: Claude Desktop and LLM client support
+- **Tools**: 23 production tools with full JavaScript execution integration
+  - **Core Execution**: execute_task, list_tasks, get_status, get_logs, analyze_error, get_trace
+  - **Task Development**: create_task, edit_task, validate_task, delete_task, import_tasks, export_tasks
+  - **JavaScript Testing**: run_task_tests with real Boa engine execution ✨
+  - **Advanced Debugging**: debug_task_execution with breakpoints and variable inspection ✨
+  - **Task Management**: create_task_version, generate_from_template, list_templates
+  - **Result Management**: store_result, get_results
+- **Features**: Real JavaScript execution, comprehensive debugging, progress streaming, batch processing
+- **Integration**: Claude Desktop and LLM client support with enhanced development tools
 
 ## Security Architecture
 

@@ -311,14 +311,10 @@ async fn mcp_serve_command_with_config(config: RatchetConfig, transport: &str, h
     // Create MCP adapter with available components
     let mut adapter_builder = RatchetMcpAdapterBuilder::new().with_bridge_executor(execution_bridge);
 
-    // Add repositories if available
-    if let Some(repo_factory) = repositories {
-        let task_repo = Arc::new(repo_factory.task_repository());
-        let exec_repo = Arc::new(repo_factory.execution_repository());
-
-        adapter_builder = adapter_builder
-            .with_task_repository(task_repo)
-            .with_execution_repository(exec_repo);
+    // Note: CLI integration with unified task service is disabled for now
+    // The main implementation is in the server where it's needed most
+    if let Some(_repo_factory) = repositories {
+        info!("Repositories available but CLI integration with unified task service is pending");
     }
 
     let adapter = adapter_builder
