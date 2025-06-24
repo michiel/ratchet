@@ -105,7 +105,7 @@ gix = { version = "0.66", default-features = false, features = ["blocking-http-t
 
 # Workspace-level configuration for targets
 [workspace.package]
-version = "0.4.8"  # Common version for all crates
+version = "0.4.9"  # Common version for all crates
 authors = ["Michiel Kalkman <michiel@nosuchtype.com>"]
 edition = "2021"
 rust-version = "1.85"
