@@ -42,6 +42,7 @@ logs/
 # Test artifacts
 coverage/
 .nyc_output/
+tests/
 
 # Temporary files
 tmp/
@@ -67,3 +68,17 @@ dev/
 scratch/
 examples/data/
 test-data/
+
+# Build optimization: exclude task files that aren't needed for compilation
+tasks/
+github-docker-release.log
+
+# Exclude test configuration files
+test_js_execution.rs
+e2e-test-config.yaml 
+e2e_mcp_http_test.js
+simple_mcp_test.js
+sync_execution_debug.js
+
+# Exclude analysis files
+CAPABILITY_GAPS_ANALYSIS.md
