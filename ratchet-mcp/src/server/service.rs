@@ -8,9 +8,9 @@ use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use ratchet_execution::ProcessTaskExecutor;
-use ratchet_interfaces::{Service, ServiceHealth, ServiceMetrics};
+use ratchet_interfaces::{Service, ServiceHealth, ServiceMetrics, TaskService};
 use ratchet_storage::seaorm::repositories::{
-    execution_repository::ExecutionRepository, task_repository::TaskRepository,
+    execution_repository::ExecutionRepository,
 };
 
 use crate::security::{AuditLogger, McpAuthManager, SecurityConfig};
@@ -58,14 +58,14 @@ impl McpService {
     pub async fn new(
         config: McpServiceConfig,
         task_executor: Arc<ProcessTaskExecutor>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn ratchet_interfaces::TaskService>,
         execution_repository: Arc<ExecutionRepository>,
     ) -> McpResult<Self> {
         // Create the MCP adapter
         let adapter = if let Some(log_path) = &config.log_file_path {
-            RatchetMcpAdapter::with_log_file(task_executor, task_repository, execution_repository, log_path.clone())
+            RatchetMcpAdapter::with_log_file(task_executor, task_service, execution_repository, log_path.clone())
         } else {
-            RatchetMcpAdapter::new(task_executor, task_repository, execution_repository)
+            RatchetMcpAdapter::new(task_executor, task_service, execution_repository)
         };
 
         // Create tool registry with the adapter
@@ -244,7 +244,7 @@ impl Service for McpService {
 pub struct McpServiceBuilder {
     config: McpServiceConfig,
     task_executor: Option<Arc<ProcessTaskExecutor>>,
-    task_repository: Option<Arc<TaskRepository>>,
+    task_service: Option<Arc<dyn TaskService>>,
     execution_repository: Option<Arc<ExecutionRepository>>,
 }
 
@@ -254,7 +254,7 @@ impl McpServiceBuilder {
         Self {
             config: McpServiceConfig::default(),
             task_executor: None,
-            task_repository: None,
+            task_service: None,
             execution_repository: None,
         }
     }
@@ -271,9 +271,9 @@ impl McpServiceBuilder {
         self
     }
 
-    /// Set the task repository
-    pub fn with_task_repository(mut self, repo: Arc<TaskRepository>) -> Self {
-        self.task_repository = Some(repo);
+    /// Set the task service
+    pub fn with_task_service(mut self, service: Arc<dyn TaskService>) -> Self {
+        self.task_service = Some(service);
         self
     }
 
@@ -289,15 +289,15 @@ impl McpServiceBuilder {
             .task_executor
             .ok_or_else(|| McpServiceError::InitializationFailed("Task executor is required".to_string()))?;
 
-        let task_repository = self
-            .task_repository
-            .ok_or_else(|| McpServiceError::InitializationFailed("Task repository is required".to_string()))?;
+        let task_service = self
+            .task_service
+            .ok_or_else(|| McpServiceError::InitializationFailed("Task service is required".to_string()))?;
 
         let execution_repository = self
             .execution_repository
             .ok_or_else(|| McpServiceError::InitializationFailed("Execution repository is required".to_string()))?;
 
-        McpService::new(self.config, task_executor, task_repository, execution_repository)
+        McpService::new(self.config, task_executor, task_service, execution_repository)
             .await
             .map_err(Into::into)
     }
@@ -315,7 +315,7 @@ impl McpService {
     pub async fn from_ratchet_config(
         mcp_config: &ratchet_config::domains::mcp::McpConfig,
         task_executor: Arc<ProcessTaskExecutor>,
-        task_repository: Arc<TaskRepository>,
+        task_service: Arc<dyn TaskService>,
         execution_repository: Arc<ExecutionRepository>,
         log_file_path: Option<std::path::PathBuf>,
     ) -> McpResult<Self> {
@@ -327,7 +327,7 @@ impl McpService {
             log_file_path,
         };
 
-        Self::new(config, task_executor, task_repository, execution_repository).await
+        Self::new(config, task_executor, task_service, execution_repository).await
     }
 
     /// Create from Ratchet's legacy MCP configuration (for backward compatibility)
@@ -335,10 +335,10 @@ impl McpService {
     #[allow(dead_code)]
     async fn from_legacy_ratchet_config_disabled(
         _mcp_config: &std::marker::PhantomData<()>, // Placeholder for future MCP config
-        task_executor: Arc<ProcessTaskExecutor>,
-        task_repository: Arc<TaskRepository>,
-        execution_repository: Arc<ExecutionRepository>,
-        log_file_path: Option<std::path::PathBuf>,
+        _task_executor: Arc<ProcessTaskExecutor>,
+        _task_service: Arc<dyn TaskService>,
+        _execution_repository: Arc<ExecutionRepository>,
+        _log_file_path: Option<std::path::PathBuf>,
     ) -> McpResult<Self> {
         /*
         // TODO: Re-enable in Phase 3 - Convert Ratchet config to MCP service config

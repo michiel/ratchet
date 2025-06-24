@@ -45,7 +45,7 @@ impl Server {
     }
 
     /// Build the complete application router
-    pub fn build_app(&self) -> Router<()> {
+    pub async fn build_app(&self) -> Router<()> {
         // Create REST API context
         let rest_context = RestAppContext {
             tasks: self.services.rest_context(),
@@ -78,6 +78,10 @@ impl Server {
 
         // Add admin UI handler
         app = app.route("/admin", get(admin_handler));
+
+        // Add OAuth discovery endpoints for Claude MCP compatibility
+        app = app.route("/.well-known/oauth-authorization-server", get(oauth_authorization_server_metadata));
+        app = app.route("/.well-known/oauth-protected-resource", get(oauth_protected_resource_metadata));
 
         // Add GraphQL API if enabled
         if self.config.graphql_api.enabled {
@@ -124,36 +128,66 @@ impl Server {
             app = app.merge(graphql_router);
         }
 
-        // Add MCP SSE API if enabled
-        if self.config.mcp_api.enabled && self.config.mcp_api.sse_enabled {
-            tracing::info!("MCP SSE API enabled, creating MCP server and routes");
+        // Add MCP API if enabled
+        if self.config.mcp_api.enabled {
+            tracing::info!("MCP API enabled with transport: {:?}", self.config.mcp_api.transport);
 
             #[cfg(feature = "mcp")]
             {
-                // Create MCP server configuration
-                let mcp_server_config =
-                    McpServerConfig::sse_with_host(self.config.mcp_api.port, &self.config.mcp_api.host);
+                use crate::mcp_handler::{mcp_get_handler, mcp_post_handler, mcp_delete_handler, mcp_health_handler, McpEndpointState};
 
-                // Create MCP adapter (placeholder - would need actual task executor)
-                // For now, create a minimal MCP server with basic tools
-                let tool_registry = RatchetToolRegistry::new();
-                let auth_manager = std::sync::Arc::new(McpAuthManager::new(McpAuth::default()));
-                let audit_logger = std::sync::Arc::new(AuditLogger::new(false));
+                // Create MCP endpoint state with dependencies
+                let mcp_state = match McpEndpointState::new_with_dependencies(
+                    self.config.mcp_api.clone(),
+                    self.services.repositories.clone(),
+                    self.services.mcp_task_service.clone(),
+                    self.services.storage_factory.clone(),
+                    Some(self.services.task_service.clone()),
+                ).await {
+                    Ok(state) => state,
+                    Err(e) => {
+                        tracing::error!("Failed to create MCP endpoint state: {}", e);
+                        return app;
+                    }
+                };
 
-                let mcp_server = McpServer::new(
-                    mcp_server_config,
-                    std::sync::Arc::new(tool_registry),
-                    auth_manager,
-                    audit_logger,
+                // Create unified MCP handler that supports both SSE and StreamableHTTP
+                app = app.route(
+                    &self.config.mcp_api.endpoint,
+                    axum::routing::get(mcp_get_handler)
+                        .post(mcp_post_handler)
+                        .delete(mcp_delete_handler)
+                        .with_state(mcp_state.clone()),
                 );
 
-                // Create and nest MCP SSE routes
-                let mcp_routes = mcp_server.create_sse_routes();
-                app = app.nest(&self.config.mcp_api.endpoint, mcp_routes);
+                // Add health endpoint
+                app = app.route(
+                    &format!("{}/health", self.config.mcp_api.endpoint),
+                    axum::routing::get(mcp_health_handler).with_state(mcp_state.clone()),
+                );
+
+                // Add trailing slash handler for Claude compatibility
+                let mcp_endpoint_with_slash = format!("{}/", self.config.mcp_api.endpoint);
+                let mcp_endpoint_target = self.config.mcp_api.endpoint.clone();
+                app = app.route(&mcp_endpoint_with_slash, 
+                    axum::routing::get({
+                        let target = mcp_endpoint_target.clone(); 
+                        move || async move { axum::response::Redirect::permanent(&target) }
+                    })
+                    .post({
+                        let target = mcp_endpoint_target.clone();
+                        move || async move { axum::response::Redirect::permanent(&target) }
+                    })
+                    .delete({
+                        let target = mcp_endpoint_target.clone();
+                        move || async move { axum::response::Redirect::permanent(&target) }
+                    }));
             }
 
             #[cfg(not(feature = "mcp"))]
             {
+                use crate::mcp_handler::{mcp_placeholder_handler, mcp_health_handler};
+
                 tracing::warn!("MCP API enabled in config but mcp feature not available at compile time");
                 // Add placeholder endpoints
                 app = app.route(
@@ -282,7 +316,7 @@ impl Server {
 
     /// Start the server
     pub async fn start(self) -> Result<()> {
-        let app = self.build_app();
+        let app = self.build_app().await;
         let addr = self.config.server.bind_address;
 
         tracing::info!("Starting Ratchet server on {}", addr);
@@ -299,12 +333,26 @@ impl Server {
             // Don't fail server startup for this
         }
 
+        // Create shutdown channel to coordinate background services
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel::<()>(1);
+        
         // Start scheduler service as background task AFTER schedules are initialized
         if let Some(scheduler_service) = &self.services.scheduler_service {
             let scheduler_clone = scheduler_service.clone();
+            let mut shutdown_rx = shutdown_tx.subscribe();
             tokio::spawn(async move {
-                if let Err(e) = scheduler_clone.start().await {
-                    tracing::error!("Scheduler service failed: {}", e);
+                tokio::select! {
+                    result = scheduler_clone.start() => {
+                        if let Err(e) = result {
+                            tracing::error!("Scheduler service failed: {}", e);
+                        }
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::info!("Scheduler service received shutdown signal");
+                        if let Err(e) = scheduler_clone.stop().await {
+                            tracing::error!("Failed to stop scheduler service: {}", e);
+                        }
+                    }
                 }
             });
             tracing::info!("Started background scheduler service");
@@ -313,9 +361,18 @@ impl Server {
         // Start job processor service as background task
         if let Some(job_processor_service) = &self.services.job_processor_service {
             let job_processor_clone = job_processor_service.clone();
+            let mut shutdown_rx = shutdown_tx.subscribe();
             tokio::spawn(async move {
-                if let Err(e) = job_processor_clone.start().await {
-                    tracing::error!("Job processor service failed: {}", e);
+                tokio::select! {
+                    result = job_processor_clone.start() => {
+                        if let Err(e) = result {
+                            tracing::error!("Job processor service failed: {}", e);
+                        }
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::info!("Job processor service received shutdown signal");
+                        job_processor_clone.stop().await;
+                    }
                 }
             });
             tracing::info!("Started background job processor service");
@@ -327,10 +384,10 @@ impl Server {
         // Start the server with TLS if configured
         if let Some(tls_config) = &self.config.server.tls {
             tracing::info!("Starting HTTPS server with TLS on {}", addr);
-            self.start_tls_server(app, addr, tls_config).await?;
+            self.start_tls_server(app, addr, tls_config, shutdown_tx).await?;
         } else {
             tracing::info!("Starting HTTP server on {}", addr);
-            self.start_http_server(app, addr).await?;
+            self.start_http_server(app, addr, shutdown_tx).await?;
         }
 
         tracing::info!("Server shutdown complete");
@@ -338,10 +395,10 @@ impl Server {
     }
 
     /// Start HTTP server
-    async fn start_http_server(&self, app: Router<()>, addr: std::net::SocketAddr) -> Result<()> {
+    async fn start_http_server(&self, app: Router<()>, addr: std::net::SocketAddr, shutdown_tx: tokio::sync::broadcast::Sender<()>) -> Result<()> {
         let listener = tokio::net::TcpListener::bind(&addr).await?;
         axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
+            .with_graceful_shutdown(shutdown_signal_with_services(shutdown_tx))
             .await?;
         Ok(())
     }
@@ -352,6 +409,7 @@ impl Server {
         app: Router<()>,
         addr: std::net::SocketAddr,
         tls_config: &crate::config::TlsConfig,
+        shutdown_tx: tokio::sync::broadcast::Sender<()>,
     ) -> Result<()> {
         // Load TLS certificates
         let cert_pem = fs::read(&tls_config.cert_path)
@@ -378,11 +436,18 @@ impl Server {
         // Create axum-server RustlsConfig
         let axum_tls_config = axum_server::tls_rustls::RustlsConfig::from_config(Arc::new(rustls_config));
 
-        // Start HTTPS server using axum-server
-        axum_server::bind_rustls(addr, axum_tls_config)
-            .serve(app.into_make_service())
-            .await
-            .map_err(|e| anyhow::anyhow!("HTTPS server error: {}", e))?;
+        // Start HTTPS server using axum-server with shutdown coordination
+        let server_future = axum_server::bind_rustls(addr, axum_tls_config)
+            .serve(app.into_make_service());
+        
+        tokio::select! {
+            result = server_future => {
+                result.map_err(|e| anyhow::anyhow!("HTTPS server error: {}", e))?;
+            }
+            _ = shutdown_signal_with_services(shutdown_tx) => {
+                tracing::info!("HTTPS server shutting down due to signal");
+            }
+        }
 
         Ok(())
     }
@@ -641,9 +706,9 @@ impl Server {
         if self.config.mcp_api.enabled {
             tracing::info!("   🤖 MCP Server-Sent Events API:");
             tracing::info!(
-                "      • Base Endpoint:    http://{}:{}{}",
-                self.config.mcp_api.host,
-                self.config.mcp_api.port,
+                "      • Base Endpoint:    {}://{}{}",
+                protocol,
+                self.config.server.bind_address,
                 self.config.mcp_api.endpoint
             );
 
@@ -727,24 +792,6 @@ async fn admin_handler() -> Html<String> {
     Html(html)
 }
 
-/// MCP SSE placeholder handler
-async fn mcp_placeholder_handler() -> axum::response::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "message": "MCP SSE API is enabled and ready",
-        "status": "placeholder",
-        "protocol": "Model Context Protocol over Server-Sent Events",
-        "note": "Full MCP SSE implementation will be added in future updates"
-    }))
-}
-
-/// MCP health handler
-async fn mcp_health_handler() -> axum::response::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "status": "healthy",
-        "service": "MCP SSE",
-        "timestamp": chrono::Utc::now().to_rfc3339()
-    }))
-}
 
 /// Graceful shutdown signal
 async fn shutdown_signal() {
@@ -769,4 +816,46 @@ async fn shutdown_signal() {
     }
 
     tracing::info!("Shutdown signal received, starting graceful shutdown...");
+}
+
+async fn shutdown_signal_with_services(shutdown_tx: tokio::sync::broadcast::Sender<()>) {
+    // Wait for shutdown signal
+    shutdown_signal().await;
+    
+    // Signal background services to stop
+    tracing::info!("Signaling background services to shutdown...");
+    if let Err(e) = shutdown_tx.send(()) {
+        tracing::warn!("Failed to send shutdown signal to background services: {}", e);
+    }
+    
+    // Give services a moment to shut down cleanly
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    tracing::info!("Background services shutdown coordination complete");
+}
+
+/// OAuth authorization server metadata for Claude MCP compatibility
+async fn oauth_authorization_server_metadata() -> axum::response::Json<serde_json::Value> {
+    axum::response::Json(serde_json::json!({
+        "issuer": "http://localhost:8080",
+        "authorization_endpoint": "http://localhost:8080/mcp/oauth/authorize",
+        "token_endpoint": "http://localhost:8080/mcp/oauth/token", 
+        "registration_endpoint": "http://localhost:8080/mcp/oauth/register",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "scopes_supported": ["mcp"],
+        "ui_locales_supported": ["en"]
+    }))
+}
+
+/// OAuth protected resource metadata for Claude MCP compatibility  
+async fn oauth_protected_resource_metadata() -> axum::response::Json<serde_json::Value> {
+    axum::response::Json(serde_json::json!({
+        "resource": "http://localhost:8080/mcp",
+        "authorization_servers": ["http://localhost:8080"],
+        "scopes_supported": ["mcp"],
+        "bearer_methods_supported": ["header", "query"],
+        "resource_documentation": "http://localhost:8080/mcp/info"
+    }))
 }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use ratchet_interfaces::{
     CrudRepository, DatabaseError, ExecutionFilters, ExecutionRepository, FilteredRepository, JobFilters,
     JobRepository, RegistryError, RegistryManager, Repository, RepositoryFactory, ScheduleFilters, ScheduleRepository,
-    SyncResult, TaskFilters, TaskMetadata, TaskRegistry, TaskRepository, TaskValidator, ValidationResult,
+    SyncResult, TaskFilters, TaskMetadata, TaskRegistry, TaskRepository, TaskService, TaskValidator, ValidationResult,
 };
 // Import storage repository trait for health checks (unused for now)
 // use ratchet_storage::seaorm::repositories::Repository as StorageRepositoryTrait;
@@ -25,6 +25,7 @@ use crate::config::ServerConfig;
 use crate::heartbeat::HeartbeatService;
 use crate::job_processor::{JobProcessor, JobProcessorConfig, JobProcessorService};
 use crate::scheduler::{SchedulerService, TokioCronSchedulerConfig, TokioCronSchedulerService};
+use crate::task_service::UnifiedTaskService;
 use ratchet_output::OutputDeliveryManager;
 
 /// Service container holding all application services
@@ -34,11 +35,13 @@ pub struct ServiceContainer {
     pub registry: Arc<dyn TaskRegistry>,
     pub registry_manager: Arc<dyn RegistryManager>,
     pub validator: Arc<dyn TaskValidator>,
+    pub task_service: Arc<dyn TaskService>,
     pub mcp_task_service: Option<Arc<TaskDevelopmentService>>,
     pub output_manager: Arc<OutputDeliveryManager>,
     pub scheduler_service: Option<Arc<dyn SchedulerService>>,
     pub job_processor_service: Option<Arc<dyn JobProcessor>>,
     pub heartbeat_service: Arc<HeartbeatService>,
+    pub storage_factory: Option<Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>>,
 }
 
 impl ServiceContainer {
@@ -48,10 +51,16 @@ impl ServiceContainer {
         // In the future, these would be replaced with the new modular implementations
 
         // This is a bridge implementation during the migration
-        let (repositories, mcp_task_service, _seaorm_factory) = create_repository_factory_with_mcp(config).await?;
+        let (repositories, mcp_task_service, seaorm_factory) = create_repository_factory_with_mcp(config).await?;
         let registry = create_task_registry(config, repositories.clone()).await?;
         let registry_manager = create_registry_manager(config).await?;
         let validator = create_task_validator(config).await?;
+        
+        // Create unified task service
+        let task_service: Arc<dyn TaskService> = Arc::new(UnifiedTaskService::new(
+            repositories.clone(),
+            registry.clone(),
+        ));
 
         // Create output delivery manager
         let output_manager = Arc::new(OutputDeliveryManager::new());
@@ -82,11 +91,13 @@ impl ServiceContainer {
             registry,
             registry_manager,
             validator,
+            task_service,
             mcp_task_service,
             output_manager,
             scheduler_service,
             job_processor_service,
             heartbeat_service,
+            storage_factory: Some(seaorm_factory),
         })
     }
 

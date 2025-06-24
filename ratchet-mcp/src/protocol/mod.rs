@@ -22,9 +22,9 @@ pub const MCP_PROTOCOL_VERSION: &str = "0.1.0";
 
 /// Supported MCP protocol versions
 pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[
-    "0.1.0",
-    "2024-11-05", // Claude Code compatibility
+    "2024-11-05", // Claude Code primary version
     "2025-03-26", // Claude Code latest version
+    "0.1.0",      // MCP standard version
     "1.0.0",      // Future version compatibility
 ];
 
@@ -43,7 +43,12 @@ pub fn get_protocol_version_for_client(client_version: &str) -> String {
     if SUPPORTED_PROTOCOL_VERSIONS.contains(&client_version) {
         client_version.to_string()
     } else {
-        MCP_PROTOCOL_VERSION.to_string()
+        // For Claude compatibility, prefer Claude's version format if possible
+        if client_version.starts_with("2024") || client_version.starts_with("2025") {
+            "2024-11-05".to_string()
+        } else {
+            MCP_PROTOCOL_VERSION.to_string()
+        }
     }
 }
 

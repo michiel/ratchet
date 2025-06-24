@@ -48,6 +48,11 @@ impl ExecutionBridge {
         &self.inner
     }
 
+    /// Start the worker processes
+    pub async fn start(&self) -> Result<(), ExecutionError> {
+        self.inner.start().await
+    }
+
     /// Get a reference to the executor configuration
     pub fn config(&self) -> &ProcessExecutorConfig {
         &self.config

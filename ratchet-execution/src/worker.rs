@@ -6,9 +6,11 @@ use std::time::Duration;
 use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
+use serde_json::Value as JsonValue;
 
 use crate::error::ExecutionError;
-use crate::ipc::{CoordinatorMessage, TaskExecutionResult, WorkerMessage, WorkerStatus};
+use crate::ipc::{CoordinatorMessage, TaskExecutionResult, WorkerMessage, WorkerStatus, ExecutionContext};
+use ratchet_js::{JsTask, JsTaskRunner, ExecutionContext as JsExecutionContext};
 
 /// Configuration for worker processes
 #[derive(Debug, Clone)]
@@ -182,23 +184,48 @@ impl WorkerProcessManager {
             .find_available_worker()
             .ok_or_else(|| ExecutionError::WorkerError("No available workers".to_string()))?;
 
-        // For now, simulate task execution
+        // Execute the task for real
         match message {
             WorkerMessage::ExecuteTask {
-                job_id, correlation_id, ..
+                job_id,
+                correlation_id,
+                task_path,
+                input_data,
+                execution_context,
+                ..
             } => {
-                // Simulate some work
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                // Return a simulated result
-                let result = TaskExecutionResult {
-                    success: false, // Simplified - always fails since no real execution
-                    output: None,
-                    error_message: Some("Worker process execution not yet fully implemented".to_string()),
-                    error_details: None,
-                    started_at: chrono::Utc::now(),
-                    completed_at: chrono::Utc::now(),
-                    duration_ms: 100,
+                let started_at = chrono::Utc::now();
+                
+                // Execute the JavaScript task
+                let result = match self.execute_javascript_task(&task_path, input_data, execution_context).await {
+                    Ok(output) => {
+                        let completed_at = chrono::Utc::now();
+                        let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+                        
+                        TaskExecutionResult {
+                            success: true,
+                            output: Some(output),
+                            error_message: None,
+                            error_details: None,
+                            started_at,
+                            completed_at,
+                            duration_ms,
+                        }
+                    }
+                    Err(error) => {
+                        let completed_at = chrono::Utc::now();
+                        let duration_ms = (completed_at - started_at).num_milliseconds() as i32;
+                        
+                        TaskExecutionResult {
+                            success: false,
+                            output: None,
+                            error_message: Some(error.to_string()),
+                            error_details: None,
+                            started_at,
+                            completed_at,
+                            duration_ms,
+                        }
+                    }
                 };
 
                 Ok(CoordinatorMessage::TaskResult {
@@ -277,6 +304,120 @@ impl WorkerProcessManager {
         self.workers
             .values()
             .any(|w| matches!(w.status, WorkerProcessStatus::Ready | WorkerProcessStatus::Busy))
+    }
+
+    /// Execute a JavaScript task using the ratchet-js engine
+    /// This runs in a separate thread to avoid Send issues with Boa engine
+    async fn execute_javascript_task(
+        &self,
+        task_path: &str,
+        input_data: JsonValue,
+        execution_context: ExecutionContext,
+    ) -> Result<JsonValue, ExecutionError> {
+        debug!("Executing JavaScript task at path: {}", task_path);
+
+        // For now, handle embedded tasks by checking known embedded task names
+        // In a full implementation, this would integrate with the registry
+        let (task_name, js_content) = self.resolve_task_content(task_path)?;
+        debug!("Resolved task: {} with content length: {}", task_name, js_content.len());
+
+        // Create JavaScript task
+        let js_task = JsTask {
+            name: task_name.clone(),
+            content: js_content.clone(),
+            input_schema: None, // TODO: Load from registry if available
+            output_schema: None, // TODO: Load from registry if available
+        };
+
+        // Create execution context for JavaScript
+        let js_context = Some(JsExecutionContext {
+            execution_id: execution_context.execution_id.clone(),
+            task_id: execution_context.task_id.clone(),
+            task_version: execution_context.task_version.clone(),
+            job_id: execution_context.job_id.clone(),
+        });
+
+        // Execute the task in a separate thread to avoid Send issues with Boa
+        let result = tokio::task::spawn_blocking(move || {
+            let runner = JsTaskRunner::new();
+            // Use the sync blocking execution since we're in a blocking task
+            tokio::runtime::Handle::current().block_on(async move {
+                runner.execute_task(&js_task, input_data, js_context).await
+            })
+        })
+        .await
+        .map_err(|e| ExecutionError::TaskExecutionError(format!("Task execution failed: {}", e)))?
+        .map_err(|e| ExecutionError::TaskExecutionError(format!("JavaScript execution failed: {}", e)))?;
+
+        debug!("JavaScript task completed successfully");
+        Ok(result)
+    }
+
+    /// Resolve task content from path/name
+    /// This is a simplified implementation that handles embedded tasks
+    fn resolve_task_content(&self, task_path: &str) -> Result<(String, String), ExecutionError> {
+        // Handle embedded tasks first
+        if task_path == "heartbeat" || task_path.contains("heartbeat") {
+            // Return the embedded heartbeat task JavaScript
+            // Using simplified synchronous version that works with Boa
+            let heartbeat_js = r#"
+function main(input) {
+    try {
+        // Basic system status
+        const timestamp = new Date().toISOString();
+        
+        // Get process uptime (simulated for Boa engine)
+        const uptimeSeconds = Math.floor(Math.random() * 10000); // Simulated uptime
+        
+        // Basic system information
+        const systemInfo = {
+            version: "ratchet-0.1.0",
+            uptime_seconds: uptimeSeconds,
+            active_jobs: 0 // This would be populated by the execution context
+        };
+        
+        // Return success response
+        return {
+            status: "ok",
+            timestamp: timestamp,
+            message: "Heartbeat successful - system running normally",
+            system_info: systemInfo
+        };
+        
+    } catch (error) {
+        // Return error response if something goes wrong
+        return {
+            status: "error",
+            timestamp: new Date().toISOString(),
+            message: "Heartbeat failed: " + error.message,
+            system_info: {
+                version: "ratchet-0.1.0",
+                uptime_seconds: 0,
+                active_jobs: 0
+            }
+        };
+    }
+}
+"#;
+            return Ok(("heartbeat".to_string(), heartbeat_js.to_string()));
+        }
+
+        // Handle bridge task paths (from the execution bridge)
+        if task_path.starts_with("/bridge-task/") {
+            let task_name = task_path.strip_prefix("/bridge-task/").unwrap_or(task_path);
+            
+            // For now, try to match known embedded tasks
+            if task_name == "heartbeat" {
+                // Use the same embedded heartbeat content
+                return self.resolve_task_content("heartbeat");
+            }
+        }
+
+        // For unknown tasks, return an error
+        Err(ExecutionError::TaskExecutionError(format!(
+            "Unable to resolve task content for path: {}. Only embedded tasks are currently supported.",
+            task_path
+        )))
     }
 }
 
@@ -366,6 +507,92 @@ mod tests {
             assert_eq!(worker_id, "worker-0");
         } else {
             panic!("Expected Pong response");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_heartbeat_task() {
+        // First test just the JavaScript execution directly
+        let heartbeat_js = r#"
+function main(input) {
+    return {
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        message: "Heartbeat successful - system running normally",
+        system_info: {
+            version: "ratchet-0.1.0",
+            uptime_seconds: 12345,
+            active_jobs: 0
+        }
+    };
+}
+"#;
+
+        let js_task = JsTask {
+            name: "heartbeat".to_string(),
+            content: heartbeat_js.to_string(),
+            input_schema: None,
+            output_schema: None,
+        };
+
+        let js_context = Some(JsExecutionContext {
+            execution_id: "test-exec-123".to_string(),
+            task_id: "heartbeat".to_string(),
+            task_version: "1.0.0".to_string(),
+            job_id: None,
+        });
+
+        let runner = JsTaskRunner::new();
+        let js_result = runner.execute_task(&js_task, serde_json::json!({}), js_context).await;
+        
+        println!("Direct JS execution result: {:?}", js_result);
+        assert!(js_result.is_ok(), "Direct JS execution should succeed");
+        
+        let js_output = js_result.unwrap();
+        println!("Direct JS output: {}", serde_json::to_string_pretty(&js_output).unwrap());
+        assert!(js_output.is_object(), "JS output should be an object");
+        
+        // Now test through the worker manager
+        let config = WorkerConfig {
+            worker_count: 1,
+            ..Default::default()
+        };
+        let mut manager = WorkerProcessManager::new(config);
+        manager.start().await.unwrap();
+
+        let execution_context = ExecutionContext {
+            execution_id: "test-exec-123".to_string(),
+            job_id: None,
+            task_id: "heartbeat".to_string(),
+            task_version: "1.0.0".to_string(),
+        };
+
+        let message = WorkerMessage::ExecuteTask {
+            job_id: 1,
+            task_id: 2,
+            task_path: "heartbeat".to_string(),
+            input_data: serde_json::json!({}),
+            execution_context,
+            correlation_id: Uuid::new_v4(),
+        };
+
+        let result = manager.send_task(message, Duration::from_secs(10)).await;
+        assert!(result.is_ok());
+
+        if let Ok(CoordinatorMessage::TaskResult { result, .. }) = result {
+            println!("Worker task execution result: {:?}", result);
+            assert!(result.success, "Task should succeed");
+            assert!(result.output.is_some(), "Task should return output");
+            
+            let output = result.output.unwrap();
+            println!("Worker output: {}", serde_json::to_string_pretty(&output).unwrap());
+            assert!(output.is_object(), "Output should be an object");
+            
+            let output_obj = output.as_object().unwrap();
+            assert!(output_obj.contains_key("status"), "Output should have status field");
+            assert_eq!(output_obj["status"], "ok", "Status should be 'ok'");
+        } else {
+            panic!("Expected TaskResult response, got: {:?}", result);
         }
     }
 }

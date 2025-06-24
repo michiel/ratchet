@@ -23,6 +23,7 @@ ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-config = { path = "../ratchet-config" }
 ratchet-storage = { path = "../ratchet-storage" }
 ratchet-ipc = { path = "../ratchet-ipc" }
+ratchet-js = { path = "../ratchet-js" }
 
 # Process management
 tokio-process = { version = "0.2", optional = true }

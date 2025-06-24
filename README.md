@@ -525,7 +525,8 @@ Ratchet includes a built-in MCP server that allows Language Learning Models (LLM
 - **`ratchet.edit_task`**: Modify existing tasks and validation
 - **`ratchet.delete_task`**: Remove tasks with backup options
 - **`ratchet.validate_task`**: Validate task code and schemas
-- **`ratchet.run_task_tests`**: Execute task test suites
+- **`ratchet.run_task_tests`**: Execute task test suites with real JavaScript execution ✨
+- **`ratchet.debug_task_execution`**: Debug tasks with breakpoints and variable inspection ✨
 - **`ratchet.create_task_version`**: Manage task versioning
 - **`ratchet.import_tasks`**: Import task collections
 - **`ratchet.export_tasks`**: Export tasks for distribution
@@ -558,7 +559,7 @@ Configure MCP in your `config.yaml`:
 # Enable MCP API
 mcp_api:
   enabled: true
-  sse_enabled: true
+  transport: "sse"
   host: "127.0.0.1"
   port: 8081
   endpoint: "/mcp"
