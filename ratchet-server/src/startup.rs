@@ -142,6 +142,7 @@ impl Server {
                     self.services.repositories.clone(),
                     self.services.mcp_task_service.clone(),
                     self.services.storage_factory.clone(),
+                    Some(self.services.task_service.clone()),
                 ).await {
                     Ok(state) => state,
                     Err(e) => {
