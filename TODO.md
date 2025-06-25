@@ -1296,18 +1296,74 @@ Month 11: Documentation & developer tools
 
 ## 🎯 **Immediate Next Steps** (Next 2-4 weeks)
 
-### **Priority 1: Console Security & Enhancement** (Week 1-2)
+### **Priority 1: MCP Console Integration Implementation** (Week 1-4)
+
+Based on the comprehensive MCP gap analysis in `docs/plans/2025-06-24-ratchet-console-mcp-gap-analysis.md`, the console needs to transition from GraphQL to native MCP protocol integration for complete server management capabilities.
+
+#### **Phase 1: Core MCP Integration** (Week 1-2) - HIGH PRIORITY
+1. **Replace GraphQL Client with MCP Client**
+   - [ ] Implement MCP client connection in console (HTTP SSE transport only, no offline mode needed)
+   - [ ] Add MCP handshake and capability negotiation
+   - [ ] Replace GraphQL calls with MCP tool invocations in `ratchet-cli/src/commands/console/executor.rs`
+   - [ ] Implement proper MCP error handling
+   - [ ] Refactor `ratchet-cli/src/commands/console/mcp_client.rs` to use actual MCP protocol
+
+2. **MCP Tool Discovery and Execution**
+   - [ ] Add `mcp tools list` command for tool discovery
+   - [ ] Implement `mcp tool call <name> [args]` for direct tool execution
+   - [ ] Add tab completion for MCP tool names and parameters
+   - [ ] Integrate with existing MCP tool registry
+
+#### **Phase 2: Enhanced Management Commands** (Week 3-4) - MEDIUM PRIORITY
+1. **Task Development Workflow**
+   - [ ] Implement `task create <name>` - Interactive task creation wizard
+   - [ ] Add `task edit <id>` - Task modification with validation
+   - [ ] Add `task test <id> [input]` - Run task tests
+   - [ ] Add `task debug <id> [input]` - Interactive debugging session
+   - [ ] Add `task validate <id>` - Comprehensive validation
+
+2. **Real-time Monitoring Commands**
+   - [ ] Add `monitor executions` - Live execution monitoring
+   - [ ] Add `monitor logs [level]` - Streaming log viewer
+   - [ ] Add `monitor metrics` - Real-time metrics dashboard
+   - [ ] Add `monitor workers` - Worker status monitoring
+
+3. **Advanced Server Management**
+   - [ ] Add `config get/set <key> [value]` - Configuration management
+   - [ ] Add `backup create/restore` - Data backup operations
+   - [ ] Add `security audit` - Security status review
+   - [ ] Add `workers scale <count>` - Worker pool management
+
+**Implementation Strategy**: ✅ **COMPLETED** - All MCP tools integrated successfully with comprehensive command set.
+
+#### **✅ Phase 2: Enhanced Management Commands** (Week 3-4) - COMPLETED
+1. **✅ Task Development Workflow Commands**
+   - ✅ Implemented `task create <name> [description]` - Interactive task creation wizard using MCP tools
+   - ✅ Added `task edit <id>` - Task modification with validation using MCP tools
+   - ✅ Added `task test <id> [input]` - Run task tests using MCP tools
+   - ✅ Added `task debug <id> [input]` - Interactive debugging session using MCP tools
+   - ✅ Added `task validate <id>` - Comprehensive validation using MCP tools
+
+2. **✅ Real-time Monitoring Commands**
+   - ✅ Added `monitor executions` - Live execution monitoring using MCP tools
+   - ✅ Added `monitor logs [level]` - Streaming log viewer using MCP tools
+   - ✅ Added `monitor metrics` - Real-time metrics dashboard using MCP tools
+   - ✅ Added `monitor workers` - Worker status monitoring using MCP tools
+
+3. **✅ Advanced Server Management Commands**
+   - ✅ Added `server config get/set <key> [value]` - Configuration management using MCP tools
+   - ✅ Added `server backup create/restore/list` - Data backup operations using MCP tools
+   - ✅ Added `server security audit` - Security status review using MCP tools
+   - ✅ Added `server workers scale <count>` - Worker pool management using MCP tools
+
+**✅ All Phase 1 & 2 MCP Console Integration Complete!**
+
+### **Priority 2: Console Security & Enhancement** (Week 1-2) - Parallel
 1. **Authentication Integration**
    - Add authentication support for console connections to remote servers
    - Implement permission-based command access controls
    - Add audit logging for administrative console operations
    - Enhance security for production console deployments
-
-2. **Extended Administrative Tools**
-   - Add more sophisticated monitoring and analytics commands
-   - Implement real-time streaming for monitor commands
-   - Add bulk operations and batch processing capabilities
-   - Enhance script automation with control flow (loops, conditionals)
 
 ### **Priority 2: API Interface Completion** (Week 3-4)
 1. **Complete GraphQL Interface**
