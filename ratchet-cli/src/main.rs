@@ -309,7 +309,7 @@ async fn mcp_serve_command_with_config(config: RatchetConfig, transport: &str, h
     let execution_bridge = Arc::new(ExecutionBridge::new(execution_config));
 
     // Create MCP adapter with available components
-    let mut adapter_builder = RatchetMcpAdapterBuilder::new().with_bridge_executor(execution_bridge);
+    let adapter_builder = RatchetMcpAdapterBuilder::new().with_bridge_executor(execution_bridge);
 
     // Note: CLI integration with unified task service is disabled for now
     // The main implementation is in the server where it's needed most

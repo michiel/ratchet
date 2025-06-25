@@ -17,12 +17,6 @@ use ratchet_graphql_api::{
 use ratchet_rest_api::app::{create_rest_app, AppConfig as RestAppConfig, AppContext as RestAppContext};
 // use ratchet_web::middleware::{cors_layer, request_id_layer, error_handler_layer};
 
-#[cfg(feature = "mcp")]
-use ratchet_mcp::{
-    security::{AuditLogger, McpAuth, McpAuthManager},
-    server::config::McpServerConfig,
-    server::{tools::RatchetToolRegistry, McpServer},
-};
 
 use crate::{config::ServerConfig, services::ServiceContainer};
 

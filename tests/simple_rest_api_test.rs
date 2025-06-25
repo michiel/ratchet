@@ -23,7 +23,7 @@ async fn test_basic_rest_api_endpoints() -> Result<()> {
 
     // Try to connect to see if anything is running
     match client.get(format!("{}/health", base_url)).send().await {
-        Ok(response) => {
+        Ok(_response) => {
             println!("✅ Found running server on localhost:8080");
 
             // Test OpenAPI documentation endpoint

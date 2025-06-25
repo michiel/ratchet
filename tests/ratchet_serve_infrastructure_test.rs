@@ -102,7 +102,7 @@ async fn start_test_webhook_server() -> Result<(SocketAddr, TestWebhookState)> {
     let addr = listener.local_addr()?;
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     tokio::time::sleep(Duration::from_millis(100)).await;

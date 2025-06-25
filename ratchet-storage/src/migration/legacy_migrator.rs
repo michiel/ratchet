@@ -3,7 +3,7 @@
 //! This module provides the main migration logic for transforming data from
 //! the legacy ratchet-lib database format to the modern ratchet-storage format.
 
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait};
+use sea_orm::DatabaseConnection;
 use std::time::Instant;
 use uuid::Uuid;
 

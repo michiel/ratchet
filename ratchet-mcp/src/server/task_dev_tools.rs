@@ -1333,7 +1333,7 @@ impl TaskDevelopmentService {
         });
 
         // Create the new version (in production this would update the database)
-        let updated_task = self.apply_version_changes(&current_task, &request).await?;
+        let _updated_task = self.apply_version_changes(&current_task, &request).await?;
         
         // Store version history entry
         self.store_version_history(&version_record).await?;
@@ -3569,7 +3569,7 @@ function compareResults(actual, expected) {
     }
 
     /// Generate migration plan for breaking changes
-    async fn generate_migration_plan(&self, current_task: &TaskInfo, request: &CreateTaskVersionRequest) -> McpResult<Value> {
+    async fn generate_migration_plan(&self, _current_task: &TaskInfo, request: &CreateTaskVersionRequest) -> McpResult<Value> {
         let migration_steps = vec![
             "Backup current task version",
             "Identify all dependent tasks and workflows",
@@ -3657,7 +3657,7 @@ function compareResults(actual, expected) {
     }
 
     /// Assess test compatibility for version changes
-    async fn assess_test_compatibility(&self, current_task: &TaskInfo, request: &CreateTaskVersionRequest) -> Value {
+    async fn assess_test_compatibility(&self, _current_task: &TaskInfo, request: &CreateTaskVersionRequest) -> Value {
         json!({
             "existing_tests_compatible": !request.breaking_change,
             "new_tests_required": request.breaking_change,

@@ -1,0 +1,490 @@
+# Ratchet Full Configuration
+# This configuration demonstrates all available options with explanations
+# Suitable for production deployments with comprehensive features enabled
+
+# =============================================================================
+# TASK EXECUTION CONFIGURATION
+# =============================================================================
+execution:
+  # Maximum time a task can run before being terminated (10 minutes for production)
+  max_execution_duration: 600  # seconds
+
+  # Validate task input/output schemas during execution
+  validate_schemas: true
+
+  # Maximum number of tasks that can run simultaneously
+  max_concurrent_tasks: 20
+
+  # Grace period for task cleanup when timeout occurs
+  timeout_grace_period: 10  # seconds
+
+  # JavaScript variable names used internally for HTTP fetch operations
+  # (Advanced: only change if you have conflicts with these variable names)
+  fetch_variables:
+    url_var: "__fetch_url"           # Variable for request URL
+    params_var: "__fetch_params"     # Variable for query parameters  
+    body_var: "__fetch_body"         # Variable for request body
+    result_var: "__http_result"      # Variable for HTTP response
+    temp_result_var: "__temp_result" # Variable for temporary results
+
+# =============================================================================
+# HTTP CLIENT CONFIGURATION
+# =============================================================================
+http:
+  # Timeout for HTTP requests made by tasks
+  timeout: 60  # seconds
+
+  # Maximum number of redirects to follow
+  max_redirects: 10
+
+  # User agent string for HTTP requests
+  user_agent: "Ratchet-Production/1.0"
+
+  # Verify SSL certificates for HTTPS requests
+  verify_ssl: true
+
+  # HTTP connection pool settings for better performance
+  connection_pool:
+    # Maximum idle connections per host
+    max_idle_per_host: 20
+    
+    # How long to keep idle connections open
+    idle_timeout: 90  # seconds
+    
+    # Timeout for establishing new connections
+    connection_timeout: 15  # seconds
+
+  # Optional: Proxy configuration
+  # proxy:
+  #   http_proxy: "http://proxy.company.com:8080"
+  #   https_proxy: "http://proxy.company.com:8080"
+  #   no_proxy: "localhost,127.0.0.1,.local"
+
+# =============================================================================
+# CACHING CONFIGURATION
+# =============================================================================
+cache:
+  # Enable caching for better performance
+  enabled: true
+
+  # Task content cache (for task definitions and scripts)
+  task_cache:
+    # Cache implementation: lru, ttl, moka, inmemory
+    cache_type: "lru"
+    
+    # Number of task definitions to keep in memory
+    task_content_cache_size: 500
+    
+    # Maximum memory usage for task cache (128MB)
+    memory_limit_bytes: 134217728
+    
+    # How long to cache task definitions (2 hours)
+    ttl: 7200  # seconds
+
+  # HTTP response cache (for external API calls)
+  http_cache:
+    # Enable HTTP response caching
+    enabled: true
+    
+    # Maximum cache size (50MB)
+    max_size_bytes: 52428800
+    
+    # Default cache time for responses without cache headers (10 minutes)
+    default_ttl: 600  # seconds
+    
+    # Respect HTTP cache-control headers
+    respect_cache_control: true
+
+  # Result cache (for task execution results)
+  result_cache:
+    # Enable result caching
+    enabled: true
+    
+    # Only cache successful results (not errors)
+    cache_only_success: true
+    
+    # Maximum number of cached results
+    max_entries: 5000
+    
+    # How long to cache results (1 hour)
+    ttl: 3600  # seconds
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+logging:
+  # Log level: trace, debug, info, warn, error
+  level: info
+
+  # Log format: text (human-readable), json (structured), compact, pretty
+  format: json
+
+  # Include source code location in logs (useful for debugging)
+  include_location: false
+
+  # Enable structured logging with consistent fields
+  structured: true
+
+  # Multiple log targets (where logs are written)
+  targets:
+    # Console output for immediate feedback
+    - type: console
+      level: info
+
+    # File logging for persistence and analysis
+    - type: file
+      path: "/var/log/ratchet/ratchet.log"
+      level: debug
+      # Rotate when file reaches 50MB
+      max_size_bytes: 52428800
+      # Keep 10 rotated files
+      max_files: 10
+
+    # System logging for centralized monitoring
+    - type: syslog
+      level: warn
+      facility: "daemon"  # kern, user, mail, daemon, auth, syslog, lpr, news, uucp, cron, authpriv, ftp, local0-local7
+      ident: "ratchet-server"
+
+# =============================================================================
+# OUTPUT CONFIGURATION
+# =============================================================================
+output:
+  # Number of concurrent output deliveries
+  max_concurrent_deliveries: 50
+
+  # Default timeout for output operations
+  default_timeout: 60  # seconds
+
+  # Validate output destination configurations on startup
+  validate_on_startup: true
+
+  # Default retry policy for failed deliveries
+  default_retry_policy:
+    # Maximum number of retry attempts
+    max_attempts: 5
+    
+    # Initial delay before first retry (1 second)
+    initial_delay_ms: 1000
+    
+    # Maximum delay between retries (2 minutes)
+    max_delay_ms: 120000
+    
+    # Exponential backoff multiplier
+    backoff_multiplier: 2.0
+
+  # Output formatting settings
+  formatting:
+    # Timestamp format for output data
+    timestamp_format: "%Y-%m-%dT%H:%M:%S%.3fZ"
+    
+    # Include metadata in output
+    include_metadata: true
+    
+    # Pretty-print JSON output
+    pretty_json: true
+
+  # Global output destinations (applied to all executions)
+  global_destinations:
+    # File system output for audit logging
+    - name: "audit-logs"
+      description: "Execution audit logs for compliance"
+      destination:
+        type: "filesystem"
+        path: "/var/log/ratchet/executions/{date}/{task_name}-{execution_id}.json"
+        format: "json"
+        permissions: "644"
+        create_dirs: true
+        overwrite: false
+        backup_existing: true
+
+    # Webhook notification for real-time monitoring
+    - name: "monitoring-webhook"
+      description: "Real-time execution notifications"
+      destination:
+        type: "webhook"
+        url: "https://monitoring.company.com/webhook/ratchet"
+        method: "POST"
+        headers:
+          "Content-Type": "application/json"
+          "X-Source": "ratchet-server"
+        timeout_seconds: 30
+        # auth:
+        #   type: "bearer"
+        #   token: "your-webhook-token"
+
+# =============================================================================
+# SERVER CONFIGURATION
+# =============================================================================
+server:
+  # Server network configuration
+  bind_address: "0.0.0.0"  # Listen on all interfaces for production
+  port: 8080
+
+  # Database configuration
+  database:
+    # Use PostgreSQL for production (better concurrency and features)
+    url: "postgres://ratchet_user:secure_password@localhost:5432/ratchet_production"
+    
+    # Alternative: SQLite for smaller deployments
+    # url: "sqlite:./ratchet.db"
+    
+    # Connection pool settings
+    max_connections: 50      # Maximum connections in pool
+    min_connections: 5       # Minimum idle connections
+    connection_timeout: 30   # Connection timeout (seconds)
+    idle_timeout: 600       # Idle connection timeout (10 minutes)
+    max_lifetime: 3600      # Maximum connection lifetime (1 hour)
+
+    # Database-specific configuration
+    database_specific:
+      # PostgreSQL-specific settings
+      postgres:
+        application_name: "ratchet-server"
+        statement_timeout: 60  # seconds
+        lock_timeout: 30      # seconds
+        ssl_mode: "require"   # disable, allow, prefer, require, verify-ca, verify-full
+
+    # Migration settings
+    migrations:
+      auto_migrate: true                    # Run migrations on startup
+      migration_dir: "migrations"           # Migration directory
+      table_name: "__ratchet_migrations"    # Migration tracking table
+      validate_checksums: true              # Validate migration integrity
+
+  # Authentication configuration (optional but recommended for production)
+  auth:
+    # JWT secret (must be at least 32 characters)
+    jwt_secret: "your-256-bit-secret-key-change-this-in-production-seriously"
+    
+    # Token expiration time (8 hours)
+    token_expiration: 28800  # seconds
+    
+    # JWT issuer and audience
+    issuer: "ratchet-production"
+    audience: "ratchet-api"
+
+  # CORS configuration for web browser access
+  cors:
+    # Allowed origins (restrict in production)
+    allowed_origins: 
+      - "https://dashboard.company.com"
+      - "https://admin.company.com"
+    
+    # Allowed HTTP methods
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    
+    # Allowed headers
+    allowed_headers: 
+      - "Content-Type"
+      - "Authorization" 
+      - "X-Requested-With"
+      - "X-API-Key"
+    
+    # Allow credentials (cookies, authorization headers)
+    allow_credentials: true
+    
+    # Preflight cache time (1 hour)
+    max_age: 3600  # seconds
+
+  # Rate limiting to prevent abuse
+  rate_limit:
+    # Enable rate limiting
+    enabled: true
+    
+    # Requests per minute per IP address
+    requests_per_minute: 120
+    
+    # Burst size for temporary spikes
+    burst_size: 20
+    
+    # Time window for rate limiting
+    time_window: 60  # seconds
+
+  # Optional: TLS/SSL configuration for HTTPS
+  # tls:
+  #   cert_file: "/etc/ssl/certs/ratchet.crt"
+  #   key_file: "/etc/ssl/private/ratchet.key"
+  #   min_version: "1.2"  # 1.0, 1.1, 1.2, 1.3
+  #   chain_file: "/etc/ssl/certs/ca-chain.crt"  # Optional certificate chain
+
+# =============================================================================
+# TASK REGISTRY CONFIGURATION
+# =============================================================================
+registry:
+  # Default polling interval for all sources (5 minutes)
+  default_polling_interval: 300  # seconds
+
+  # Registry cache configuration
+  cache:
+    enabled: true
+    ttl: 3600        # Cache for 1 hour
+    max_entries: 5000 # Maximum cached items
+
+  # Task sources configuration
+  sources:
+    # Local filesystem source
+    - name: "local-tasks"
+      uri: "file:///opt/ratchet/tasks"
+      polling_interval: 60  # Check every minute
+      enabled: true
+      config:
+        filesystem:
+          watch_changes: true    # Real-time change detection
+          include_patterns:      # File patterns to include
+            - "**/*.js"
+            - "**/*.json"
+          exclude_patterns:      # File patterns to exclude
+            - "**/node_modules/**"
+            - "**/.git/**"
+            - "**/test/**"
+          follow_symlinks: false
+
+    # Git repository source
+    - name: "company-tasks"
+      uri: "git://github.com/company/ratchet-tasks.git"
+      auth_name: "github-token"  # Reference to auth configuration
+      polling_interval: 300      # Check every 5 minutes
+      enabled: true
+      config:
+        git:
+          branch: "production"     # Git branch to use
+          subdirectory: "tasks"    # Subdirectory within repo
+          shallow: true           # Use shallow clones for speed
+          depth: 1               # Clone depth
+          sync_strategy: "fetch"  # clone, fetch, pull
+          cleanup_on_error: true
+          verify_signatures: false
+          timeout: 300           # Git operation timeout (5 minutes)
+          cache_ttl: 1800       # Cache for 30 minutes
+
+    # HTTP/HTTPS registry source
+    - name: "external-registry"
+      uri: "https://registry.example.com/tasks"
+      auth_name: "api-key"
+      polling_interval: 600  # Check every 10 minutes
+      enabled: true
+      config:
+        http:
+          timeout: 60
+          verify_ssl: true
+          headers:
+            "Accept": "application/json"
+            "X-Client": "ratchet-server"
+
+    # AWS S3 source
+    - name: "s3-tasks"
+      uri: "s3://company-ratchet-tasks/production/"
+      auth_name: "aws-credentials"
+      polling_interval: 900  # Check every 15 minutes
+      enabled: true
+      config:
+        s3:
+          region: "us-east-1"
+          prefix: "tasks/"
+          timeout: 120
+
+  # Authentication configurations for registry sources
+  auth:
+    # GitHub token for private repositories
+    github-token:
+      type: "gittoken"
+      token: "ghp_your_github_personal_access_token"
+
+    # API key for HTTP registries
+    api-key:
+      type: "apikey"
+      header: "X-API-Key"
+      value: "your-registry-api-key"
+
+    # AWS credentials for S3 access
+    aws-credentials:
+      type: "awscredentials"
+      access_key_id: "AKIA..."
+      secret_access_key: "your-secret-key"
+      # session_token: "temporary-session-token"  # For temporary credentials
+
+    # SSH key for Git repositories
+    # ssh-key:
+    #   type: "sshkey"
+    #   private_key_path: "/home/ratchet/.ssh/id_rsa"
+    #   passphrase: "optional-passphrase"
+
+    # Client certificate authentication
+    # client-cert:
+    #   type: "clientcertificate"
+    #   cert_path: "/etc/ssl/client.crt"
+    #   key_path: "/etc/ssl/client.key"
+    #   ca_cert_path: "/etc/ssl/ca.crt"
+
+# =============================================================================
+# MCP SERVER CONFIGURATION
+# =============================================================================
+mcp:
+  # Enable Model Context Protocol server for AI tool integration
+  enabled: true
+
+  # Transport protocol: stdio (for direct process communication) or sse (for web-based AI tools)
+  transport: "sse"
+
+  # Network configuration for SSE transport
+  host: "0.0.0.0"    # Listen on all interfaces
+  port: 8090         # MCP server port
+
+# =============================================================================
+# ENVIRONMENT VARIABLE OVERRIDES
+# =============================================================================
+# Any configuration value can be overridden using environment variables:
+#
+# Core settings:
+# RATCHET_LOG_LEVEL=debug
+# RATCHET_HTTP_TIMEOUT=90
+# RATCHET_MAX_EXECUTION_DURATION=900
+# RATCHET_MAX_CONCURRENT_TASKS=50
+#
+# Server settings:
+# RATCHET_SERVER_PORT=3000
+# RATCHET_BIND_ADDRESS=0.0.0.0
+# RATCHET_DATABASE_URL=postgres://user:pass@localhost/db
+#
+# Security settings:
+# RATCHET_JWT_SECRET=your-production-secret
+# RATCHET_VERIFY_SSL=true
+#
+# Advanced logging:
+# RUST_LOG=debug                    # Global debug logging
+# RUST_LOG=ratchet=info,sqlx=warn  # Per-module log levels
+#
+# Performance tuning:
+# RATCHET_CACHE_ENABLED=true
+# RATCHET_TASK_CACHE_SIZE=1000
+# RATCHET_MAX_CONCURRENT_DELIVERIES=100
+
+# =============================================================================
+# PRODUCTION DEPLOYMENT NOTES
+# =============================================================================
+# 
+# 1. Security:
+#    - Change JWT secret to a secure 256-bit key
+#    - Use strong database passwords
+#    - Restrict CORS origins to your domains
+#    - Enable TLS/SSL for HTTPS
+#    - Use authentication for registries
+#
+# 2. Performance:
+#    - Use PostgreSQL for better concurrency
+#    - Tune connection pool sizes based on load
+#    - Enable caching for better response times
+#    - Monitor resource usage and adjust limits
+#
+# 3. Reliability:
+#    - Configure proper log rotation
+#    - Set up monitoring and alerting
+#    - Use persistent storage for databases
+#    - Configure backup strategies
+#
+# 4. Scaling:
+#    - Use load balancers for multiple instances
+#    - Consider database connection pooling
+#    - Monitor cache hit rates
+#    - Implement proper rate limiting

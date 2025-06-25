@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use bcrypt::{hash, verify, DEFAULT_COST};
+use bcrypt::{hash, DEFAULT_COST};
 use chrono::{Duration, Utc};
 use ratchet_api_types::ApiId;
 use ratchet_web::{

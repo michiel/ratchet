@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "result": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "type": "object"
+}

@@ -80,7 +80,7 @@ pub async fn readiness_check(State(ctx): State<TasksContext>) -> RestResult<impl
     let mut overall_ready = true;
 
     // Check database readiness
-    let db_ready = match ctx.repositories.health_check().await {
+    let _db_ready = match ctx.repositories.health_check().await {
         Ok(_) => {
             checks.insert(
                 "database".to_string(),
@@ -105,7 +105,7 @@ pub async fn readiness_check(State(ctx): State<TasksContext>) -> RestResult<impl
     };
 
     // Check registry readiness
-    let registry_ready = match ctx.registry.health_check().await {
+    let _registry_ready = match ctx.registry.health_check().await {
         Ok(_) => {
             checks.insert(
                 "registry".to_string(),

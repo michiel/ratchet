@@ -306,6 +306,8 @@ async fn test_mcp_server_error_handling() {
 async fn create_test_adapter() -> RatchetMcpAdapter {
     use ratchet_execution::{ProcessExecutorConfig, ProcessTaskExecutor};
     use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
+    use ratchet_server::{task_service::UnifiedTaskService, services::DirectRepositoryFactory};
+    use ratchet_interfaces::{RepositoryFactory as RepoFactory, TaskRegistry};
 
     // Create in-memory database for testing using new config type
     let db_config = ratchet_storage::seaorm::config::DatabaseConfig {
@@ -321,10 +323,24 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     // Run migrations
     database.migrate().await.expect("Failed to run migrations");
 
-    // Create repositories using the new factory
-    let repo_factory = RepositoryFactory::new(database.clone());
-    let task_repository = Arc::new(repo_factory.task_repository());
-    let execution_repository = Arc::new(repo_factory.execution_repository());
+    // Create storage factory
+    let storage_factory = Arc::new(RepositoryFactory::new(database.clone()));
+    
+    // Create direct repository factory (bridge to interfaces)
+    let direct_factory = DirectRepositoryFactory::new(storage_factory.clone());
+    let repositories: Arc<dyn RepoFactory> = Arc::new(direct_factory);
+    let execution_repository = Arc::new(storage_factory.execution_repository());
+    
+    // Create unified interfaces - use bridge registry for testing
+    let server_config = ratchet_server::config::ServerConfig::default();
+    let registry: Arc<dyn TaskRegistry> = Arc::new(
+        ratchet_server::bridges::BridgeTaskRegistry::new(&server_config)
+            .await
+            .expect("Failed to create bridge registry")
+    );
+    
+    // Create unified task service
+    let task_service = Arc::new(UnifiedTaskService::new(repositories, registry));
 
     // Create a simple task service wrapper for testing
     let task_service = Arc::new(MockTaskService::new(task_repository.clone()));

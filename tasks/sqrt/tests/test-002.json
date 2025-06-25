@@ -1,0 +1,9 @@
+{
+  "description": "Test square root with decimal result",
+  "expected": null,
+  "input": {
+    "number": 2
+  },
+  "name": "decimal_result",
+  "should_fail": false
+}

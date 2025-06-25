@@ -159,7 +159,7 @@ impl Mutation {
 
         // Validate that task exists
         let task_repo = context.repositories.task_repository();
-        let task = task_repo
+        let _task = task_repo
             .find_by_id(input.task_id.0.as_i32().unwrap_or(0))
             .await
             .map_err(|e| ApiError::internal_error(format!("Failed to fetch task: {}", e)))?
@@ -381,7 +381,7 @@ impl Mutation {
         let context = ctx.data::<GraphQLContext>()?;
 
         // Check if MCP adapter is available
-        let mcp_adapter = context
+        let _mcp_adapter = context
             .mcp_adapter
             .as_ref()
             .ok_or_else(|| ApiError::internal_error("MCP service not available"))?;

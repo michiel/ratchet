@@ -24,12 +24,8 @@ use axum::{
 };
 use ratchet_config::{
     domains::{
-        database::DatabaseConfig,
-        http::HttpConfig,
-        logging::{LogFormat, LogLevel, LoggingConfig},
-        output::OutputConfig,
-        registry::{RegistryConfig, RegistrySourceConfig, RegistrySourceType},
-        server::ServerConfig,
+        logging::{LogFormat, LogLevel},
+        registry::{RegistrySourceConfig, RegistrySourceType},
     },
     RatchetConfig,
 };
@@ -38,9 +34,7 @@ use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap,
     net::SocketAddr,
-    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -217,7 +211,7 @@ async fn start_test_webhook_server() -> Result<(SocketAddr, TestWebhookState)> {
 }
 
 /// Create test configuration for the server
-async fn create_test_config(temp_dir: &TempDir, webhook_addr: SocketAddr) -> Result<RatchetConfig> {
+async fn create_test_config(temp_dir: &TempDir, _webhook_addr: SocketAddr) -> Result<RatchetConfig> {
     let db_path = temp_dir.path().join("test.db");
 
     let mut config = RatchetConfig::default();
@@ -559,7 +553,7 @@ async fn test_task_crud_operations() -> Result<()> {
     println!("🧪 Testing task CRUD operations...");
 
     // Step 1: List tasks (should be empty or contain sample tasks)
-    let (status, tasks): (StatusCode, Option<Value>) = ctx.get("/tasks").await?;
+    let (status, _tasks): (StatusCode, Option<Value>) = ctx.get("/tasks").await?;
     assert_eq!(status, StatusCode::OK, "List tasks should return 200");
 
     // Step 2: Create a new task
@@ -648,7 +642,7 @@ async fn test_execution_management_workflow() -> Result<()> {
     println!("🧪 Testing execution management workflow...");
 
     // Step 1: List executions (should be empty initially)
-    let (status, executions): (StatusCode, Option<Value>) = ctx.get("/executions").await?;
+    let (status, _executions): (StatusCode, Option<Value>) = ctx.get("/executions").await?;
     assert_eq!(status, StatusCode::OK, "List executions should return 200");
 
     // Step 2: Get execution statistics
@@ -722,7 +716,7 @@ async fn test_execution_management_workflow() -> Result<()> {
         .unwrap();
 
     // Step 4: Get the created execution
-    let (status, retrieved_execution): (StatusCode, Option<Value>) =
+    let (status, _retrieved_execution): (StatusCode, Option<Value>) =
         ctx.get(&format!("/executions/{}", execution_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get execution should return 200");
 
@@ -736,7 +730,7 @@ async fn test_execution_management_workflow() -> Result<()> {
     );
 
     // Step 6: Test execution logs
-    let (status, logs): (StatusCode, Option<Value>) = ctx.get(&format!("/executions/{}/logs", execution_id)).await?;
+    let (status, _logs): (StatusCode, Option<Value>) = ctx.get(&format!("/executions/{}/logs", execution_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get execution logs should return 200");
 
     // Cleanup: Delete the created task
@@ -754,11 +748,11 @@ async fn test_job_queue_operations() -> Result<()> {
     println!("🧪 Testing job queue operations...");
 
     // Step 1: List jobs
-    let (status, jobs): (StatusCode, Option<Value>) = ctx.get("/jobs").await?;
+    let (status, _jobs): (StatusCode, Option<Value>) = ctx.get("/jobs").await?;
     assert_eq!(status, StatusCode::OK, "List jobs should return 200");
 
     // Step 2: Get job statistics
-    let (status, stats): (StatusCode, Option<Value>) = ctx.get("/jobs/stats").await?;
+    let (status, _stats): (StatusCode, Option<Value>) = ctx.get("/jobs/stats").await?;
     assert_eq!(status, StatusCode::OK, "Job stats should return 200");
 
     // Step 3a: Create a task first (needed for job creation)
@@ -816,7 +810,7 @@ async fn test_job_queue_operations() -> Result<()> {
     let job_id = job_data.get("id").expect("Job should have ID").as_str().unwrap();
 
     // Step 4: Get the created job
-    let (status, retrieved_job): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs/{}", job_id)).await?;
+    let (status, _retrieved_job): (StatusCode, Option<Value>) = ctx.get(&format!("/jobs/{}", job_id)).await?;
     assert_eq!(status, StatusCode::OK, "Get job should return 200");
 
     // Step 5: Test job control operations

@@ -30,40 +30,9 @@ use ratchet_mcp::{
 /// Test helper to create a test MCP adapter
 async fn create_test_adapter() -> Result<RatchetMcpAdapter> {
     use ratchet_execution::{ProcessExecutorConfig, ProcessTaskExecutor};
-    use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory as SeaOrmRepositoryFactory};
+    use ratchet_storage::seaorm::{connection::DatabaseConnection, repositories::RepositoryFactory};
     use ratchet_server::{task_service::UnifiedTaskService, services::DirectRepositoryFactory};
-    use ratchet_interfaces::{TaskRegistry, RegistryError, TaskMetadata, RepositoryFactory, ExecutionRepository};
-    use async_trait::async_trait;
-
-    // Simple mock TaskRegistry for testing
-    struct MockTaskRegistry;
-    
-    #[async_trait]
-    impl TaskRegistry for MockTaskRegistry {
-        async fn discover_tasks(&self) -> Result<Vec<TaskMetadata>, RegistryError> {
-            Ok(vec![])
-        }
-        
-        async fn get_task_metadata(&self, _name: &str) -> Result<TaskMetadata, RegistryError> {
-            Err(RegistryError::TaskNotFound { name: "test".to_string() })
-        }
-        
-        async fn load_task_content(&self, _name: &str) -> Result<String, RegistryError> {
-            Err(RegistryError::TaskNotFound { name: "test".to_string() })
-        }
-        
-        async fn task_exists(&self, _name: &str) -> Result<bool, RegistryError> {
-            Ok(false)
-        }
-        
-        fn registry_id(&self) -> &str {
-            "test-registry"
-        }
-        
-        async fn health_check(&self) -> Result<(), RegistryError> {
-            Ok(())
-        }
-    }
+    use ratchet_interfaces::{RepositoryFactory as RepoFactory, TaskRegistry};
 
     // Create in-memory database for testing using new config type
     let db_config = ratchet_storage::seaorm::config::DatabaseConfig {
@@ -79,14 +48,24 @@ async fn create_test_adapter() -> Result<RatchetMcpAdapter> {
     // Run migrations
     database.migrate().await.expect("Failed to run migrations");
 
-    // Create repositories using the SeaORM factory and then wrap with DirectRepositoryFactory
-    let seaorm_factory = Arc::new(SeaOrmRepositoryFactory::new(database.clone()));
-    let repo_factory = Arc::new(DirectRepositoryFactory::new(seaorm_factory.clone()));
-    let execution_repository = Arc::new(seaorm_factory.execution_repository());
-
-    // Create mock registry and task service
-    let mock_registry = Arc::new(MockTaskRegistry);
-    let task_service = Arc::new(UnifiedTaskService::new(repo_factory, mock_registry));
+    // Create storage factory
+    let storage_factory = Arc::new(RepositoryFactory::new(database.clone()));
+    
+    // Create direct repository factory (bridge to interfaces)
+    let direct_factory = DirectRepositoryFactory::new(storage_factory.clone());
+    let repositories: Arc<dyn RepoFactory> = Arc::new(direct_factory);
+    let execution_repository = Arc::new(storage_factory.execution_repository());
+    
+    // Create unified interfaces - use bridge registry for testing
+    let server_config = ratchet_server::config::ServerConfig::default();
+    let registry: Arc<dyn TaskRegistry> = Arc::new(
+        ratchet_server::bridges::BridgeTaskRegistry::new(&server_config)
+            .await
+            .expect("Failed to create bridge registry")
+    );
+    
+    // Create unified task service
+    let task_service = Arc::new(UnifiedTaskService::new(repositories, registry));
 
     // Create executor using the new API from ratchet-execution
     let executor_config = ProcessExecutorConfig {

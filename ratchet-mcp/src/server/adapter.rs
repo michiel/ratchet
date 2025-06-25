@@ -13,10 +13,7 @@ use ratchet_interfaces::logging::{LogEvent, LogLevel};
 use ratchet_interfaces::{TaskService, TaskServiceFilters};
 use ratchet_runtime::executor::TaskExecutor;
 use ratchet_storage::seaorm::entities::ExecutionStatus;
-use ratchet_storage::seaorm::repositories::{
-    execution_repository::ExecutionRepository,
-    task_repository::{Pagination, TaskFilters, TaskRepository},
-};
+use ratchet_storage::seaorm::repositories::execution_repository::ExecutionRepository;
 
 use super::tools::{McpExecutionStatus, McpTaskExecutor, McpTaskInfo};
 

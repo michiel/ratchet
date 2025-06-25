@@ -9,7 +9,7 @@ use ratchet_interfaces::{RegistryManager, RepositoryFactory, TaskRegistry, TaskV
 use ratchet_web::middleware::{
     audit_middleware, cors_layer, create_rate_limit_middleware, create_session_manager, error_handler_layer,
     rate_limit_middleware, request_id_layer, security_headers_middleware, session_middleware, AuditConfig,
-    RateLimitConfig, RateLimiter, SecurityConfig, SessionConfig,
+    RateLimitConfig, SecurityConfig, SessionConfig,
 };
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
@@ -425,9 +425,9 @@ async fn placeholder_handler() -> axum::response::Json<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use axum::http::StatusCode;
-    use tower::ServiceExt;
+    
+    
+    
 
     #[tokio::test]
     async fn test_health_endpoint() {

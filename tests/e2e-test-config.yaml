@@ -1,0 +1,42 @@
+server:
+  host: 127.0.0.1
+  port: 8081
+  workers: 2
+  database:
+    url: sqlite://e2e_test.db
+rest_api:
+  enabled: true
+  prefix: /api/v1
+logging:
+  level: debug
+  targets:
+    - type: console
+      enabled: true
+registry:
+  update_interval: 60
+  concurrent_updates: 2
+  retry_attempts: 3
+  sources:
+    - name: test-tasks
+      polling_interval: 30
+      uri: file://test-tasks
+      config:
+        watch_for_changes: true
+        auto_reload: true
+        include_patterns:
+          - '*.js'
+          - '*.yaml'
+          - '*.json'
+        recursive: true
+        max_depth: 5
+mcp:
+  enabled: true
+  transport: sse
+  server:
+    host: 127.0.0.1
+    port: 8091
+    enable_cors: true
+  tools:
+    enable_execution: true
+    enable_logging: true
+    enable_debugging: true

@@ -74,3 +74,5 @@ transport-streamable-http = ["ratchet-http/server"]
 tokio-test = "0.4"
 sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 fastrand = { workspace = true }
+ratchet-registry = { path = "../ratchet-registry" }
+ratchet-server = { path = "../ratchet-server" }

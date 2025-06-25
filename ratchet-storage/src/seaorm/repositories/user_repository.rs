@@ -130,7 +130,7 @@ impl CrudRepository<UnifiedUser> for SeaOrmUserRepository {
         Ok(user.map(Self::to_unified_user))
     }
 
-    async fn find_by_uuid(&self, uuid: uuid::Uuid) -> Result<Option<UnifiedUser>, DatabaseError> {
+    async fn find_by_uuid(&self, _uuid: uuid::Uuid) -> Result<Option<UnifiedUser>, DatabaseError> {
         // Note: Users table doesn't have UUID field, using ID instead
         // This is a placeholder implementation
         Err(DatabaseError::Internal {
