@@ -116,33 +116,38 @@ impl ConsoleMcpClient {
             return Err(anyhow!("Not connected to server"));
         }
 
-        // Try to make a simple GraphQL health query
-        let health_query = r#"
-            query {
-                health {
-                    database
-                    message
-                }
-            }
-        "#;
+        // Use MCP tools/list to check health instead of GraphQL
+        let mcp_url = if self.server_url.ends_with("/mcp") {
+            self.server_url.clone()
+        } else {
+            format!("{}/mcp", self.server_url)
+        };
+
+        let health_request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "params": {},
+            "id": "health-check"
+        });
 
         let response = timeout(
             Duration::from_secs(10),
             self.http_client
-                .post(format!("{}/graphql", self.server_url))
-                .json(&serde_json::json!({
-                    "query": health_query
-                }))
+                .post(&mcp_url)
+                .header("Content-Type", "application/json")
+                .json(&health_request)
                 .send(),
         )
         .await??;
 
         if response.status().is_success() {
             let result: Value = response.json().await?;
-            if result.get("errors").is_none() {
+            if result.get("result").is_some() {
                 Ok("healthy".to_string())
-            } else {
+            } else if result.get("error").is_some() {
                 Ok("degraded".to_string())
+            } else {
+                Ok("unknown".to_string())
             }
         } else {
             Err(anyhow!("Server returned status: {}", response.status()))
