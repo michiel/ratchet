@@ -1,6 +1,60 @@
 # Changes
 
-## Unreleased (after v0.4.8)
+## v0.4.10 (2025-06-25)
+
+### Build & Development Experience
+- **Docker Build Performance**: Comprehensive build optimization with caching
+  - Implement dependency layer caching in Dockerfile for faster rebuilds
+  - Add parallel multi-platform builds (amd64/arm64) in GitHub Actions
+  - Create dependency pre-compilation workflow for cache warming
+  - Add conditional build triggers to skip unnecessary builds
+  - Enhance .dockerignore to reduce build context size
+  - Expected performance: 80% faster builds for code changes
+
+- **Test Infrastructure Improvements**: Resolved compilation errors and enhanced testing
+  - Fixed axum integration test compilation errors across multiple test files
+  - Resolved async/await issues in server build_app() calls
+  - Fixed MCP test trait bound issues with UnifiedTaskService integration
+  - Reduced build warnings through systematic cleanup (65 → 60 warnings)
+  - Applied both automatic (cargo fix) and manual fixes for unused variables
+
+### Configuration Management
+- **Streamlined Configuration Examples**: Comprehensive configuration cleanup
+  - Created two definitive example configurations: minimal.yaml and full.yaml
+  - Added detailed comments explaining all configuration options and domains
+  - Removed 551 legacy sample/example files (74,101 deletions) 
+  - Maintained production-ready settings with security and performance considerations
+
+### Documentation Enhancements
+- **Documentation Restructuring**: Streamlined and focused documentation
+  - Removed 37 redundant markdown files while preserving strategic content
+  - Kept essential documentation: docs/plans/, docs/reviews/, docs/MCP_ENDPOINTS_REFERENCE.md
+  - Created comprehensive MCP-based task development guide with working examples
+  - Added detailed logging, tracing, and performance monitoring sections
+  - Included complete task development workflow from connection to execution
+
+- **Task Development Guide**: Complete MCP interface documentation
+  - Step-by-step task development workflow using MCP protocol
+  - Working example: HTTP GET task that extracts origin information from httpbin.org
+  - Comprehensive error handling and debugging examples
+  - Real-world JSON-RPC 2.0 communication patterns
+  - Execution monitoring and log analysis techniques
+
+### Code Quality & Maintenance
+- **Build System Reliability**: Enhanced compilation and dependency management
+  - Fixed trait bound issues in MCP adapter integration
+  - Resolved unused import and variable warnings across the codebase
+  - Improved axum service setup with proper .into_make_service() calls
+  - Enhanced database connection handling in integration tests
+
+- **GitHub Actions**: Improved CI/CD pipeline configuration
+  - Reset actions-rust-release origin for better workflow management
+  - Enhanced release automation and dependency caching
+  - Improved multi-platform build support
+
+This release focuses on developer experience improvements, build performance optimization, and comprehensive documentation while maintaining the robust MCP integration established in previous releases.
+
+## v0.4.9 (2024-06-24)
 
 ### Major Features
 - **Model Context Protocol (MCP) Integration**: Complete MCP server implementation with multi-transport support
