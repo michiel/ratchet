@@ -1,10 +1,78 @@
 //! Integration tests for MCP server
 
+use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{server::adapter::RatchetMcpAdapter, McpConfig, McpServer, SimpleTransportType};
+use ratchet_interfaces::{TaskService, TaskServiceError, TaskServiceFilters, TaskServiceMetadata, TaskSource};
+use ratchet_api_types::{ListResponse, PaginationInput, UnifiedTask};
+use ratchet_api_types::pagination::PaginationMeta;
+use ratchet_storage::seaorm::repositories::task_repository::TaskRepository;
+
+/// Mock task service for testing that wraps a TaskRepository
+struct MockTaskService {
+    task_repository: Arc<TaskRepository>,
+}
+
+impl MockTaskService {
+    fn new(task_repository: Arc<TaskRepository>) -> Self {
+        Self { task_repository }
+    }
+}
+
+#[async_trait]
+impl TaskService for MockTaskService {
+    async fn find_by_id(&self, _id: Uuid) -> Result<Option<UnifiedTask>, TaskServiceError> {
+        // Simplified for testing - return a mock task
+        Ok(None)
+    }
+
+    async fn find_by_name(&self, _name: &str) -> Result<Option<UnifiedTask>, TaskServiceError> {
+        // Simplified for testing - return a mock task
+        Ok(None)
+    }
+
+    async fn list_tasks(
+        &self,
+        _pagination: Option<PaginationInput>,
+        _filters: Option<TaskServiceFilters>,
+    ) -> Result<ListResponse<UnifiedTask>, TaskServiceError> {
+        // Simplified for testing - return empty list
+        Ok(ListResponse {
+            items: vec![],
+            meta: PaginationMeta {
+                page: 1,
+                limit: 25,
+                total: 0,
+                total_pages: 0,
+                has_next: false,
+                has_previous: false,
+                offset: 0,
+            },
+        })
+    }
+
+    async fn get_task_metadata(&self, _id: Uuid) -> Result<Option<TaskServiceMetadata>, TaskServiceError> {
+        // Simplified for testing
+        Ok(None)
+    }
+
+    async fn execute_task(&self, _id: Uuid, _input: serde_json::Value) -> Result<serde_json::Value, TaskServiceError> {
+        // Simplified for testing
+        Ok(serde_json::json!({"status": "success"}))
+    }
+
+    async fn task_exists(&self, id: Uuid) -> Result<bool, TaskServiceError> {
+        Ok(self.find_by_id(id).await?.is_some())
+    }
+
+    async fn get_task_source(&self, _id: Uuid) -> Result<Option<TaskSource>, TaskServiceError> {
+        // Simplified for testing
+        Ok(Some(TaskSource::Database))
+    }
+}
 
 // Stdio-specific integration tests
 mod simple_stdio_test;
@@ -258,6 +326,9 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     let task_repository = Arc::new(repo_factory.task_repository());
     let execution_repository = Arc::new(repo_factory.execution_repository());
 
+    // Create a simple task service wrapper for testing
+    let task_service = Arc::new(MockTaskService::new(task_repository.clone()));
+
     // Create executor using the new API from ratchet-execution
     let executor_config = ProcessExecutorConfig {
         worker_count: 1,
@@ -267,7 +338,7 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     };
     let executor = Arc::new(ProcessTaskExecutor::new(executor_config));
 
-    RatchetMcpAdapter::new(executor, task_repository, execution_repository)
+    RatchetMcpAdapter::new(executor, task_service, execution_repository)
 }
 
 /// Test that demonstrates a complete MCP session

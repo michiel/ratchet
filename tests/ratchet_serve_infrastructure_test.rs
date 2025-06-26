@@ -211,14 +211,14 @@ async fn test_ratchet_serve_infrastructure() -> Result<()> {
     println!("🌐 Step 3: Starting ratchet server");
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
-    let app = server.build_app();
+    let app = server.build_app().await;
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let server_addr = listener.local_addr()?;
     let server_url = format!("http://{}", server_addr);
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -437,14 +437,14 @@ async fn test_graphql_error_handling() -> Result<()> {
     let (config, _temp_dir) = create_minimal_test_config().await?;
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
-    let app = server.build_app();
+    let app = server.build_app().await;
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let server_addr = listener.local_addr()?;
     let server_url = format!("http://{}", server_addr);
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -488,14 +488,14 @@ async fn test_concurrent_requests() -> Result<()> {
     let (config, _temp_dir) = create_minimal_test_config().await?;
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
-    let app = server.build_app();
+    let app = server.build_app().await;
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let server_addr = listener.local_addr()?;
     let server_url = format!("http://{}", server_addr);
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     tokio::time::sleep(Duration::from_millis(500)).await;

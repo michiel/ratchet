@@ -5187,6 +5187,7 @@ name = "ratchet-integration-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "chrono",
  "fastrand 2.3.0",

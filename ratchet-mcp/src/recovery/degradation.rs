@@ -576,6 +576,20 @@ mod tests {
 
     #[async_trait::async_trait]
     impl McpTransport for MockTransport {
+        async fn connect(&mut self) -> McpResult<()> {
+            if self.should_fail.load(Ordering::Relaxed) {
+                Err(McpError::Transport {
+                    message: format!("Mock {} transport connection failure", self.name),
+                })
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn is_connected(&self) -> bool {
+            !self.should_fail.load(Ordering::Relaxed)
+        }
+
         async fn send(&mut self, _request: crate::protocol::JsonRpcRequest) -> McpResult<()> {
             if self.should_fail.load(Ordering::Relaxed) {
                 Err(McpError::Transport {
@@ -586,19 +600,34 @@ mod tests {
             }
         }
 
-        async fn receive(&mut self) -> McpResult<crate::protocol::JsonRpcRequest> {
+        async fn receive(&mut self) -> McpResult<crate::protocol::JsonRpcResponse> {
             if self.should_fail.load(Ordering::Relaxed) {
                 Err(McpError::Transport {
                     message: format!("Mock {} transport failure", self.name),
                 })
             } else {
-                Ok(crate::protocol::JsonRpcRequest {
+                Ok(crate::protocol::JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
-                    method: "test".to_string(),
-                    params: None,
+                    result: Some(serde_json::Value::String(format!("mock_{}_result", self.name))),
+                    error: None,
                     id: Some(serde_json::Value::Number(1.into())),
                 })
             }
+        }
+
+        async fn health(&self) -> crate::transport::TransportHealth {
+            crate::transport::TransportHealth {
+                connected: self.is_connected().await,
+                last_success: Some(chrono::Utc::now()),
+                last_error: None,
+                consecutive_failures: if self.should_fail.load(Ordering::Relaxed) { 1 } else { 0 },
+                latency: Some(std::time::Duration::from_millis(10)),
+                metadata: std::collections::HashMap::new(),
+            }
+        }
+
+        async fn close(&mut self) -> McpResult<()> {
+            Ok(())
         }
     }
 

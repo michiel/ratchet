@@ -53,12 +53,12 @@ impl PartialFailurePolicy {
                     false
                 } else {
                     let failure_rate = errors.len() as f64 / total_processed as f64;
-                    failure_rate > *max_failure_rate
+                    failure_rate >= *max_failure_rate
                 }
             }
             
             Self::AbortOnConsecutive { max_consecutive } => {
-                self.count_consecutive_failures(errors, total_processed) > *max_consecutive
+                self.count_consecutive_failures(errors, total_processed) >= *max_consecutive
             }
         }
     }
@@ -137,6 +137,7 @@ pub enum RetryableErrorType {
     InternalServer,
     RateLimited,
     ServiceUnavailable,
+    Authentication, // Non-retryable by default
 }
 
 impl RetryPolicy {
@@ -157,7 +158,10 @@ impl RetryPolicy {
             McpError::ServerTimeout { .. } => RetryableErrorType::Timeout,
             McpError::Internal { .. } => RetryableErrorType::InternalServer,
             McpError::RateLimited { .. } => RetryableErrorType::RateLimited,
-            _ => RetryableErrorType::Transport, // Default classification
+            McpError::ServerUnavailable { .. } => RetryableErrorType::ServiceUnavailable,
+            McpError::AuthenticationFailed { .. } => RetryableErrorType::Authentication,
+            McpError::AuthorizationDenied { .. } => RetryableErrorType::Authentication,
+            _ => RetryableErrorType::Authentication, // Default to non-retryable for safety
         }
     }
     
@@ -553,7 +557,7 @@ mod tests {
         assert_eq!(partial_result.success_count(), 1);
         assert_eq!(partial_result.error_count(), 1);
         
-        let failed_result = BatchResult::AllFailed(vec![
+        let failed_result: BatchResult<String> = BatchResult::AllFailed(vec![
             (0, McpError::Transport { message: "failed1".to_string() }),
             (1, McpError::Transport { message: "failed2".to_string() }),
         ]);
@@ -570,8 +574,8 @@ mod tests {
         let handler = BatchErrorHandler::new(policy, retry_policy);
         
         let operations = vec![
-            BatchOperation::new(0, || async { Ok::<String, McpError>("success1".to_string()) }),
-            BatchOperation::new(1, || async { Ok::<String, McpError>("success2".to_string()) }),
+            BatchOperation::new(0, || Box::pin(async { Ok::<String, McpError>("success1".to_string()) })),
+            BatchOperation::new(1, || Box::pin(async { Ok::<String, McpError>("success2".to_string()) })),
         ];
         
         let (result, stats) = handler.execute_batch(operations).await;

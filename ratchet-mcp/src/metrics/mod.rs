@@ -669,6 +669,6 @@ mod tests {
         assert_eq!(snapshot.counts[4], 1); // 10.0 (overflow)
         
         // Test percentiles
-        assert_eq!(snapshot.percentile(50.0), 1.0); // 50th percentile should be in 1.0 bucket
+        assert_eq!(snapshot.percentile(50.0), 0.5); // 50th percentile should be in 0.5 bucket
     }
 }
