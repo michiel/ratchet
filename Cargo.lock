@@ -5574,6 +5574,7 @@ dependencies = [
  "jsonwebtoken",
  "lru",
  "ratchet-api-types",
+ "ratchet-core",
  "ratchet-interfaces",
  "serde",
  "serde_json",

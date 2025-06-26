@@ -63,10 +63,20 @@ impl SseTransport {
             });
         }
 
-        // Validate URL
-        url::Url::parse(&url).map_err(|e| McpError::Configuration {
+        // Validate URL and check for safe schemes
+        let parsed_url = url::Url::parse(&url).map_err(|e| McpError::Configuration {
             message: format!("Invalid URL: {}", e),
         })?;
+        
+        // Only allow HTTP and HTTPS schemes for security
+        match parsed_url.scheme() {
+            "http" | "https" => {},
+            scheme => {
+                return Err(McpError::Configuration {
+                    message: format!("Unsupported or unsafe URL scheme: {}. Only http and https are allowed.", scheme),
+                });
+            }
+        }
 
         // Create HTTP client
         let client = Client::builder()

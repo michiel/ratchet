@@ -81,8 +81,16 @@ impl ErrorSanitizer {
         let sensitive_patterns = vec![
             // Database connection strings
             Regex::new(r"(?i)(postgresql|mysql|sqlite)://[^\s]+").unwrap(),
-            // JWT tokens and API keys
-            Regex::new(r"(?i)(jwt|token|key|secret|password)[=:\s]+[a-zA-Z0-9+/=]{20,}").unwrap(),
+            // JWT tokens and API keys (improved pattern)
+            Regex::new(r"(?i)(jwt|token|key|secret|password)[=:\s]+[a-zA-Z0-9+/=_\-]{10,}").unwrap(),
+            // Specific secret/key/password patterns
+            Regex::new(r"(?i)(secret|password|key)\s*[=:]\s*[a-zA-Z0-9+/=_\-]{5,}").unwrap(),
+            // API keys with common prefixes
+            Regex::new(r"(?i)(sk_live_|sk_test_|api_key[=:\s]+)[a-zA-Z0-9+/=_\-]+").unwrap(),
+            // Password patterns in various formats
+            Regex::new(r"(?i)password[=:\s]+[^\s,;)]{3,}").unwrap(),
+            // Host and connection details with credentials  
+            Regex::new(r"(?i)(host|server)[=:\s]*[a-zA-Z0-9\.-]+\.(com|org|net|local|internal)[a-zA-Z0-9\.-]*").unwrap(),
             // File paths (Unix and Windows)
             Regex::new(r"(/[a-zA-Z0-9_\-./]+){2,}|([A-Z]:\\[a-zA-Z0-9_\-\\./]+)").unwrap(),
             // IP addresses
@@ -91,12 +99,16 @@ impl ErrorSanitizer {
             Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
             // Environment variables
             Regex::new(r"\$\{[^}]+\}|\$[A-Z_][A-Z0-9_]*").unwrap(),
+            // SQL injection patterns
+            Regex::new(r"(?i)(drop\s+table|delete\s+from|insert\s+into|update\s+\w+\s+set|select\s+.*\s+from)\s+[a-zA-Z0-9_]+").unwrap(),
             // SQL error patterns
             Regex::new(r"(?i)(table|column|constraint|foreign key|primary key)\s+[a-zA-Z0-9_]+").unwrap(),
             // Stack traces
             Regex::new(r"(?m)^\s*at\s+.*$").unwrap(),
             // Function names with line numbers
             Regex::new(r"(in\s+function\s+)?[a-zA-Z_][a-zA-Z0-9_]*::\w+\(\)\s+(at\s+line\s+\d+)?").unwrap(),
+            // Generic secret-like tokens (long alphanumeric strings that might be sensitive)
+            Regex::new(r"\b[a-zA-Z0-9+/=]{32,}\b").unwrap(),
         ];
 
         let path_patterns = vec![
