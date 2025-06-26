@@ -501,9 +501,9 @@ async fn test_openapi_documentation_available() -> Result<()> {
         println!("  - {}", path);
     }
     
-    // Check for at least some documented endpoints (paths without API prefix in OpenAPI spec)
-    assert!(paths.contains_key("/tasks"), "Tasks endpoint should be documented");
-    assert!(paths.contains_key("/schedules"), "Schedules endpoint should be documented");
+    // Check for at least some documented endpoints (paths with API prefix in OpenAPI spec)
+    assert!(paths.contains_key("/api/v1/tasks"), "Tasks endpoint should be documented");
+    assert!(paths.contains_key("/api/v1/schedules"), "Schedules endpoint should be documented");
     
     // Check that we have a reasonable number of documented endpoints
     assert!(paths.len() >= 3, "Should have at least 3 documented endpoints, found {}", paths.len());

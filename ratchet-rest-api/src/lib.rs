@@ -86,6 +86,12 @@ use utoipa::OpenApi;
         handlers::tasks::create_task,
         handlers::tasks::get_task,
 
+        // Execution endpoints
+        handlers::executions::list_executions,
+
+        // Job endpoints
+        handlers::jobs::list_jobs,
+
         // Schedule endpoints (only annotated ones)
         handlers::schedules::list_schedules,
         handlers::schedules::create_schedule,

@@ -22,7 +22,15 @@ use crate::{
 };
 
 /// List all executions with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/api/v1/executions",
+    responses(
+        (status = 200, description = "List of executions retrieved successfully"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "executions"
+)]
 pub async fn list_executions(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing executions with query: {:?}", query.0);
 

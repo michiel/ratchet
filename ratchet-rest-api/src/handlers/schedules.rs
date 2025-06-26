@@ -280,7 +280,7 @@ fn validate_output_destinations(destinations: &[UnifiedOutputDestination]) -> Re
 /// List all schedules with optional filtering and pagination
 #[utoipa::path(
     get,
-    path = "/schedules",
+    path = "/api/v1/schedules",
     tag = "schedules",
     summary = "List all schedules",
     description = "Retrieve all schedules with optional filtering and pagination",
@@ -343,7 +343,7 @@ pub async fn get_schedule(
 /// Create a new schedule
 #[utoipa::path(
     post,
-    path = "/schedules",
+    path = "/api/v1/schedules",
     tag = "schedules",
     summary = "Create a new schedule",
     description = "Create a new schedule with the provided configuration",

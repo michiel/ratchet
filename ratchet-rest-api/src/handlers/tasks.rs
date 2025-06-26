@@ -25,7 +25,7 @@ use crate::{
 /// List all tasks with optional filtering and pagination
 #[utoipa::path(
     get,
-    path = "/tasks",
+    path = "/api/v1/tasks",
     tag = "tasks",
     summary = "List all tasks",
     description = "Retrieve all tasks with optional filtering and pagination",
@@ -55,7 +55,7 @@ pub async fn list_tasks(State(ctx): State<TasksContext>, query: QueryParams) -> 
 /// Get a specific task by ID
 #[utoipa::path(
     get,
-    path = "/tasks/{id}",
+    path = "/api/v1/tasks/{id}",
     tag = "tasks",
     summary = "Get a task by ID",
     description = "Retrieve a specific task by its ID",
@@ -113,7 +113,7 @@ pub async fn get_task(State(ctx): State<TasksContext>, Path(task_id): Path<Strin
 /// Create a new task
 #[utoipa::path(
     post,
-    path = "/tasks",
+    path = "/api/v1/tasks",
     tag = "tasks",
     summary = "Create a new task",
     description = "Create a new task with the provided configuration",
