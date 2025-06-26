@@ -752,7 +752,13 @@ impl ToolRegistry for RatchetToolRegistry {
             | "ratchet_generate_from_template"
             | "ratchet_list_templates"
             | "ratchet_store_result"
-            | "ratchet_get_results" => {
+            | "ratchet_get_results"
+            | "ratchet_discover_tasks"
+            | "ratchet_sync_registry"
+            | "ratchet_registry_health"
+            | "ratchet_get_developer_endpoint_reference"
+            | "ratchet_get_developer_integration_guide"
+            | "ratchet_get_developer_guide_walkthrough" => {
                 if let Some(service) = &self.task_dev_service {
                     super::task_dev_tools::execute_task_dev_tool(name, execution_context, service.clone()).await
                 } else {
