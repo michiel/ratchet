@@ -1,8 +1,9 @@
 # Ratchet MCP Endpoints Reference
 
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Protocol**: Model Context Protocol (MCP) v2024-11-05  
-**Transport**: HTTP JSON-RPC 2.0 / Server-Sent Events (SSE)
+**Transport**: HTTP JSON-RPC 2.0 / Server-Sent Events (SSE) / Stdio  
+**Last Updated**: 2025-01-20
 
 ## Base Configuration
 
@@ -60,7 +61,7 @@ Content-Type: application/json
 ### 1. Execute Task
 **Tool**: `ratchet_execute_task`
 
-Execute a task with optional progress streaming.
+Execute a task with optional progress streaming and detailed tracing.
 
 ```json
 {
@@ -90,30 +91,15 @@ Execute a task with optional progress streaming.
   "content": [
     {
       "type": "text",
-      "text": "{ \"result\": \"task output\" }"
+      "text": "{ \"result\": \"task output\", \"execution_id\": \"uuid\" }"
     }
   ],
   "isError": false,
   "metadata": {
     "task_id": "string",
+    "execution_id": "string",
     "streaming": false,
     "trace_enabled": true
-  }
-}
-```
-
-**Response** (Streaming):
-```json
-{
-  "content": [
-    {
-      "type": "text", 
-      "text": "{ \"execution_id\": \"uuid\", \"streaming\": true }"
-    }
-  ],
-  "metadata": {
-    "execution_id": "string",
-    "streaming": true
   }
 }
 ```
@@ -121,7 +107,7 @@ Execute a task with optional progress streaming.
 ### 2. Batch Execute Tasks
 **Tool**: `ratchet_batch_execute`
 
-Execute multiple tasks with dependency management.
+Execute multiple tasks with dependency management and parallel execution.
 
 ```json
 {
@@ -151,10 +137,33 @@ Execute multiple tasks with dependency management.
 
 ## Task Management Endpoints
 
-### 3. Create Task
+### 3. List Available Tasks
+**Tool**: `ratchet_list_available_tasks`
+
+List all available tasks with filtering, pagination, and schema options.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "ratchet_list_available_tasks",
+    "arguments": {
+      "filter": "string (name pattern)",
+      "include_schemas": "boolean (default: false)",
+      "category": "string",
+      "page": "integer (default: 0, 0-based)",
+      "limit": "integer (default: 50, max: 1000)",
+      "sort_by": "name|created_at|updated_at|version",
+      "sort_order": "asc|desc"
+    }
+  }
+}
+```
+
+### 4. Create Task
 **Tool**: `ratchet_create_task`
 
-Create a new JavaScript task.
+Create a new JavaScript task with code, schemas, and test cases.
 
 ```json
 {
@@ -180,41 +189,6 @@ Create a new JavaScript task.
           "should_fail": "boolean"
         }
       ]
-    }
-  }
-}
-```
-
-**Response**:
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{ \"task_id\": \"uuid\", \"database_id\": 1, \"message\": \"Task created successfully\" }"
-    }
-  ]
-}
-```
-
-### 4. List Available Tasks
-**Tool**: `ratchet_list_available_tasks`
-
-List all available tasks with filtering and pagination.
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "ratchet_list_available_tasks",
-    "arguments": {
-      "limit": "integer (default: 50, max: 1000)",
-      "page": "integer (default: 0)",
-      "filter": "string (name pattern)",
-      "category": "string",
-      "sort_by": "name|created_at|updated_at|version",
-      "sort_order": "asc|desc",
-      "include_schemas": "boolean (default: false)"
     }
   }
 }
@@ -247,7 +221,7 @@ Edit existing task code, schemas, and metadata.
 ### 6. Validate Task
 **Tool**: `ratchet_validate_task`
 
-Validate task code, schemas, and run tests.
+Validate task code, schemas, and run tests without execution.
 
 ```json
 {
@@ -269,7 +243,7 @@ Validate task code, schemas, and run tests.
 ### 7. Delete Task
 **Tool**: `ratchet_delete_task`
 
-Delete an existing task with optional backup.
+Delete an existing task with optional backup and file cleanup.
 
 ```json
 {
@@ -305,30 +279,7 @@ Get status and progress of a running execution.
 }
 ```
 
-### 9. List Executions
-**Tool**: `ratchet_list_executions`
-
-List task executions with filtering and pagination.
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "ratchet_list_executions",
-    "arguments": {
-      "task_id": "string (optional filter)",
-      "status": "queued|running|completed|failed|cancelled",
-      "limit": "integer (default: 50, max: 1000)",
-      "page": "integer (default: 0)",
-      "sort_by": "queued_at|started_at|completed_at|duration_ms|status",
-      "sort_order": "asc|desc",
-      "include_output": "boolean (default: false)"
-    }
-  }
-}
-```
-
-### 10. Get Execution Logs
+### 9. Get Execution Logs
 **Tool**: `ratchet_get_execution_logs`
 
 Retrieve logs for a specific execution.
@@ -341,14 +292,14 @@ Retrieve logs for a specific execution.
     "arguments": {
       "execution_id": "string (required)",
       "level": "trace|debug|info|warn|error",
-      "format": "json|text",
-      "limit": "integer (default: 100)"
+      "limit": "integer (default: 100)",
+      "format": "json|text (default: json)"
     }
   }
 }
 ```
 
-### 11. Get Execution Trace
+### 10. Get Execution Trace
 **Tool**: `ratchet_get_execution_trace`
 
 Get detailed execution trace with timing and context.
@@ -360,17 +311,17 @@ Get detailed execution trace with timing and context.
     "name": "ratchet_get_execution_trace",
     "arguments": {
       "execution_id": "string (required)",
-      "format": "json|flamegraph",
-      "include_http_calls": "boolean (default: true)"
+      "include_http_calls": "boolean (default: true)",
+      "format": "json|flamegraph (default: json)"
     }
   }
 }
 ```
 
-### 12. Analyze Execution Error
+### 11. Analyze Execution Error
 **Tool**: `ratchet_analyze_execution_error`
 
-Get detailed error analysis for failed execution.
+Get detailed error analysis for failed execution with fix suggestions.
 
 ```json
 {
@@ -379,8 +330,31 @@ Get detailed error analysis for failed execution.
     "name": "ratchet_analyze_execution_error",
     "arguments": {
       "execution_id": "string (required)",
-      "include_context": "boolean (default: true)",
-      "include_suggestions": "boolean (default: true)"
+      "include_suggestions": "boolean (default: true)",
+      "include_context": "boolean (default: true)"
+    }
+  }
+}
+```
+
+### 12. List Executions
+**Tool**: `ratchet_list_executions`
+
+List task executions with filtering and pagination.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "ratchet_list_executions",
+    "arguments": {
+      "task_id": "string (optional filter)",
+      "status": "pending|running|completed|failed|cancelled",
+      "limit": "integer (default: 50, max: 1000)",
+      "page": "integer (default: 0)",
+      "sort_by": "queued_at|started_at|completed_at|duration_ms|status",
+      "sort_order": "asc|desc",
+      "include_output": "boolean (default: false)"
     }
   }
 }
@@ -637,6 +611,94 @@ Create a new version of an existing task.
 }
 ```
 
+## Discovery & Registry Management
+
+### 24. Discover Tasks
+**Tool**: `ratchet_discover_tasks`
+
+Discover tasks in a filesystem directory.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "ratchet_discover_tasks",
+    "arguments": {
+      "path": "string (required)",
+      "recursive": "boolean (default: true)",
+      "include_tests": "boolean (default: true)",
+      "auto_import": "boolean (default: false)"
+    }
+  }
+}
+```
+
+### 25. Sync Registry
+**Tool**: `ratchet_sync_registry`
+
+Sync registry sources to load available tasks.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "ratchet_sync_registry",
+    "arguments": {
+      "source_name": "string (optional, specific source)",
+      "force_refresh": "boolean (default: false)",
+      "include_dependencies": "boolean (default: true)"
+    }
+  }
+}
+```
+
+### 26. Registry Health
+**Tool**: `ratchet_registry_health`
+
+Check registry health and status.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "ratchet_registry_health",
+    "arguments": {}
+  }
+}
+```
+
+## Documentation Endpoints
+
+### 27. Get Developer Endpoint Reference
+**Tool**: `ratchet_get_developer_endpoint_reference`
+
+Get comprehensive MCP endpoints reference with all available tools.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "ratchet_get_developer_endpoint_reference",
+    "arguments": {}
+  }
+}
+```
+
+### 28. Get Developer Integration Guide
+**Tool**: `ratchet_get_developer_integration_guide`
+
+Get comprehensive MCP integration guide for setting up Claude Desktop.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "ratchet_get_developer_integration_guide",
+    "arguments": {}
+  }
+}
+```
+
 ## Error Handling
 
 All endpoints return standard MCP error responses:
@@ -693,6 +755,10 @@ Default rate limits per operation type:
 - **Protocol**: SSE with JSON-RPC messages
 - **Use Case**: Real-time progress updates
 
+### Stdio
+- **Transport**: Direct process communication
+- **Use Case**: Desktop AI applications like Claude Desktop
+
 ## Example Usage
 
 ### Complete Task Creation and Execution Flow
@@ -725,23 +791,25 @@ const createResponse = await fetch('/mcp', {
     params: {
       name: 'ratchet_create_task',
       arguments: {
-        name: 'my_task',
-        description: 'My test task',
-        code: 'function main(input) { return { result: input.a + input.b }; }',
+        name: 'httpbin_get_origin',
+        description: 'Calls httpbin.org/get and returns the origin IP',
+        code: `
+async function main(input) {
+  const response = await fetch('https://httpbin.org/get');
+  const data = await response.json();
+  return { origin: data.origin };
+}`,
         input_schema: {
           type: 'object',
-          properties: {
-            a: { type: 'number' },
-            b: { type: 'number' }
-          },
-          required: ['a', 'b']
+          properties: {},
+          additionalProperties: false
         },
         output_schema: {
           type: 'object',
           properties: {
-            result: { type: 'number' }
+            origin: { type: 'string' }
           },
-          required: ['result']
+          required: ['origin']
         }
       }
     }
@@ -759,12 +827,13 @@ const execResponse = await fetch('/mcp', {
     params: {
       name: 'ratchet_execute_task',
       arguments: {
-        task_id: 'task-uuid-from-create-response',
-        input: { a: 5, b: 3 }
+        task_id: 'httpbin_get_origin',
+        input: {},
+        trace: true
       }
     }
   })
 });
 ```
 
-This comprehensive reference covers all 23+ MCP tools available in the Ratchet implementation, providing complete parameter specifications, JSON schemas, and usage examples for each endpoint.
+This comprehensive reference covers all 28 MCP tools available in the Ratchet implementation, providing complete parameter specifications, JSON schemas, and usage examples for each endpoint.

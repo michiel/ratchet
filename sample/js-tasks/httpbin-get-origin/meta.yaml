@@ -1,0 +1,31 @@
+name: httpbin_get_origin
+description: Calls httpbin.org/get and returns the origin IP address
+version: 1.0.0
+author: Ratchet Examples
+category: example
+tags:
+  - http
+  - api
+  - example
+  - httpbin
+
+input_schema:
+  type: object
+  properties: {}
+  additionalProperties: false
+
+output_schema:
+  type: object
+  properties:
+    origin:
+      type: string
+      description: The origin IP address from httpbin
+  required:
+    - origin
+
+test_cases:
+  - name: basic_execution
+    description: Test basic httpbin.org/get call
+    input: {}
+    expected_output:
+      origin: string
