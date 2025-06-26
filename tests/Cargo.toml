@@ -27,6 +27,10 @@ path = "mcp_e2e_test.rs"
 name = "mcp_simple_e2e_test"
 path = "mcp_simple_e2e_test.rs"
 
+[[test]]
+name = "mcp_development_guide_integration_test"
+path = "mcp_development_guide_integration_test.rs"
+
 [dependencies]
 # Core dependencies
 anyhow = { workspace = true }
