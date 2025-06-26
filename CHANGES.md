@@ -1,5 +1,60 @@
 # Changes
 
+## v0.4.11 (2025-06-26)
+
+### Major Features
+- **MCP Console Integration**: Complete console implementation with MCP protocol support
+  - Implemented comprehensive MCP console integration replacing GraphQL health checks
+  - Added MCP protocol-based health monitoring and status reporting
+  - Enhanced console user interface with real-time MCP connectivity
+
+- **Enhanced MCP Development Tools**: Advanced developer assistance and documentation
+  - Added comprehensive MCP Development Guide with step-by-step examples
+  - Implemented developer documentation MCP tools for enhanced agent assistance
+  - Created working HTTP client task examples with proper error handling
+  - Added MCP Development Guide integration testing
+
+### MCP Protocol Enhancements
+- **Security Hardening**: Comprehensive Phase 1 MCP security implementation
+  - Complete MCP security hardening with comprehensive testing
+  - Enhanced request validation and authentication mechanisms
+  - Improved error handling and graceful degradation patterns
+
+- **Core Functionality Expansion**: Phase 2.1 MCP TODO implementations
+  - Complete Phase 2.1 MCP TODO implementations with core functionality
+  - Enhanced task execution dispatch with missing MCP development tools
+  - Improved task correlation and performance monitoring capabilities
+
+- **Advanced Error Recovery**: Phase 2.3 comprehensive error handling
+  - Implemented comprehensive error recovery and graceful degradation
+  - Enhanced MCP request correlation and performance metrics (Phase 2.2)
+  - Improved fault tolerance and system resilience
+
+### Infrastructure Improvements
+- **Webhook Support**: Configurable localhost webhook integration
+  - Added configurable localhost webhook support for production deployments
+  - Enhanced REST API functionality with localhost webhook capabilities
+  - Resolved REST API test failures and enabled localhost webhooks
+
+- **Documentation & Testing**: Comprehensive documentation and test improvements
+  - Streamlined documentation by removing redundant markdown files
+  - Added comprehensive task development guide using MCP interface
+  - Enhanced example configurations and resolved cargo test errors
+  - Added missing addition task for end-to-end testing
+
+### Bug Fixes & Stability
+- **API Consistency**: Resolved OpenAPI and REST API issues
+  - Fixed OpenAPI test failures and REST API documentation consistency
+  - Resolved rebase conflicts and build issues
+  - Enhanced API documentation accuracy and completeness
+
+- **Codebase Cleanup**: Comprehensive code organization and maintenance
+  - Cleaned up sample and example files for better organization
+  - Removed redundant documentation while preserving essential content
+  - Added comprehensive example configurations with detailed comments
+
+This release significantly enhances the MCP integration with comprehensive console support, advanced security hardening, and improved developer experience while maintaining robust task execution capabilities.
+
 ## v0.4.10 (2025-06-25)
 
 ### Build & Development Experience
