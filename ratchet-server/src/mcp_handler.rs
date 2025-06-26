@@ -21,7 +21,7 @@ use ratchet_mcp::{
     server::McpServerConfig,
 };
 use ratchet_interfaces::RepositoryFactory;
-use ratchet_execution::{ExecutionBridge, ProcessTaskExecutor};
+use ratchet_execution::ExecutionBridge;
 
 /// MCP endpoint state for handling both SSE and StreamableHTTP
 #[derive(Clone)]

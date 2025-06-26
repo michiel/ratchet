@@ -1,0 +1,18 @@
+name: addition
+description: Simple addition task for testing
+version: 1.0.0
+runtime: nodejs
+entrypoint: task.js
+inputs:
+  a:
+    type: number
+    description: First number
+    required: true
+  b:
+    type: number
+    description: Second number
+    required: true
+outputs:
+  result:
+    type: number
+    description: Sum of a and b

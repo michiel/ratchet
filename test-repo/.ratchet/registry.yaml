@@ -1,5 +1,0 @@
-# Repository metadata
-name: "Test Repository"
-description: "A test repository for validating repo commands"
-version: "1.0.0"
-ratchet_version: ">=0.6.0"

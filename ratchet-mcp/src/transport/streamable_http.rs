@@ -5,7 +5,6 @@
 
 use async_trait::async_trait;
 use axum::{
-    extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -13,7 +12,6 @@ use axum::{
     },
     Json,
 };
-use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -22,7 +20,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::{RwLock, mpsc};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -356,7 +354,7 @@ impl StreamableHttpTransport {
             .or_else(|| query.get("session_id").map(|s| s.as_str()));
         
         if let Some(session_id) = session_id {
-            if let Some(session) = self.session_manager.get_session(session_id).await {
+            if let Some(_session) = self.session_manager.get_session(session_id).await {
                 let last_event_id = headers
                     .get("last-event-id")
                     .and_then(|h| h.to_str().ok());
@@ -591,8 +589,8 @@ impl StreamableHttpTransport {
             .get_events_since(session_id, last_event_id)
             .await?;
         
-        let session_id = session_id.to_string();
-        let event_store = Arc::clone(&self.session_manager.event_store);
+        let _session_id = session_id.to_string();
+        let _event_store = Arc::clone(&self.session_manager.event_store);
         
         let stream = async_stream::stream! {
             // Send historical events first

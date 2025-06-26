@@ -90,6 +90,7 @@ impl RatchetCompleter {
             "health",
             "stats",
             "monitor",
+            "mcp",
             "help",
             "exit",
             "quit",

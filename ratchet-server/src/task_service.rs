@@ -320,7 +320,7 @@ impl TaskService for UnifiedTaskService {
     }
     
     /// Execute a task with the given input
-    async fn execute_task(&self, id: Uuid, input: JsonValue) -> Result<JsonValue, TaskServiceError> {
+    async fn execute_task(&self, _id: Uuid, _input: JsonValue) -> Result<JsonValue, TaskServiceError> {
         // This would delegate to the execution service
         // For now, return an error indicating this needs implementation
         Err(TaskServiceError::Configuration {

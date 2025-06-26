@@ -1,0 +1,117 @@
+# Ratchet Minimal Configuration
+# This configuration provides the simplest setup to get Ratchet running
+# Suitable for development, testing, and basic task execution
+
+# =============================================================================
+# TASK EXECUTION CONFIGURATION
+# =============================================================================
+execution:
+  # Maximum time a task can run before being terminated (5 minutes)
+  max_execution_duration: 300  # seconds
+
+  # Validate task input/output schemas during execution
+  validate_schemas: true
+
+  # Maximum number of tasks that can run simultaneously
+  max_concurrent_tasks: 5
+
+# =============================================================================
+# HTTP CLIENT CONFIGURATION
+# =============================================================================
+http:
+  # Timeout for HTTP requests made by tasks (30 seconds)
+  timeout: 30  # seconds
+
+  # Verify SSL certificates for HTTPS requests
+  verify_ssl: true
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+logging:
+  # Log level: error, warn, info, debug, trace
+  level: info
+
+  # Log format: text (human-readable) or json (structured)
+  format: text
+
+  # Where to send logs
+  targets:
+    - type: console  # Log to standard output
+
+# =============================================================================
+# CACHE CONFIGURATION
+# =============================================================================
+cache:
+  # Enable caching for better performance
+  enabled: true
+
+  # Task content cache (for task definitions)
+  task_cache:
+    # Number of task definitions to keep in memory
+    task_content_cache_size: 50
+
+# =============================================================================
+# OUTPUT CONFIGURATION
+# =============================================================================
+output:
+  # Number of concurrent output deliveries
+  max_concurrent_deliveries: 5
+
+  # Default timeout for output operations
+  default_timeout: 30  # seconds
+
+  # Security settings for webhook URLs
+  security:
+    # Allow localhost webhooks for local development and localhost clients
+    # Set to true for the first deployment scenario with localhost clients
+    allow_localhost_webhooks: true
+
+# =============================================================================
+# OPTIONAL: SERVER CONFIGURATION
+# =============================================================================
+# Uncomment this section to enable the HTTP server for API access
+# server:
+#   # Server address and port
+#   bind_address: "127.0.0.1"
+#   port: 8080
+#   
+#   # In-memory database (data lost on restart - good for testing)
+#   database:
+#     url: "sqlite::memory:"
+#     max_connections: 5
+
+# =============================================================================
+# OPTIONAL: MCP SERVER CONFIGURATION  
+# =============================================================================
+# Uncomment this section to enable Model Context Protocol server
+# (for integration with AI tools like Claude)
+# mcp:
+#   enabled: true
+#   transport: "sse"  # Server-Sent Events
+#   host: "127.0.0.1"
+#   port: 8090
+
+# =============================================================================
+# OPTIONAL: TASK REGISTRY CONFIGURATION
+# =============================================================================
+# Uncomment this section to load tasks from a directory
+# registry:
+#   sources:
+#     - name: "local-tasks"
+#       uri: "file://./tasks"  # Path to your task directory
+#       polling_interval: 60   # Check for changes every 60 seconds
+
+# =============================================================================
+# ENVIRONMENT VARIABLES
+# =============================================================================
+# You can override any configuration using environment variables:
+# 
+# RATCHET_LOG_LEVEL=debug
+# RATCHET_HTTP_TIMEOUT=60
+# RATCHET_MAX_EXECUTION_DURATION=600
+# RATCHET_SERVER_PORT=3000
+# RATCHET_BIND_ADDRESS=0.0.0.0
+#
+# For detailed logging:
+# RUST_LOG=debug

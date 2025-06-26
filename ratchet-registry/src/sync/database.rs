@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::error::{RegistryError, Result};
 use crate::sync::ConflictResolver;
@@ -30,8 +30,6 @@ impl DatabaseSync {
 
     pub async fn sync_discovered_tasks(&self, tasks: Vec<DiscoveredTask>) -> Result<SyncResult> {
         info!("Starting database sync of {} discovered tasks", tasks.len());
-
-        let task_repo = self.repository_factory.task_repository();
         let mut sync_result = SyncResult {
             tasks_added: 0,
             tasks_updated: 0,

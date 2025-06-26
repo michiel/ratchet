@@ -8,7 +8,6 @@ use axum::{
 };
 use ratchet_api_types::ApiId;
 use ratchet_core::validation::{ErrorSanitizer, InputValidator};
-use ratchet_interfaces::JobFilters;
 use ratchet_web::{extract_job_filters, ApiResponse, QueryParams};
 use tracing::{info, warn};
 

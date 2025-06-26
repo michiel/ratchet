@@ -319,15 +319,15 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     // Step 4: Start ratchet server
     println!("🌐 Step 4: Starting ratchet server");
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config.clone())?;
-    let server = Server::new(server_config).await?;
-    let app = server.build_app().await;
-
+    
     // Start server on random port
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let server_addr = listener.local_addr().unwrap();
     let server_url = format!("http://{}", server_addr);
 
     tokio::spawn(async move {
+        let server = Server::new(server_config).await.expect("Failed to create server");
+        let app = server.build_app().await;
         axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 

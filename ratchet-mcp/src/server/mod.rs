@@ -463,7 +463,7 @@ impl McpServer {
     /// Create MCP SSE routes that can be nested into another Axum router
     pub fn create_sse_routes(&self) -> axum::Router {
         use axum::{
-            extract::{Path, Query, State},
+            extract::{Path, State},
             http::{HeaderMap, StatusCode},
             response::{sse::Event, Sse},
             routing::get,

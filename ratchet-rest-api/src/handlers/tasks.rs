@@ -8,7 +8,7 @@ use axum::{
 };
 use ratchet_api_types::ApiId;
 use ratchet_core::validation::{ErrorSanitizer, InputValidator};
-use ratchet_interfaces::{DatabaseError, TaskFilters};
+use ratchet_interfaces::DatabaseError;
 use ratchet_mcp::server::task_dev_tools::{
     CreateTaskRequest as McpCreateTaskRequest, DeleteTaskRequest as McpDeleteTaskRequest,
     EditTaskRequest as McpEditTaskRequest, RunTaskTestsRequest as McpRunTaskTestsRequest,
@@ -595,7 +595,7 @@ pub async fn mcp_store_result(
     info!("MCP: Storing task execution result");
 
     // Check if MCP task service is available
-    let mcp_service = ctx
+    let _mcp_service = ctx
         .mcp_task_service
         .as_ref()
         .ok_or_else(|| RestError::InternalError("MCP task development service is not available".to_string()))?;
@@ -612,7 +612,7 @@ pub async fn mcp_store_result(
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
-    let result_data = request
+    let _result_data = request
         .get("result")
         .cloned()
         .unwrap_or_else(|| serde_json::json!(null));
@@ -642,7 +642,7 @@ pub async fn mcp_get_results(
     info!("MCP: Getting results for task: {}", task_name);
 
     // Check if MCP task service is available
-    let mcp_service = ctx
+    let _mcp_service = ctx
         .mcp_task_service
         .as_ref()
         .ok_or_else(|| RestError::InternalError("MCP task development service is not available".to_string()))?;

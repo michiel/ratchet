@@ -89,7 +89,7 @@ async fn execute_task_modern(task_path: &str, input: &JsonValue) -> Result<JsonV
 
 /// Execute task using legacy ratchet_lib engine
 #[cfg(feature = "javascript")]
-async fn execute_task_legacy(task_path: &str, input: &JsonValue) -> Result<JsonValue> {
+async fn execute_task_legacy(task_path: &str, _input: &JsonValue) -> Result<JsonValue> {
     debug!("Legacy ratchet_lib execution no longer available: {}", task_path);
 
     // Legacy execution is no longer available - ratchet_lib has been removed
