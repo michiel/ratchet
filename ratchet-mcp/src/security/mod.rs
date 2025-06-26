@@ -69,6 +69,9 @@ pub struct SecurityContext {
 
     /// Request start time for timeout enforcement
     pub request_start: std::time::Instant,
+
+    /// Request ID for correlation and tracing
+    pub request_id: Option<String>,
 }
 
 impl SecurityContext {
@@ -78,6 +81,17 @@ impl SecurityContext {
             client,
             config,
             request_start: std::time::Instant::now(),
+            request_id: None,
+        }
+    }
+
+    /// Create a new security context with request ID
+    pub fn with_request_id(client: ClientContext, config: SecurityConfig, request_id: Option<String>) -> Self {
+        Self {
+            client,
+            config,
+            request_start: std::time::Instant::now(),
+            request_id,
         }
     }
 

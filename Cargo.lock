@@ -5296,6 +5296,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "boa_engine",
  "chrono",
  "fastrand 2.3.0",

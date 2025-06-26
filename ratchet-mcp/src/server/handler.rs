@@ -1,5 +1,6 @@
 //! Request handler for MCP server operations
 
+use base64::Engine;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -69,7 +70,7 @@ impl McpRequestHandler {
 
     /// Handle tools/list request
     pub async fn handle_tools_list(&self, params: Option<Value>, security_ctx: &SecurityContext) -> McpResult<Value> {
-        let _params: Option<ToolsListParams> = if let Some(p) = params {
+        let params: Option<ToolsListParams> = if let Some(p) = params {
             Some(serde_json::from_value(p)?)
         } else {
             None
@@ -82,11 +83,47 @@ impl McpRequestHandler {
         }
 
         // Get available tools
-        let tools = self.tool_registry.list_tools(security_ctx).await?;
+        let mut tools = self.tool_registry.list_tools(security_ctx).await?;
+        
+        // Implement basic pagination
+        const PAGE_SIZE: usize = 50; // Maximum tools per page
+        let mut next_cursor = None;
+        
+        // Handle cursor-based pagination
+        let start_index = if let Some(ref params) = params {
+            if let Some(ref cursor) = params.cursor {
+                // Parse cursor as base64-encoded index
+                match base64::engine::general_purpose::STANDARD.decode(cursor) {
+                    Ok(decoded) => {
+                        match String::from_utf8(decoded).ok().and_then(|s| s.parse::<usize>().ok()) {
+                            Some(index) if index < tools.len() => index,
+                            _ => 0, // Invalid cursor, start from beginning
+                        }
+                    },
+                    Err(_) => 0, // Invalid cursor, start from beginning
+                }
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        
+        // Apply pagination
+        let end_index = std::cmp::min(start_index + PAGE_SIZE, tools.len());
+        
+        // Set next cursor if there are more tools
+        if end_index < tools.len() {
+            let cursor_data = end_index.to_string();
+            next_cursor = Some(base64::engine::general_purpose::STANDARD.encode(cursor_data));
+        }
+        
+        // Slice the tools for this page
+        tools = tools.into_iter().skip(start_index).take(PAGE_SIZE).collect();
 
         let result = ToolsListResult {
             tools,
-            next_cursor: None, // TODO: Implement pagination
+            next_cursor,
         };
 
         // Audit log the request
@@ -127,7 +164,7 @@ impl McpRequestHandler {
         let execution_context = ToolExecutionContext {
             security: security_ctx.clone(),
             arguments: params.arguments,
-            request_id: None, // TODO: Extract from request context
+            request_id: security_ctx.request_id.clone(),
         };
 
         // Execute the tool

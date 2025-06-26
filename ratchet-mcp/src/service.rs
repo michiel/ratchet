@@ -404,7 +404,9 @@ impl McpService {
 
         Self::new(config, task_executor, task_repository, execution_repository).await
         */
-        unimplemented!("Legacy config support will be re-enabled in Phase 3")
+        Err(McpError::Configuration {
+            message: "Legacy config support is disabled in this version. Please use the new modular configuration format via `from_new_ratchet_config()`. Legacy support will be re-enabled in Phase 3.".to_string(),
+        })
     }
 }
 
