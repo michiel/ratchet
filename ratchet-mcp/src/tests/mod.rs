@@ -342,9 +342,6 @@ async fn create_test_adapter() -> RatchetMcpAdapter {
     // Create unified task service
     let task_service = Arc::new(UnifiedTaskService::new(repositories, registry));
 
-    // Create a simple task service wrapper for testing
-    let task_service = Arc::new(MockTaskService::new(task_repository.clone()));
-
     // Create executor using the new API from ratchet-execution
     let executor_config = ProcessExecutorConfig {
         worker_count: 1,

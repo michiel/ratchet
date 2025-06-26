@@ -5020,7 +5020,7 @@ async fn get_developer_integration_guide() -> Result<String, String> {
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
     );
     
-    let content = include_str!("../../../docs/MCP_INTEGRATION_GUIDE.md");
+    let content = include_str!("../../../docs/MCP_DEVELOPMENT_GUIDE.md");
     Ok(format!("{}{}", header, content))
 }
 
