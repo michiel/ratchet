@@ -5303,6 +5303,7 @@ dependencies = [
  "futures-util",
  "http 1.3.1",
  "humantime-serde",
+ "rand 0.8.5",
  "ratchet-api-types",
  "ratchet-config",
  "ratchet-core",

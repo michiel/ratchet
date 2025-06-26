@@ -42,6 +42,7 @@ humantime-serde = "1.1"
 serde_yaml = "0.9"
 serde_urlencoded = "0.7"
 base64 = "0.22"
+rand = "0.8"
 
 # Internal dependencies
 ratchet-interfaces = { path = "../ratchet-interfaces" }
