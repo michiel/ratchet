@@ -26,6 +26,8 @@ use crate::protocol::{
     InitializeParams, InitializeResult, JsonRpcError, JsonRpcRequest, JsonRpcResponse, ServerCapabilities, ServerInfo,
 };
 use crate::security::{AuditLogger, McpAuthManager, SecurityContext};
+use crate::correlation::{CorrelationManager, CorrelationConfig};
+use crate::metrics::{McpMetrics, MetricsConfig};
 use crate::{McpAuth, McpError, McpResult};
 
 /// MCP server for exposing Ratchet capabilities to LLMs
@@ -42,6 +44,12 @@ pub struct McpServer {
 
     /// Audit logger
     audit_logger: Arc<AuditLogger>,
+
+    /// Request correlation manager
+    correlation_manager: Arc<CorrelationManager>,
+
+    /// Performance metrics system
+    metrics: Arc<McpMetrics>,
 
     /// Active client sessions
     _sessions: Arc<RwLock<HashMap<String, SecurityContext>>>,
@@ -64,11 +72,16 @@ impl McpServer {
         auth_manager: Arc<McpAuthManager>,
         audit_logger: Arc<AuditLogger>,
     ) -> Self {
+        let correlation_manager = Arc::new(CorrelationManager::new(CorrelationConfig::default()));
+        let metrics = Arc::new(McpMetrics::new(MetricsConfig::default()));
+        
         Self {
             config,
             tool_registry,
             auth_manager,
             audit_logger,
+            correlation_manager,
+            metrics,
             _sessions: Arc::new(RwLock::new(HashMap::new())),
             initialized: Arc::new(RwLock::new(false)),
             server_issued_sessions: Arc::new(RwLock::new(HashSet::new())),
@@ -107,11 +120,16 @@ impl McpServer {
             bind_address: Some(format!("{}:{}", config.host, config.port)),
         };
 
+        let correlation_manager = Arc::new(CorrelationManager::new(CorrelationConfig::default()));
+        let metrics = Arc::new(McpMetrics::new(MetricsConfig::default()));
+
         Ok(Self {
             config: server_config,
             tool_registry: Arc::new(tool_registry),
             auth_manager,
             audit_logger,
+            correlation_manager,
+            metrics,
             _sessions: Arc::new(RwLock::new(HashMap::new())),
             initialized: Arc::new(RwLock::new(false)),
             server_issued_sessions: Arc::new(RwLock::new(HashSet::new())),
@@ -1194,6 +1212,8 @@ impl McpServer {
             self.auth_manager.clone(),
             self.audit_logger.clone(),
             &self.config,
+            self.correlation_manager.clone(),
+            self.metrics.clone(),
         );
 
         // Handle the specific method
