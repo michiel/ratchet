@@ -1296,7 +1296,88 @@ Month 11: Documentation & developer tools
 
 ## 🎯 **Immediate Next Steps** (Next 2-4 weeks)
 
-### **Priority 1: MCP Console Integration Implementation** (Week 1-4)
+### **Priority 1: Console REPL Enhancement Implementation** (Week 1-4)
+
+**Plan Document**: [`docs/plans/2025-06-26-console-repl-enhancement-plan.md`](docs/plans/2025-06-26-console-repl-enhancement-plan.md)
+
+Based on comprehensive analysis of the console REPL implementation and MCP tool ecosystem, the following high-priority enhancements will transform the console from a basic administration tool into a comprehensive development and operations platform.
+
+#### **Console Enhancement Analysis Summary**
+- **Current State**: Excellent UX foundation with ~30% MCP tool coverage (9/29 tools)
+- **Gap Analysis**: Missing advanced features like batch operations, templates, versioning, real-time monitoring
+- **Enhancement Opportunity**: Full MCP ecosystem integration with enhanced workflow capabilities
+
+#### **Phase 1: Foundation** (Sprint 1-2 weeks) - HIGH PRIORITY
+- [ ] **Enhanced MCP Client with Streaming Support**
+  - [ ] Implement streaming execution with progress updates
+  - [ ] Add batch operation support with dependency resolution
+  - [ ] Real-time monitoring capabilities with filtering
+  - [ ] Enhanced error handling and connection management
+
+- [ ] **Base Command Trait with MCP Integration**
+  - [ ] Create unified command interface with MCP client integration
+  - [ ] Implement rich output formatting (tables, JSON, streams, dashboards)
+  - [ ] Add context-aware tab completion for MCP tools
+  - [ ] Enhanced variable expansion with MCP context
+
+- [ ] **Task Development Commands**
+  - [ ] `task create` - Interactive wizard using `ratchet_create_task` + templates
+  - [ ] `task edit` - Code modification using `ratchet_edit_task`
+  - [ ] `task validate` - Comprehensive validation using `ratchet_validate_task`
+  - [ ] `task test` - Test execution using `ratchet_run_task_tests`
+  - [ ] `task debug` - Interactive debugging using `ratchet_debug_task_execution`
+  - [ ] `task version` - Version management using `ratchet_create_task_version`
+
+- [ ] **Template System Commands**
+  - [ ] `template list` - Browse templates using `ratchet_list_templates`
+  - [ ] `template generate` - Create from template using `ratchet_generate_from_template`
+  - [ ] `task import/export` - Task portability using `ratchet_import_tasks`/`ratchet_export_tasks`
+
+#### **Phase 2: Execution & Monitoring** (Sprint 2-2 weeks) - HIGH PRIORITY  
+- [ ] **Enhanced Execution Commands**
+  - [ ] `task execute` - Advanced execution with tracing using `ratchet_execute_task`
+  - [ ] `task batch` - Batch operations using `ratchet_batch_execute`
+  - [ ] `execution trace` - Performance analysis using `ratchet_get_execution_trace`
+  - [ ] `execution analyze` - Error analysis using `ratchet_analyze_execution_error`
+
+- [ ] **Real-time Monitoring Dashboard**
+  - [ ] `monitor dashboard` - TUI dashboard with live updates
+  - [ ] `monitor executions` - Live execution tracking with filtering
+  - [ ] `monitor logs` - Streaming log viewer with level filtering
+  - [ ] Real-time metrics and worker status monitoring
+
+- [ ] **Enhanced Repository Management**
+  - [ ] `repo discover` - Task discovery using `ratchet_discover_tasks`
+  - [ ] `repo sync` - Registry sync using `ratchet_sync_registry`
+  - [ ] `repo health` - Health monitoring using `ratchet_registry_health`
+
+#### **Phase 3: Data & Advanced Features** (Sprint 3-1 week) - MEDIUM PRIORITY
+- [ ] **Data Management Commands**
+  - [ ] `result store/list/export` - Result management using `ratchet_store_result`/`ratchet_get_results`
+  - [ ] Enhanced completion system with 95% command coverage
+  - [ ] Interactive modes and wizards for complex workflows
+
+#### **Phase 4: Polish & Documentation** (Sprint 4-1 week) - MEDIUM PRIORITY
+- [ ] **User Experience Enhancements**
+  - [ ] Interactive task creation wizards
+  - [ ] Enhanced output formatting with relationships and status
+  - [ ] Advanced completion with MCP tool integration
+  - [ ] Comprehensive testing and documentation updates
+
+#### **Expected Outcomes**
+- **90%+ MCP Tool Coverage**: Transform from 30% to 90% MCP tool accessibility
+- **Enhanced Productivity**: 50% reduction in command sequence length for common workflows
+- **Real-time Capabilities**: Live monitoring and streaming updates <500ms latency
+- **Professional UX**: Interactive modes, rich formatting, advanced completion
+
+#### **Implementation Timeline**
+- **Sprint 1**: Foundation and task development (2 weeks)
+- **Sprint 2**: Execution and monitoring (2 weeks)  
+- **Sprint 3**: Data management and repository commands (1 week)
+- **Sprint 4**: Polish and documentation (1 week)
+- **Total**: 6 weeks, 2-3 developers
+
+### **Priority 1: MCP Console Integration Implementation** (Week 1-4) - SUPERSEDED BY CONSOLE ENHANCEMENT PLAN
 
 Based on the comprehensive MCP gap analysis in `docs/plans/2025-06-24-ratchet-console-mcp-gap-analysis.md`, the console needs to transition from GraphQL to native MCP protocol integration for complete server management capabilities.
 
