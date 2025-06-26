@@ -320,7 +320,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     println!("🌐 Step 4: Starting ratchet server");
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config.clone())?;
     let server = Server::new(server_config).await?;
-    let app = server.build_app();
+    let app = server.build_app().await;
 
     // Start server on random port
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -328,7 +328,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
     let server_url = format!("http://{}", server_addr);
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     // Give server time to start and sync repositories
@@ -788,14 +788,14 @@ async fn test_graphql_playground_queries_compatibility() -> Result<()> {
 
     let server_config = ratchet_server::config::ServerConfig::from_ratchet_config(config)?;
     let server = Server::new(server_config).await?;
-    let app = server.build_app();
+    let app = server.build_app().await;
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let server_addr = listener.local_addr().unwrap();
     let server_url = format!("http://{}", server_addr);
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     // Reduced startup time for compatibility test

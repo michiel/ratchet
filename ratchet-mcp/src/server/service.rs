@@ -72,9 +72,9 @@ impl McpService {
         let mut tool_registry = RatchetToolRegistry::new();
         tool_registry.set_executor(Arc::new(adapter));
 
-        // Create security components
-        let auth_manager = Arc::new(McpAuthManager::new(McpAuth::None)); // TODO: Configure from config
-        let audit_logger = Arc::new(AuditLogger::new(false)); // TODO: Make configurable
+        // Create security components from configuration
+        let auth_manager = Arc::new(McpAuthManager::new(McpAuth::None)); // TODO: Phase 3 - Add auth config to SecurityConfig
+        let audit_logger = Arc::new(AuditLogger::new(config.server_config.security.audit_log_enabled));
 
         // Create MCP server
         let server = McpServer::new(
@@ -392,6 +392,8 @@ impl McpService {
 
         Self::new(config, task_executor, task_repository, execution_repository).await
         */
-        unimplemented!("Legacy config support will be re-enabled in Phase 3")
+        Err(McpError::Configuration {
+            message: "Legacy config support is disabled in this version. Please use the new modular configuration format. Legacy support will be re-enabled in Phase 3.".to_string(),
+        })
     }
 }

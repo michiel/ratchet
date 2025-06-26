@@ -54,6 +54,10 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod security;
+pub mod correlation;
+pub mod metrics;
+pub mod monitoring;
+pub mod recovery;
 
 // Re-export commonly used types
 pub use error::{McpError, McpResult};
@@ -68,6 +72,10 @@ pub use client::{McpClient, McpClientConfig, ServerConnection};
 pub use config::{ConnectionLimits, McpConfig, SimpleTransportType, Timeouts, ToolConfig};
 pub use security::{ClientPermissions, McpAuth, McpAuthManager};
 pub use transport::{McpTransport, TransportType};
+pub use correlation::{CorrelationManager, RequestContext, RequestMetrics};
+pub use metrics::{McpMetrics, MetricsSummary, ToolStats};
+pub use monitoring::{EnhancedHealthMonitor, HealthReport, HealthStatus};
+pub use recovery::{ErrorRecoveryCoordinator, ReconnectionManager, DegradationManager, BatchErrorHandler};
 
 /// MCP protocol version supported by this implementation
 pub const MCP_VERSION: &str = "1.0.0";

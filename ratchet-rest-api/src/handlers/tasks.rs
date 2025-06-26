@@ -23,7 +23,18 @@ use crate::{
 };
 
 /// List all tasks with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/api/v1/tasks",
+    tag = "tasks",
+    summary = "List all tasks",
+    description = "Retrieve all tasks with optional filtering and pagination",
+    responses(
+        (status = 200, description = "List of tasks retrieved successfully"),
+        (status = 400, description = "Invalid query parameters"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn list_tasks(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing tasks with query: {:?}", query.0);
 
@@ -42,7 +53,21 @@ pub async fn list_tasks(State(ctx): State<TasksContext>, query: QueryParams) -> 
 }
 
 /// Get a specific task by ID
-
+#[utoipa::path(
+    get,
+    path = "/api/v1/tasks/{id}",
+    tag = "tasks",
+    summary = "Get a task by ID",
+    description = "Retrieve a specific task by its ID",
+    params(
+        ("id" = String, Path, description = "Task ID")
+    ),
+    responses(
+        (status = 200, description = "Task retrieved successfully"),
+        (status = 404, description = "Task not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_task(State(ctx): State<TasksContext>, Path(task_id): Path<String>) -> RestResult<impl IntoResponse> {
     info!("Getting task with ID: {}", task_id);
 
@@ -86,7 +111,18 @@ pub async fn get_task(State(ctx): State<TasksContext>, Path(task_id): Path<Strin
 }
 
 /// Create a new task
-
+#[utoipa::path(
+    post,
+    path = "/api/v1/tasks",
+    tag = "tasks",
+    summary = "Create a new task",
+    description = "Create a new task with the provided configuration",
+    responses(
+        (status = 201, description = "Task created successfully"),
+        (status = 400, description = "Invalid task data"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn create_task(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateTaskRequest>,

@@ -81,6 +81,21 @@ use utoipa::OpenApi;
         // Health check
         handlers::health::health_check,
 
+        // Task endpoints (only annotated ones)
+        handlers::tasks::list_tasks,
+        handlers::tasks::create_task,
+        handlers::tasks::get_task,
+
+        // Execution endpoints
+        handlers::executions::list_executions,
+
+        // Job endpoints
+        handlers::jobs::list_jobs,
+
+        // Schedule endpoints (only annotated ones)
+        handlers::schedules::list_schedules,
+        handlers::schedules::create_schedule,
+
         // Monitoring and metrics  
         handlers::metrics::get_metrics,
         handlers::metrics::get_prometheus_metrics,

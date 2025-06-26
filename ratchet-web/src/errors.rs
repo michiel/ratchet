@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 use ratchet_api_types::errors::ApiError;
+use ratchet_core::validation::error_sanitization::ErrorSanitizer;
 use serde_json::json;
 use thiserror::Error;
 
@@ -96,12 +97,26 @@ impl WebError {
 impl IntoResponse for WebError {
     fn into_response(self) -> Response {
         let status = self.status_code();
+        
+        // Apply sanitization for sensitive errors before creating response
+        let (error_code, safe_message) = match &self {
+            // For internal errors, use sanitization
+            WebError::Internal { .. } => {
+                let sanitizer = ErrorSanitizer::default();
+                let sanitized = sanitizer.sanitize_error(&self);
+                let error_code = sanitized.error_code.unwrap_or_else(|| self.error_code().to_string());
+                (error_code, sanitized.message)
+            }
+            // For other errors, use the original error code and message
+            _ => (self.error_code().to_string(), self.to_string())
+        };
+        
         let error_response = match &self {
             WebError::Validation { errors } => {
                 json!({
                     "error": {
-                        "code": self.error_code(),
-                        "message": self.to_string(),
+                        "code": error_code,
+                        "message": safe_message,
                         "details": errors
                     }
                 })
@@ -109,14 +124,49 @@ impl IntoResponse for WebError {
             _ => {
                 json!({
                     "error": {
-                        "code": self.error_code(),
-                        "message": self.to_string()
+                        "code": error_code,
+                        "message": safe_message
                     }
                 })
             }
         };
 
         (status, Json(error_response)).into_response()
+    }
+}
+
+// Conversion from WebError to ApiError with sanitization
+impl From<WebError> for ApiError {
+    fn from(error: WebError) -> Self {
+        // Apply selective sanitization - some errors are safe and shouldn't be sanitized
+        let (error_code, message) = match &error {
+            // These error types are safe user-facing errors that don't need sanitization
+            WebError::BadRequest { message } => ("BAD_REQUEST".to_string(), message.clone()),
+            WebError::Unauthorized { message } => ("UNAUTHORIZED".to_string(), message.clone()),
+            WebError::Forbidden { message } => ("FORBIDDEN".to_string(), message.clone()),
+            WebError::NotFound { message } => ("NOT_FOUND".to_string(), message.clone()),
+            WebError::Conflict { message } => ("CONFLICT".to_string(), message.clone()),
+            WebError::TooManyRequests { message } => ("RATE_LIMITED".to_string(), message.clone()),
+            WebError::ServiceUnavailable { message } => ("SERVICE_UNAVAILABLE".to_string(), message.clone()),
+            WebError::RateLimit => ("RATE_LIMITED".to_string(), "Rate limit exceeded".to_string()),
+            WebError::Timeout => ("TIMEOUT".to_string(), "Request timeout".to_string()),
+            WebError::Validation { errors } => {
+                // Validation errors are generally safe, but sanitize details
+                let safe_errors: Vec<_> = errors.iter().map(|e| format!("{}: {}", e.field.as_deref().unwrap_or("field"), e.message)).collect();
+                ("VALIDATION_ERROR".to_string(), safe_errors.join(", "))
+            },
+
+            // These error types may contain sensitive data and need sanitization
+            WebError::Internal { .. } => {
+                let sanitizer = ErrorSanitizer::default();
+                let sanitized = sanitizer.sanitize_error(&error);
+                
+                let error_code = sanitized.error_code.unwrap_or_else(|| "INTERNAL_ERROR".to_string());
+                (error_code, sanitized.message)
+            }
+        };
+
+        ApiError::new(error_code, message)
     }
 }
 

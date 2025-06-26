@@ -123,7 +123,13 @@ pub struct CorsConfig {
 impl Default for CorsConfig {
     fn default() -> Self {
         Self {
-            allowed_origins: vec!["*".to_string()],
+            // Secure defaults - only allow localhost for development
+            allowed_origins: vec![
+                "http://localhost:3000".to_string(),
+                "http://127.0.0.1:3000".to_string(),
+                "https://localhost:3000".to_string(),
+                "https://127.0.0.1:3000".to_string(),
+            ],
             allowed_methods: vec!["GET".to_string(), "POST".to_string(), "OPTIONS".to_string()],
             allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
             allow_credentials: false,
@@ -209,14 +215,15 @@ mod tests {
                 assert_eq!(host, "127.0.0.1");
                 assert!(!tls);
             }
-            _ => panic!("Expected SSE transport"),
+            _ => assert!(false, "Expected SSE transport"),
         }
     }
 
     #[test]
     fn test_cors_config() {
         let cors = CorsConfig::default();
-        assert!(cors.allowed_origins.contains(&"*".to_string()));
+        // Should have secure defaults instead of wildcard
+        assert!(cors.allowed_origins.contains(&"http://localhost:3000".to_string()));
         assert!(cors.allowed_methods.contains(&"GET".to_string()));
         assert!(!cors.allow_credentials);
     }
@@ -234,7 +241,7 @@ mod tests {
 
         match deserialized.transport {
             McpServerTransport::Sse { port, .. } => assert_eq!(port, 3000),
-            _ => panic!("Expected SSE transport"),
+            _ => assert!(false, "Expected SSE transport"),
         }
     }
 }

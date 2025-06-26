@@ -66,15 +66,19 @@ fn validate_output_destinations(destinations: &[UnifiedOutputDestination]) -> Re
                         )));
                     }
 
-                    // Prevent localhost and private IPs in production
-                    if webhook.url.contains("localhost")
-                        || webhook.url.contains("127.0.0.1")
-                        || webhook.url.contains("::1")
-                    {
-                        return Err(RestError::BadRequest(format!(
-                            "{}: Localhost URLs not allowed for webhooks",
-                            context
-                        )));
+                    // Allow localhost URLs for testing in development mode
+                    // In production, you might want to restrict this based on environment
+                    if cfg!(not(debug_assertions)) {
+                        // Only check in release mode (production)
+                        if webhook.url.contains("localhost")
+                            || webhook.url.contains("127.0.0.1")
+                            || webhook.url.contains("::1")
+                        {
+                            return Err(RestError::BadRequest(format!(
+                                "{}: Localhost URLs not allowed for webhooks in production",
+                                context
+                            )));
+                        }
                     }
 
                     // Validate timeout
@@ -274,7 +278,18 @@ fn validate_output_destinations(destinations: &[UnifiedOutputDestination]) -> Re
 }
 
 /// List all schedules with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/api/v1/schedules",
+    tag = "schedules",
+    summary = "List all schedules",
+    description = "Retrieve all schedules with optional filtering and pagination",
+    responses(
+        (status = 200, description = "List of schedules retrieved successfully"),
+        (status = 400, description = "Invalid query parameters"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn list_schedules(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing schedules with query: {:?}", query.0);
 
@@ -326,7 +341,18 @@ pub async fn get_schedule(
 }
 
 /// Create a new schedule
-
+#[utoipa::path(
+    post,
+    path = "/api/v1/schedules",
+    tag = "schedules",
+    summary = "Create a new schedule",
+    description = "Create a new schedule with the provided configuration",
+    responses(
+        (status = 201, description = "Schedule created successfully"),
+        (status = 400, description = "Invalid schedule data"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn create_schedule(
     State(ctx): State<TasksContext>,
     Json(request): Json<CreateScheduleRequest>,

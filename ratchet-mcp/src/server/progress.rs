@@ -46,6 +46,19 @@ struct ProgressSubscription {
 
     /// Subscription timestamp
     created_at: chrono::DateTime<chrono::Utc>,
+
+    /// Last notification state for filtering
+    last_notification_state: Arc<RwLock<Option<LastNotificationState>>>,
+}
+
+/// State of the last progress notification sent for delta/frequency filtering
+#[derive(Debug, Clone)]
+struct LastNotificationState {
+    /// Last progress value sent
+    last_progress: f32,
+    
+    /// Timestamp of last notification
+    last_notification_time: chrono::DateTime<chrono::Utc>,
 }
 
 impl std::fmt::Debug for ProgressSubscription {
@@ -114,6 +127,7 @@ impl ProgressNotificationManager {
             connection,
             filter,
             created_at: chrono::Utc::now(),
+            last_notification_state: Arc::new(RwLock::new(None)),
         };
 
         let mut subscriptions = self.subscriptions.write().await;
@@ -196,7 +210,7 @@ impl ProgressNotificationManager {
                 for subscription in subs {
                     // Apply filter if present
                     if let Some(filter) = &subscription.filter {
-                        if !Self::should_send_notification(&notification.update, filter) {
+                        if !Self::should_send_notification(&notification.update, filter, &subscription.last_notification_state).await {
                             continue;
                         }
                     }
@@ -237,7 +251,11 @@ impl ProgressNotificationManager {
     }
 
     /// Check if a notification should be sent based on filter criteria
-    fn should_send_notification(update: &ProgressUpdate, filter: &ProgressFilter) -> bool {
+    async fn should_send_notification(
+        update: &ProgressUpdate, 
+        filter: &ProgressFilter,
+        last_state: &Arc<RwLock<Option<LastNotificationState>>>
+    ) -> bool {
         // Check step filter
         if let Some(step_filter) = &filter.step_filter {
             if let Some(step) = &update.step {
@@ -247,9 +265,34 @@ impl ProgressNotificationManager {
             }
         }
 
-        // TODO: Implement progress delta and frequency filtering
-        // This would require tracking last notification state per subscription
-
+        // Implement progress delta and frequency filtering
+        let mut last_state_guard = last_state.write().await;
+        let now = chrono::Utc::now();
+        
+        if let Some(ref last) = *last_state_guard {
+            // Check frequency filter
+            if let Some(max_freq_ms) = filter.max_frequency_ms {
+                let time_since_last = now.signed_duration_since(last.last_notification_time);
+                if time_since_last.num_milliseconds() < max_freq_ms as i64 {
+                    return false;
+                }
+            }
+            
+            // Check progress delta filter
+            if let Some(min_delta) = filter.min_progress_delta {
+                let progress_delta = (update.progress - last.last_progress).abs();
+                if progress_delta < min_delta {
+                    return false;
+                }
+            }
+        }
+        
+        // Update last notification state
+        *last_state_guard = Some(LastNotificationState {
+            last_progress: update.progress,
+            last_notification_time: now,
+        });
+        
         true
     }
 }

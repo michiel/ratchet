@@ -9,7 +9,7 @@ use thiserror::Error;
 pub type McpResult<T> = Result<T, McpError>;
 
 /// Comprehensive error type for MCP operations
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum McpError {
     /// Transport-level errors
     #[error("Transport error: {message}")]
@@ -61,6 +61,10 @@ pub enum McpError {
         message: String,
         retry_after: Option<Duration>,
     },
+
+    /// Rate limited (short form)
+    #[error("Rate limited: {message}")]
+    RateLimited { message: String },
 
     /// Resource quota exceeded
     #[error("Resource quota exceeded: {resource}: {message}")]

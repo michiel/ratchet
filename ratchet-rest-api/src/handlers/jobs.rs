@@ -22,7 +22,15 @@ use crate::{
 };
 
 /// List all jobs with optional filtering and pagination
-
+#[utoipa::path(
+    get,
+    path = "/api/v1/jobs",
+    responses(
+        (status = 200, description = "List of jobs retrieved successfully"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "jobs"
+)]
 pub async fn list_jobs(State(ctx): State<TasksContext>, query: QueryParams) -> RestResult<impl IntoResponse> {
     info!("Listing jobs with query: {:?}", query.0);
 

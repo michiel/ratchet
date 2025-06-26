@@ -4488,6 +4488,42 @@ pub fn register_task_dev_tools(tools: &mut HashMap<String, McpTool>) {
         "registry",
     );
     tools.insert("ratchet_registry_health".to_string(), registry_health_tool);
+
+    // Get MCP endpoints reference tool
+    let get_endpoints_tool = McpTool::new(
+        "ratchet_get_developer_endpoint_reference",
+        "Get comprehensive MCP endpoints reference with all 23+ available tools, parameters, and examples",
+        json!({
+            "type": "object",
+            "properties": {}
+        }),
+        "documentation",
+    );
+    tools.insert("ratchet_get_developer_endpoint_reference".to_string(), get_endpoints_tool);
+
+    // Get MCP integration guide tool  
+    let get_integration_tool = McpTool::new(
+        "ratchet_get_developer_integration_guide",
+        "Get comprehensive MCP integration guide for setting up Claude Desktop and other clients",
+        json!({
+            "type": "object",
+            "properties": {}
+        }),
+        "documentation",
+    );
+    tools.insert("ratchet_get_developer_integration_guide".to_string(), get_integration_tool);
+
+    // Get MCP development walkthrough tool
+    let get_walkthrough_tool = McpTool::new(
+        "ratchet_get_developer_guide_walkthrough",
+        "Get comprehensive MCP development walkthrough with step-by-step examples for agents",
+        json!({
+            "type": "object",
+            "properties": {}
+        }),
+        "documentation",
+    );
+    tools.insert("ratchet_get_developer_guide_walkthrough".to_string(), get_walkthrough_tool);
 }
 
 /// Execute task development tools
@@ -4876,8 +4912,129 @@ pub async fn execute_task_dev_tool(
             }
         }
 
+        "ratchet_get_developer_endpoint_reference" => {
+            match get_developer_endpoint_reference().await {
+                Ok(documentation) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: documentation,
+                    }],
+                    is_error: false,
+                    metadata: {
+                        let mut metadata = HashMap::new();
+                        metadata.insert("document_type".to_string(), Value::String("mcp_endpoints_reference".to_string()));
+                        metadata.insert("source_file".to_string(), Value::String("docs/MCP_ENDPOINTS_REFERENCE.md".to_string()));
+                        metadata.insert("tool_count".to_string(), Value::String("23+".to_string()));
+                        metadata
+                    },
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to retrieve MCP endpoints reference: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+
+        "ratchet_get_developer_integration_guide" => {
+            match get_developer_integration_guide().await {
+                Ok(documentation) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: documentation,
+                    }],
+                    is_error: false,
+                    metadata: {
+                        let mut metadata = HashMap::new();
+                        metadata.insert("document_type".to_string(), Value::String("mcp_integration_guide".to_string()));
+                        metadata.insert("source_file".to_string(), Value::String("docs/MCP_INTEGRATION_GUIDE.md".to_string()));
+                        metadata.insert("covers".to_string(), Value::String("claude_desktop_setup_troubleshooting_configuration".to_string()));
+                        metadata
+                    },
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to retrieve MCP integration guide: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+
+        "ratchet_get_developer_guide_walkthrough" => {
+            match get_developer_guide_walkthrough().await {
+                Ok(documentation) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: documentation,
+                    }],
+                    is_error: false,
+                    metadata: {
+                        let mut metadata = HashMap::new();
+                        metadata.insert("document_type".to_string(), Value::String("mcp_development_walkthrough".to_string()));
+                        metadata.insert("source_file".to_string(), Value::String("docs/MCP_DEVELOPMENT_GUIDE.md".to_string()));
+                        metadata.insert("covers".to_string(), Value::String("task_creation_execution_monitoring_debugging_administration".to_string()));
+                        metadata.insert("example_task".to_string(), Value::String("httpbin_get_origin".to_string()));
+                        metadata
+                    },
+                }),
+                Err(e) => Ok(ToolsCallResult {
+                    content: vec![ToolContent::Text {
+                        text: format!("Failed to retrieve MCP development walkthrough: {}", e),
+                    }],
+                    is_error: true,
+                    metadata: HashMap::new(),
+                }),
+            }
+        }
+
         _ => Err(McpError::ToolNotFound {
             tool_name: tool_name.to_string(),
         }),
     }
+}
+
+/// Get the MCP endpoints reference documentation
+async fn get_developer_endpoint_reference() -> Result<String, String> {
+    let header = format!(
+        "# Ratchet MCP Endpoints Reference\n\n\
+        **Retrieved at**: {}\n\
+        **Source**: Embedded documentation\n\
+        **Document Type**: Comprehensive API Reference\n\n\
+        ---\n\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    );
+    
+    let content = include_str!("../../../docs/MCP_ENDPOINTS_REFERENCE.md");
+    Ok(format!("{}{}", header, content))
+}
+
+/// Get the MCP integration guide documentation
+async fn get_developer_integration_guide() -> Result<String, String> {
+    let header = format!(
+        "# Ratchet MCP Integration Guide\n\n\
+        **Retrieved at**: {}\n\
+        **Source**: Embedded documentation\n\
+        **Document Type**: Setup and Integration Guide\n\n\
+        ---\n\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    );
+    
+    let content = include_str!("../../../docs/MCP_INTEGRATION_GUIDE.md");
+    Ok(format!("{}{}", header, content))
+}
+
+/// Get the MCP development walkthrough guide
+async fn get_developer_guide_walkthrough() -> Result<String, String> {
+    let header = format!(
+        "# Ratchet MCP Development Walkthrough\n\n\
+        **Retrieved at**: {}\n\
+        **Source**: Embedded documentation\n\
+        **Document Type**: Step-by-step Development Guide\n\n\
+        ---\n\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    );
+    
+    let content = include_str!("../../../docs/MCP_DEVELOPMENT_GUIDE.md");
+    Ok(format!("{}{}", header, content))
 }

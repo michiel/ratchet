@@ -1,5 +1,6 @@
 //! Request handler for MCP server operations
 
+use base64::Engine;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -12,6 +13,8 @@ use crate::protocol::{
     ResourcesReadParams, ResourcesReadResult, ToolsCallParams, ToolsListParams, ToolsListResult,
 };
 use crate::security::{AuditLogger, McpAuthManager, PermissionChecker, SecurityContext};
+use crate::correlation::CorrelationManager;
+use crate::metrics::McpMetrics;
 use crate::{McpError, McpResult};
 
 /// Request handler for MCP operations
@@ -31,6 +34,12 @@ pub struct McpRequestHandler {
 
     /// Batch processor for handling batch requests
     batch_processor: Option<Arc<BatchProcessor>>,
+
+    /// Correlation manager for request tracking
+    correlation_manager: Arc<CorrelationManager>,
+
+    /// Metrics system for performance monitoring
+    metrics: Arc<McpMetrics>,
 }
 
 impl McpRequestHandler {
@@ -40,6 +49,8 @@ impl McpRequestHandler {
         auth_manager: Arc<McpAuthManager>,
         audit_logger: Arc<AuditLogger>,
         config: &McpServerConfig,
+        correlation_manager: Arc<CorrelationManager>,
+        metrics: Arc<McpMetrics>,
     ) -> Self {
         Self {
             tool_registry,
@@ -47,6 +58,8 @@ impl McpRequestHandler {
             audit_logger,
             _config: config.clone(),
             batch_processor: None,
+            correlation_manager,
+            metrics,
         }
     }
 
@@ -57,6 +70,8 @@ impl McpRequestHandler {
         audit_logger: Arc<AuditLogger>,
         config: &McpServerConfig,
         batch_processor: Arc<BatchProcessor>,
+        correlation_manager: Arc<CorrelationManager>,
+        metrics: Arc<McpMetrics>,
     ) -> Self {
         Self {
             tool_registry,
@@ -64,12 +79,23 @@ impl McpRequestHandler {
             audit_logger,
             _config: config.clone(),
             batch_processor: Some(batch_processor),
+            correlation_manager,
+            metrics,
         }
     }
 
     /// Handle tools/list request
     pub async fn handle_tools_list(&self, params: Option<Value>, security_ctx: &SecurityContext) -> McpResult<Value> {
-        let _params: Option<ToolsListParams> = if let Some(p) = params {
+        // Start request correlation if not already present
+        let request_id = if let Some(ref id) = security_ctx.request_id {
+            id.clone()
+        } else {
+            self.correlation_manager.start_request(security_ctx.client.id.clone(), "tools/list".to_string()).await
+        };
+
+        let start_time = std::time::Instant::now();
+
+        let params: Option<ToolsListParams> = if let Some(p) = params {
             Some(serde_json::from_value(p)?)
         } else {
             None
@@ -82,21 +108,69 @@ impl McpRequestHandler {
         }
 
         // Get available tools
-        let tools = self.tool_registry.list_tools(security_ctx).await?;
+        let mut tools = self.tool_registry.list_tools(security_ctx).await?;
+        
+        // Implement basic pagination
+        const PAGE_SIZE: usize = 50; // Maximum tools per page
+        let mut next_cursor = None;
+        
+        // Handle cursor-based pagination
+        let start_index = if let Some(ref params) = params {
+            if let Some(ref cursor) = params.cursor {
+                // Parse cursor as base64-encoded index
+                match base64::engine::general_purpose::STANDARD.decode(cursor) {
+                    Ok(decoded) => {
+                        match String::from_utf8(decoded).ok().and_then(|s| s.parse::<usize>().ok()) {
+                            Some(index) if index < tools.len() => index,
+                            _ => 0, // Invalid cursor, start from beginning
+                        }
+                    },
+                    Err(_) => 0, // Invalid cursor, start from beginning
+                }
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        
+        // Apply pagination
+        let end_index = std::cmp::min(start_index + PAGE_SIZE, tools.len());
+        
+        // Set next cursor if there are more tools
+        if end_index < tools.len() {
+            let cursor_data = end_index.to_string();
+            next_cursor = Some(base64::engine::general_purpose::STANDARD.encode(cursor_data));
+        }
+        
+        // Slice the tools for this page
+        tools = tools.into_iter().skip(start_index).take(PAGE_SIZE).collect();
 
         let result = ToolsListResult {
             tools,
-            next_cursor: None, // TODO: Implement pagination
+            next_cursor,
         };
+
+        let duration = start_time.elapsed();
+        let success = true;
+
+        // Record metrics
+        self.metrics.record_request("tools/list", &security_ctx.client.id, duration, success).await;
+
+        // Complete request correlation
+        if security_ctx.request_id.is_none() {
+            // Only complete if we started the correlation
+            self.correlation_manager.complete_request(request_id.clone(), success, None).await;
+        }
 
         // Audit log the request
         self.audit_logger
             .log_tool_execution(
                 &security_ctx.client.id,
                 "tools/list",
-                true,
-                0, // No execution time for list operation
-                None,
+                success,
+                duration.as_millis() as u64,
+                Some(request_id),
             )
             .await;
 
@@ -105,6 +179,15 @@ impl McpRequestHandler {
 
     /// Handle tools/call request
     pub async fn handle_tools_call(&self, params: Option<Value>, security_ctx: &SecurityContext) -> McpResult<Value> {
+        // Start request correlation if not already present
+        let request_id = if let Some(ref id) = security_ctx.request_id {
+            id.clone()
+        } else {
+            self.correlation_manager.start_request(security_ctx.client.id.clone(), "tools/call".to_string()).await
+        };
+
+        let start_time = std::time::Instant::now();
+
         let params: ToolsCallParams = TryFromValue::try_into(params.ok_or_else(|| McpError::InvalidParams {
             method: "tools/call".to_string(),
             details: "Missing parameters".to_string(),
@@ -116,33 +199,59 @@ impl McpRequestHandler {
 
         // Check if client can access this tool
         if !self.tool_registry.can_access_tool(&params.name, security_ctx).await {
+            let duration = start_time.elapsed();
+            
+            // Record failed request metrics
+            self.metrics.record_request("tools/call", &security_ctx.client.id, duration, false).await;
+            
+            // Complete request correlation with error
+            if security_ctx.request_id.is_none() {
+                self.correlation_manager.complete_request(request_id, false, Some("authorization_denied".to_string())).await;
+            }
+            
             return Err(McpError::AuthorizationDenied {
                 reason: format!("Access denied to tool: {}", params.name),
             });
         }
 
-        let start_time = std::time::Instant::now();
+        // Add tool name to correlation metadata
+        self.correlation_manager.add_request_metadata(&request_id, "tool_name".to_string(), params.name.clone()).await;
 
-        // Create execution context
+        // Create execution context with proper request ID
         let execution_context = ToolExecutionContext {
             security: security_ctx.clone(),
             arguments: params.arguments,
-            request_id: None, // TODO: Extract from request context
+            request_id: Some(request_id.clone()),
         };
 
         // Execute the tool
         let result = self.tool_registry.execute_tool(&params.name, execution_context).await;
 
         let duration = start_time.elapsed();
+        let success = result.is_ok();
+        let error_code = if !success {
+            Some("tool_execution_failed".to_string())
+        } else {
+            None
+        };
+
+        // Record metrics
+        self.metrics.record_request("tools/call", &security_ctx.client.id, duration, success).await;
+        self.metrics.record_tool_execution(&params.name, &security_ctx.client.id, duration, success, Some(request_id.clone())).await;
+
+        // Complete request correlation
+        if security_ctx.request_id.is_none() {
+            self.correlation_manager.complete_request(request_id.clone(), success, error_code.clone()).await;
+        }
 
         // Audit log the execution
         self.audit_logger
             .log_tool_execution(
                 &security_ctx.client.id,
                 &params.name,
-                result.is_ok(),
+                success,
                 duration.as_millis() as u64,
-                None,
+                Some(request_id),
             )
             .await;
 
@@ -382,12 +491,17 @@ mod tests {
     use crate::server::tools::RatchetToolRegistry;
 
     fn create_test_handler() -> McpRequestHandler {
+        use crate::correlation::{CorrelationManager, CorrelationConfig};
+        use crate::metrics::{McpMetrics, MetricsConfig};
+        
         let tool_registry = Arc::new(RatchetToolRegistry::new());
         let auth_manager = Arc::new(McpAuthManager::new(McpAuth::None));
         let audit_logger = Arc::new(AuditLogger::new(false));
         let config = McpServerConfig::default();
+        let correlation_manager = Arc::new(CorrelationManager::new(CorrelationConfig::default()));
+        let metrics = Arc::new(McpMetrics::new(MetricsConfig::default()));
 
-        McpRequestHandler::new(tool_registry, auth_manager, audit_logger, &config)
+        McpRequestHandler::new(tool_registry, auth_manager, audit_logger, &config, correlation_manager, metrics)
     }
 
     fn create_test_security_context() -> SecurityContext {
