@@ -184,6 +184,25 @@ output:
     # Pretty-print JSON output
     pretty_json: true
 
+  # Security settings for webhook URLs
+  security:
+    # Allow localhost/127.0.0.1 URLs in webhook destinations
+    # WARNING: Only enable this for local development or when clients run on localhost
+    # Set to true for the first deployment scenario with localhost clients
+    allow_localhost_webhooks: false
+    
+    # Allow private network ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x) in webhook URLs
+    # WARNING: This can be a security risk in production environments
+    allow_private_network_webhooks: false
+    
+    # Additional allowed domains for webhook URLs (bypasses security checks)
+    # Use this to explicitly allow specific internal domains
+    allowed_webhook_domains: []
+    # Example:
+    # allowed_webhook_domains:
+    #   - "internal.company.com"
+    #   - "webhook.internal"
+
   # Global output destinations (applied to all executions)
   global_destinations:
     # File system output for audit logging

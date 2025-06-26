@@ -61,6 +61,12 @@ output:
   # Default timeout for output operations
   default_timeout: 30  # seconds
 
+  # Security settings for webhook URLs
+  security:
+    # Allow localhost webhooks for local development and localhost clients
+    # Set to true for the first deployment scenario with localhost clients
+    allow_localhost_webhooks: true
+
 # =============================================================================
 # OPTIONAL: SERVER CONFIGURATION
 # =============================================================================
