@@ -549,8 +549,11 @@ ratchet mcp --transport sse --port 8090
 # Option 3: Start MCP server for Claude Desktop (stdio transport)  
 ratchet mcp-serve
 
-# Option 4: Add to Claude Desktop using Claude Code CLI
+# Option 4: Add to Claude Desktop using Claude Code CLI (stdio transport)
 claude mcp add ratchet ratchet mcp-serve
+
+# Option 5: Add to Claude Desktop using HTTP transport
+claude mcp add --transport http ratchet-http http://localhost:8080/mcp
 ```
 
 Configure MCP in your `config.yaml`:
