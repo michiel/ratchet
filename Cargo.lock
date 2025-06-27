@@ -5002,6 +5002,7 @@ name = "ratchet"
 version = "0.4.11"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "clap",
  "clap_complete",

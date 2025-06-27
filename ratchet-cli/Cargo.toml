@@ -55,6 +55,7 @@ tokio-stream = { version = "0.1", optional = true }
 dirs = { workspace = true }
 reqwest = { workspace = true }
 regex = { workspace = true }
+async-trait = { workspace = true }
 
 # Feature flags for optional functionality
 [features]
