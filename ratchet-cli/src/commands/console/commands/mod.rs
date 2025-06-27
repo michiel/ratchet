@@ -1,18 +1,13 @@
-//! Individual command implementations for the console
+//! Enhanced console commands with full MCP integration
 
-pub mod database;
+pub mod enhanced_task;
+pub mod template;
 pub mod execution;
-pub mod job;
 pub mod monitor;
-pub mod repo;
-pub mod server;
-pub mod task;
+pub mod job;
 
-// Re-export command modules (currently empty placeholders)
-// pub use repo::*;
-// pub use task::*;
-// pub use execution::*;
-// pub use job::*;
-// pub use database::*;
-// pub use server::*;
-// pub use monitor::*;
+pub use enhanced_task::EnhancedTaskCommand;
+pub use template::TemplateCommand;
+pub use execution::ExecutionCommand;
+pub use monitor::MonitorCommand;
+pub use job::JobCommand;

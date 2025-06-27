@@ -1,0 +1,119 @@
+execution:
+  fetch_variables:
+    url_var: __fetch_url
+    params_var: __fetch_params
+    body_var: __fetch_body
+    result_var: __http_result
+    temp_result_var: __temp_result
+  max_execution_duration: 300
+  validate_schemas: true
+  max_concurrent_tasks: 10
+  timeout_grace_period: 5
+http:
+  timeout: 30
+  max_redirects: 10
+  user_agent: Ratchet/1.0
+  verify_ssl: true
+  connection_pool:
+    max_idle_per_host: 10
+    idle_timeout: 90
+    connection_timeout: 10
+cache:
+  enabled: true
+  task_cache:
+    cache_type: lru
+    task_content_cache_size: 100
+    memory_limit_bytes: 67108864
+    ttl: 3600
+  http_cache:
+    enabled: true
+    max_size_bytes: 10485760
+    default_ttl: 300
+    respect_cache_control: true
+  result_cache:
+    enabled: true
+    cache_only_success: true
+    max_entries: 1000
+    ttl: 1800
+logging:
+  level: info
+  format: text
+  targets:
+  - type: console
+    level: null
+  include_location: false
+  structured: true
+output:
+  max_concurrent_deliveries: 10
+  default_timeout: 30
+  validate_on_startup: true
+  global_destinations: []
+  default_retry_policy:
+    max_attempts: 3
+    initial_delay_ms: 1000
+    max_delay_ms: 30000
+    backoff_multiplier: 2.0
+  formatting:
+    timestamp_format: '%Y-%m-%dT%H:%M:%S%.3fZ'
+    include_metadata: true
+    pretty_json: false
+  security:
+    allow_localhost_webhooks: false
+    allow_private_network_webhooks: false
+    allowed_webhook_domains: []
+server:
+  bind_address: 127.0.0.1
+  port: 8080
+  database:
+    url: 'sqlite::memory:'
+    max_connections: 10
+    min_connections: 1
+    connection_timeout: 30
+    idle_timeout: 600
+    max_lifetime: 3600
+    database_specific:
+      sqlite:
+        journal_mode: WAL
+        synchronous: NORMAL
+        cache_size_kb: 2000
+        busy_timeout_ms: 5000
+      postgres:
+        application_name: ratchet
+        statement_timeout: 30
+        lock_timeout: 10
+        ssl_mode: prefer
+      mysql:
+        charset: utf8mb4
+        collation: utf8mb4_unicode_ci
+        sql_mode: STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+        connect_timeout: 10
+    migrations:
+      auto_migrate: true
+      migration_dir: migrations
+      table_name: __migrations
+      validate_checksums: true
+  cors:
+    allowed_origins:
+    - '*'
+    allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    allowed_headers:
+    - Content-Type
+    - Authorization
+    - X-Requested-With
+    allow_credentials: false
+    max_age: 3600
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst_size: 10
+    time_window: 60
+mcp:
+  enabled: true
+  transport: sse
+  host: 127.0.0.1
+  port: 8090
+

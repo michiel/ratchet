@@ -12,7 +12,14 @@ use rustyline::{Context, Editor, Helper};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::{executor::CommandExecutor, formatter::OutputFormatter, parser::CommandParser, ConsoleConfig};
+use super::{
+    executor::CommandExecutor, 
+    formatter::OutputFormatter, 
+    parser::CommandParser, 
+    ConsoleConfig,
+    enhanced_mcp_client::EnhancedMcpClient,
+    command_registry::CommandRegistry,
+};
 
 /// Ratchet command completer for tab completion
 struct RatchetHelper {
@@ -92,6 +99,7 @@ impl RatchetCompleter {
             "monitor",
             "mcp",
             "help",
+            "help-extended",
             "exit",
             "quit",
             "clear",
@@ -210,6 +218,9 @@ pub struct RatchetConsole {
     formatter: OutputFormatter,
     variables: HashMap<String, String>,
     running: bool,
+    // Enhanced components for Phase 1
+    enhanced_mcp_client: EnhancedMcpClient,
+    command_registry: CommandRegistry,
 }
 
 impl RatchetConsole {
@@ -233,6 +244,10 @@ impl RatchetConsole {
         let executor = CommandExecutor::new(&config).await?;
         let formatter = OutputFormatter::new();
 
+        // Initialize enhanced components
+        let enhanced_mcp_client = EnhancedMcpClient::new(config.clone());
+        let command_registry = CommandRegistry::new();
+
         Ok(Self {
             config,
             editor,
@@ -241,6 +256,8 @@ impl RatchetConsole {
             formatter,
             variables: HashMap::new(),
             running: false,
+            enhanced_mcp_client,
+            command_registry,
         })
     }
 
@@ -304,6 +321,27 @@ impl RatchetConsole {
             }
         }
 
+        // Try to connect enhanced MCP client as well
+        match self.enhanced_mcp_client.connect().await {
+            Ok(info) => {
+                self.formatter.print_success(&format!("Enhanced MCP client connected: {}", info));
+                
+                // Show enhanced capabilities
+                if let Some(capabilities) = self.enhanced_mcp_client.get_capabilities() {
+                    if self.enhanced_mcp_client.supports_streaming() {
+                        self.formatter.print_info("✓ Streaming support enabled");
+                    }
+                    if self.enhanced_mcp_client.supports_batch() {
+                        self.formatter.print_info("✓ Batch operations enabled");
+                    }
+                }
+            }
+            Err(e) => {
+                self.formatter.print_warning(&format!("Enhanced MCP client connection failed: {}", e));
+                self.formatter.print_info("Enhanced commands may not be available.");
+            }
+        }
+
         println!(
             "Type '{}' for available commands, '{}' to quit",
             "help".bright_yellow(),
@@ -345,6 +383,11 @@ impl RatchetConsole {
             return result;
         }
 
+        // Try enhanced commands first
+        if let Some(result) = self.try_enhanced_command(input).await? {
+            return result;
+        }
+
         // Substitute variables
         let substituted = self.substitute_variables(input);
 
@@ -374,6 +417,10 @@ impl RatchetConsole {
             }
             "help" => {
                 self.show_help();
+                Ok(Some(Ok(())))
+            }
+            "help-extended" => {
+                self.show_help_extended();
                 Ok(Some(Ok(())))
             }
             "clear" => {
@@ -467,39 +514,274 @@ impl RatchetConsole {
         }
     }
 
+    /// Try to execute enhanced commands using the command registry
+    async fn try_enhanced_command(&mut self, input: &str) -> Result<Option<Result<()>>> {
+        use super::command_trait::CommandArgs;
+        
+        let parts: Vec<&str> = input.split_whitespace().collect();
+        if parts.is_empty() {
+            return Ok(None);
+        }
+
+        let command_name = parts[0];
+        
+        // Check if this is an enhanced command
+        if !self.command_registry.has_command(command_name) {
+            return Ok(None);
+        }
+
+        // Parse arguments
+        let action = if parts.len() > 1 { parts[1].to_string() } else { "help".to_string() };
+        let positional: Vec<String> = parts.iter().skip(2).map(|s| s.to_string()).collect();
+        let flags = std::collections::HashMap::new(); // TODO: Parse flags properly
+        
+        let args = CommandArgs::new(action, positional, flags);
+
+        // Execute enhanced command
+        match self.command_registry.execute_command(command_name, args, &self.enhanced_mcp_client).await {
+            Ok(output) => {
+                self.display_enhanced_output(output);
+                Ok(Some(Ok(())))
+            }
+            Err(e) => {
+                self.formatter.print_error(&format!("Enhanced command error: {}", e));
+                Ok(Some(Ok(())))
+            }
+        }
+    }
+
+    /// Display enhanced command output
+    fn display_enhanced_output(&self, output: super::command_trait::CommandOutput) {
+        use super::command_trait::CommandOutput;
+        
+        match output {
+            CommandOutput::Text(text) => {
+                println!("{}", text);
+            }
+            CommandOutput::Json(value) => {
+                println!("{}", serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string()));
+            }
+            CommandOutput::Table(table) => {
+                if let Some(title) = &table.title {
+                    println!("{}", title.bright_cyan().bold());
+                }
+                
+                // Print headers
+                if !table.headers.is_empty() {
+                    println!("{}", table.headers.join("  ").bright_yellow());
+                }
+                
+                // Print rows
+                for row in &table.rows {
+                    println!("{}", row.join("  "));
+                }
+            }
+            CommandOutput::Success { message, data } => {
+                self.formatter.print_success(&message);
+                if let Some(data) = data {
+                    println!("{}", serde_json::to_string_pretty(&data).unwrap_or_else(|_| data.to_string()));
+                }
+            }
+            CommandOutput::Error { message, context } => {
+                self.formatter.print_error(&message);
+                if let Some(context) = context {
+                    println!("Context: {}", serde_json::to_string_pretty(&context).unwrap_or_else(|_| context.to_string()));
+                }
+            }
+            CommandOutput::Progress { message, percentage } => {
+                if let Some(pct) = percentage {
+                    println!("{} ({}%)", message, pct);
+                } else {
+                    println!("{}", message);
+                }
+            }
+            CommandOutput::Stream(_) => {
+                println!("Streaming output not yet implemented in console");
+            }
+            CommandOutput::Dashboard(_) => {
+                println!("Dashboard output not yet implemented in console");
+            }
+        }
+    }
+
     /// Show help information
     fn show_help(&self) {
         println!("{}", "Console Commands:".bright_cyan().bold());
         println!("  {}             - Show this help", "help".bright_yellow());
+        println!("  {}     - Show detailed help with examples", "help-extended".bright_yellow());
         println!("  {}             - Exit the console", "exit, quit".bright_yellow());
         println!("  {}            - Clear the screen", "clear".bright_yellow());
         println!("  {}          - Show command history", "history".bright_yellow());
-        println!("  {}   - Set a variable", "set <var> = <value>".bright_yellow());
-        println!("  {}      - Unset a variable", "unset <var>".bright_yellow());
-        println!("  {}             - Show all variables", "vars".bright_yellow());
-        println!(
-            "  {}              - Show environment variables",
-            "env [var]".bright_yellow()
-        );
         println!("  {}    - Execute a script file", "source <file>".bright_yellow());
         println!("  {}          - Connect to server", "connect".bright_yellow());
         println!("  {}       - Disconnect from server", "disconnect".bright_yellow());
         println!();
-        println!("{}", "Ratchet Commands:".bright_cyan().bold());
+        
+        println!("{}", "Core Ratchet Commands:".bright_cyan().bold());
         println!("  {}          - List repositories", "repo list".bright_yellow());
-        println!("  {}          - List tasks", "task list".bright_yellow());
+        println!("  {}          - List basic tasks", "task list".bright_yellow());
         println!("  {}       - Show server status", "server status".bright_yellow());
         println!("  {}            - Check server health", "health".bright_yellow());
         println!("  {}          - Show system stats", "stats".bright_yellow());
         println!();
-        println!("{}", "Variable Expansion:".bright_cyan().bold());
-        println!("  {}              - Simple variable", "$VAR".bright_yellow());
-        println!("  {}            - Variable with braces", "${VAR}".bright_yellow());
-        println!("  {}        - Environment variable", "${ENV:VAR}".bright_yellow());
-        println!("  {}   - Variable with default", "${VAR:-default}".bright_yellow());
-        println!("  {}    - Value if variable set", "${VAR:+value}".bright_yellow());
+        
+        // Show enhanced commands integrated
+        println!("{}", "Enhanced Development Commands:".bright_cyan().bold());
+        let categories = self.command_registry.list_commands_by_category();
+        for (category, commands) in &categories {
+            if !commands.is_empty() {
+                println!("  {} Commands:", category.bright_green());
+                for (name, description) in commands {
+                    let short_desc = description.lines().next().unwrap_or("").chars().take(50).collect::<String>();
+                    println!("    {} - {}", name.bright_yellow(), short_desc);
+                }
+                println!();
+            }
+        }
+        
+        println!("{}", "Use 'help-extended' for detailed examples and variable expansion".bright_green());
+    }
+
+    /// Show extended help with examples and variable expansion
+    fn show_help_extended(&self) {
+        println!("{}", "=== RATCHET CONSOLE - EXTENDED HELP ===".bright_cyan().bold());
         println!();
-        println!("{}", "Use tab completion for command suggestions".bright_green());
+        
+        // Console Commands with examples
+        println!("{}", "Console Commands:".bright_cyan().bold());
+        println!("  {}             - Show basic help", "help".bright_yellow());
+        println!("  {}     - Show this extended help", "help-extended".bright_yellow());
+        println!("  {}             - Exit the console", "exit, quit".bright_yellow());
+        println!("  {}            - Clear the screen", "clear".bright_yellow());
+        println!("  {}          - Show command history", "history".bright_yellow());
+        println!("  {}   - Set a variable", "set <var> = <value>".bright_yellow());
+        println!("    Example: {}", "set PROJECT_NAME = my-project".bright_white());
+        println!("  {}      - Unset a variable", "unset <var>".bright_yellow());
+        println!("  {}             - Show all variables", "vars".bright_yellow());
+        println!("  {}              - Show environment variables", "env [var]".bright_yellow());
+        println!("    Example: {}", "env PATH".bright_white());
+        println!("  {}    - Execute a script file", "source <file>".bright_yellow());
+        println!("    Example: {}", "source my-script.ratchet".bright_white());
+        println!("  {}          - Connect to server", "connect".bright_yellow());
+        println!("  {}       - Disconnect from server", "disconnect".bright_yellow());
+        println!();
+
+        // Core Ratchet Commands with examples
+        println!("{}", "Core Ratchet Commands:".bright_cyan().bold());
+        println!("  {}          - List repositories", "repo list".bright_yellow());
+        println!("  {}           - Add repository", "repo add <url>".bright_yellow());
+        println!("    Example: {}", "repo add https://github.com/user/tasks".bright_white());
+        println!("  {}        - Repository status", "repo status".bright_yellow());
+        println!("  {}          - List basic tasks", "task list".bright_yellow());
+        println!("  {}          - Show task details", "task show <id>".bright_yellow());
+        println!("  {}       - Execute basic task", "task execute <id>".bright_yellow());
+        println!("  {}       - Show server status", "server status".bright_yellow());
+        println!("  {}            - Check server health", "health".bright_yellow());
+        println!("  {}          - Show system stats", "stats".bright_yellow());
+        println!("  {}      - List executions", "execution list".bright_yellow());
+        println!("  {}      - Show execution", "execution show <id>".bright_yellow());
+        println!("  {}            - List jobs", "job list".bright_yellow());
+        println!("  {}           - Show job", "job show <id>".bright_yellow());
+        println!();
+
+        // Enhanced Development Commands with detailed examples
+        println!("{}", "Enhanced Development Commands:".bright_cyan().bold());
+        let categories = self.command_registry.list_commands_by_category();
+        
+        for (category, commands) in &categories {
+            if !commands.is_empty() {
+                println!();
+                println!("  {} Commands:", category.bright_green().bold());
+                
+                for (name, _description) in commands {
+                    if let Some(examples) = self.get_command_examples(name) {
+                        println!("    {} - Enhanced {} operations", name.bright_yellow(), category.to_lowercase());
+                        for example in examples {
+                            println!("      {}", example.bright_white());
+                        }
+                    }
+                }
+            }
+        }
+        
+        println!();
+        println!("{}", "Variable Expansion:".bright_cyan().bold());
+        println!("  {}              - Simple variable substitution", "$VAR".bright_yellow());
+        println!("    Example: {}", "task execute $TASK_ID".bright_white());
+        println!("  {}            - Variable with braces", "${VAR}".bright_yellow());
+        println!("    Example: {}", "execution show ${EXEC_ID}".bright_white());
+        println!("  {}        - Environment variable", "${ENV:VAR}".bright_yellow());
+        println!("    Example: {}", "set API_KEY = ${ENV:RATCHET_API_KEY}".bright_white());
+        println!("  {}   - Variable with default value", "${VAR:-default}".bright_yellow());
+        println!("    Example: {}", "task execute ${TASK_ID:-default-task}".bright_white());
+        println!("  {}    - Value if variable is set", "${VAR:+value}".bright_yellow());
+        println!("    Example: {}", "task execute ${DEBUG:+--verbose}".bright_white());
+        println!();
+        
+        println!("{}", "Scripting Features:".bright_cyan().bold());
+        println!("  - Comments start with '#'");
+        println!("  - Variables persist across commands in the session");
+        println!("  - Environment variables are accessible via ${{ENV:VAR}}");
+        println!("  - Tab completion works for commands, files, and task IDs");
+        println!("  - Command history is saved between sessions");
+        println!();
+        
+        println!("{}", "Advanced Usage Examples:".bright_cyan().bold());
+        println!("  {}", "# Set up common variables".bright_green());
+        println!("  {}", "set PROJECT = weather-api".bright_white());
+        println!("  {}", "set VERSION = 1.2.0".bright_white());
+        println!();
+        println!("  {}", "# Create and execute a task".bright_green());
+        println!("  {}", "task create $PROJECT --template http-client".bright_white());
+        println!("  {}", "task execute $PROJECT --input '{\"city\": \"London\"}'".bright_white());
+        println!();
+        println!("  {}", "# Monitor execution progress".bright_green());
+        println!("  {}", "execution list --status running".bright_white());
+        println!("  {}", "monitor dashboard".bright_white());
+        println!();
+        println!("  {}", "# Job scheduling".bright_green());
+        println!("  {}", "job create daily-backup --task backup --schedule \"0 2 * * *\"".bright_white());
+        println!("  {}", "job list --status active".bright_white());
+        println!();
+        
+        println!("{}", "Use tab completion for command suggestions and available options".bright_green());
+    }
+
+    /// Get command usage examples for help-extended
+    fn get_command_examples(&self, command_name: &str) -> Option<Vec<String>> {
+        match command_name {
+            "task" => Some(vec![
+                "task create my-api --template http-client".to_string(),
+                "task edit my-api --description \"Updated API\"".to_string(),
+                "task execute my-api --input '{\"key\": \"value\"}'".to_string(),
+                "task validate my-api --fix".to_string(),
+            ]),
+            "template" => Some(vec![
+                "template list --category web".to_string(),
+                "template generate http-client my-service".to_string(),
+            ]),
+            "execution" => Some(vec![
+                "execution list --limit 10".to_string(),
+                "execution show abc123 --logs".to_string(),
+                "execution cancel xyz789 --reason \"timeout\"".to_string(),
+                "execution retry failed-exec --input '{\"retry\": true}'".to_string(),
+                "execution analyze error-exec".to_string(),
+            ]),
+            "monitor" => Some(vec![
+                "monitor dashboard".to_string(),
+                "monitor health --detailed".to_string(),
+                "monitor stats --range 1h".to_string(),
+                "monitor live --filter executions".to_string(),
+            ]),
+            "job" => Some(vec![
+                "job list --status active".to_string(),
+                "job create backup-job --task backup --schedule \"0 2 * * *\"".to_string(),
+                "job show job123".to_string(),
+                "job trigger job123".to_string(),
+                "job update job123 --enabled false".to_string(),
+            ]),
+            _ => None,
+        }
     }
 
     /// Show command history

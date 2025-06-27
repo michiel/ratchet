@@ -12,6 +12,11 @@ pub mod mcp_client;
 pub mod parser;
 pub mod repl;
 
+// Enhanced components for Phase 1 implementation
+pub mod enhanced_mcp_client;
+pub mod command_trait;
+pub mod command_registry;
+
 use repl::RatchetConsole;
 
 /// Console command configuration
