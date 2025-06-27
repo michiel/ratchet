@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use crate::commands::console::{
     command_trait::{BoxedCommand, CommandArgs, CommandOutput},
-    commands::{EnhancedTaskCommand, TemplateCommand},
+    commands::{EnhancedTaskCommand, TemplateCommand, ExecutionCommand, MonitorCommand, JobCommand},
     enhanced_mcp_client::EnhancedMcpClient,
 };
 use std::sync::Arc;
@@ -28,6 +28,15 @@ impl CommandRegistry {
         
         // Register template command
         registry.register_command("template", BoxedCommand::Template(Arc::new(TemplateCommand::new())));
+        
+        // Register execution command
+        registry.register_command("execution", BoxedCommand::Execution(Arc::new(ExecutionCommand::new())));
+        
+        // Register monitor command
+        registry.register_command("monitor", BoxedCommand::Monitor(Arc::new(MonitorCommand::new())));
+        
+        // Register job command
+        registry.register_command("job", BoxedCommand::Job(Arc::new(JobCommand::new())));
 
         registry
     }

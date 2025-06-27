@@ -153,6 +153,9 @@ pub trait ConsoleCommand: Send + Sync {
 pub enum BoxedCommand {
     EnhancedTask(std::sync::Arc<crate::commands::console::commands::EnhancedTaskCommand>),
     Template(std::sync::Arc<crate::commands::console::commands::TemplateCommand>),
+    Execution(std::sync::Arc<crate::commands::console::commands::ExecutionCommand>),
+    Monitor(std::sync::Arc<crate::commands::console::commands::MonitorCommand>),
+    Job(std::sync::Arc<crate::commands::console::commands::JobCommand>),
 }
 
 impl BoxedCommand {
@@ -161,6 +164,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.execute(args, mcp_client).await,
             BoxedCommand::Template(cmd) => cmd.execute(args, mcp_client).await,
+            BoxedCommand::Execution(cmd) => cmd.execute(args, mcp_client).await,
+            BoxedCommand::Monitor(cmd) => cmd.execute(args, mcp_client).await,
+            BoxedCommand::Job(cmd) => cmd.execute(args, mcp_client).await,
         }
     }
 
@@ -169,6 +175,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.completion_hints(partial),
             BoxedCommand::Template(cmd) => cmd.completion_hints(partial),
+            BoxedCommand::Execution(cmd) => cmd.completion_hints(partial),
+            BoxedCommand::Monitor(cmd) => cmd.completion_hints(partial),
+            BoxedCommand::Job(cmd) => cmd.completion_hints(partial),
         }
     }
 
@@ -177,6 +186,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.help_text(),
             BoxedCommand::Template(cmd) => cmd.help_text(),
+            BoxedCommand::Execution(cmd) => cmd.help_text(),
+            BoxedCommand::Monitor(cmd) => cmd.help_text(),
+            BoxedCommand::Job(cmd) => cmd.help_text(),
         }
     }
 
@@ -185,6 +197,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.usage_examples(),
             BoxedCommand::Template(cmd) => cmd.usage_examples(),
+            BoxedCommand::Execution(cmd) => cmd.usage_examples(),
+            BoxedCommand::Monitor(cmd) => cmd.usage_examples(),
+            BoxedCommand::Job(cmd) => cmd.usage_examples(),
         }
     }
 
@@ -193,6 +208,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.requires_connection(),
             BoxedCommand::Template(cmd) => cmd.requires_connection(),
+            BoxedCommand::Execution(cmd) => cmd.requires_connection(),
+            BoxedCommand::Monitor(cmd) => cmd.requires_connection(),
+            BoxedCommand::Job(cmd) => cmd.requires_connection(),
         }
     }
 
@@ -201,6 +219,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.category(),
             BoxedCommand::Template(cmd) => cmd.category(),
+            BoxedCommand::Execution(cmd) => cmd.category(),
+            BoxedCommand::Monitor(cmd) => cmd.category(),
+            BoxedCommand::Job(cmd) => cmd.category(),
         }
     }
 
@@ -209,6 +230,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.aliases(),
             BoxedCommand::Template(cmd) => cmd.aliases(),
+            BoxedCommand::Execution(cmd) => cmd.aliases(),
+            BoxedCommand::Monitor(cmd) => cmd.aliases(),
+            BoxedCommand::Job(cmd) => cmd.aliases(),
         }
     }
 
@@ -217,6 +241,9 @@ impl BoxedCommand {
         match self {
             BoxedCommand::EnhancedTask(cmd) => cmd.validate_args(args),
             BoxedCommand::Template(cmd) => cmd.validate_args(args),
+            BoxedCommand::Execution(cmd) => cmd.validate_args(args),
+            BoxedCommand::Monitor(cmd) => cmd.validate_args(args),
+            BoxedCommand::Job(cmd) => cmd.validate_args(args),
         }
     }
 }
