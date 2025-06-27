@@ -6,6 +6,14 @@ use std::io::{self, Write};
 
 use super::executor::CommandResult;
 
+/// Border types for table formatting
+#[derive(Clone, Copy)]
+enum BorderType {
+    Top,
+    Middle,
+    Bottom,
+}
+
 /// Output formatter for console results
 pub struct OutputFormatter {}
 
@@ -90,14 +98,18 @@ impl OutputFormatter {
             }
         }
 
+        // Print top border
+        self.print_table_border(&col_widths, BorderType::Top);
+        
         // Print headers
-        self.print_table_separator(&col_widths);
         print!("│");
         for (i, header) in headers.iter().enumerate() {
             print!(" {:width$} │", header.bright_cyan().bold(), width = col_widths[i]);
         }
         println!();
-        self.print_table_separator(&col_widths);
+        
+        // Print middle border
+        self.print_table_border(&col_widths, BorderType::Middle);
 
         // Print rows
         for row in rows {
@@ -108,19 +120,27 @@ impl OutputFormatter {
             }
             println!();
         }
-        self.print_table_separator(&col_widths);
+        
+        // Print bottom border
+        self.print_table_border(&col_widths, BorderType::Bottom);
     }
 
-    /// Print table separator
-    fn print_table_separator(&self, col_widths: &[usize]) {
-        print!("┌");
+    /// Print table border with correct corner and junction characters
+    fn print_table_border(&self, col_widths: &[usize], border_type: BorderType) {
+        let (left, junction, right) = match border_type {
+            BorderType::Top => ("┌", "┬", "┐"),
+            BorderType::Middle => ("├", "┼", "┤"),
+            BorderType::Bottom => ("└", "┴", "┘"),
+        };
+
+        print!("{}", left);
         for (i, &width) in col_widths.iter().enumerate() {
             if i > 0 {
-                print!("┬");
+                print!("{}", junction);
             }
             print!("{}", "─".repeat(width + 2));
         }
-        println!("┐");
+        println!("{}", right);
     }
 
     /// Colorize a JSON line for better readability

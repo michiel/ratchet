@@ -99,6 +99,7 @@ impl RatchetCompleter {
             "monitor",
             "mcp",
             "help",
+            "help-extended",
             "exit",
             "quit",
             "clear",
@@ -418,6 +419,10 @@ impl RatchetConsole {
                 self.show_help();
                 Ok(Some(Ok(())))
             }
+            "help-extended" => {
+                self.show_help_extended();
+                Ok(Some(Ok(())))
+            }
             "clear" => {
                 print!("\x1B[2J\x1B[1;1H"); // Clear screen
                 Ok(Some(Ok(())))
@@ -603,48 +608,180 @@ impl RatchetConsole {
     fn show_help(&self) {
         println!("{}", "Console Commands:".bright_cyan().bold());
         println!("  {}             - Show this help", "help".bright_yellow());
+        println!("  {}     - Show detailed help with examples", "help-extended".bright_yellow());
         println!("  {}             - Exit the console", "exit, quit".bright_yellow());
         println!("  {}            - Clear the screen", "clear".bright_yellow());
         println!("  {}          - Show command history", "history".bright_yellow());
-        println!("  {}   - Set a variable", "set <var> = <value>".bright_yellow());
-        println!("  {}      - Unset a variable", "unset <var>".bright_yellow());
-        println!("  {}             - Show all variables", "vars".bright_yellow());
-        println!(
-            "  {}              - Show environment variables",
-            "env [var]".bright_yellow()
-        );
         println!("  {}    - Execute a script file", "source <file>".bright_yellow());
         println!("  {}          - Connect to server", "connect".bright_yellow());
         println!("  {}       - Disconnect from server", "disconnect".bright_yellow());
         println!();
-        println!("{}", "Ratchet Commands:".bright_cyan().bold());
+        
+        println!("{}", "Core Ratchet Commands:".bright_cyan().bold());
         println!("  {}          - List repositories", "repo list".bright_yellow());
-        println!("  {}          - List tasks", "task list".bright_yellow());
+        println!("  {}          - List basic tasks", "task list".bright_yellow());
         println!("  {}       - Show server status", "server status".bright_yellow());
         println!("  {}            - Check server health", "health".bright_yellow());
         println!("  {}          - Show system stats", "stats".bright_yellow());
         println!();
         
-        // Show enhanced commands
-        println!("{}", "Enhanced Commands (Phase 1):".bright_cyan().bold());
+        // Show enhanced commands integrated
+        println!("{}", "Enhanced Development Commands:".bright_cyan().bold());
         let categories = self.command_registry.list_commands_by_category();
-        for (category, commands) in categories {
+        for (category, commands) in &categories {
             if !commands.is_empty() {
-                println!("  {}:", category.bright_green());
+                println!("  {} Commands:", category.bright_green());
                 for (name, description) in commands {
-                    println!("    {} - {}", name.bright_yellow(), description);
+                    let short_desc = description.lines().next().unwrap_or("").chars().take(50).collect::<String>();
+                    println!("    {} - {}", name.bright_yellow(), short_desc);
+                }
+                println!();
+            }
+        }
+        
+        println!("{}", "Use 'help-extended' for detailed examples and variable expansion".bright_green());
+    }
+
+    /// Show extended help with examples and variable expansion
+    fn show_help_extended(&self) {
+        println!("{}", "=== RATCHET CONSOLE - EXTENDED HELP ===".bright_cyan().bold());
+        println!();
+        
+        // Console Commands with examples
+        println!("{}", "Console Commands:".bright_cyan().bold());
+        println!("  {}             - Show basic help", "help".bright_yellow());
+        println!("  {}     - Show this extended help", "help-extended".bright_yellow());
+        println!("  {}             - Exit the console", "exit, quit".bright_yellow());
+        println!("  {}            - Clear the screen", "clear".bright_yellow());
+        println!("  {}          - Show command history", "history".bright_yellow());
+        println!("  {}   - Set a variable", "set <var> = <value>".bright_yellow());
+        println!("    Example: {}", "set PROJECT_NAME = my-project".bright_white());
+        println!("  {}      - Unset a variable", "unset <var>".bright_yellow());
+        println!("  {}             - Show all variables", "vars".bright_yellow());
+        println!("  {}              - Show environment variables", "env [var]".bright_yellow());
+        println!("    Example: {}", "env PATH".bright_white());
+        println!("  {}    - Execute a script file", "source <file>".bright_yellow());
+        println!("    Example: {}", "source my-script.ratchet".bright_white());
+        println!("  {}          - Connect to server", "connect".bright_yellow());
+        println!("  {}       - Disconnect from server", "disconnect".bright_yellow());
+        println!();
+
+        // Core Ratchet Commands with examples
+        println!("{}", "Core Ratchet Commands:".bright_cyan().bold());
+        println!("  {}          - List repositories", "repo list".bright_yellow());
+        println!("  {}           - Add repository", "repo add <url>".bright_yellow());
+        println!("    Example: {}", "repo add https://github.com/user/tasks".bright_white());
+        println!("  {}        - Repository status", "repo status".bright_yellow());
+        println!("  {}          - List basic tasks", "task list".bright_yellow());
+        println!("  {}          - Show task details", "task show <id>".bright_yellow());
+        println!("  {}       - Execute basic task", "task execute <id>".bright_yellow());
+        println!("  {}       - Show server status", "server status".bright_yellow());
+        println!("  {}            - Check server health", "health".bright_yellow());
+        println!("  {}          - Show system stats", "stats".bright_yellow());
+        println!("  {}      - List executions", "execution list".bright_yellow());
+        println!("  {}      - Show execution", "execution show <id>".bright_yellow());
+        println!("  {}            - List jobs", "job list".bright_yellow());
+        println!("  {}           - Show job", "job show <id>".bright_yellow());
+        println!();
+
+        // Enhanced Development Commands with detailed examples
+        println!("{}", "Enhanced Development Commands:".bright_cyan().bold());
+        let categories = self.command_registry.list_commands_by_category();
+        
+        for (category, commands) in &categories {
+            if !commands.is_empty() {
+                println!();
+                println!("  {} Commands:", category.bright_green().bold());
+                
+                for (name, _description) in commands {
+                    if let Some(examples) = self.get_command_examples(name) {
+                        println!("    {} - Enhanced {} operations", name.bright_yellow(), category.to_lowercase());
+                        for example in examples {
+                            println!("      {}", example.bright_white());
+                        }
+                    }
                 }
             }
         }
+        
         println!();
         println!("{}", "Variable Expansion:".bright_cyan().bold());
-        println!("  {}              - Simple variable", "$VAR".bright_yellow());
+        println!("  {}              - Simple variable substitution", "$VAR".bright_yellow());
+        println!("    Example: {}", "task execute $TASK_ID".bright_white());
         println!("  {}            - Variable with braces", "${VAR}".bright_yellow());
+        println!("    Example: {}", "execution show ${EXEC_ID}".bright_white());
         println!("  {}        - Environment variable", "${ENV:VAR}".bright_yellow());
-        println!("  {}   - Variable with default", "${VAR:-default}".bright_yellow());
-        println!("  {}    - Value if variable set", "${VAR:+value}".bright_yellow());
+        println!("    Example: {}", "set API_KEY = ${ENV:RATCHET_API_KEY}".bright_white());
+        println!("  {}   - Variable with default value", "${VAR:-default}".bright_yellow());
+        println!("    Example: {}", "task execute ${TASK_ID:-default-task}".bright_white());
+        println!("  {}    - Value if variable is set", "${VAR:+value}".bright_yellow());
+        println!("    Example: {}", "task execute ${DEBUG:+--verbose}".bright_white());
         println!();
-        println!("{}", "Use tab completion for command suggestions".bright_green());
+        
+        println!("{}", "Scripting Features:".bright_cyan().bold());
+        println!("  - Comments start with '#'");
+        println!("  - Variables persist across commands in the session");
+        println!("  - Environment variables are accessible via ${{ENV:VAR}}");
+        println!("  - Tab completion works for commands, files, and task IDs");
+        println!("  - Command history is saved between sessions");
+        println!();
+        
+        println!("{}", "Advanced Usage Examples:".bright_cyan().bold());
+        println!("  {}", "# Set up common variables".bright_green());
+        println!("  {}", "set PROJECT = weather-api".bright_white());
+        println!("  {}", "set VERSION = 1.2.0".bright_white());
+        println!();
+        println!("  {}", "# Create and execute a task".bright_green());
+        println!("  {}", "task create $PROJECT --template http-client".bright_white());
+        println!("  {}", "task execute $PROJECT --input '{\"city\": \"London\"}'".bright_white());
+        println!();
+        println!("  {}", "# Monitor execution progress".bright_green());
+        println!("  {}", "execution list --status running".bright_white());
+        println!("  {}", "monitor dashboard".bright_white());
+        println!();
+        println!("  {}", "# Job scheduling".bright_green());
+        println!("  {}", "job create daily-backup --task backup --schedule \"0 2 * * *\"".bright_white());
+        println!("  {}", "job list --status active".bright_white());
+        println!();
+        
+        println!("{}", "Use tab completion for command suggestions and available options".bright_green());
+    }
+
+    /// Get command usage examples for help-extended
+    fn get_command_examples(&self, command_name: &str) -> Option<Vec<String>> {
+        match command_name {
+            "task" => Some(vec![
+                "task create my-api --template http-client".to_string(),
+                "task edit my-api --description \"Updated API\"".to_string(),
+                "task execute my-api --input '{\"key\": \"value\"}'".to_string(),
+                "task validate my-api --fix".to_string(),
+            ]),
+            "template" => Some(vec![
+                "template list --category web".to_string(),
+                "template generate http-client my-service".to_string(),
+            ]),
+            "execution" => Some(vec![
+                "execution list --limit 10".to_string(),
+                "execution show abc123 --logs".to_string(),
+                "execution cancel xyz789 --reason \"timeout\"".to_string(),
+                "execution retry failed-exec --input '{\"retry\": true}'".to_string(),
+                "execution analyze error-exec".to_string(),
+            ]),
+            "monitor" => Some(vec![
+                "monitor dashboard".to_string(),
+                "monitor health --detailed".to_string(),
+                "monitor stats --range 1h".to_string(),
+                "monitor live --filter executions".to_string(),
+            ]),
+            "job" => Some(vec![
+                "job list --status active".to_string(),
+                "job create backup-job --task backup --schedule \"0 2 * * *\"".to_string(),
+                "job show job123".to_string(),
+                "job trigger job123".to_string(),
+                "job update job123 --enabled false".to_string(),
+            ]),
+            _ => None,
+        }
     }
 
     /// Show command history
