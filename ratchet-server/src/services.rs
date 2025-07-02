@@ -29,6 +29,9 @@ use crate::scheduler::{SchedulerService, TokioCronSchedulerConfig, TokioCronSche
 use crate::task_service::UnifiedTaskService;
 use ratchet_output::OutputDeliveryManager;
 
+// Enhanced services for repository management
+use crate::repository_services::{EnhancedRepositoryService, TaskAssignmentService, SeaOrmDatabaseInterface};
+
 /// Service container holding all application services
 #[derive(Clone)]
 pub struct ServiceContainer {
@@ -43,6 +46,9 @@ pub struct ServiceContainer {
     pub job_processor_service: Option<Arc<dyn JobProcessor>>,
     pub heartbeat_service: Arc<HeartbeatService>,
     pub storage_factory: Option<Arc<ratchet_storage::seaorm::repositories::RepositoryFactory>>,
+    // Enhanced repository management services
+    pub enhanced_repository_service: Option<Arc<EnhancedRepositoryService>>,
+    pub task_assignment_service: Option<Arc<TaskAssignmentService>>,
 }
 
 impl ServiceContainer {
@@ -87,6 +93,33 @@ impl ServiceContainer {
             output_manager.clone(),
         ));
 
+        // Create enhanced repository services if SeaORM is available
+        let (enhanced_repository_service, task_assignment_service) = if let Some(ref storage_factory) = Some(seaorm_factory.clone()) {
+            // Create database interface for sync service
+            let db_interface = Arc::new(SeaOrmDatabaseInterface::new(storage_factory.clone()));
+            
+            // Create repository service from storage layer  
+            let db_repo_service = Arc::new(ratchet_storage::seaorm::repositories::RepositoryService::new(
+                std::sync::Arc::new(storage_factory.database().get_connection().clone())
+            ));
+            
+            // Create enhanced repository service
+            let enhanced_repo_service = Arc::new(EnhancedRepositoryService::new(
+                db_repo_service.clone(),
+                db_interface.clone(),
+            ));
+
+            // Create task assignment service
+            let task_assign_service = Arc::new(TaskAssignmentService::new(
+                db_repo_service,
+                enhanced_repo_service.sync_service.clone(),
+            ));
+
+            (Some(enhanced_repo_service), Some(task_assign_service))
+        } else {
+            (None, None)
+        };
+
         Ok(Self {
             repositories,
             registry,
@@ -99,6 +132,8 @@ impl ServiceContainer {
             job_processor_service,
             heartbeat_service,
             storage_factory: Some(seaorm_factory),
+            enhanced_repository_service,
+            task_assignment_service,
         })
     }
 

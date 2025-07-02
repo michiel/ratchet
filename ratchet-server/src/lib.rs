@@ -9,6 +9,7 @@ pub mod embedded;
 pub mod heartbeat;
 pub mod job_processor;
 pub mod mcp_handler;
+pub mod repository_services;
 pub mod scheduler;
 pub mod services;
 pub mod startup;
