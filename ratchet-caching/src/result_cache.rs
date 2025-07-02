@@ -32,7 +32,8 @@ impl ResultCacheKey {
 
         // Create deterministic hash of input
         let mut hasher = DefaultHasher::new();
-        input_data.to_string().hash(&mut hasher);
+        // Hash the JSON value directly without string conversion for better performance
+        input_data.hash(&mut hasher);
         let input_hash = format!("{:x}", hasher.finish());
 
         Self {
