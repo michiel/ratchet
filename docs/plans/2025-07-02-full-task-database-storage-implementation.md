@@ -738,9 +738,11 @@ pub async fn mcp_list_conflicts(/* ... */) -> Result<JsonValue>;
 pub async fn mcp_resolve_conflict(/* ... */) -> Result<JsonValue>;
 ```
 
-## Phase 5: Background Sync & Monitoring
+## Phase 5: Background Sync & Monitoring 🚧 IN PROGRESS
 
-### 5.1 Sync Scheduler
+**Started**: 2025-07-02
+
+### 5.1 Sync Scheduler ✅ COMPLETED
 
 **File**: `ratchet-server/src/scheduler/sync_scheduler.rs`
 
