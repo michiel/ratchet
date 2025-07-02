@@ -145,7 +145,6 @@ pub trait Updater {
 }
 
 pub use binary::DefaultBinaryManager;
-pub use command::UpdateCommand;
 pub use github::GitHubVersionManager;
 pub use platform::DefaultPlatformDetector;
 pub use updater::DefaultUpdater;

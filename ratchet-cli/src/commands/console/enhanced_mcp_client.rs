@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 use uuid::Uuid;
 use futures::Stream;
 use tokio::sync::mpsc;

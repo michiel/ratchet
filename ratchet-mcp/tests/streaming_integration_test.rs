@@ -11,6 +11,7 @@ use ratchet_mcp::server::{
     tools::{McpExecutionStatus, McpTaskExecutor, McpTaskInfo, RatchetToolRegistry},
 };
 use ratchet_mcp::transport::connection::TransportConnection;
+use ratchet_mcp::McpResult;
 
 /// Mock task executor for testing
 struct MockStreamingTaskExecutor {
@@ -173,12 +174,12 @@ impl TransportConnection for MockTransportConnection {
     async fn send_notification(
         &self,
         notification: McpNotification,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> McpResult<()> {
         self.notifications.write().await.push(notification);
         Ok(())
     }
 
-    async fn close(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn close(&self) -> McpResult<()> {
         Ok(())
     }
 }
