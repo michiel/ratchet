@@ -5309,6 +5309,7 @@ dependencies = [
  "cron",
  "jsonschema",
  "log",
+ "ratchet-config",
  "regex",
  "serde",
  "serde_json",

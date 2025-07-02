@@ -120,6 +120,77 @@ pub struct TlsConfig {
     pub chain_file: Option<String>,
 }
 
+impl TlsConfig {
+    /// Create a new TLS configuration builder
+    pub fn builder() -> TlsConfigBuilder {
+        TlsConfigBuilder::new()
+    }
+}
+
+/// Builder for TLS configuration
+#[derive(Debug)]
+pub struct TlsConfigBuilder {
+    cert_file: Option<String>,
+    key_file: Option<String>,
+    min_version: String,
+    chain_file: Option<String>,
+}
+
+impl TlsConfigBuilder {
+    /// Create a new TLS configuration builder
+    pub fn new() -> Self {
+        Self {
+            cert_file: None,
+            key_file: None,
+            min_version: default_min_tls_version(),
+            chain_file: None,
+        }
+    }
+
+    /// Set the certificate file path
+    pub fn cert_file(mut self, path: impl Into<String>) -> Self {
+        self.cert_file = Some(path.into());
+        self
+    }
+
+    /// Set the private key file path
+    pub fn key_file(mut self, path: impl Into<String>) -> Self {
+        self.key_file = Some(path.into());
+        self
+    }
+
+    /// Set the minimum TLS version
+    pub fn min_version(mut self, version: impl Into<String>) -> Self {
+        self.min_version = version.into();
+        self
+    }
+
+    /// Set the certificate chain file path
+    pub fn chain_file(mut self, path: impl Into<String>) -> Self {
+        self.chain_file = Some(path.into());
+        self
+    }
+
+    /// Build the TLS configuration
+    pub fn build(self) -> Result<TlsConfig, String> {
+        let cert_file = self.cert_file.ok_or("Certificate file path is required")?;
+        let key_file = self.key_file.ok_or("Private key file path is required")?;
+
+        Ok(TlsConfig {
+            cert_file,
+            key_file,
+            min_version: self.min_version,
+            chain_file: self.chain_file,
+        })
+    }
+}
+
+impl Default for TlsConfigBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {

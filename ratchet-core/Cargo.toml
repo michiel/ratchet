@@ -21,6 +21,7 @@ regex = "1.10"
 url = "2.5"
 cron = "0.15"
 tracing = { workspace = true }
+ratchet-config = { path = "../ratchet-config" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
