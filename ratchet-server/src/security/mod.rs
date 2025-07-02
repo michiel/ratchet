@@ -8,20 +8,24 @@ pub mod encryption;
 pub mod audit_logger;
 pub mod access_control;
 
+#[cfg(test)]
+pub mod tests;
+
 pub use credential_manager::*;
 pub use encryption::*;
 pub use audit_logger::*;
 pub use access_control::*;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 /// Security context for repository operations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityContext {
     /// User ID performing the operation
     pub user_id: Option<String>,
@@ -64,7 +68,7 @@ impl SecurityContext {
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("ratchet-server/1.0".to_string()),
             session_id: None,
-            correlation_id: uuid::Uuid::new_v4().to_string(),
+            correlation_id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
             attributes: HashMap::new(),
         }
@@ -88,7 +92,7 @@ impl SecurityContext {
 }
 
 /// Security event types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SecurityEventType {
     Authentication,
     Authorization,
@@ -100,7 +104,7 @@ pub enum SecurityEventType {
 }
 
 /// Security event severity
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd, Eq, Hash)]
 pub enum SecurityEventSeverity {
     Info,
     Warning,
@@ -138,7 +142,7 @@ impl SecurityEvent {
         context: SecurityContext,
     ) -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: Uuid::new_v4().to_string(),
             event_type,
             severity,
             message,
@@ -167,7 +171,7 @@ pub struct SecurityManager {
     /// Credential manager
     credential_manager: Arc<CredentialManager>,
     /// Encryption service
-    encryption_service: Arc<EncryptionService>,
+    encryption_service: Arc<dyn EncryptionService>,
     /// Audit logger
     audit_logger: Arc<AuditLogger>,
     /// Access control service
@@ -180,7 +184,7 @@ impl SecurityManager {
     /// Create a new security manager
     pub fn new(
         credential_manager: Arc<CredentialManager>,
-        encryption_service: Arc<EncryptionService>,
+        encryption_service: Arc<dyn EncryptionService>,
         audit_logger: Arc<AuditLogger>,
         access_control: Arc<AccessControlService>,
     ) -> Self {

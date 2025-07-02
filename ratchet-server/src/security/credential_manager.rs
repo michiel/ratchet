@@ -78,7 +78,7 @@ pub struct CredentialManager {
     /// Stored credentials by repository ID
     credentials: Arc<RwLock<HashMap<i32, RepositoryCredentials>>>,
     /// Encryption service for credential storage
-    encryption_service: Arc<EncryptionService>,
+    encryption_service: Arc<dyn EncryptionService>,
     /// Credential rotation settings
     rotation_settings: Arc<RwLock<CredentialRotationSettings>>,
 }
@@ -109,7 +109,7 @@ impl Default for CredentialRotationSettings {
 
 impl CredentialManager {
     /// Create a new credential manager
-    pub fn new(encryption_service: Arc<EncryptionService>) -> Self {
+    pub fn new(encryption_service: Arc<dyn EncryptionService>) -> Self {
         Self {
             credentials: Arc::new(RwLock::new(HashMap::new())),
             encryption_service,

@@ -159,7 +159,7 @@ impl AesEncryptionService {
 
     /// Encrypt data with AES-256-GCM
     async fn encrypt_aes_gcm(&self, data: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-        use aes_gcm::{Aes256Gcm, Key, Nonce, NewAead, Aead};
+        use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, AeadInPlace};
         
         // Generate random nonce
         let mut nonce_bytes = [0u8; 12];
@@ -167,41 +167,37 @@ impl AesEncryptionService {
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         // Create cipher
-        let key = Key::from_slice(key);
+        let key = aes_gcm::Key::<Aes256Gcm>::from_slice(key);
         let cipher = Aes256Gcm::new(key);
 
-        // Encrypt data
-        let ciphertext = cipher.encrypt(nonce, data)
+        // Encrypt data in-place
+        let mut buffer = data.to_vec();
+        let tag = cipher.encrypt_in_place_detached(nonce, b"", &mut buffer)
             .map_err(|e| anyhow::anyhow!("AES-GCM encryption failed: {}", e))?;
 
-        // Split ciphertext and tag
-        let (encrypted_data, tag) = ciphertext.split_at(ciphertext.len() - 16);
-
-        Ok((encrypted_data.to_vec(), nonce_bytes.to_vec(), tag.to_vec()))
+        Ok((buffer, nonce_bytes.to_vec(), tag.to_vec()))
     }
 
     /// Decrypt data with AES-256-GCM
     async fn decrypt_aes_gcm(&self, encrypted_data: &[u8], nonce: &[u8], tag: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        use aes_gcm::{Aes256Gcm, Key, Nonce, NewAead, Aead};
-
-        // Reconstruct ciphertext with tag
-        let mut ciphertext = encrypted_data.to_vec();
-        ciphertext.extend_from_slice(tag);
+        use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, AeadInPlace, Tag};
 
         let nonce = Nonce::from_slice(nonce);
-        let key = Key::from_slice(key);
+        let key = aes_gcm::Key::<Aes256Gcm>::from_slice(key);
         let cipher = Aes256Gcm::new(key);
+        let tag = Tag::from_slice(tag);
 
-        // Decrypt data
-        let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
+        // Decrypt data in-place
+        let mut buffer = encrypted_data.to_vec();
+        cipher.decrypt_in_place_detached(nonce, b"", &mut buffer, tag)
             .map_err(|e| anyhow::anyhow!("AES-GCM decryption failed: {}", e))?;
 
-        Ok(plaintext)
+        Ok(buffer)
     }
 
     /// Encrypt data with ChaCha20-Poly1305
     async fn encrypt_chacha20(&self, data: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, NewAead, Aead};
+        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, KeyInit, AeadInPlace};
 
         // Generate random nonce
         let mut nonce_bytes = [0u8; 12];
@@ -209,36 +205,32 @@ impl AesEncryptionService {
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         // Create cipher
-        let key = Key::from_slice(key);
+        let key = chacha20poly1305::Key::from_slice(key);
         let cipher = ChaCha20Poly1305::new(key);
 
-        // Encrypt data
-        let ciphertext = cipher.encrypt(nonce, data)
+        // Encrypt data in-place
+        let mut buffer = data.to_vec();
+        let tag = cipher.encrypt_in_place_detached(nonce, b"", &mut buffer)
             .map_err(|e| anyhow::anyhow!("ChaCha20-Poly1305 encryption failed: {}", e))?;
 
-        // Split ciphertext and tag
-        let (encrypted_data, tag) = ciphertext.split_at(ciphertext.len() - 16);
-
-        Ok((encrypted_data.to_vec(), nonce_bytes.to_vec(), tag.to_vec()))
+        Ok((buffer, nonce_bytes.to_vec(), tag.to_vec()))
     }
 
     /// Decrypt data with ChaCha20-Poly1305
     async fn decrypt_chacha20(&self, encrypted_data: &[u8], nonce: &[u8], tag: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, NewAead, Aead};
-
-        // Reconstruct ciphertext with tag
-        let mut ciphertext = encrypted_data.to_vec();
-        ciphertext.extend_from_slice(tag);
+        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, KeyInit, AeadInPlace, Tag};
 
         let nonce = Nonce::from_slice(nonce);
-        let key = Key::from_slice(key);
+        let key = chacha20poly1305::Key::from_slice(key);
         let cipher = ChaCha20Poly1305::new(key);
+        let tag = Tag::from_slice(tag);
 
-        // Decrypt data
-        let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
+        // Decrypt data in-place
+        let mut buffer = encrypted_data.to_vec();
+        cipher.decrypt_in_place_detached(nonce, b"", &mut buffer, tag)
             .map_err(|e| anyhow::anyhow!("ChaCha20-Poly1305 decryption failed: {}", e))?;
 
-        Ok(plaintext)
+        Ok(buffer)
     }
 }
 
@@ -397,29 +389,29 @@ impl RsaEncryptionService {
 #[async_trait]
 impl EncryptionService for RsaEncryptionService {
     async fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        use rsa::{PaddingScheme, PublicKey};
+        use rsa::{Pkcs1v15Encrypt, RsaPublicKey};
 
         let key_pairs = self.key_pairs.read().await;
         let private_key = key_pairs.get(&self.default_algorithm)
             .ok_or_else(|| anyhow::anyhow!("RSA key pair not found"))?;
 
-        let public_key = rsa::RsaPublicKey::from(private_key);
+        let public_key = RsaPublicKey::from(private_key);
         let mut rng = rand::thread_rng();
 
-        let encrypted_data = public_key.encrypt(&mut rng, PaddingScheme::new_pkcs1v15_encrypt(), data)
+        let encrypted_data = public_key.encrypt(&mut rng, Pkcs1v15Encrypt, data)
             .context("RSA encryption failed")?;
 
         Ok(encrypted_data)
     }
 
     async fn decrypt(&self, encrypted_data: &[u8]) -> Result<Vec<u8>> {
-        use rsa::PaddingScheme;
+        use rsa::Pkcs1v15Encrypt;
 
         let key_pairs = self.key_pairs.read().await;
         let private_key = key_pairs.get(&self.default_algorithm)
             .ok_or_else(|| anyhow::anyhow!("RSA key pair not found"))?;
 
-        let decrypted_data = private_key.decrypt(PaddingScheme::new_pkcs1v15_encrypt(), encrypted_data)
+        let decrypted_data = private_key.decrypt(Pkcs1v15Encrypt, encrypted_data)
             .context("RSA decryption failed")?;
 
         Ok(decrypted_data)
@@ -451,9 +443,12 @@ impl EncryptionService for RsaEncryptionService {
             _ => return Err(anyhow::anyhow!("Invalid RSA algorithm: {:?}", self.default_algorithm)),
         };
 
-        let mut rng = rand::thread_rng();
-        let new_private_key = rsa::RsaPrivateKey::new(&mut rng, key_size)
-            .context("Failed to generate new RSA private key")?;
+        // Generate key without holding across await
+        let new_private_key = {
+            let mut rng = rand::thread_rng();
+            rsa::RsaPrivateKey::new(&mut rng, key_size)
+                .context("Failed to generate new RSA private key")?
+        };
 
         let mut key_pairs = self.key_pairs.write().await;
         key_pairs.insert(self.default_algorithm.clone(), new_private_key);

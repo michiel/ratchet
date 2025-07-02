@@ -37,6 +37,12 @@ use crate::scheduler::{SyncScheduler, SyncSchedulerConfig};
 use crate::watchers::{FilesystemWatcher, FilesystemWatcherConfig};
 use crate::monitoring::{SyncHealthMonitor, SyncHealthConfig};
 
+// Security and configuration services (Phase 6)
+use crate::security::{SecurityManager, CredentialManager, AuditLogger, AccessControlService, EncryptionService, AesEncryptionService};
+use crate::config::{ConfigManager, RepositoryConfig, EncryptionAlgorithm};
+use crate::security::audit_logger::FileAuditStorage;
+use std::path::PathBuf;
+
 /// Service container holding all application services
 #[derive(Clone)]
 pub struct ServiceContainer {
@@ -58,6 +64,12 @@ pub struct ServiceContainer {
     pub sync_scheduler: Option<Arc<SyncScheduler>>,
     pub filesystem_watcher: Option<Arc<FilesystemWatcher>>,
     pub sync_health_monitor: Option<Arc<SyncHealthMonitor>>,
+    // Security and configuration services for Phase 6
+    pub security_manager: Option<Arc<SecurityManager>>,
+    pub config_manager: Option<Arc<ConfigManager>>,
+    pub credential_manager: Option<Arc<CredentialManager>>,
+    pub audit_logger: Option<Arc<AuditLogger>>,
+    pub access_control: Option<Arc<AccessControlService>>,
 }
 
 impl ServiceContainer {
@@ -155,7 +167,48 @@ impl ServiceContainer {
             (None, None, None, None, None)
         };
 
-        Ok(Self {
+        // Create security and configuration services (Phase 6)
+        let (security_manager, config_manager, credential_manager, audit_logger, access_control) = {
+            // Create encryption service
+            let encryption_service = Arc::new(AesEncryptionService::new(EncryptionAlgorithm::AES256));
+            if let Err(e) = encryption_service.initialize().await {
+                tracing::warn!("Failed to initialize encryption service: {}", e);
+            }
+
+            // Create credential manager
+            let cred_manager = Arc::new(CredentialManager::new(encryption_service.clone() as Arc<dyn EncryptionService>));
+
+            // Create audit logger with file storage
+            let audit_storage_path = PathBuf::from("./data/audit_logs");
+            let audit_storage = match FileAuditStorage::new(audit_storage_path).await {
+                Ok(storage) => Arc::new(storage) as Arc<dyn crate::security::audit_logger::AuditStorage>,
+                Err(e) => {
+                    tracing::warn!("Failed to create file audit storage: {}", e);
+                    return Err(e.into());
+                }
+            };
+            let audit_config = crate::config::AuditConfig::default();
+            let audit_log = Arc::new(AuditLogger::new(audit_storage, audit_config));
+
+            // Create access control service
+            let access_config = crate::config::AccessControlConfig::default();
+            let access_ctrl = Arc::new(AccessControlService::new(access_config));
+
+            // Create security manager
+            let sec_manager = Arc::new(SecurityManager::new(
+                cred_manager.clone(),
+                encryption_service.clone() as Arc<dyn EncryptionService>,
+                audit_log.clone(),
+                access_ctrl.clone(),
+            ));
+
+            // Create configuration manager
+            let conf_manager = Arc::new(ConfigManager::new());
+
+            (Some(sec_manager), Some(conf_manager), Some(cred_manager), Some(audit_log), Some(access_ctrl))
+        };
+
+        let mut container = Self {
             repositories,
             registry,
             registry_manager,
@@ -172,7 +225,17 @@ impl ServiceContainer {
             sync_scheduler,
             filesystem_watcher,
             sync_health_monitor,
-        })
+            security_manager,
+            config_manager,
+            credential_manager,
+            audit_logger,
+            access_control,
+        };
+
+        // Initialize service integrations after container creation
+        container.initialize_service_integrations().await?;
+
+        Ok(container)
     }
 
     /// Create a test service container with mock implementations
@@ -228,6 +291,25 @@ impl ServiceContainer {
             self.registry_manager.clone(),
             self.validator.clone(),
         )
+    }
+
+    /// Initialize service integrations after container creation
+    async fn initialize_service_integrations(&mut self) -> Result<()> {
+        // Update repository service with security manager
+        if let (Some(enhanced_repo_service), Some(security_manager)) = (&mut self.enhanced_repository_service, &self.security_manager) {
+            // Get a mutable reference and set the security manager
+            let mut repo_service = Arc::try_unwrap(enhanced_repo_service.clone())
+                .map_err(|_| anyhow::anyhow!("Cannot get exclusive access to repository service"))?;
+            repo_service.set_security_manager(security_manager.clone());
+            *enhanced_repo_service = Arc::new(repo_service);
+        }
+
+        // Initialize repositories with security context if available
+        if let Some(enhanced_repo_service) = &self.enhanced_repository_service {
+            enhanced_repo_service.initialize_repositories().await?;
+        }
+
+        Ok(())
     }
 }
 

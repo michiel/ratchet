@@ -12,6 +12,7 @@ pub mod mcp_handler;
 pub mod monitoring;
 pub mod repository_services;
 pub mod scheduler;
+pub mod security;
 pub mod services;
 pub mod startup;
 pub mod task_service;

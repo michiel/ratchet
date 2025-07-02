@@ -13,6 +13,7 @@ use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
 use crate::config::{AuditConfig, AuditExportFormat, AuditLogLevel};
 use super::{SecurityEvent, SecurityContext, SecurityEventType, SecurityEventSeverity};
@@ -440,11 +441,11 @@ impl AuditLogger {
         };
 
         if !should_log {
-            return Ok();
+            return anyhow::Ok(());
         }
 
         let entry = AuditLogEntry {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
             event,
             metadata: AuditMetadata::default(),
@@ -563,7 +564,7 @@ mod tests {
         );
 
         let entry = AuditLogEntry {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
             event,
             metadata: AuditMetadata::default(),

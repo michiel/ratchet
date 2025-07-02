@@ -6,6 +6,9 @@
 pub mod repository_config;
 pub mod server_config;
 
+#[cfg(test)]
+pub mod tests;
+
 pub use repository_config::*;
 pub use server_config::*;
 

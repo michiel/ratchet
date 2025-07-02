@@ -13,6 +13,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 use anyhow::{Context, Result, anyhow};
 
+use crate::security::{SecurityManager, SecurityContext, SecurityEvent, SecurityEventType, SecurityEventSeverity};
+
 use ratchet_storage::repositories::{
     TaskSyncService, TaskRepository, FilesystemTaskRepository, GitTaskRepository, HttpTaskRepository,
     HttpRepositoryConfig, GitAuth, HttpAuth, SyncResult, PushResult, RepositoryHealth,
@@ -31,6 +33,8 @@ pub struct EnhancedRepositoryService {
     pub sync_service: Arc<TaskSyncService>,
     /// Active repository instances
     active_repositories: Arc<RwLock<HashMap<i32, Box<dyn TaskRepository>>>>,
+    /// Security manager for authentication and authorization
+    security_manager: Option<Arc<SecurityManager>>,
 }
 
 /// Repository sync status information
@@ -81,11 +85,51 @@ impl EnhancedRepositoryService {
             db_service,
             sync_service,
             active_repositories: Arc::new(RwLock::new(HashMap::new())),
+            security_manager: None,
         }
+    }
+
+    /// Create a new enhanced repository service with security manager
+    pub fn new_with_security(
+        db_service: Arc<ratchet_storage::seaorm::repositories::RepositoryService>,
+        db_interface: Arc<dyn DatabaseInterface>,
+        security_manager: Arc<SecurityManager>,
+    ) -> Self {
+        let sync_service = Arc::new(TaskSyncService::new(
+            db_interface,
+            ConflictResolution::TakeLocal, // Default conflict resolution
+        ));
+
+        Self {
+            db_service,
+            sync_service,
+            active_repositories: Arc::new(RwLock::new(HashMap::new())),
+            security_manager: Some(security_manager),
+        }
+    }
+
+    /// Set security manager for repository operations
+    pub fn set_security_manager(&mut self, security_manager: Arc<SecurityManager>) {
+        self.security_manager = Some(security_manager);
     }
 
     /// List all repositories with enhanced information
     pub async fn list_repositories(&self) -> Result<Vec<UnifiedTaskRepository>> {
+        self.list_repositories_with_context(&SecurityContext::system()).await
+    }
+
+    /// List all repositories with enhanced information and security context
+    pub async fn list_repositories_with_context(&self, context: &SecurityContext) -> Result<Vec<UnifiedTaskRepository>> {
+        // Log repository list access
+        if let Some(security_manager) = &self.security_manager {
+            let event = SecurityEvent::new(
+                SecurityEventType::DataAccess,
+                SecurityEventSeverity::Info,
+                "Repository list accessed".to_string(),
+                context.clone(),
+            );
+            security_manager.log_security_event(event).await?;
+        }
         let repositories = self.db_service.list_repositories().await
             .context("Failed to list repositories from database")?;
 
@@ -123,6 +167,34 @@ impl EnhancedRepositoryService {
 
     /// Get repository by ID with enhanced information
     pub async fn get_repository(&self, id: i32) -> Result<Option<UnifiedTaskRepository>> {
+        self.get_repository_with_context(id, &SecurityContext::system()).await
+    }
+
+    /// Get repository by ID with enhanced information and security context
+    pub async fn get_repository_with_context(&self, id: i32, context: &SecurityContext) -> Result<Option<UnifiedTaskRepository>> {
+        // Check authorization for repository access
+        if let Some(security_manager) = &self.security_manager {
+            let authorized = security_manager.authorize_repository_operation(id, "read", context).await?;
+            if !authorized {
+                let event = SecurityEvent::new(
+                    SecurityEventType::Authorization,
+                    SecurityEventSeverity::Warning,
+                    format!("Unauthorized access attempt to repository {}", id),
+                    context.clone(),
+                ).with_repository(id);
+                security_manager.log_security_event(event).await?;
+                return Err(anyhow!("Access denied to repository {}", id));
+            }
+
+            // Log repository access
+            let event = SecurityEvent::new(
+                SecurityEventType::DataAccess,
+                SecurityEventSeverity::Info,
+                format!("Repository {} accessed", id),
+                context.clone(),
+            ).with_repository(id);
+            security_manager.log_security_event(event).await?;
+        }
         let repo = self.db_service.get_repository(id).await
             .context("Failed to get repository from database")?;
 
@@ -158,14 +230,43 @@ impl EnhancedRepositoryService {
 
     /// Create repository with sync setup
     pub async fn create_repository(&self, request: CreateRepositoryWithSyncRequest) -> Result<UnifiedTaskRepository> {
+        self.create_repository_with_context(request, &SecurityContext::system()).await
+    }
+
+    /// Create repository with sync setup and security context
+    pub async fn create_repository_with_context(&self, request: CreateRepositoryWithSyncRequest, context: &SecurityContext) -> Result<UnifiedTaskRepository> {
+        // Check authorization for repository creation
+        if let Some(security_manager) = &self.security_manager {
+            // Use repository ID -1 for general admin operations since we don't have an ID yet
+            let authorized = security_manager.authorize_repository_operation(-1, "admin", context).await?;
+            if !authorized {
+                let event = SecurityEvent::new(
+                    SecurityEventType::Authorization,
+                    SecurityEventSeverity::Warning,
+                    "Unauthorized repository creation attempt".to_string(),
+                    context.clone(),
+                );
+                security_manager.log_security_event(event).await?;
+                return Err(anyhow!("Access denied for repository creation"));
+            }
+
+            // Log repository creation attempt
+            let event = SecurityEvent::new(
+                SecurityEventType::AdminOperation,
+                SecurityEventSeverity::Info,
+                format!("Repository creation started: {}", request.repository.name),
+                context.clone(),
+            );
+            security_manager.log_security_event(event).await?;
+        }
         info!("Creating repository: {}", request.repository.name);
 
         // Create repository in database
         let created_repo = self.db_service.create_repository(request.repository.clone()).await
             .context("Failed to create repository in database")?;
 
-        // Create and register repository instance
-        let repo_instance = self.create_repository_instance(&created_repo).await?;
+        // Create and register repository instance with authentication
+        let repo_instance = self.create_repository_instance_with_auth(&created_repo, context).await?;
         self.sync_service.register_repository(created_repo.id, repo_instance).await;
 
         // Test connection if requested
@@ -195,21 +296,60 @@ impl EnhancedRepositoryService {
             }
         }
 
+        // Log successful repository creation
+        if let Some(security_manager) = &self.security_manager {
+            let event = SecurityEvent::new(
+                SecurityEventType::AdminOperation,
+                SecurityEventSeverity::Info,
+                format!("Repository created successfully: {} (ID: {})", created_repo.name, created_repo.id),
+                context.clone(),
+            ).with_repository(created_repo.id);
+            security_manager.log_security_event(event).await?;
+        }
+
         // Return unified repository representation
-        self.get_repository(created_repo.id).await?
+        self.get_repository_with_context(created_repo.id, context).await?
             .ok_or_else(|| anyhow!("Failed to retrieve created repository"))
     }
 
     /// Update repository with sync coordination
     pub async fn update_repository(&self, id: i32, request: UpdateRepositoryWithSyncRequest) -> Result<Option<UnifiedTaskRepository>> {
+        self.update_repository_with_context(id, request, &SecurityContext::system()).await
+    }
+
+    /// Update repository with sync coordination and security context
+    pub async fn update_repository_with_context(&self, id: i32, request: UpdateRepositoryWithSyncRequest, context: &SecurityContext) -> Result<Option<UnifiedTaskRepository>> {
+        // Check authorization for repository modification
+        if let Some(security_manager) = &self.security_manager {
+            let authorized = security_manager.authorize_repository_operation(id, "write", context).await?;
+            if !authorized {
+                let event = SecurityEvent::new(
+                    SecurityEventType::Authorization,
+                    SecurityEventSeverity::Warning,
+                    format!("Unauthorized repository update attempt: {}", id),
+                    context.clone(),
+                ).with_repository(id);
+                security_manager.log_security_event(event).await?;
+                return Err(anyhow!("Access denied for repository {} update", id));
+            }
+
+            // Log repository update attempt
+            let event = SecurityEvent::new(
+                SecurityEventType::AdminOperation,
+                SecurityEventSeverity::Info,
+                format!("Repository update started: {}", id),
+                context.clone(),
+            ).with_repository(id);
+            security_manager.log_security_event(event).await?;
+        }
         info!("Updating repository: {}", id);
 
         let updated_repo = self.db_service.update_repository(id, request.repository).await
             .context("Failed to update repository in database")?;
 
         if let Some(repo) = updated_repo {
-            // Recreate repository instance with updated configuration
-            let repo_instance = self.create_repository_instance(&repo).await?;
+            // Recreate repository instance with updated configuration and authentication
+            let repo_instance = self.create_repository_instance_with_auth(&repo, context).await?;
             self.sync_service.register_repository(repo.id, repo_instance).await;
 
             // Test connection if requested
@@ -239,7 +379,18 @@ impl EnhancedRepositoryService {
                 }
             }
 
-            Ok(Some(self.get_repository(repo.id).await?.unwrap()))
+            // Log successful repository update
+            if let Some(security_manager) = &self.security_manager {
+                let event = SecurityEvent::new(
+                    SecurityEventType::AdminOperation,
+                    SecurityEventSeverity::Info,
+                    format!("Repository updated successfully: {}", repo.id),
+                    context.clone(),
+                ).with_repository(repo.id);
+                security_manager.log_security_event(event).await?;
+            }
+
+            Ok(Some(self.get_repository_with_context(repo.id, context).await?.unwrap()))
         } else {
             Ok(None)
         }
@@ -247,6 +398,34 @@ impl EnhancedRepositoryService {
 
     /// Delete repository with cleanup
     pub async fn delete_repository(&self, id: i32) -> Result<bool> {
+        self.delete_repository_with_context(id, &SecurityContext::system()).await
+    }
+
+    /// Delete repository with cleanup and security context
+    pub async fn delete_repository_with_context(&self, id: i32, context: &SecurityContext) -> Result<bool> {
+        // Check authorization for repository deletion
+        if let Some(security_manager) = &self.security_manager {
+            let authorized = security_manager.authorize_repository_operation(id, "delete", context).await?;
+            if !authorized {
+                let event = SecurityEvent::new(
+                    SecurityEventType::Authorization,
+                    SecurityEventSeverity::Warning,
+                    format!("Unauthorized repository deletion attempt: {}", id),
+                    context.clone(),
+                ).with_repository(id);
+                security_manager.log_security_event(event).await?;
+                return Err(anyhow!("Access denied for repository {} deletion", id));
+            }
+
+            // Log repository deletion attempt
+            let event = SecurityEvent::new(
+                SecurityEventType::AdminOperation,
+                SecurityEventSeverity::Warning,
+                format!("Repository deletion started: {}", id),
+                context.clone(),
+            ).with_repository(id);
+            security_manager.log_security_event(event).await?;
+        }
         info!("Deleting repository: {}", id);
 
         // Unregister from sync service
@@ -258,6 +437,17 @@ impl EnhancedRepositoryService {
 
         if deleted {
             info!("Repository {} deleted successfully", id);
+            
+            // Log successful repository deletion
+            if let Some(security_manager) = &self.security_manager {
+                let event = SecurityEvent::new(
+                    SecurityEventType::AdminOperation,
+                    SecurityEventSeverity::Warning,
+                    format!("Repository deleted successfully: {}", id),
+                    context.clone(),
+                ).with_repository(id);
+                security_manager.log_security_event(event).await?;
+            }
         }
 
         Ok(deleted)
@@ -301,6 +491,34 @@ impl EnhancedRepositoryService {
 
     /// Sync repository
     pub async fn sync_repository(&self, id: i32) -> Result<SyncResult> {
+        self.sync_repository_with_context(id, &SecurityContext::system()).await
+    }
+
+    /// Sync repository with security context
+    pub async fn sync_repository_with_context(&self, id: i32, context: &SecurityContext) -> Result<SyncResult> {
+        // Check authorization for repository sync
+        if let Some(security_manager) = &self.security_manager {
+            let authorized = security_manager.authorize_repository_operation(id, "sync", context).await?;
+            if !authorized {
+                let event = SecurityEvent::new(
+                    SecurityEventType::Authorization,
+                    SecurityEventSeverity::Warning,
+                    format!("Unauthorized repository sync attempt: {}", id),
+                    context.clone(),
+                ).with_repository(id);
+                security_manager.log_security_event(event).await?;
+                return Err(anyhow!("Access denied for repository {} sync", id));
+            }
+
+            // Log repository sync attempt
+            let event = SecurityEvent::new(
+                SecurityEventType::DataAccess,
+                SecurityEventSeverity::Info,
+                format!("Repository sync started: {}", id),
+                context.clone(),
+            ).with_repository(id);
+            security_manager.log_security_event(event).await?;
+        }
         info!("Starting sync for repository: {}", id);
         
         let result = self.sync_service.sync_repository(id).await
@@ -309,6 +527,20 @@ impl EnhancedRepositoryService {
         info!("Sync completed for repository {}: Added: {}, Updated: {}, Deleted: {}, Conflicts: {}, Errors: {}",
             id, result.tasks_added, result.tasks_updated, result.tasks_deleted, 
             result.conflicts.len(), result.errors.len());
+
+        // Log sync completion
+        if let Some(security_manager) = &self.security_manager {
+            let severity = if result.errors.is_empty() { SecurityEventSeverity::Info } else { SecurityEventSeverity::Warning };
+            let event = SecurityEvent::new(
+                SecurityEventType::DataAccess,
+                severity,
+                format!("Repository sync completed: {} (Added: {}, Updated: {}, Deleted: {}, Conflicts: {}, Errors: {})",
+                    id, result.tasks_added, result.tasks_updated, result.tasks_deleted,
+                    result.conflicts.len(), result.errors.len()),
+                context.clone(),
+            ).with_repository(id);
+            security_manager.log_security_event(event).await?;
+        }
 
         Ok(result)
     }
@@ -399,6 +631,18 @@ impl EnhancedRepositoryService {
 
     /// Create repository instance based on type
     async fn create_repository_instance(&self, repo: &ratchet_storage::seaorm::entities::TaskRepository) -> Result<Box<dyn TaskRepository>> {
+        self.create_repository_instance_with_auth(repo, &SecurityContext::system()).await
+    }
+
+    /// Create repository instance with authentication based on type
+    async fn create_repository_instance_with_auth(&self, repo: &ratchet_storage::seaorm::entities::TaskRepository, context: &SecurityContext) -> Result<Box<dyn TaskRepository>> {
+        // Authenticate repository access if security manager is available
+        if let Some(security_manager) = &self.security_manager {
+            let authenticated = security_manager.authenticate_repository_access(repo.id, context).await?;
+            if !authenticated {
+                return Err(anyhow!("Authentication failed for repository {}", repo.id));
+            }
+        }
         match repo.repository_type.as_str() {
             "filesystem" => {
                 let watch_patterns: Vec<String> = serde_json::from_value(repo.watch_patterns.clone())

@@ -230,7 +230,7 @@ impl Default for EncryptionConfig {
 }
 
 /// Encryption algorithms supported
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum EncryptionAlgorithm {
     AES128,
     AES256,
@@ -273,7 +273,7 @@ impl Default for AccessControlConfig {
 }
 
 /// User permissions
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Permission {
     Read,
     Write,
@@ -284,7 +284,7 @@ pub enum Permission {
 }
 
 /// User roles
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum UserRole {
     Guest,
     User,
