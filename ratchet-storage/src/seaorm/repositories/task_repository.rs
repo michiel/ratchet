@@ -420,8 +420,8 @@ mod tests {
             is_editable: true,
             created_from: "test".to_string(),
             needs_push: false,
-            created_at: chrono::DateTime::from_utc(chrono::Utc::now().naive_utc(), chrono::Utc),
-            updated_at: chrono::DateTime::from_utc(chrono::Utc::now().naive_utc(), chrono::Utc),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
             source_modified_at: None,
             validated_at: None,
         }

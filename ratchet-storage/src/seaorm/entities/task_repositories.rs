@@ -113,8 +113,8 @@ impl Model {
             ignore_patterns: serde_json::json!(["**/node_modules/**", "**/.git/**", "**/target/**"]),
             push_on_change: false,
             metadata: serde_json::json!({}),
-            created_at: ChronoDateTimeUtc::from_utc(chrono::Utc::now().naive_utc(), chrono::Utc),
-            updated_at: ChronoDateTimeUtc::from_utc(chrono::Utc::now().naive_utc(), chrono::Utc),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         }
     }
 

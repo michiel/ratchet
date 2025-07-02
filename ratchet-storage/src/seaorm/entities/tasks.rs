@@ -261,9 +261,9 @@ impl Model {
             is_editable: true,
             created_from: "api".to_string(),
             needs_push: false, // Will be set based on repository configuration
-            created_at: chrono::DateTime::from_utc(now.naive_utc(), chrono::Utc),
-            updated_at: chrono::DateTime::from_utc(now.naive_utc(), chrono::Utc),
-            source_modified_at: Some(chrono::DateTime::from_utc(now.naive_utc(), chrono::Utc)),
+            created_at: now,
+            updated_at: now,
+            source_modified_at: Some(now),
             validated_at: None,
         }
     }
@@ -280,7 +280,7 @@ impl Model {
     pub fn update_source_code(&mut self, source_code: String) {
         self.source_code = source_code;
         self.checksum = self.calculate_checksum();
-        self.updated_at = chrono::DateTime::from_utc(chrono::Utc::now().naive_utc(), chrono::Utc);
+        self.updated_at = chrono::Utc::now();
         self.source_modified_at = Some(self.updated_at);
         self.sync_status = "modified".to_string();
         self.needs_push = true;
@@ -290,7 +290,7 @@ impl Model {
     pub fn mark_synced(&mut self, repository_commit: Option<String>) {
         self.sync_status = "synced".to_string();
         self.needs_push = false;
-        self.last_synced_at = Some(chrono::DateTime::from_utc(chrono::Utc::now().naive_utc(), chrono::Utc));
+        self.last_synced_at = Some(chrono::Utc::now());
         // Store commit hash in metadata if provided
         if let Some(commit) = repository_commit {
             if let Some(metadata_obj) = self.metadata.as_object_mut() {

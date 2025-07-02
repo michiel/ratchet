@@ -118,7 +118,7 @@ impl Model {
             changed_by: changed_by.to_string(),
             change_source: change_source.to_string(),
             repository_commit,
-            created_at: ChronoDateTimeUtc::from_utc(chrono::Utc::now().naive_utc(), chrono::Utc),
+            created_at: chrono::Utc::now(),
         }
     }
 }

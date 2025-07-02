@@ -394,9 +394,7 @@ async fn test_ratchet_serve_end_to_end_workflow() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
-    if !ready {
-        panic!("Server failed to become ready after 10 attempts");
-    }
+    assert!(ready, "Server failed to become ready after 10 attempts");
     println!("✅ Server is ready!");
 
     // Step 6: Initialize GraphQL client

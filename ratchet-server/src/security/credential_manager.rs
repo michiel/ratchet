@@ -4,6 +4,7 @@
 //! for repository access authentication.
 
 use anyhow::{Context, Result};
+use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -132,7 +133,7 @@ impl CredentialManager {
                 .encrypt(value.as_bytes())
                 .await
                 .context("Failed to encrypt credential value")?;
-            encrypted_credentials.insert(key, base64::encode(encrypted_value));
+            encrypted_credentials.insert(key, general_purpose::STANDARD.encode(encrypted_value));
         }
 
         let repo_credentials = RepositoryCredentials {
@@ -161,7 +162,7 @@ impl CredentialManager {
             // Decrypt credentials
             let mut decrypted_credentials = HashMap::new();
             for (key, encrypted_value) in repo_creds.credentials {
-                let encrypted_bytes = base64::decode(&encrypted_value)
+                let encrypted_bytes = general_purpose::STANDARD.decode(&encrypted_value)
                     .context("Failed to decode base64 credential")?;
                 let decrypted_bytes = self.encryption_service
                     .decrypt(&encrypted_bytes)
@@ -198,7 +199,7 @@ impl CredentialManager {
                     .encrypt(value.as_bytes())
                     .await
                     .context("Failed to encrypt credential value")?;
-                encrypted_credentials.insert(key, base64::encode(encrypted_value));
+                encrypted_credentials.insert(key, general_purpose::STANDARD.encode(encrypted_value));
             }
 
             repo_creds.credentials = encrypted_credentials;
