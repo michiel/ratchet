@@ -9,7 +9,6 @@ pub use degradation::{DegradationManager, DegradationConfig, DegradationState};
 pub use batch_error::{BatchErrorHandler, BatchResult, PartialFailurePolicy, RetryPolicy};
 
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 /// Configuration for error recovery behavior
 #[derive(Debug, Clone, Serialize, Deserialize)]

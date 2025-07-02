@@ -207,7 +207,7 @@ impl TokenBucket {
         self.last_refill = now;
     }
 
-    fn remaining_tokens(&mut self) -> f64 {
+    fn _remaining_tokens(&mut self) -> f64 {
         self.refill();
         self.tokens
     }

@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::config::{AuthType, RepositoryConfig};
-use super::{EncryptionService, SecurityContext, SecurityEvent, SecurityEventType, SecurityEventSeverity};
+use crate::config::AuthType;
+use super::{EncryptionService, SecurityContext};
 
 /// Repository credentials for authentication
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,7 +123,7 @@ impl CredentialManager {
         repository_id: i32,
         auth_type: AuthType,
         credentials: HashMap<String, String>,
-        context: &SecurityContext,
+        _context: &SecurityContext,
     ) -> Result<()> {
         // Encrypt credentials before storage
         let mut encrypted_credentials = HashMap::new();
@@ -187,7 +187,7 @@ impl CredentialManager {
         &self,
         repository_id: i32,
         credentials: HashMap<String, String>,
-        context: &SecurityContext,
+        _context: &SecurityContext,
     ) -> Result<()> {
         let mut creds = self.credentials.write().await;
         if let Some(repo_creds) = creds.get_mut(&repository_id) {
@@ -214,7 +214,7 @@ impl CredentialManager {
     pub async fn remove_credentials(
         &self,
         repository_id: i32,
-        context: &SecurityContext,
+        _context: &SecurityContext,
     ) -> Result<()> {
         let mut creds = self.credentials.write().await;
         creds.remove(&repository_id);
@@ -231,7 +231,7 @@ impl CredentialManager {
     pub async fn validate_credentials(
         &self,
         repository_id: i32,
-        context: &SecurityContext,
+        _context: &SecurityContext,
     ) -> Result<CredentialValidationResult> {
         let creds = self.credentials.read().await;
         
@@ -325,10 +325,10 @@ impl CredentialManager {
         &self,
         repository_id: i32,
         new_credentials: HashMap<String, String>,
-        context: &SecurityContext,
+        _context: &SecurityContext,
     ) -> Result<()> {
         // Update credentials with new values
-        self.update_credentials(repository_id, new_credentials, context).await?;
+        self.update_credentials(repository_id, new_credentials, _context).await?;
 
         // Update rotation metadata
         let mut creds = self.credentials.write().await;

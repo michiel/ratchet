@@ -39,7 +39,7 @@ use crate::monitoring::{SyncHealthMonitor, SyncHealthConfig};
 
 // Security and configuration services (Phase 6)
 use crate::security::{SecurityManager, CredentialManager, AuditLogger, AccessControlService, EncryptionService, AesEncryptionService};
-use crate::config::{ConfigManager, RepositoryConfig, EncryptionAlgorithm};
+use crate::config::{ConfigManager, EncryptionAlgorithm};
 use crate::security::audit_logger::FileAuditStorage;
 use std::path::PathBuf;
 
@@ -296,12 +296,9 @@ impl ServiceContainer {
     /// Initialize service integrations after container creation
     async fn initialize_service_integrations(&mut self) -> Result<()> {
         // Update repository service with security manager
-        if let (Some(enhanced_repo_service), Some(security_manager)) = (&mut self.enhanced_repository_service, &self.security_manager) {
-            // Get a mutable reference and set the security manager
-            let mut repo_service = Arc::try_unwrap(enhanced_repo_service.clone())
-                .map_err(|_| anyhow::anyhow!("Cannot get exclusive access to repository service"))?;
-            repo_service.set_security_manager(security_manager.clone());
-            *enhanced_repo_service = Arc::new(repo_service);
+        if let (Some(enhanced_repo_service), Some(security_manager)) = (&self.enhanced_repository_service, &self.security_manager) {
+            // Set the security manager using the async method
+            enhanced_repo_service.set_security_manager(security_manager.clone()).await;
         }
 
         // Initialize repositories with security context if available

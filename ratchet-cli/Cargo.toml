@@ -125,3 +125,6 @@ full = ["complete"]
 dev-full = ["developer", "dynamic-plugins"]
 production = ["server", "database", "mcp-server", "static-plugins", "output"]
 enterprise = ["complete", "postgres"]
+
+[dev-dependencies]
+tempfile.workspace = true

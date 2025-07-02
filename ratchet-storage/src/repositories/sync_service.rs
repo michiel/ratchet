@@ -9,8 +9,8 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
-use anyhow::{Context, Result, anyhow};
+use tracing::{debug, info, warn};
+use anyhow::{Result, anyhow};
 
 use super::task_sync::{
     ConflictResolution, ConflictType, PushResult, RepositoryTask, SyncError, SyncResult,
@@ -428,7 +428,7 @@ impl TaskSyncService {
     }
 
     /// Push task changes to repository
-    pub async fn push_task_changes(&self, task_id: i32) -> Result<PushResult> {
+    pub async fn push_task_changes(&self, _task_id: i32) -> Result<PushResult> {
         // Implementation would get the task from database and push to its repository
         todo!("Implement push_task_changes")
     }

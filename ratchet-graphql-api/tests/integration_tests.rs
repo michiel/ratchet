@@ -6,7 +6,7 @@
 use async_graphql::{value, Request, Response, Variables};
 use chrono::Utc;
 use ratchet_api_types::{
-    ApiId, ExecutionStatus, JobPriority, JobStatus, UnifiedExecution, UnifiedJob, UnifiedSchedule, UnifiedTask,
+    ApiId, ExecutionStatus, JobPriority, JobStatus, TaskRepositoryInfo, UnifiedExecution, UnifiedJob, UnifiedSchedule, UnifiedTask,
 };
 use ratchet_graphql_api::{
     context::{GraphQLConfig, GraphQLContext},
@@ -883,6 +883,22 @@ fn create_test_task() -> UnifiedTask {
         updated_at: Utc::now(),
         validated_at: Some(Utc::now()),
         in_sync: true,
+        source_code: "function test() { return 'hello'; }".to_string(),
+        source_type: "javascript".to_string(),
+        repository_info: TaskRepositoryInfo {
+            repository_id: ApiId::from_i32(1),
+            repository_name: "test-repo".to_string(),
+            repository_type: "git".to_string(),
+            repository_path: "/test/task.js".to_string(),
+            branch: Some("main".to_string()),
+            commit: Some("abc123".to_string()),
+            can_push: true,
+            auto_push: false,
+        },
+        is_editable: true,
+        sync_status: "synced".to_string(),
+        needs_push: false,
+        last_synced_at: Some(Utc::now()),
         input_schema: Some(json!({"type": "object", "properties": {}})),
         output_schema: Some(json!({"type": "object", "properties": {"result": {"type": "string"}}})),
         metadata: None,

@@ -225,7 +225,7 @@ async fn handle_function_expression_with_http(
 }
 
 /// Handle anonymous function execution when no main function is found (legacy sync version)
-fn handle_anonymous_function(
+fn _handle_anonymous_function(
     context: &mut BoaContext,
     script_result: boa_engine::JsValue,
     input_arg: boa_engine::JsValue,

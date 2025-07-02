@@ -3,7 +3,6 @@
 //! This module provides automated repository synchronization capabilities,
 //! managing periodic sync operations and triggered sync events.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -526,7 +525,7 @@ impl Clone for SyncScheduler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{SyncScheduler, SyncSchedulerConfig, SyncSchedule};
     
     // TODO: Add comprehensive tests for sync scheduler
     // This would include:

@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::commands::console::{
     command_trait::{ConsoleCommand, CommandArgs, CommandOutput},

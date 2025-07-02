@@ -3,7 +3,6 @@
 //! This service handles the assignment of tasks to repositories, managing
 //! the relationship between tasks and their source repositories.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -11,7 +10,6 @@ use tracing::{debug, error, info, warn};
 use anyhow::{Context, Result, anyhow};
 
 use ratchet_storage::repositories::TaskSyncService;
-use ratchet_api_types::{ApiId, UnifiedTask};
 
 /// Task assignment service
 #[derive(Clone)]
@@ -251,7 +249,7 @@ impl TaskAssignmentService {
 
         self.validate_repository_exists(repository_id).await?;
         
-        let repository = self.db_service.get_repository(repository_id).await
+        let _repository = self.db_service.get_repository(repository_id).await
             .context("Failed to get repository")?
             .ok_or_else(|| anyhow!("Repository {} not found", repository_id))?;
 
@@ -370,7 +368,7 @@ impl std::error::Error for TaskAssignmentError {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{TaskAssignmentService, TaskRepositoryAssignment, AssignTaskRequest};
     
     // TODO: Add comprehensive tests for task assignment operations
     // This would include:

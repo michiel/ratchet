@@ -67,7 +67,7 @@ pub struct InputValidator {
     max_array_length: usize,
     max_object_depth: usize,
     max_keys_per_object: usize,
-    allow_unicode: bool,
+    _allow_unicode: bool,
     blocked_domains: Vec<String>,
     blocked_ips: Vec<IpAddr>,
 }
@@ -80,7 +80,7 @@ impl Default for InputValidator {
             max_array_length: MAX_ARRAY_LENGTH,
             max_object_depth: MAX_OBJECT_DEPTH,
             max_keys_per_object: MAX_KEYS_PER_OBJECT,
-            allow_unicode: true,
+            _allow_unicode: true,
             blocked_domains: vec![
                 "localhost".to_string(),
                 "127.0.0.1".to_string(),
@@ -415,7 +415,7 @@ impl InputValidator {
     }
 
     /// Check if input looks like a cron expression
-    fn is_likely_cron_expression(&self, input: &str) -> bool {
+    fn _is_likely_cron_expression(&self, input: &str) -> bool {
         let trimmed = input.trim();
 
         // Basic cron expression patterns - 5 or 6 space-separated fields
@@ -426,7 +426,7 @@ impl InputValidator {
 
         // Check if all parts match cron field patterns
         for part in &parts {
-            if !self.is_valid_cron_field(part) {
+            if !self._is_valid_cron_field(part) {
                 return false;
             }
         }
@@ -435,7 +435,7 @@ impl InputValidator {
     }
 
     /// Check if a single field matches cron syntax
-    fn is_valid_cron_field(&self, field: &str) -> bool {
+    fn _is_valid_cron_field(&self, field: &str) -> bool {
         // Cron field can contain: numbers, *, /, -, ,
         // Examples: *, */5, 1-10, 1,3,5, 15, */2
         let cron_field_regex = regex::Regex::new(r"^[0-9*,/\-]+$").unwrap();

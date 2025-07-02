@@ -15,7 +15,7 @@ use crate::migration::{
 /// Main legacy data migrator
 pub struct LegacyMigrator {
     config: MigrationConfig,
-    source_db: DatabaseConnection,
+    _source_db: DatabaseConnection,
     target_db: DatabaseConnection,
     schema_detector: SchemaVersionDetector,
     validator: MigrationValidator,
@@ -38,7 +38,7 @@ impl LegacyMigrator {
 
         Ok(Self {
             config,
-            source_db,
+            _source_db: source_db,
             target_db,
             schema_detector,
             validator,
@@ -330,43 +330,43 @@ impl LegacyMigrator {
 // In the real implementation, these would import from ratchet-lib
 #[derive(Debug, Clone)]
 struct LegacyTask {
-    pub id: i32,
-    pub uuid: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub version: String,
-    pub path: String,
+    pub _id: i32,
+    pub _uuid: Uuid,
+    pub _name: String,
+    pub _description: Option<String>,
+    pub _version: String,
+    pub _path: String,
     // ... other fields
 }
 
 #[derive(Debug, Clone)]
 struct LegacyExecution {
-    pub id: i32,
-    pub uuid: Uuid,
-    pub task_id: i32,
+    pub _id: i32,
+    pub _uuid: Uuid,
+    pub _task_id: i32,
     // ... other fields
 }
 
 #[derive(Debug, Clone)]
 struct LegacyJob {
-    pub id: i32,
-    pub uuid: Uuid,
-    pub task_id: i32,
+    pub _id: i32,
+    pub _uuid: Uuid,
+    pub _task_id: i32,
     // ... other fields
 }
 
 #[derive(Debug, Clone)]
 struct LegacySchedule {
-    pub id: i32,
-    pub uuid: Uuid,
-    pub task_id: i32,
+    pub _id: i32,
+    pub _uuid: Uuid,
+    pub _task_id: i32,
     // ... other fields
 }
 
 #[derive(Debug, Clone)]
 struct LegacyDeliveryResult {
-    pub id: i32,
-    pub execution_id: i32,
+    pub _id: i32,
+    pub _execution_id: i32,
     // ... other fields
 }
 

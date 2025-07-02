@@ -21,7 +21,6 @@ pub use repository_config::{
 };
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use tokio::fs;

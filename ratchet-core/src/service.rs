@@ -346,11 +346,11 @@ mod tests {
         value: String,
     }
 
-    trait TestTrait: Send + Sync {
+    trait _TestTrait: Send + Sync {
         fn get_value(&self) -> &str;
     }
 
-    impl TestTrait for TestService {
+    impl _TestTrait for TestService {
         fn get_value(&self) -> &str {
             &self.value
         }

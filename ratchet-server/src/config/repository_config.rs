@@ -3,10 +3,9 @@
 //! This module provides comprehensive configuration management for repository
 //! operations, including security, performance, and environment-specific settings.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// Repository configuration profiles for different environments
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

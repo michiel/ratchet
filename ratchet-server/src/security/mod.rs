@@ -335,7 +335,7 @@ impl SecurityManager {
     async fn validate_credentials(
         &self,
         credentials: &RepositoryCredentials,
-        context: &SecurityContext,
+        _context: &SecurityContext,
     ) -> Result<bool> {
         // Implementation depends on credential type
         match &credentials.auth_type {

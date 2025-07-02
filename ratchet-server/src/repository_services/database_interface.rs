@@ -5,7 +5,6 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use anyhow::Result;
 
@@ -27,7 +26,7 @@ impl SeaOrmDatabaseInterface {
 #[async_trait]
 impl DatabaseInterface for SeaOrmDatabaseInterface {
     /// Get all tasks for a repository
-    async fn get_repository_tasks(&self, repository_id: i32) -> Result<Vec<DatabaseTask>> {
+    async fn get_repository_tasks(&self, _repository_id: i32) -> Result<Vec<DatabaseTask>> {
         // TODO: Implement using SeaORM task repository
         // For now, return empty list as placeholder
         let _task_repo = self.storage_factory.task_repository();
@@ -39,7 +38,7 @@ impl DatabaseInterface for SeaOrmDatabaseInterface {
     }
     
     /// Get a specific task by repository and path
-    async fn get_task_by_path(&self, repository_id: i32, path: &str) -> Result<Option<DatabaseTask>> {
+    async fn get_task_by_path(&self, _repository_id: i32, _path: &str) -> Result<Option<DatabaseTask>> {
         // TODO: Implement using SeaORM task repository
         // For now, return None as placeholder
         let _task_repo = self.storage_factory.task_repository();
@@ -50,7 +49,7 @@ impl DatabaseInterface for SeaOrmDatabaseInterface {
     }
     
     /// Create or update a task in the database
-    async fn upsert_task(&self, task: &DatabaseTask) -> Result<()> {
+    async fn upsert_task(&self, _task: &DatabaseTask) -> Result<()> {
         // TODO: Implement using SeaORM task repository
         // For now, do nothing as placeholder
         let _task_repo = self.storage_factory.task_repository();
@@ -61,7 +60,7 @@ impl DatabaseInterface for SeaOrmDatabaseInterface {
     }
     
     /// Delete a task from the database
-    async fn delete_task(&self, repository_id: i32, path: &str) -> Result<()> {
+    async fn delete_task(&self, _repository_id: i32, _path: &str) -> Result<()> {
         // TODO: Implement using SeaORM task repository
         // For now, do nothing as placeholder
         let _task_repo = self.storage_factory.task_repository();
@@ -72,7 +71,7 @@ impl DatabaseInterface for SeaOrmDatabaseInterface {
     }
     
     /// Mark task as needing push
-    async fn mark_task_needs_push(&self, task_id: i32, needs_push: bool) -> Result<()> {
+    async fn mark_task_needs_push(&self, _task_id: i32, _needs_push: bool) -> Result<()> {
         // TODO: Implement using SeaORM task repository
         // For now, do nothing as placeholder
         let _task_repo = self.storage_factory.task_repository();
@@ -83,7 +82,7 @@ impl DatabaseInterface for SeaOrmDatabaseInterface {
     }
     
     /// Update task sync status
-    async fn update_sync_status(&self, task_id: i32, status: &str, synced_at: DateTime<Utc>) -> Result<()> {
+    async fn update_sync_status(&self, _task_id: i32, _status: &str, _synced_at: DateTime<Utc>) -> Result<()> {
         // TODO: Implement using SeaORM task repository
         // For now, do nothing as placeholder
         let _task_repo = self.storage_factory.task_repository();
@@ -94,7 +93,7 @@ impl DatabaseInterface for SeaOrmDatabaseInterface {
     }
     
     /// Get repository configuration
-    async fn get_repository_config(&self, repository_id: i32) -> Result<Option<RepositoryConfig>> {
+    async fn get_repository_config(&self, _repository_id: i32) -> Result<Option<RepositoryConfig>> {
         // TODO: Implement using SeaORM repository service
         // For now, return None as placeholder
         

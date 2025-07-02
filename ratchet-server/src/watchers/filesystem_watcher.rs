@@ -714,7 +714,7 @@ impl Clone for FilesystemWatcher {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{FilesystemWatcher, FilesystemWatcherConfig, WatchEvent};
     
     // TODO: Add comprehensive tests for filesystem watcher
     // This would include:

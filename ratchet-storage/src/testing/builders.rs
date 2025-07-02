@@ -764,7 +764,7 @@ mod tests {
 
         assert_eq!(task.name, "test-task");
         assert_eq!(task.version, "2.0.0");
-        assert_eq!(task.path, "test-path");
+        assert_eq!(task.path, Some("test-path".to_string()));
     }
 
     #[test]

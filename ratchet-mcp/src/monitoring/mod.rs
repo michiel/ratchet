@@ -7,7 +7,6 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::correlation::{CorrelationManager, RequestMetrics};
 use crate::metrics::{McpMetrics, MetricsSummary};
-use crate::transport::connection::ConnectionHealth;
 
 /// Configuration for health monitoring
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -531,8 +530,8 @@ impl EnhancedHealthMonitor {
     /// Calculate overall system status
     fn calculate_overall_status(
         &self,
-        transport_health: &TransportHealth,
-        metrics_summary: &Option<MetricsSummary>,
+        _transport_health: &TransportHealth,
+        _metrics_summary: &Option<MetricsSummary>,
         health_checks: &[HealthCheck],
     ) -> HealthStatus {
         let check_statuses: Vec<&HealthStatus> = health_checks.iter().map(|c| &c.status).collect();

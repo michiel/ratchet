@@ -206,7 +206,7 @@ impl CorrelationManager {
         let mut active = self.active_requests.lock().await;
         
         // Get parent info first
-        let (parent_depth, parent_client_id) = {
+        let (parent_depth, _parent_client_id) = {
             let parent = active.get(&parent_id)
                 .ok_or_else(|| format!("Parent request {} not found", parent_id))?;
             

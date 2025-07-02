@@ -159,7 +159,7 @@ impl AesEncryptionService {
 
     /// Encrypt data with AES-256-GCM
     async fn encrypt_aes_gcm(&self, data: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-        use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, AeadInPlace};
+        use aes_gcm::{Aes256Gcm, Nonce, KeyInit, AeadInPlace};
         
         // Generate random nonce
         let mut nonce_bytes = [0u8; 12];
@@ -180,7 +180,7 @@ impl AesEncryptionService {
 
     /// Decrypt data with AES-256-GCM
     async fn decrypt_aes_gcm(&self, encrypted_data: &[u8], nonce: &[u8], tag: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, AeadInPlace, Tag};
+        use aes_gcm::{Aes256Gcm, Nonce, KeyInit, AeadInPlace, Tag};
 
         let nonce = Nonce::from_slice(nonce);
         let key = aes_gcm::Key::<Aes256Gcm>::from_slice(key);
@@ -197,7 +197,7 @@ impl AesEncryptionService {
 
     /// Encrypt data with ChaCha20-Poly1305
     async fn encrypt_chacha20(&self, data: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, KeyInit, AeadInPlace};
+        use chacha20poly1305::{ChaCha20Poly1305, Nonce, KeyInit, AeadInPlace};
 
         // Generate random nonce
         let mut nonce_bytes = [0u8; 12];
@@ -218,7 +218,7 @@ impl AesEncryptionService {
 
     /// Decrypt data with ChaCha20-Poly1305
     async fn decrypt_chacha20(&self, encrypted_data: &[u8], nonce: &[u8], tag: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, KeyInit, AeadInPlace, Tag};
+        use chacha20poly1305::{ChaCha20Poly1305, Nonce, KeyInit, AeadInPlace, Tag};
 
         let nonce = Nonce::from_slice(nonce);
         let key = chacha20poly1305::Key::from_slice(key);

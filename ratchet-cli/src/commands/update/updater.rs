@@ -244,7 +244,7 @@ impl Updater for DefaultUpdater {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::update::{DefaultBinaryManager, DefaultPlatformDetector, GitHubVersionManager};
+    use crate::commands::update::{DefaultBinaryManager, DefaultPlatformDetector, GitHubVersionManager};
 
     #[tokio::test]
     async fn test_updater_creation() {

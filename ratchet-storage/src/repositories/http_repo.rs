@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use anyhow::{Context, Result, anyhow};
 
 use super::task_sync::{

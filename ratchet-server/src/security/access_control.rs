@@ -3,7 +3,7 @@
 //! This module provides role-based access control (RBAC) and permission
 //! management for repository operations and user actions.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::config::{AccessControlConfig, Permission, UserRole};
-use super::{SecurityContext, SecurityEvent, SecurityEventType, SecurityEventSeverity};
+use super::SecurityContext;
 
 /// Access control service for authorization
 pub struct AccessControlService {

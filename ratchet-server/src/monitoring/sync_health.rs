@@ -680,7 +680,7 @@ impl Clone for SyncHealthMonitor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{SyncHealthMonitor, SyncHealthConfig, HealthStatus, SyncMetrics};
     
     // TODO: Add comprehensive tests for sync health monitor
     // This would include:

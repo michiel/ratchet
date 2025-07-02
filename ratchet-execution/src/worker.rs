@@ -127,8 +127,8 @@ pub struct WorkerStats {
 pub struct WorkerProcessManager {
     config: WorkerConfig,
     workers: HashMap<String, WorkerProcess>,
-    pending_tasks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<Result<TaskExecutionResult, ExecutionError>>>>>,
-    task_queue: Arc<Mutex<Vec<WorkerMessage>>>,
+    _pending_tasks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<Result<TaskExecutionResult, ExecutionError>>>>>,
+    _task_queue: Arc<Mutex<Vec<WorkerMessage>>>,
 }
 
 impl WorkerProcessManager {
@@ -137,8 +137,8 @@ impl WorkerProcessManager {
         Self {
             config,
             workers: HashMap::new(),
-            pending_tasks: Arc::new(Mutex::new(HashMap::new())),
-            task_queue: Arc::new(Mutex::new(Vec::new())),
+            _pending_tasks: Arc::new(Mutex::new(HashMap::new())),
+            _task_queue: Arc::new(Mutex::new(Vec::new())),
         }
     }
 

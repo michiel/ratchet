@@ -16,7 +16,7 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::config::{AuditConfig, AuditExportFormat, AuditLogLevel};
-use super::{SecurityEvent, SecurityContext, SecurityEventType, SecurityEventSeverity};
+use super::{SecurityEvent, SecurityEventType, SecurityEventSeverity};
 
 /// Audit log entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -548,6 +548,7 @@ pub struct AuditStatistics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::SecurityContext;
     use tempfile::TempDir;
 
     #[tokio::test]

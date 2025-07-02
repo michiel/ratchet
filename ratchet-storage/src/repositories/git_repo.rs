@@ -4,15 +4,15 @@
 //! Git repositories, supporting clone, pull, push operations and branch management.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::fs;
 use tokio::process::Command;
-use tracing::{debug, error, info, warn};
-use anyhow::{Context, Result, anyhow};
+use tracing::{debug, info, warn};
+use anyhow::{Result, anyhow};
 
 use super::task_sync::{
     RepositoryHealth, RepositoryMetadata, RepositoryTask, TaskRepository,
@@ -273,7 +273,7 @@ impl GitTaskRepository {
                 has_changes: false,
                 ahead_by: 0,
                 behind_by: 0,
-                current_branch: self.branch.clone(),
+                _current_branch: self.branch.clone(),
             });
         }
 
@@ -313,7 +313,7 @@ impl GitTaskRepository {
             has_changes,
             ahead_by,
             behind_by,
-            current_branch: self.branch.clone(),
+            _current_branch: self.branch.clone(),
         })
     }
 }
@@ -324,7 +324,7 @@ struct GitStatus {
     has_changes: bool,
     ahead_by: u32,
     behind_by: u32,
-    current_branch: String,
+    _current_branch: String,
 }
 
 #[async_trait]
@@ -512,7 +512,7 @@ mod tests {
             has_changes: true,
             ahead_by: 2,
             behind_by: 1,
-            current_branch: "feature".to_string(),
+            _current_branch: "feature".to_string(),
         };
 
         assert!(status.has_changes);

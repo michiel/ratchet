@@ -139,12 +139,12 @@ impl FilesystemTaskRepository {
         file.read_to_string(&mut contents).await?;
 
         let metadata = file.metadata().await?;
-        let modified_at = DateTime::from_timestamp(
+        let _modified_at = DateTime::from_timestamp(
             metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?.as_secs() as i64,
             0,
         ).unwrap_or_else(Utc::now);
         
-        let created_at = DateTime::from_timestamp(
+        let _created_at = DateTime::from_timestamp(
             metadata.created()?.duration_since(std::time::UNIX_EPOCH)?.as_secs() as i64,
             0,
         ).unwrap_or_else(Utc::now);
@@ -476,7 +476,6 @@ impl TaskRepository for FilesystemTaskRepository {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    use tokio::fs;
 
     #[tokio::test]
     async fn test_filesystem_repository_creation() {
