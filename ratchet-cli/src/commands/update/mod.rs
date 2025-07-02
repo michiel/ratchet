@@ -3,9 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 
+pub mod binary;
+pub mod command;
 pub mod github;
 pub mod platform;
-pub mod binary;
 pub mod updater;
 
 /// Update-related errors
@@ -143,7 +144,8 @@ pub trait Updater {
     async fn perform_update(&self, force: bool, backup: bool) -> Result<(), UpdateError>;
 }
 
+pub use binary::DefaultBinaryManager;
+pub use command::UpdateCommand;
 pub use github::GitHubVersionManager;
 pub use platform::DefaultPlatformDetector;
-pub use binary::DefaultBinaryManager;
 pub use updater::DefaultUpdater;

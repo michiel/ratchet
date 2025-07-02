@@ -1,4 +1,4 @@
-use crate::update::{PlatformDetector, PlatformInfo, UpdateError};
+use super::{PlatformDetector, PlatformInfo, UpdateError};
 
 /// Default platform detector
 pub struct DefaultPlatformDetector;

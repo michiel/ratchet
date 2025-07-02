@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
-use ratchet_core::update::{
+use std::path::PathBuf;
+
+use super::{
     BinaryManager, DefaultBinaryManager, DefaultPlatformDetector, DefaultUpdater, GitHubVersionManager,
     UpdateError, Updater,
 };
-use std::path::PathBuf;
 
 pub struct UpdateCommand {
     pub check_only: bool,

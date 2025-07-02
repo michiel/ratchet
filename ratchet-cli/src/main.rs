@@ -1347,7 +1347,7 @@ async fn main() -> Result<()> {
             dry_run,
             skip_verify,
         }) => {
-            let update_cmd = commands::update::UpdateCommand {
+            let update_cmd = commands::update::command::UpdateCommand {
                 check_only,
                 force,
                 pre_release,

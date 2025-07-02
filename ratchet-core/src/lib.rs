@@ -10,7 +10,6 @@ pub mod execution;
 pub mod service;
 pub mod task;
 pub mod types;
-pub mod update;
 pub mod validation;
 
 // Re-export commonly used types at the crate root

@@ -1,4 +1,4 @@
-use crate::update::{BinaryManager, UpdateError};
+use super::{BinaryManager, UpdateError};
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;

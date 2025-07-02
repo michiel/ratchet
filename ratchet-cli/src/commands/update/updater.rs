@@ -1,4 +1,4 @@
-use crate::update::{
+use super::{
     BinaryManager, PlatformDetector, PlatformInfo, ReleaseInfo, UpdateError, UpdateInfo,
     Updater, VersionComparison, VersionManager,
 };
@@ -41,7 +41,7 @@ impl DefaultUpdater {
         &self,
         release: &'a ReleaseInfo,
         platform: &PlatformInfo,
-    ) -> Result<&'a crate::update::ReleaseAsset, UpdateError> {
+    ) -> Result<&'a super::ReleaseAsset, UpdateError> {
         let pattern = self.platform_detector.get_asset_pattern(platform);
         
         // Try exact match first

@@ -1,4 +1,4 @@
-use crate::update::{ReleaseInfo, ReleaseAsset, UpdateError, VersionComparison, VersionManager};
+use super::{ReleaseInfo, ReleaseAsset, UpdateError, VersionComparison, VersionManager};
 use async_trait::async_trait;
 use reqwest::Client;
 use semver::Version;
