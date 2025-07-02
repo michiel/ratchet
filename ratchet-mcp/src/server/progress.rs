@@ -414,12 +414,12 @@ mod tests {
         async fn send_notification(
             &self,
             notification: McpNotification,
-        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        ) -> crate::McpResult<()> {
             self.notifications.write().await.push(notification);
             Ok(())
         }
 
-        async fn close(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        async fn close(&self) -> crate::McpResult<()> {
             Ok(())
         }
     }

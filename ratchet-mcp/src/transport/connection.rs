@@ -25,10 +25,10 @@ pub trait TransportConnection: Send + Sync {
     async fn send_notification(
         &self,
         notification: McpNotification,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    ) -> McpResult<()>;
 
     /// Close the connection
-    async fn close(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    async fn close(&self) -> McpResult<()>;
 }
 
 /// Connection wrapper with metadata

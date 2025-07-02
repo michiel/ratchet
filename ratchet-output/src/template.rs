@@ -47,11 +47,14 @@ impl TemplateEngine {
     }
 
     /// Validate that a template is syntactically correct
-    pub fn validate(&self, template: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn validate(&self, template: &str) -> Result<(), DeliveryError> {
         // Try to compile the template to check syntax
         match handlebars::Template::compile(template) {
             Ok(_) => Ok(()),
-            Err(e) => Err(format!("Invalid template syntax: {}", e).into()),
+            Err(e) => Err(DeliveryError::TemplateRender {
+                template: template.to_string(),
+                error: format!("Invalid template syntax: {}", e),
+            }),
         }
     }
 
