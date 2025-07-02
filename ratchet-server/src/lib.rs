@@ -9,11 +9,13 @@ pub mod embedded;
 pub mod heartbeat;
 pub mod job_processor;
 pub mod mcp_handler;
+pub mod monitoring;
 pub mod repository_services;
 pub mod scheduler;
 pub mod services;
 pub mod startup;
 pub mod task_service;
+pub mod watchers;
 
 // Re-export main components
 pub use config::*;

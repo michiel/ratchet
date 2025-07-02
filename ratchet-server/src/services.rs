@@ -32,6 +32,11 @@ use ratchet_output::OutputDeliveryManager;
 // Enhanced services for repository management
 use crate::repository_services::{EnhancedRepositoryService, TaskAssignmentService, SeaOrmDatabaseInterface};
 
+// Background services
+use crate::scheduler::{SyncScheduler, SyncSchedulerConfig};
+use crate::watchers::{FilesystemWatcher, FilesystemWatcherConfig};
+use crate::monitoring::{SyncHealthMonitor, SyncHealthConfig};
+
 /// Service container holding all application services
 #[derive(Clone)]
 pub struct ServiceContainer {
@@ -49,6 +54,10 @@ pub struct ServiceContainer {
     // Enhanced repository management services
     pub enhanced_repository_service: Option<Arc<EnhancedRepositoryService>>,
     pub task_assignment_service: Option<Arc<TaskAssignmentService>>,
+    // Background services for Phase 5
+    pub sync_scheduler: Option<Arc<SyncScheduler>>,
+    pub filesystem_watcher: Option<Arc<FilesystemWatcher>>,
+    pub sync_health_monitor: Option<Arc<SyncHealthMonitor>>,
 }
 
 impl ServiceContainer {
@@ -94,7 +103,7 @@ impl ServiceContainer {
         ));
 
         // Create enhanced repository services if SeaORM is available
-        let (enhanced_repository_service, task_assignment_service) = if let Some(ref storage_factory) = Some(seaorm_factory.clone()) {
+        let (enhanced_repository_service, task_assignment_service, sync_scheduler, filesystem_watcher, sync_health_monitor) = if let Some(ref storage_factory) = Some(seaorm_factory.clone()) {
             // Create database interface for sync service
             let db_interface = Arc::new(SeaOrmDatabaseInterface::new(storage_factory.clone()));
             
@@ -115,9 +124,35 @@ impl ServiceContainer {
                 enhanced_repo_service.sync_service.clone(),
             ));
 
-            (Some(enhanced_repo_service), Some(task_assign_service))
+            // Create background services (Phase 5)
+            
+            // Create sync scheduler
+            let sync_sched_config = SyncSchedulerConfig::default();
+            let sync_sched = Arc::new(SyncScheduler::new(
+                sync_sched_config,
+                enhanced_repo_service.clone(),
+            ));
+
+            // Create filesystem watcher
+            let fs_watcher_config = FilesystemWatcherConfig::default();
+            let fs_watcher = Arc::new(FilesystemWatcher::new(
+                fs_watcher_config,
+                enhanced_repo_service.clone(),
+                sync_sched.clone(),
+            ));
+
+            // Create sync health monitor
+            let health_monitor_config = SyncHealthConfig::default();
+            let health_monitor = Arc::new(SyncHealthMonitor::new(
+                health_monitor_config,
+                enhanced_repo_service.clone(),
+                sync_sched.clone(),
+                fs_watcher.clone(),
+            ));
+
+            (Some(enhanced_repo_service), Some(task_assign_service), Some(sync_sched), Some(fs_watcher), Some(health_monitor))
         } else {
-            (None, None)
+            (None, None, None, None, None)
         };
 
         Ok(Self {
@@ -134,6 +169,9 @@ impl ServiceContainer {
             storage_factory: Some(seaorm_factory),
             enhanced_repository_service,
             task_assignment_service,
+            sync_scheduler,
+            filesystem_watcher,
+            sync_health_monitor,
         })
     }
 

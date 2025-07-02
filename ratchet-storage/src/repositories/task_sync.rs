@@ -172,6 +172,18 @@ pub struct SyncError {
     pub occurred_at: DateTime<Utc>,
 }
 
+impl std::fmt::Display for SyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ref path) = self.task_path {
+            write!(f, "{}: {} (task: {})", self.error_type, self.message, path)
+        } else {
+            write!(f, "{}: {}", self.error_type, self.message)
+        }
+    }
+}
+
+impl std::error::Error for SyncError {}
+
 /// Repository abstraction trait for task operations
 #[async_trait]
 pub trait TaskRepository: Send + Sync {
