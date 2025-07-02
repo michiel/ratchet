@@ -155,8 +155,10 @@ impl CredentialManager {
         &self,
         repository_id: i32,
     ) -> Result<Option<RepositoryCredentials>> {
-        let creds = self.credentials.read().await;
-        let credentials = creds.get(&repository_id).cloned();
+        let credentials = {
+            let creds = self.credentials.read().await;
+            creds.get(&repository_id).cloned()
+        };
 
         if let Some(mut repo_creds) = credentials {
             // Decrypt credentials
@@ -174,7 +176,7 @@ impl CredentialManager {
             }
             repo_creds.credentials = decrypted_credentials;
 
-            // Update last used timestamp
+            // Update last used timestamp (read lock is already dropped)
             self.update_last_used(repository_id).await?;
 
             Ok(Some(repo_creds))
@@ -522,7 +524,7 @@ mod mock_encryption {
     }
 
     #[async_trait::async_trait]
-    impl super::super::EncryptionService for MockEncryptionService {
+    impl EncryptionService for MockEncryptionService {
         async fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
             // Simple mock: just return the data as-is
             Ok(data.to_vec())
