@@ -30,6 +30,7 @@ pub mod config;
 pub mod error;
 pub mod filters;
 pub mod migrations;
+pub mod repositories;
 
 // SeaORM implementation (feature-gated)
 #[cfg(feature = "seaorm")]

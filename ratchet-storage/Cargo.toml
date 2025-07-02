@@ -17,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
+anyhow = { workspace = true }
 async-trait = "0.1"
 log = { workspace = true }
 tracing = { workspace = true }
@@ -26,6 +27,10 @@ regex = "1.10"
 fastrand = "2.0"
 cron = { workspace = true }
 sha2 = "0.10"
+hex = "0.4"
+serde_yaml = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+urlencoding = "2.1"
 
 # Database dependencies (optional)
 sea-orm = { version = "1.1", optional = true, features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
@@ -36,7 +41,6 @@ sqlx = { workspace = true, optional = true }
 # Testing dependencies (optional)
 tempfile = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
-serde_yaml = { workspace = true, optional = true }
 clap = { version = "4.4", optional = true, features = ["derive"] }
 
 [features]
@@ -45,7 +49,7 @@ database = ["sea-orm", "sea-orm-migration", "sea-query", "sqlx"]
 seaorm = ["database"]  # Feature flag for SeaORM integration
 postgres = ["database"]
 mysql = ["database"]
-testing = ["seaorm", "tempfile", "mockall", "serde_yaml", "clap"]  # Feature flag for testing utilities
+testing = ["seaorm", "tempfile", "mockall", "clap"]  # Feature flag for testing utilities
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
