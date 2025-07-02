@@ -3,14 +3,14 @@
 //! This module provides HAR (HTTP Archive) format recording capabilities
 //! for debugging and testing purposes.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use tracing::{debug, info};
+use std::sync::{Arc, Mutex, MutexGuard};
+use tracing::{debug, info, warn};
 
 // Global recording state
 lazy_static::lazy_static! {
@@ -23,17 +23,28 @@ struct RecordingState {
     entries: Vec<JsonValue>,
 }
 
+/// Helper function to safely access the recording state
+fn with_recording_state<T, F>(f: F) -> Result<T>
+where
+    F: FnOnce(MutexGuard<Option<RecordingState>>) -> Result<T>,
+{
+    let state = RECORDING_STATE
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Recording state mutex is poisoned: {}", e))?;
+    f(state)
+}
+
 /// Set the recording directory for the current session
 pub fn set_recording_dir(session_dir: PathBuf) -> Result<()> {
     debug!("Setting recording directory: {:?}", session_dir);
 
-    let mut state = RECORDING_STATE.lock().unwrap();
-    *state = Some(RecordingState {
-        session_dir,
-        entries: Vec::new(),
-    });
-
-    Ok(())
+    with_recording_state(|mut state| {
+        *state = Some(RecordingState {
+            session_dir,
+            entries: Vec::new(),
+        });
+        Ok(())
+    })
 }
 
 /// Record an HTTP request/response pair in HAR format
@@ -48,9 +59,8 @@ pub fn record_http_request(
     started_at: DateTime<Utc>,
     duration_ms: u64,
 ) -> Result<()> {
-    let mut state = RECORDING_STATE.lock().unwrap();
-
-    if let Some(ref mut recording_state) = state.as_mut() {
+    with_recording_state(|mut state| {
+        if let Some(ref mut recording_state) = state.as_mut() {
         debug!("Recording HTTP request: {} {}", method, url);
 
         // Build request headers
@@ -142,18 +152,17 @@ pub fn record_http_request(
             "comment": ""
         });
 
-        recording_state.entries.push(entry);
-        info!("Recorded HTTP request {} {} -> {}", method, url, response_status);
-    }
-
-    Ok(())
+            recording_state.entries.push(entry);
+            info!("Recorded HTTP request {} {} -> {}", method, url, response_status);
+        }
+        Ok(())
+    })
 }
 
 /// Finalize and save the HAR file
 pub fn finalize_recording() -> Result<()> {
-    let mut state = RECORDING_STATE.lock().unwrap();
-
-    if let Some(recording_state) = state.take() {
+    with_recording_state(|mut state| {
+        if let Some(recording_state) = state.take() {
         debug!("Finalizing recording with {} entries", recording_state.entries.len());
 
         let har = json!({
@@ -175,58 +184,69 @@ pub fn finalize_recording() -> Result<()> {
             }
         });
 
-        let har_file = recording_state.session_dir.join("requests.har");
-        let har_json = serde_json::to_string_pretty(&har)?;
-        fs::write(&har_file, har_json)?;
+            let har_file = recording_state.session_dir.join("requests.har");
+            let har_json = serde_json::to_string_pretty(&har)?;
+            fs::write(&har_file, har_json)
+                .with_context(|| format!("Failed to write HAR file: {:?}", har_file))?;
 
-        info!("Saved HAR file: {:?}", har_file);
-    }
-
-    Ok(())
+            info!("Saved HAR file: {:?}", har_file);
+        }
+        Ok(())
+    })
 }
 
 /// Check if recording is currently active
 pub fn is_recording() -> bool {
-    let state = RECORDING_STATE.lock().unwrap();
-    state.is_some()
+    match RECORDING_STATE.lock() {
+        Ok(state) => state.is_some(),
+        Err(e) => {
+            warn!("Recording state mutex is poisoned: {}, assuming not recording", e);
+            false
+        }
+    }
 }
 
 /// Get the current recording directory
 pub fn get_recording_dir() -> Option<PathBuf> {
-    let state = RECORDING_STATE.lock().unwrap();
-    state.as_ref().map(|s| s.session_dir.clone())
+    match RECORDING_STATE.lock() {
+        Ok(state) => state.as_ref().map(|s| s.session_dir.clone()),
+        Err(e) => {
+            warn!("Recording state mutex is poisoned: {}, returning None", e);
+            None
+        }
+    }
 }
 
 /// Record task input JSON
 pub fn record_input(input_json: &JsonValue) -> Result<()> {
-    let state = RECORDING_STATE.lock().unwrap();
+    with_recording_state(|state| {
+        if let Some(recording_state) = state.as_ref() {
+            debug!("Recording task input JSON");
 
-    if let Some(recording_state) = state.as_ref() {
-        debug!("Recording task input JSON");
+            let input_file = recording_state.session_dir.join("input.json");
+            let input_pretty = serde_json::to_string_pretty(input_json)?;
+            fs::write(&input_file, input_pretty)
+                .with_context(|| format!("Failed to write input JSON: {:?}", input_file))?;
 
-        let input_file = recording_state.session_dir.join("input.json");
-        let input_pretty = serde_json::to_string_pretty(input_json)?;
-        fs::write(&input_file, input_pretty)?;
-
-        info!("Saved input JSON: {:?}", input_file);
-    }
-
-    Ok(())
+            info!("Saved input JSON: {:?}", input_file);
+        }
+        Ok(())
+    })
 }
 
 /// Record task output JSON
 pub fn record_output(output_json: &JsonValue) -> Result<()> {
-    let state = RECORDING_STATE.lock().unwrap();
+    with_recording_state(|state| {
+        if let Some(recording_state) = state.as_ref() {
+            debug!("Recording task output JSON");
 
-    if let Some(recording_state) = state.as_ref() {
-        debug!("Recording task output JSON");
+            let output_file = recording_state.session_dir.join("output.json");
+            let output_pretty = serde_json::to_string_pretty(output_json)?;
+            fs::write(&output_file, output_pretty)
+                .with_context(|| format!("Failed to write output JSON: {:?}", output_file))?;
 
-        let output_file = recording_state.session_dir.join("output.json");
-        let output_pretty = serde_json::to_string_pretty(output_json)?;
-        fs::write(&output_file, output_pretty)?;
-
-        info!("Saved output JSON: {:?}", output_file);
-    }
-
-    Ok(())
+            info!("Saved output JSON: {:?}", output_file);
+        }
+        Ok(())
+    })
 }

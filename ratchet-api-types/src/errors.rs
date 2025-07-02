@@ -232,8 +232,21 @@ impl ValidationErrors {
 
 impl From<ValidationErrors> for ApiError {
     fn from(validation_errors: ValidationErrors) -> Self {
-        ApiError::new("VALIDATION_ERROR", validation_errors.message)
-            .with_details(serde_json::to_value(validation_errors.errors).unwrap())
+        let mut error = ApiError::new("VALIDATION_ERROR", validation_errors.message);
+        
+        // Safely serialize validation errors, falling back to error count if serialization fails
+        match serde_json::to_value(&validation_errors.errors) {
+            Ok(details) => error = error.with_details(details),
+            Err(_) => {
+                // Fallback to basic error information if serialization fails
+                error = error.with_details(serde_json::json!({
+                    "error_count": validation_errors.errors.len(),
+                    "serialization_error": "Failed to serialize validation details"
+                }));
+            }
+        }
+        
+        error
     }
 }
 

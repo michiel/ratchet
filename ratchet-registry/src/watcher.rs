@@ -288,7 +288,13 @@ impl EventProcessor {
             let retry_delay_ms = self.config.retry_delay_ms;
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.unwrap();
+                let _permit = match semaphore.acquire().await {
+                    Ok(permit) => permit,
+                    Err(e) => {
+                        error!("Failed to acquire semaphore permit: {}", e);
+                        return;
+                    }
+                };
 
                 match event {
                     WatchEvent::TaskAdded(path) | WatchEvent::TaskModified(path) => {
