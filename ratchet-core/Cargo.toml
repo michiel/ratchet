@@ -20,7 +20,17 @@ log = { workspace = true }
 regex = "1.10"
 url = "2.5"
 cron = "0.15"
+reqwest = { workspace = true }
+semver = "1.0"
+sha2 = "0.10"
+tokio = { workspace = true, features = ["fs", "io-util"] }
+futures-util = "0.3"
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 tempfile = "3.8"
+
+[features]
+default = []
+update = []

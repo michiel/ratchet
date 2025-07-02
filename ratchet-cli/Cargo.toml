@@ -28,7 +28,7 @@ uuid.workspace = true
 ratchet-execution = { path = "../ratchet-execution", optional = true }
 ratchet-mcp = { path = "../ratchet-mcp", optional = true }
 ratchet-config = { path = "../ratchet-config" }
-ratchet-core = { path = "../ratchet-core" }
+ratchet-core = { path = "../ratchet-core", features = ["update"] }
 ratchet-storage = { path = "../ratchet-storage" }
 ratchet-caching = { path = "../ratchet-caching", optional = true }
 ratchet-resilience = { path = "../ratchet-resilience", optional = true }
