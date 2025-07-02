@@ -57,6 +57,13 @@ reqwest = { workspace = true }
 regex = { workspace = true }
 async-trait = { workspace = true }
 
+# Update command dependencies
+semver = "1.0"
+sha2 = "0.10"
+futures-util = "0.3"
+thiserror = { workspace = true }
+serde = { workspace = true }
+
 # Feature flags for optional functionality
 [features]
 default = ["developer"]

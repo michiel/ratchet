@@ -1336,6 +1336,30 @@ async fn main() -> Result<()> {
             };
             commands::console::run_console(console_config).await?;
         }
+        Some(Commands::Update {
+            check_only,
+            force,
+            pre_release,
+            version,
+            install_dir,
+            backup,
+            rollback,
+            dry_run,
+            skip_verify,
+        }) => {
+            let update_cmd = commands::update::command::UpdateCommand {
+                check_only,
+                force,
+                pre_release,
+                version,
+                install_dir,
+                backup,
+                rollback,
+                dry_run,
+                skip_verify,
+            };
+            update_cmd.execute().await?;
+        }
         None => {
             // No command provided, show help
             info!("No command provided. Use --help for usage information.");

@@ -168,6 +168,45 @@ pub enum Commands {
         #[arg(long, value_name = "PATH")]
         script: Option<PathBuf>,
     },
+
+    /// Update the ratchet binary to the latest version
+    Update {
+        /// Check for updates without installing
+        #[arg(long)]
+        check_only: bool,
+
+        /// Force update even if same version
+        #[arg(long)]
+        force: bool,
+
+        /// Include pre-release versions
+        #[arg(long)]
+        pre_release: bool,
+
+        /// Update to specific version
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+
+        /// Custom installation directory
+        #[arg(long, value_name = "PATH")]
+        install_dir: Option<PathBuf>,
+
+        /// Create backup of current binary
+        #[arg(long)]
+        backup: bool,
+
+        /// Rollback to previous version (requires backup)
+        #[arg(long)]
+        rollback: bool,
+
+        /// Show what would be updated without installing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip binary verification
+        #[arg(long)]
+        skip_verify: bool,
+    },
 }
 
 #[derive(Subcommand)]
