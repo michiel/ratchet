@@ -13,9 +13,11 @@ pub mod pagination;
 
 // Re-export main types for convenience
 pub use domain::{
-    UnifiedApiKey, UnifiedApiKeyAuth, UnifiedBasicAuth, UnifiedBearerAuth, UnifiedExecution, UnifiedFilesystemConfig,
-    UnifiedJob, UnifiedOutputDestination, UnifiedRetryPolicy, UnifiedSchedule, UnifiedSession, UnifiedStdioConfig,
-    UnifiedTask, UnifiedUser, UnifiedWebhookAuth, UnifiedWebhookConfig, UnifiedWorkerStatus,
+    ConnectionTestResult, CreateRepositoryRequest, CreateTaskRequest, PushResult, SyncResult, TaskConflict,
+    TaskRepositoryInfo, UnifiedApiKey, UnifiedApiKeyAuth, UnifiedBasicAuth, UnifiedBearerAuth, UnifiedExecution, 
+    UnifiedFilesystemConfig, UnifiedJob, UnifiedOutputDestination, UnifiedRetryPolicy, UnifiedSchedule, 
+    UnifiedSession, UnifiedStdioConfig, UnifiedTask, UnifiedTaskRepository, UnifiedUser, UnifiedWebhookAuth, 
+    UnifiedWebhookConfig, UnifiedWorkerStatus, UpdateRepositoryRequest, UpdateTaskSourceRequest,
 };
 pub use enums::{
     ApiKeyPermissions, CompressionType, ExecutionStatus, HttpMethod, JobPriority, JobStatus, OutputFormat, UserRole,

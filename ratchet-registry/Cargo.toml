@@ -18,6 +18,7 @@ async-trait = { workspace = true }
 tokio = { workspace = true, features = ["fs", "time", "rt", "macros"] }
 chrono = { workspace = true }
 uuid = { workspace = true }
+sha2 = "0.10"
 
 # Ratchet dependencies
 ratchet-core = { path = "../ratchet-core" }

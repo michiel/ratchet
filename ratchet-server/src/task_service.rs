@@ -88,6 +88,23 @@ impl TaskService for UnifiedTaskService {
                             updated_at: chrono::Utc::now(), // Use current time as fallback
                             validated_at: None,
                             in_sync: true, // Registry tasks are always in sync
+                            // New required fields - placeholders for registry tasks
+                            source_code: "// Registry task - source code loaded on demand".to_string(),
+                            source_type: "javascript".to_string(),
+                            repository_info: ratchet_api_types::TaskRepositoryInfo {
+                                repository_id: ApiId::from_i32(1),
+                                repository_name: "registry".to_string(),
+                                repository_type: "registry".to_string(),
+                                repository_path: task_meta.name.clone(),
+                                branch: None,
+                                commit: None,
+                                can_push: false,
+                                auto_push: false,
+                            },
+                            is_editable: false,
+                            sync_status: "synced".to_string(),
+                            needs_push: false,
+                            last_synced_at: Some(chrono::Utc::now()),
                             input_schema: task_meta.input_schema,
                             output_schema: task_meta.output_schema,
                             metadata: task_meta.metadata,
@@ -139,6 +156,23 @@ impl TaskService for UnifiedTaskService {
                             updated_at: chrono::Utc::now(), // Use current time as fallback
                             validated_at: None,
                             in_sync: true, // Registry tasks are always in sync
+                            // New required fields - placeholders for registry tasks
+                            source_code: "// Registry task - source code loaded on demand".to_string(),
+                            source_type: "javascript".to_string(),
+                            repository_info: ratchet_api_types::TaskRepositoryInfo {
+                                repository_id: ApiId::from_i32(1),
+                                repository_name: "registry".to_string(),
+                                repository_type: "registry".to_string(),
+                                repository_path: task_meta.name.clone(),
+                                branch: None,
+                                commit: None,
+                                can_push: false,
+                                auto_push: false,
+                            },
+                            is_editable: false,
+                            sync_status: "synced".to_string(),
+                            needs_push: false,
+                            last_synced_at: Some(chrono::Utc::now()),
                             input_schema: task_meta.input_schema,
                             output_schema: task_meta.output_schema,
                             metadata: task_meta.metadata,
@@ -227,6 +261,23 @@ impl TaskService for UnifiedTaskService {
                             updated_at: chrono::Utc::now(), // Use current time as fallback
                             validated_at: None,
                             in_sync: true,
+                            // New required fields - placeholders for registry tasks
+                            source_code: "// Registry task - source code loaded on demand".to_string(),
+                            source_type: "javascript".to_string(),
+                            repository_info: ratchet_api_types::TaskRepositoryInfo {
+                                repository_id: ApiId::from_i32(1),
+                                repository_name: "registry".to_string(),
+                                repository_type: "registry".to_string(),
+                                repository_path: task_meta.name.clone(),
+                                branch: None,
+                                commit: None,
+                                can_push: false,
+                                auto_push: false,
+                            },
+                            is_editable: false,
+                            sync_status: "synced".to_string(),
+                            needs_push: false,
+                            last_synced_at: Some(chrono::Utc::now()),
                             input_schema: task_meta.input_schema,
                             output_schema: task_meta.output_schema,
                             metadata: task_meta.metadata,

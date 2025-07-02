@@ -438,6 +438,23 @@ fn convert_task_definition_to_unified(task_def: &ratchet_registry::TaskDefinitio
         updated_at: task_def.metadata.updated_at,
         validated_at: Some(chrono::Utc::now()),
         in_sync: true,
+        // New required fields
+        source_code: task_def.script.clone(),
+        source_type: "javascript".to_string(),
+        repository_info: ratchet_api_types::TaskRepositoryInfo {
+            repository_id: ratchet_api_types::ApiId::from_i32(1), // Default repository
+            repository_name: "registry".to_string(),
+            repository_type: "registry".to_string(),
+            repository_path: format!("{}/{}", task_def.reference.source, task_def.reference.name),
+            branch: None,
+            commit: None,
+            can_push: false,
+            auto_push: false,
+        },
+        is_editable: false, // Registry tasks are read-only
+        sync_status: "synced".to_string(),
+        needs_push: false,
+        last_synced_at: Some(chrono::Utc::now()),
         input_schema: task_def.input_schema.clone(),
         output_schema: task_def.output_schema.clone(),
         metadata: Some(serde_json::json!({

@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1447,16 +1448,18 @@ impl TaskDevelopmentService {
 
             if let Some(code) = &request.code {
                 // Update filesystem if allowed
-                if self.allow_fs_operations && updated_task.path != "memory:inline" {
-                    let task_dir = std::path::Path::new(&updated_task.path);
-                    let main_js_path = task_dir.join("main.js");
-                    if let Err(e) = fs::write(&main_js_path, code).await {
-                        return Ok(json!({
-                            "task_id": task.uuid.to_string(),
-                            "success": false,
-                            "errors": vec![format!("Failed to update task file: {}", e)],
-                            "message": "File system update failed"
-                        }));
+                if self.allow_fs_operations && updated_task.path.as_deref() != Some("memory:inline") {
+                    if let Some(path) = &updated_task.path {
+                        let task_dir = std::path::Path::new(path);
+                        let main_js_path = task_dir.join("main.js");
+                        if let Err(e) = fs::write(&main_js_path, code).await {
+                            return Ok(json!({
+                                "task_id": task.uuid.to_string(),
+                                "success": false,
+                                "errors": vec![format!("Failed to update task file: {}", e)],
+                                "message": "File system update failed"
+                            }));
+                        }
                     }
                 } else {
                     // Store inline code in metadata
@@ -1554,15 +1557,17 @@ impl TaskDevelopmentService {
         }
 
         // Delete files if requested
-        if request.delete_files && self.allow_fs_operations && task.path != "memory:inline" {
-            let task_path = std::path::Path::new(&task.path);
-            if task_path.exists() {
-                if task_path.is_dir() {
-                    if let Err(e) = std::fs::remove_dir_all(task_path) {
-                        log::warn!("Failed to delete task directory {}: {}", task_path.display(), e);
+        if request.delete_files && self.allow_fs_operations && task.path.as_deref() != Some("memory:inline") {
+            if let Some(path) = &task.path {
+                let task_path = std::path::Path::new(path);
+                if task_path.exists() {
+                    if task_path.is_dir() {
+                        if let Err(e) = std::fs::remove_dir_all(task_path) {
+                            log::warn!("Failed to delete task directory {}: {}", task_path.display(), e);
+                        }
+                    } else if let Err(e) = std::fs::remove_file(task_path) {
+                        log::warn!("Failed to delete task file {}: {}", task_path.display(), e);
                     }
-                } else if let Err(e) = std::fs::remove_file(task_path) {
-                    log::warn!("Failed to delete task file {}: {}", task_path.display(), e);
                 }
             }
         }
@@ -2061,9 +2066,7 @@ impl TaskDevelopmentService {
             name: request.name.clone(),
             description: Some(request.description.clone()),
             version: request.version.clone(),
-            path: task_path
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "memory:inline".to_string()),
+            path: task_path.map(|p| p.display().to_string()),
             metadata: serde_json::json!({
                 "tags": request.tags,
                 "custom": request.metadata,
@@ -2074,9 +2077,23 @@ impl TaskDevelopmentService {
             input_schema: request.input_schema.clone(),
             output_schema: request.output_schema.clone(),
             enabled: request.enabled,
+            // New required fields for full task storage
+            source_code: request.code.clone(),
+            source_type: "javascript".to_string(),
+            storage_type: if task_path.is_some() { "file" } else { "database" }.to_string(),
+            file_path: task_path.map(|p| p.display().to_string()),
+            checksum: format!("{:x}", Sha256::digest(request.code.as_bytes())),
+            repository_id: 1, // Default repository - TODO: make configurable
+            repository_path: task_path.map(|p| p.display().to_string()).unwrap_or_else(|| format!("mcp-tasks/{}.js", task_uuid)),
+            last_synced_at: None,
+            sync_status: "local".to_string(),
+            is_editable: true,
+            created_from: "mcp".to_string(),
+            needs_push: false,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             validated_at: None, // Will be set when validation runs
+            source_modified_at: Some(chrono::Utc::now()),
         };
 
         // Insert into database
@@ -2149,7 +2166,7 @@ impl TaskDevelopmentService {
         }
 
         // Check if this is an inline task
-        if task.path == "memory:inline" {
+        if task.path.as_deref() == Some("memory:inline") {
             // For inline tasks, we could store the code in metadata
             if let Some(code) = task.metadata.get("inline_code").and_then(|c| c.as_str()) {
                 return Ok(code.to_string());
@@ -2158,20 +2175,25 @@ impl TaskDevelopmentService {
         }
 
         // Try to load from file system
-        let task_dir = std::path::Path::new(&task.path);
-        let main_js_path = if task_dir.is_dir() {
-            task_dir.join("main.js")
-        } else {
-            // Assume the path itself is the file
-            task_dir.to_path_buf()
-        };
+        if let Some(path) = &task.path {
+            let task_dir = std::path::Path::new(path);
+            let main_js_path = if task_dir.is_dir() {
+                task_dir.join("main.js")
+            } else {
+                // Assume the path itself is the file
+                task_dir.to_path_buf()
+            };
 
-        match fs::read_to_string(&main_js_path).await {
-            Ok(code) => Ok(code),
-            Err(e) => {
-                log::warn!("Failed to load task code from {}: {}", main_js_path.display(), e);
-                Ok(format!("// Failed to load task code: {}", e))
+            match fs::read_to_string(&main_js_path).await {
+                Ok(code) => Ok(code),
+                Err(e) => {
+                    log::warn!("Failed to load task code from {}: {}", main_js_path.display(), e);
+                    Ok(format!("// Failed to load task code: {}", e))
+                }
             }
+        } else {
+            // No path available, try to get from source_code field or return placeholder
+            Ok(task.source_code.clone())
         }
     }
 

@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use ratchet_interfaces::{
@@ -1067,14 +1068,28 @@ fn convert_unified_task_to_storage(task: UnifiedTask) -> ratchet_storage::seaorm
         name: task.name,
         description: task.description,
         version: task.version,
-        path: String::new(), // Would need to be provided or inferred
+        path: Some(task.repository_info.repository_path.clone()),
         metadata: task.metadata.unwrap_or_default(),
         input_schema: task.input_schema.unwrap_or_default(),
         output_schema: task.output_schema.unwrap_or_default(),
         enabled: task.enabled,
+        // New required fields
+        source_code: task.source_code.clone(),
+        source_type: task.source_type,
+        storage_type: "database".to_string(),
+        file_path: Some(task.repository_info.repository_path.clone()),
+        checksum: format!("{:x}", Sha256::digest(task.source_code.as_bytes())),
+        repository_id: task.repository_info.repository_id.as_i32().unwrap_or(1),
+        repository_path: task.repository_info.repository_path,
+        last_synced_at: task.last_synced_at,
+        sync_status: task.sync_status,
+        is_editable: task.is_editable,
+        created_from: "api".to_string(),
+        needs_push: task.needs_push,
         created_at: task.created_at,
         updated_at: task.updated_at,
         validated_at: task.validated_at,
+        source_modified_at: Some(task.updated_at),
     }
 }
 
@@ -1148,6 +1163,23 @@ fn convert_storage_task_to_unified(task: ratchet_storage::seaorm::entities::Task
         updated_at: task.updated_at,
         validated_at: task.validated_at,
         in_sync: task.metadata.get("in_sync").and_then(|v| v.as_bool()).unwrap_or(true),
+        // New required fields
+        source_code: task.source_code,
+        source_type: task.source_type,
+        repository_info: ratchet_api_types::TaskRepositoryInfo {
+            repository_id: ApiId::from_i32(task.repository_id),
+            repository_name: "default".to_string(), // TODO: Load from repository
+            repository_type: task.storage_type.clone(),
+            repository_path: task.repository_path,
+            branch: None,
+            commit: None,
+            can_push: task.is_editable,
+            auto_push: task.needs_push,
+        },
+        is_editable: task.is_editable,
+        sync_status: task.sync_status,
+        needs_push: task.needs_push,
+        last_synced_at: task.last_synced_at,
         input_schema: Some(task.input_schema),
         output_schema: Some(task.output_schema),
         metadata: Some(task.metadata),

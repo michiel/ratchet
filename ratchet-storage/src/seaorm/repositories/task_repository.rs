@@ -112,9 +112,23 @@ impl TaskRepository {
             input_schema: Set(task.input_schema),
             output_schema: Set(task.output_schema),
             enabled: Set(task.enabled),
+            // New fields
+            source_code: Set(task.source_code),
+            source_type: Set(task.source_type),
+            storage_type: Set(task.storage_type),
+            file_path: Set(task.file_path),
+            checksum: Set(task.checksum),
+            repository_id: Set(task.repository_id),
+            repository_path: Set(task.repository_path),
+            last_synced_at: Set(task.last_synced_at),
+            sync_status: Set(task.sync_status),
+            is_editable: Set(task.is_editable),
+            created_from: Set(task.created_from),
+            needs_push: Set(task.needs_push),
             created_at: Set(task.created_at),    // Keep original creation time
             updated_at: Set(chrono::Utc::now()), // Update the timestamp
             validated_at: Set(task.validated_at),
+            source_modified_at: Set(task.source_modified_at),
         };
 
         let updated_task = active_model.update(self.db.get_connection()).await?;

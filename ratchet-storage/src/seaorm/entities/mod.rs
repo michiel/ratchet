@@ -4,6 +4,8 @@ pub mod executions;
 pub mod jobs;
 pub mod schedules;
 pub mod sessions;
+pub mod task_repositories;
+pub mod task_versions;
 pub mod tasks;
 pub mod users;
 
@@ -25,5 +27,12 @@ pub use schedules::{
     ActiveModel as ScheduleActiveModel, Column as ScheduleColumn, Entity as Schedules, Model as Schedule,
 };
 pub use sessions::{ActiveModel as SessionActiveModel, Column as SessionColumn, Entity as Sessions, Model as Session};
+pub use task_repositories::{
+    ActiveModel as TaskRepositoryActiveModel, Column as TaskRepositoryColumn, Entity as TaskRepositories,
+    Model as TaskRepository,
+};
+pub use task_versions::{
+    ActiveModel as TaskVersionActiveModel, Column as TaskVersionColumn, Entity as TaskVersions, Model as TaskVersion,
+};
 pub use tasks::{ActiveModel as TaskActiveModel, Column as TaskColumn, Entity as Tasks, Model as Task};
 pub use users::{ActiveModel as UserActiveModel, Column as UserColumn, Entity as Users, Model as User, UserRole};

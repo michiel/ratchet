@@ -14,7 +14,7 @@ use utoipa::ToSchema;
 // #[cfg(feature = "openapi")]
 // use serde_json::json;
 
-/// Unified Task representation
+/// Unified Task representation with full repository support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
@@ -33,6 +33,15 @@ pub struct UnifiedTask {
     pub validated_at: Option<DateTime<Utc>>,
     pub in_sync: bool,
 
+    // New fields for full task storage
+    pub source_code: String,
+    pub source_type: String,
+    pub repository_info: TaskRepositoryInfo,
+    pub is_editable: bool,
+    pub sync_status: String,
+    pub needs_push: bool,
+    pub last_synced_at: Option<DateTime<Utc>>,
+
     // Additional fields for detailed view
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_schema: Option<serde_json::Value>,
@@ -40,6 +49,168 @@ pub struct UnifiedTask {
     pub output_schema: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+}
+
+/// Task repository information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRepositoryInfo {
+    pub repository_id: ApiId,
+    pub repository_name: String,
+    pub repository_type: String,
+    pub repository_path: String,
+    pub branch: Option<String>,
+    pub commit: Option<String>,
+    pub can_push: bool,
+    pub auto_push: bool,
+}
+
+/// Repository representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiedTaskRepository {
+    pub id: ApiId,
+    pub name: String,
+    pub repository_type: String,
+    pub uri: String,
+    pub branch: Option<String>,
+    pub sync_enabled: bool,
+    pub sync_interval_minutes: Option<i32>,
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub sync_status: String,
+    pub is_default: bool,
+    pub is_writable: bool,
+    pub watch_patterns: Vec<String>,
+    pub ignore_patterns: Vec<String>,
+    pub push_on_change: bool,
+    pub task_count: u32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Create task request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTaskRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub source_code: String,
+    pub source_type: Option<String>,
+    pub version: Option<String>,
+    pub input_schema: serde_json::Value,
+    pub output_schema: serde_json::Value,
+    pub metadata: Option<serde_json::Value>,
+    pub repository_id: Option<ApiId>,
+    pub repository_path: Option<String>,
+}
+
+/// Update task source request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTaskSourceRequest {
+    pub source_code: String,
+    pub input_schema: Option<serde_json::Value>,
+    pub output_schema: Option<serde_json::Value>,
+    pub version: Option<String>,
+    pub change_description: Option<String>,
+}
+
+/// Create repository request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRepositoryRequest {
+    pub name: String,
+    pub repository_type: String,
+    pub uri: String,
+    pub branch: Option<String>,
+    pub auth_config: Option<serde_json::Value>,
+    pub sync_enabled: Option<bool>,
+    pub sync_interval_minutes: Option<i32>,
+    pub is_default: Option<bool>,
+    pub is_writable: Option<bool>,
+    pub watch_patterns: Option<Vec<String>>,
+    pub ignore_patterns: Option<Vec<String>>,
+    pub push_on_change: Option<bool>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Update repository request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateRepositoryRequest {
+    pub name: Option<String>,
+    pub uri: Option<String>,
+    pub branch: Option<String>,
+    pub auth_config: Option<serde_json::Value>,
+    pub sync_enabled: Option<bool>,
+    pub sync_interval_minutes: Option<i32>,
+    pub is_default: Option<bool>,
+    pub is_writable: Option<bool>,
+    pub watch_patterns: Option<Vec<String>>,
+    pub ignore_patterns: Option<Vec<String>>,
+    pub push_on_change: Option<bool>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Repository connection test result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTestResult {
+    pub success: bool,
+    pub message: String,
+    pub details: Option<serde_json::Value>,
+}
+
+/// Sync result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SyncResult {
+    pub repository_id: ApiId,
+    pub tasks_added: u32,
+    pub tasks_updated: u32,
+    pub tasks_deleted: u32,
+    pub conflicts: Vec<TaskConflict>,
+    pub errors: Vec<String>,
+}
+
+/// Push result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PushResult {
+    pub task_id: ApiId,
+    pub repository_id: ApiId,
+    pub repository_path: String,
+    pub success: bool,
+    pub commit_hash: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Task conflict
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TaskConflict {
+    pub task_id: ApiId,
+    pub repository_id: ApiId,
+    pub conflict_type: String,
+    pub local_checksum: String,
+    pub remote_checksum: String,
+    pub auto_resolvable: bool,
 }
 
 /// Unified Execution representation

@@ -50,6 +50,23 @@ impl Mutation {
             updated_at: chrono::Utc::now(),
             validated_at: None,
             in_sync: true,
+            // New required fields
+            source_code: "// Task source code - to be implemented".to_string(), // TODO: Add source_code to CreateTaskInput
+            source_type: "javascript".to_string(),
+            repository_info: ratchet_api_types::TaskRepositoryInfo {
+                repository_id: ratchet_api_types::ApiId::from_i32(1), // Default repository
+                repository_name: "default".to_string(),
+                repository_type: "filesystem".to_string(),
+                repository_path: "tasks".to_string(),
+                branch: None,
+                commit: None,
+                can_push: false,
+                auto_push: false,
+            },
+            is_editable: true,
+            sync_status: "local".to_string(),
+            needs_push: false,
+            last_synced_at: None,
             input_schema: input.input_schema,
             output_schema: input.output_schema,
             metadata: input.metadata,

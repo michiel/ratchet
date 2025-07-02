@@ -992,7 +992,7 @@ async fn list_tasks(config_path: Option<&PathBuf>, format: &str) -> Result<()> {
                     let enabled = if task.enabled { "Yes" } else { "No" };
                     println!(
                         "{:<20} {:<10} {:<15} {:<10} {}",
-                        task.name, task.version, status, enabled, task.path
+                        task.name, task.version, status, enabled, task.path.as_deref().unwrap_or("N/A")
                     );
                 }
             }

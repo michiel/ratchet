@@ -39,6 +39,7 @@ tracing-subscriber = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+sha2 = "0.10"
 cron = { workspace = true }
 tokio-cron-scheduler = { workspace = true }
 rustls = "0.23"

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use sha2::{Digest, Sha256};
 use tracing::{error, info};
 
 use crate::error::{RegistryError, Result};
@@ -166,16 +167,30 @@ impl DatabaseSync {
             name: discovered.metadata.name.clone(),
             description: discovered.metadata.description.clone(),
             version: discovered.metadata.version.clone(),
-            path,
+            path: Some(path.clone()),
             metadata: serde_json::to_value(&discovered.metadata).map_err(|e| RegistryError::Json(e))?,
             input_schema: serde_json::json!({}), // Default empty schema - TODO: Load from task definition
             output_schema: serde_json::json!({}), // Default empty schema - TODO: Load from task definition
             enabled: true,                       // New tasks are enabled by default
+            // New required fields for full task storage
+            source_code: "// TODO: Load source code from registry".to_string(), // Will be loaded in Phase 2
+            source_type: "javascript".to_string(),
+            storage_type: "registry".to_string(),
+            file_path: Some(path.clone()),
+            checksum: format!("{:x}", Sha256::digest("// TODO: Load source code from registry".as_bytes())), // Placeholder checksum
+            repository_id: 1, // Default repository - TODO: make configurable
+            repository_path: path.clone(),
+            last_synced_at: Some(now),
+            sync_status: "synced".to_string(),
+            is_editable: false, // Registry tasks are read-only
+            created_from: "registry".to_string(),
+            needs_push: false,
             created_at: existing_id
                 .map(|_| discovered.metadata.created_at)
                 .unwrap_or(discovered.metadata.created_at),
             updated_at: discovered.metadata.updated_at,
             validated_at: Some(now), // Mark as validated since it came from registry
+            source_modified_at: Some(discovered.metadata.updated_at),
         })
     }
 

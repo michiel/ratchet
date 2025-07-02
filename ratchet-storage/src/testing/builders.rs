@@ -34,14 +34,28 @@ impl TaskBuilder {
                 name: "test-task".to_string(),
                 description: Some("A test task".to_string()),
                 version: "1.0.0".to_string(),
-                path: "test/path".to_string(),
+                path: Some("test/path".to_string()),
                 metadata: json!({}),
                 input_schema: json!({"type": "object"}),
                 output_schema: json!({"type": "object"}),
                 enabled: true,
+                // New required fields
+                source_code: "console.log('test');".to_string(),
+                source_type: "javascript".to_string(),
+                storage_type: "database".to_string(),
+                file_path: Some("test/task.js".to_string()),
+                checksum: "test-checksum".to_string(),
+                repository_id: 1,
+                repository_path: "test/task.js".to_string(),
+                last_synced_at: Some(Utc::now()),
+                sync_status: "synced".to_string(),
+                is_editable: true,
+                created_from: "api".to_string(),
+                needs_push: false,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
                 validated_at: Some(Utc::now()),
+                source_modified_at: Some(Utc::now()),
             },
         }
     }
@@ -67,7 +81,7 @@ impl TaskBuilder {
     }
 
     pub fn with_path(mut self, path: impl Into<String>) -> Self {
-        self.task.path = path.into();
+        self.task.path = Some(path.into());
         self
     }
 
@@ -108,9 +122,23 @@ impl TaskBuilder {
             input_schema: Set(task.input_schema),
             output_schema: Set(task.output_schema),
             enabled: Set(task.enabled),
+            // New fields
+            source_code: Set(task.source_code),
+            source_type: Set(task.source_type),
+            storage_type: Set(task.storage_type),
+            file_path: Set(task.file_path),
+            checksum: Set(task.checksum),
+            repository_id: Set(task.repository_id),
+            repository_path: Set(task.repository_path),
+            last_synced_at: Set(task.last_synced_at),
+            sync_status: Set(task.sync_status),
+            is_editable: Set(task.is_editable),
+            created_from: Set(task.created_from),
+            needs_push: Set(task.needs_push),
             created_at: Set(task.created_at),
             updated_at: Set(task.updated_at),
             validated_at: Set(task.validated_at),
+            source_modified_at: Set(task.source_modified_at),
         }
     }
 }
