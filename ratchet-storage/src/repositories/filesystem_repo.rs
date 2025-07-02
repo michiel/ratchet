@@ -86,17 +86,13 @@ impl FilesystemTaskRepository {
 
     /// Simple glob pattern matching (basic implementation)
     fn matches_glob_pattern(path: &str, pattern: &str) -> bool {
-        // Convert glob pattern to regex (simplified)
-        let regex_pattern = pattern
-            .replace("**", ".*")
-            .replace("*", "[^/]*")
-            .replace("?", "[^/]");
-        
-        if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
-            regex.is_match(path)
-        } else {
-            // Fallback to simple string matching
-            path.contains(&pattern.replace("*", ""))
+        // Use glob crate for proper glob pattern matching
+        match glob::Pattern::new(pattern) {
+            Ok(glob_pattern) => glob_pattern.matches(path),
+            Err(_) => {
+                // Fallback to simple pattern matching for invalid patterns
+                path.contains(&pattern.replace("*", ""))
+            }
         }
     }
 

@@ -5763,6 +5763,7 @@ dependencies = [
  "clap",
  "cron",
  "fastrand 2.3.0",
+ "glob",
  "hex",
  "log",
  "mockall",
