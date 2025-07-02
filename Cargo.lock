@@ -438,7 +438,7 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-tungstenite",
- "tower",
+ "tower 0.5.2",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -473,6 +473,35 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.103",
+]
+
+[[package]]
+name = "axum-mcp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "http 1.3.1",
+ "hyper 1.6.0",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tokio-test",
+ "tower 0.4.13",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -523,7 +552,7 @@ dependencies = [
  "serde_urlencoded",
  "smallvec 1.15.1",
  "tokio",
- "tower",
+ "tower 0.5.2",
  "url",
 ]
 
@@ -5416,7 +5445,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-test",
- "tower",
+ "tower 0.5.2",
  "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
@@ -5677,7 +5706,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-test",
- "tower",
+ "tower 0.5.2",
  "tower-http 0.5.2",
  "tracing",
  "utoipa",
@@ -5810,7 +5839,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-test",
- "tower",
+ "tower 0.5.2",
  "tower-http 0.5.2",
  "tracing",
  "uuid",
@@ -5976,7 +6005,7 @@ dependencies = [
  "tokio-native-tls",
  "tokio-rustls",
  "tokio-util",
- "tower",
+ "tower 0.5.2",
  "tower-http 0.6.6",
  "tower-service",
  "url",
@@ -7496,6 +7525,17 @@ dependencies = [
 
 [[package]]
 name = "tower"
+version = "0.4.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8fa9be0de6cf49e536ce1851f987bd21a43b771b09473c3549a6c853db37c1c"
+dependencies = [
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "tower"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
@@ -7549,7 +7589,7 @@ dependencies = [
  "http-body 1.0.1",
  "iri-string",
  "pin-project-lite",
- "tower",
+ "tower 0.5.2",
  "tower-layer",
  "tower-service",
 ]
