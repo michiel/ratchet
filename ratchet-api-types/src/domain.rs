@@ -213,6 +213,82 @@ pub struct TaskConflict {
     pub auto_resolvable: bool,
 }
 
+/// Repository sync status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RepositorySyncStatus {
+    pub repository_id: ApiId,
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub sync_status: String,
+    pub sync_error: Option<String>,
+    pub health: RepositoryHealth,
+    pub task_count: u64,
+}
+
+/// Repository health information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryHealth {
+    pub accessible: bool,
+    pub writable: bool,
+    pub last_success: Option<DateTime<Utc>>,
+    pub error_count: u32,
+    pub message: String,
+}
+
+/// Task assignment request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct AssignTaskRequest {
+    pub repository_id: ApiId,
+    pub repository_path: Option<String>,
+    pub sync_immediately: Option<bool>,
+}
+
+/// Task repository assignment information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "graphql", derive(SimpleObject))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRepositoryAssignment {
+    pub task_id: ApiId,
+    pub repository_id: ApiId,
+    pub repository_name: String,
+    pub repository_path: String,
+    pub can_push: bool,
+    pub auto_push: bool,
+    pub sync_status: String,
+    pub needs_push: bool,
+    pub last_synced_at: Option<DateTime<Utc>>,
+}
+
+/// Enhanced repository creation request with sync options
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRepositoryWithSyncRequest {
+    #[serde(flatten)]
+    pub repository: CreateRepositoryRequest,
+    pub test_connection: Option<bool>,
+    pub initial_sync: Option<bool>,
+}
+
+/// Enhanced repository update request with sync options
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateRepositoryWithSyncRequest {
+    #[serde(flatten)]
+    pub repository: UpdateRepositoryRequest,
+    pub test_connection: Option<bool>,
+    pub sync_after_update: Option<bool>,
+}
+
 /// Unified Execution representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(SimpleObject))]
