@@ -12,6 +12,14 @@ pub mod tests;
 pub use repository_config::*;
 pub use server_config::*;
 
+// Re-export types needed for tests
+pub use repository_config::{
+    RepositoryConfig, ConfigProfile, SyncConfig, SecurityConfig, 
+    PerformanceConfig, MonitoringConfig, EnvironmentConfig, 
+    ConfigMetadata, AuthType, EncryptionAlgorithm, Permission, UserRole,
+    ConfigValidationResult, ConflictResolutionStrategy
+};
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -296,54 +304,3 @@ impl EnvironmentConfigLoader {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_config_manager_operations() {
-        let temp_dir = TempDir::new().unwrap();
-        let config_path = temp_dir.path().to_str().unwrap().to_string();
-        
-        let mut manager = ConfigManager::with_paths(vec![config_path]);
-        
-        // Test saving and loading configuration
-        let mut config = RepositoryConfig::default();
-        config.repository_id = 1;
-        config.repository_name = "test-repo".to_string();
-        
-        manager.save_config(1, config.clone()).await.unwrap();
-        let loaded_config = manager.load_config(1).await.unwrap();
-        
-        assert_eq!(loaded_config.repository_id, 1);
-        assert_eq!(loaded_config.repository_name, "test-repo");
-    }
-
-    #[tokio::test]
-    async fn test_environment_config_loader() {
-        let config = EnvironmentConfigLoader::load_for_environment("production").await.unwrap();
-        assert_eq!(config.profile, ConfigProfile::Production);
-        assert!(config.security.auth.require_mfa);
-        assert!(config.security.encryption.encrypt_at_rest);
-    }
-
-    #[test]
-    fn test_config_template_generator() {
-        let dev_config = ConfigTemplateGenerator::development_template();
-        assert_eq!(dev_config.profile, ConfigProfile::Development);
-        assert!(dev_config.environment.debug_mode);
-        
-        let prod_config = ConfigTemplateGenerator::production_template();
-        assert_eq!(prod_config.profile, ConfigProfile::Production);
-        assert!(!prod_config.environment.debug_mode);
-        assert!(prod_config.security.auth.require_mfa);
-    }
-
-    #[test]
-    fn test_environment_detection() {
-        // Test with no environment variables
-        let env = EnvironmentConfigLoader::detect_environment();
-        assert_eq!(env, "development");
-    }
-}

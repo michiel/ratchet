@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod integration_tests {
-    use super::*;
+    use crate::config::*;
     use std::collections::HashMap;
 
     /// Test repository configuration basic operations

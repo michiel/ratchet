@@ -439,7 +439,7 @@ pub struct CredentialStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::security::encryption::MockEncryptionService;
+    use super::MockEncryptionService;
     use std::sync::Arc;
 
     #[tokio::test]
