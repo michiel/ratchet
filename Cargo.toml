@@ -42,7 +42,6 @@ env_logger = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
-lazy_static = "1.4"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.17", features = ["v4", "serde"] }
 # Latest SQLx version
@@ -73,7 +72,6 @@ ahash = "0.8"
 fastrand = "2.0"
 # HTTP stack dependencies
 # Utility packages
-unicode-width = "0.2.1"
 # Cron/scheduling packages  
 cron = "0.15"
 tokio-cron-scheduler = "0.14"
@@ -82,15 +80,12 @@ dirs = "6.0"
 colored = "3.0"
 rustyline = "16.0"
 # System information packages
-hostname = "0.4"
 sysinfo = "0.35"
-# Development/Testing Dependencies
+serde_yaml = "0.9"
+# Development/Testing Dependencies used in production code
 tempfile = "3.13"
 mockall = "0.13"
 tokio-test = "0.4"
-proptest = "1.5"
-criterion = "0.5"
-serde_yaml = "0.9"
 # Major Library Updates
 rand = "0.9"
 notify = "6.1"
@@ -103,6 +98,11 @@ once_cell = "1.20"
 bitflags = "2.6"
 # Git libraries
 gix = { version = "0.66", default-features = false, features = ["blocking-http-transport-reqwest", "blocking-http-transport-reqwest-rust-tls", "credentials", "worktree-mutation"] }
+
+# Development/Testing Dependencies (for benchmarks and property testing)
+[workspace.dev-dependencies]
+proptest = "1.5"
+criterion = "0.5"
 
 # Workspace-level configuration for targets
 [workspace.package]

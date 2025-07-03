@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use once_cell::sync::Lazy;
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
 use std::fs;
@@ -13,9 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tracing::{debug, info, warn};
 
 // Global recording state
-lazy_static::lazy_static! {
-    static ref RECORDING_STATE: Arc<Mutex<Option<RecordingState>>> = Arc::new(Mutex::new(None));
-}
+static RECORDING_STATE: Lazy<Arc<Mutex<Option<RecordingState>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
 
 #[derive(Debug, Clone)]
 struct RecordingState {

@@ -20,7 +20,7 @@ tracing.workspace = true
 
 # Logging dependencies
 colored = { workspace = true }
-hostname = { workspace = true }
+hostname = "0.4"
 sysinfo = { workspace = true }
 once_cell = { workspace = true }
 humantime-serde = "1.1"

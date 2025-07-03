@@ -24,7 +24,7 @@ async-trait = "0.1"
 
 # Recording functionality
 chrono.workspace = true
-lazy_static.workspace = true
+once_cell = { workspace = true }
 
 # Configuration
 ratchet-config = { path = "../ratchet-config" }
