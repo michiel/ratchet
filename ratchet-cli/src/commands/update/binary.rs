@@ -215,34 +215,44 @@ mod tests {
     #[tokio::test]
     async fn test_backup_and_rollback() {
         let manager = DefaultBinaryManager::new();
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp directory for test");
         let original_path = temp_dir.path().join("test_binary");
         
         // Create a test binary
-        let mut file = tokio::fs::File::create(&original_path).await.unwrap();
-        file.write_all(b"test content").await.unwrap();
-        file.sync_all().await.unwrap();
+        let mut file = tokio::fs::File::create(&original_path).await
+            .expect("Failed to create test binary file");
+        file.write_all(b"test content").await
+            .expect("Failed to write test content");
+        file.sync_all().await
+            .expect("Failed to sync test file");
         
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = tokio::fs::metadata(&original_path).await.unwrap().permissions();
+            let mut perms = tokio::fs::metadata(&original_path).await
+                .expect("Failed to read file metadata for permissions")
+                .permissions();
             perms.set_mode(0o755);
-            tokio::fs::set_permissions(&original_path, perms).await.unwrap();
+            tokio::fs::set_permissions(&original_path, perms).await
+                .expect("Failed to set file permissions");
         }
 
         // Create backup
-        let backup_path = manager.create_backup(&original_path).await.unwrap();
+        let backup_path = manager.create_backup(&original_path).await
+            .expect("Failed to create backup");
         assert!(backup_path.exists());
 
         // Modify original
-        tokio::fs::write(&original_path, b"modified content").await.unwrap();
+        tokio::fs::write(&original_path, b"modified content").await
+            .expect("Failed to modify original file");
 
         // Rollback
-        manager.rollback(&backup_path, &original_path).await.unwrap();
+        manager.rollback(&backup_path, &original_path).await
+            .expect("Failed to rollback file");
 
         // Verify rollback worked
-        let content = tokio::fs::read_to_string(&original_path).await.unwrap();
+        let content = tokio::fs::read_to_string(&original_path).await
+            .expect("Failed to read file after rollback");
         assert_eq!(content, "test content");
     }
 }

@@ -58,7 +58,9 @@ impl SanitizedError {
         if self.context.is_none() {
             self.context = Some(HashMap::new());
         }
-        self.context.as_mut().unwrap().insert(key.into(), value.into());
+        self.context.as_mut()
+            .expect("Context should be Some after initialization above")
+            .insert(key.into(), value.into());
         self
     }
 }
@@ -80,44 +82,62 @@ impl ErrorSanitizer {
     pub fn new(config: ErrorSanitizationConfig) -> Self {
         let sensitive_patterns = vec![
             // Database connection strings
-            Regex::new(r"(?i)(postgresql|mysql|sqlite)://[^\s]+").unwrap(),
+            Regex::new(r"(?i)(postgresql|mysql|sqlite)://[^\s]+")
+                .expect("Invalid regex pattern for database connection strings"),
             // JWT tokens and API keys (improved pattern)
-            Regex::new(r"(?i)(jwt|token|key|secret|password)[=:\s]+[a-zA-Z0-9+/=_\-]{10,}").unwrap(),
+            Regex::new(r"(?i)(jwt|token|key|secret|password)[=:\s]+[a-zA-Z0-9+/=_\-]{10,}")
+                .expect("Invalid regex pattern for JWT tokens and API keys"),
             // Specific secret/key/password patterns
-            Regex::new(r"(?i)(secret|password|key)\s*[=:]\s*[a-zA-Z0-9+/=_\-]{5,}").unwrap(),
+            Regex::new(r"(?i)(secret|password|key)\s*[=:]\s*[a-zA-Z0-9+/=_\-]{5,}")
+                .expect("Invalid regex pattern for secret/key/password patterns"),
             // API keys with common prefixes
-            Regex::new(r"(?i)(sk_live_|sk_test_|api_key[=:\s]+)[a-zA-Z0-9+/=_\-]+").unwrap(),
+            Regex::new(r"(?i)(sk_live_|sk_test_|api_key[=:\s]+)[a-zA-Z0-9+/=_\-]+")
+                .expect("Invalid regex pattern for API keys with common prefixes"),
             // Password patterns in various formats
-            Regex::new(r"(?i)password[=:\s]+[^\s,;)]{3,}").unwrap(),
+            Regex::new(r"(?i)password[=:\s]+[^\s,;)]{3,}")
+                .expect("Invalid regex pattern for password patterns"),
             // Host and connection details with credentials  
-            Regex::new(r"(?i)(host|server)[=:\s]*[a-zA-Z0-9\.-]+\.(com|org|net|local|internal)[a-zA-Z0-9\.-]*").unwrap(),
+            Regex::new(r"(?i)(host|server)[=:\s]*[a-zA-Z0-9\.-]+\.(com|org|net|local|internal)[a-zA-Z0-9\.-]*")
+                .expect("Invalid regex pattern for host and connection details"),
             // File paths (Unix and Windows)
-            Regex::new(r"(/[a-zA-Z0-9_\-./]+){2,}|([A-Z]:\\[a-zA-Z0-9_\-\\./]+)").unwrap(),
+            Regex::new(r"(/[a-zA-Z0-9_\-./]+){2,}|([A-Z]:\\[a-zA-Z0-9_\-\\./]+)")
+                .expect("Invalid regex pattern for file paths"),
             // IP addresses
-            Regex::new(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b").unwrap(),
+            Regex::new(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b")
+                .expect("Invalid regex pattern for IP addresses"),
             // Email addresses
-            Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
+            Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
+                .expect("Invalid regex pattern for email addresses"),
             // Environment variables
-            Regex::new(r"\$\{[^}]+\}|\$[A-Z_][A-Z0-9_]*").unwrap(),
+            Regex::new(r"\$\{[^}]+\}|\$[A-Z_][A-Z0-9_]*")
+                .expect("Invalid regex pattern for environment variables"),
             // SQL injection patterns
-            Regex::new(r"(?i)(drop\s+table|delete\s+from|insert\s+into|update\s+\w+\s+set|select\s+.*\s+from)\s+[a-zA-Z0-9_]+").unwrap(),
+            Regex::new(r"(?i)(drop\s+table|delete\s+from|insert\s+into|update\s+\w+\s+set|select\s+.*\s+from)\s+[a-zA-Z0-9_]+")
+                .expect("Invalid regex pattern for SQL injection patterns"),
             // SQL error patterns
-            Regex::new(r"(?i)(table|column|constraint|foreign key|primary key)\s+[a-zA-Z0-9_]+").unwrap(),
+            Regex::new(r"(?i)(table|column|constraint|foreign key|primary key)\s+[a-zA-Z0-9_]+")
+                .expect("Invalid regex pattern for SQL error patterns"),
             // Stack traces
-            Regex::new(r"(?m)^\s*at\s+.*$").unwrap(),
+            Regex::new(r"(?m)^\s*at\s+.*$")
+                .expect("Invalid regex pattern for stack traces"),
             // Function names with line numbers
-            Regex::new(r"(in\s+function\s+)?[a-zA-Z_][a-zA-Z0-9_]*::\w+\(\)\s+(at\s+line\s+\d+)?").unwrap(),
+            Regex::new(r"(in\s+function\s+)?[a-zA-Z_][a-zA-Z0-9_]*::\w+\(\)\s+(at\s+line\s+\d+)?")
+                .expect("Invalid regex pattern for function names with line numbers"),
             // Generic secret-like tokens (long alphanumeric strings that might be sensitive)
-            Regex::new(r"\b[a-zA-Z0-9+/=]{32,}\b").unwrap(),
+            Regex::new(r"\b[a-zA-Z0-9+/=]{32,}\b")
+                .expect("Invalid regex pattern for generic secret-like tokens"),
         ];
 
         let path_patterns = vec![
             // Unix paths
-            Regex::new(r"/(?:home|root|var|etc|usr|opt)/[a-zA-Z0-9_\-./]*").unwrap(),
+            Regex::new(r"/(?:home|root|var|etc|usr|opt)/[a-zA-Z0-9_\-./]*")
+                .expect("Invalid regex pattern for Unix paths"),
             // Windows paths
-            Regex::new(r"[A-Z]:\\(?:Users|Windows|Program Files)[a-zA-Z0-9_\-\\./]*").unwrap(),
+            Regex::new(r"[A-Z]:\\(?:Users|Windows|Program Files)[a-zA-Z0-9_\-\\./]*")
+                .expect("Invalid regex pattern for Windows paths"),
             // Workspace paths
-            Regex::new(r"/workspace/[a-zA-Z0-9_\-./]*").unwrap(),
+            Regex::new(r"/workspace/[a-zA-Z0-9_\-./]*")
+                .expect("Invalid regex pattern for workspace paths"),
         ];
 
         Self {

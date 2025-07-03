@@ -1,0 +1,151 @@
+//! Ratchet MCP server example demonstrating the complete integration
+//!
+//! This example shows how to use the axum-mcp framework with Ratchet-specific
+//! tools, resources, and AI workflow prompts.
+//!
+//! Run with: cargo run --example ratchet_server_example
+
+use axum_mcp::axum_integration::{mcp_routes_with_wrapper, McpServerWrapper};
+use axum_mcp::server::{config::McpServerConfig, service::McpServer};
+use ratchet_mcp::ratchet_server::*;
+use ratchet_interfaces::{
+    logging::{StructuredLogger, LogEvent}, 
+    RepositoryFactory, TaskRepository, ExecutionRepository, JobRepository, 
+    ScheduleRepository, UserRepository, SessionRepository, ApiKeyRepository, DatabaseError
+};
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use async_trait::async_trait;
+
+// Mock implementations for the example
+struct MockRepositoryFactory;
+struct MockLogger;
+
+#[async_trait]
+impl RepositoryFactory for MockRepositoryFactory {
+    fn task_repository(&self) -> &dyn TaskRepository { 
+        unimplemented!("Mock implementation for example") 
+    }
+    fn execution_repository(&self) -> &dyn ExecutionRepository { 
+        unimplemented!("Mock implementation for example") 
+    }
+    fn job_repository(&self) -> &dyn JobRepository { 
+        unimplemented!("Mock implementation for example") 
+    }
+    fn schedule_repository(&self) -> &dyn ScheduleRepository { 
+        unimplemented!("Mock implementation for example") 
+    }
+    fn user_repository(&self) -> &dyn UserRepository { 
+        unimplemented!("Mock implementation for example") 
+    }
+    fn session_repository(&self) -> &dyn SessionRepository { 
+        unimplemented!("Mock implementation for example") 
+    }
+    fn api_key_repository(&self) -> &dyn ApiKeyRepository { 
+        unimplemented!("Mock implementation for example") 
+    }
+    async fn health_check(&self) -> Result<(), DatabaseError> {
+        Ok(())
+    }
+}
+
+impl StructuredLogger for MockLogger {
+    fn log(&self, _event: LogEvent) {
+        // Mock implementation - in real usage this would use Ratchet's logging system
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing
+    tracing_subscriber::fmt::init();
+
+    println!("🚀 Starting Ratchet MCP Server with axum-mcp framework");
+    println!();
+
+    // Create repository factory and logger
+    let repository_factory = Arc::new(MockRepositoryFactory);
+    let logger = Arc::new(MockLogger);
+
+    // Create Ratchet server state with tools, resources, and prompts
+    let ratchet_state = RatchetServerState::new(repository_factory, logger);
+
+    // Create MCP server configuration for SSE transport
+    let config = McpServerConfig::sse_with_host(3000, "0.0.0.0")
+        .with_batch(50)
+        .with_metadata("provider", serde_json::json!("Ratchet"))
+        .with_metadata("version", serde_json::json!(env!("CARGO_PKG_VERSION")));
+
+    // Create the Ratchet MCP server
+    let mcp_server = McpServer::new(config, ratchet_state);
+    
+    // Wrap the server for Axum integration
+    let server_wrapper = McpServerWrapper::new(mcp_server);
+
+    // Create Axum app with MCP routes
+    let app = axum::Router::new()
+        .merge(mcp_routes_with_wrapper())
+        .with_state(server_wrapper);
+
+    // Start the server
+    println!("🌐 Ratchet MCP Server running on http://0.0.0.0:3000");
+    println!();
+    println!("📡 Available Endpoints:");
+    println!("  GET  /mcp     - Server capabilities (shows tools + resources + prompts)");
+    println!("  POST /mcp     - JSON-RPC requests");
+    println!("  GET  /mcp/sse - Server-Sent Events stream");
+    println!();
+    println!("🔧 Available Ratchet Tools:");
+    println!("  • ratchet_execute_task       - Execute a Ratchet task");
+    println!("  • ratchet_list_executions    - List recent executions");
+    println!("  • ratchet_get_execution_logs - Get execution logs");
+    println!("  • ratchet_list_schedules     - List task schedules");
+    println!();
+    println!("📂 Available Resources (ratchet:// URI scheme):");
+    println!("  • ratchet://tasks/web-scraper      - Web scraper task configuration");
+    println!("  • ratchet://executions/template    - Execution template");
+    println!();
+    println!("🤖 Available AI Workflow Prompts:");
+    println!("  • ratchet_task_analyzer       - Analyze task configurations");
+    println!("  • ratchet_execution_debugger  - Debug failed executions");
+    println!("  • ratchet_schedule_optimizer  - Optimize task scheduling");
+    println!();
+    println!("🧪 Example API Calls:");
+    println!();
+    println!("1. Check server capabilities:");
+    println!("   curl http://localhost:3000/mcp");
+    println!();
+    println!("2. List Ratchet tools:");
+    println!("   curl -X POST http://localhost:3000/mcp \\");
+    println!("     -H 'Content-Type: application/json' \\");
+    println!("     -d '{{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}}'");
+    println!();
+    println!("3. Execute a Ratchet task:");
+    println!("   curl -X POST http://localhost:3000/mcp \\");
+    println!("     -H 'Content-Type: application/json' \\");
+    println!("     -d '{{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{{\"name\":\"ratchet_execute_task\",\"arguments\":{{\"task_name\":\"web-scraper\",\"parameters\":{{}}}}}},\"id\":2}}'");
+    println!();
+    println!("4. Get a Ratchet resource:");
+    println!("   curl -X POST http://localhost:3000/mcp \\");
+    println!("     -H 'Content-Type: application/json' \\");
+    println!("     -d '{{\"jsonrpc\":\"2.0\",\"method\":\"resources/read\",\"params\":{{\"uri\":\"ratchet://tasks/web-scraper\"}},\"id\":3}}'");
+    println!();
+    println!("5. Use Ratchet AI workflow (task analysis):");
+    println!("   curl -X POST http://localhost:3000/mcp \\");
+    println!("     -H 'Content-Type: application/json' \\");
+    println!("     -d '{{\"jsonrpc\":\"2.0\",\"method\":\"prompts/get\",\"params\":{{\"name\":\"ratchet_task_analyzer\",\"arguments\":{{\"task_config\":\"{{\\\"name\\\":\\\"web-scraper\\\",\\\"schedule\\\":\\\"0 6 * * *\\\"}}\"}}}},\"id\":4}}'");
+    println!();
+    println!("💡 Integration Features:");
+    println!("   • Complete MCP protocol support with JSON-RPC 2.0");
+    println!("   • Ratchet-specific tools for task execution and monitoring");  
+    println!("   • Custom ratchet:// URI scheme for resource access");
+    println!("   • AI workflow templates for task optimization");
+    println!("   • Server-Sent Events for real-time communication");
+    println!("   • Claude Desktop compatibility via StreamableHTTP");
+    println!();
+
+    let listener = TcpListener::bind("0.0.0.0:3000").await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}

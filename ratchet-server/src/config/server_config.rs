@@ -124,7 +124,8 @@ pub struct HeartbeatConfig {
 impl Default for HttpServerConfig {
     fn default() -> Self {
         Self {
-            bind_address: "127.0.0.1:3000".parse().unwrap(),
+            bind_address: "127.0.0.1:3000".parse()
+                .expect("Failed to parse default bind address"),
             enable_cors: true,
             enable_request_id: true,
             enable_tracing: true,

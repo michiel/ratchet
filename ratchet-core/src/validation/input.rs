@@ -270,7 +270,8 @@ impl InputValidator {
 
     /// Validate task name
     pub fn validate_task_name(&self, name: &str) -> Result<(), ValidationError> {
-        let name_regex = Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap();
+        let name_regex = Regex::new(r"^[a-zA-Z0-9_-]+$")
+            .expect("Invalid regex pattern for task name validation");
 
         if name.is_empty() {
             return Err(ValidationError::RequiredField {
@@ -297,7 +298,8 @@ impl InputValidator {
 
     /// Validate semantic version
     pub fn validate_semver(&self, version: &str) -> Result<(), ValidationError> {
-        let semver_regex = Regex::new(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*|[0-9a-zA-Z-]*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*|[0-9a-zA-Z-]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$").unwrap();
+        let semver_regex = Regex::new(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*|[0-9a-zA-Z-]*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*|[0-9a-zA-Z-]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$")
+            .expect("Invalid regex pattern for semver validation");
 
         if !semver_regex.is_match(version) {
             return Err(ValidationError::InvalidFormat {
@@ -405,7 +407,8 @@ impl InputValidator {
         ];
 
         for pattern in &suspicious_patterns {
-            let regex = Regex::new(pattern).unwrap();
+            let regex = Regex::new(pattern)
+                .expect("Invalid regex pattern for injection detection");
             if regex.is_match(input) {
                 return Err(ValidationError::PotentialInjection);
             }
@@ -438,7 +441,8 @@ impl InputValidator {
     fn _is_valid_cron_field(&self, field: &str) -> bool {
         // Cron field can contain: numbers, *, /, -, ,
         // Examples: *, */5, 1-10, 1,3,5, 15, */2
-        let cron_field_regex = regex::Regex::new(r"^[0-9*,/\-]+$").unwrap();
+        let cron_field_regex = regex::Regex::new(r"^[0-9*,/\-]+$")
+            .expect("Invalid regex pattern for cron field validation");
         cron_field_regex.is_match(field)
     }
 
@@ -490,7 +494,8 @@ impl InputValidator {
 
     /// Validate email format
     pub fn validate_email(&self, email: &str) -> Result<(), ValidationError> {
-        let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
+        let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+            .expect("Invalid regex pattern for email validation");
 
         if !email_regex.is_match(email) {
             return Err(ValidationError::InvalidFormat {

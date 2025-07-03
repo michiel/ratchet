@@ -65,7 +65,8 @@ impl ConfigManager {
             self.configurations.insert(repository_id, config);
         }
         
-        Ok(self.configurations.get(&repository_id).unwrap())
+        Ok(self.configurations.get(&repository_id)
+            .expect("Configuration should exist after successful insertion"))
     }
 
     /// Get configuration for a repository (loads if not cached)

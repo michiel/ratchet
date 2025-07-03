@@ -19,7 +19,7 @@ members = [
     "ratchet-logging",  # Structured logging infrastructure
     "ratchet-output",   # Output destination system
     "ratchet-mcp",      # New MCP implementation
-    # "axum-mcp",         # Standalone MCP implementation with Axum - temporarily disabled due to compilation issues
+    # "axum-mcp-external",         # Standalone MCP implementation with Axum - temporarily disabled
     # "ratchet-lib",      # REMOVED - migrated to modular components
     "ratchet-cli-tools", # CLI tools and utilities (extracted from ratchet-lib)
     "ratchet-cli", "ratchet-config", "ratchet-plugin", "ratchet-registry",

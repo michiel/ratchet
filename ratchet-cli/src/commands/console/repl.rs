@@ -798,7 +798,8 @@ impl RatchetConsole {
         // Enhanced variable substitution with multiple formats
         // Support: $VAR, ${VAR}, $ENV{VAR}, ${ENV:VAR}, ${VAR:-default}
 
-        let re = regex::Regex::new(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)").unwrap();
+        let re = regex::Regex::new(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+            .expect("Invalid regex pattern for variable expansion");
 
         result = re
             .replace_all(&result, |caps: &regex::Captures| {
@@ -848,7 +849,7 @@ impl RatchetConsole {
                     // Check environment variables as fallback
                     std::env::var(var_name).unwrap_or_else(|_| format!("${}", var_name))
                 } else {
-                    caps.get(0).unwrap().as_str().to_string()
+                    caps.get(0).expect("Regex capture group 0 should always exist").as_str().to_string()
                 }
             })
             .to_string();

@@ -81,6 +81,9 @@ mod stdio_initialization_test;
 // SSE-specific integration tests
 mod sse_integration_test;
 
+// axum-mcp integration tests
+mod integration_test;
+
 /// Test the MCP server initialization sequence
 #[tokio::test]
 async fn test_mcp_server_initialization() {
