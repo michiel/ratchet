@@ -1,6 +1,10 @@
 //! Core error types for Ratchet
 
 use thiserror::Error;
+use std::time::Duration;
+
+pub mod standardized;
+pub use standardized::{StandardizedError, ErrorCategory, ErrorMetadata, ToApiError};
 
 /// Core error type for all Ratchet errors
 #[derive(Debug, Error)]
@@ -257,21 +261,140 @@ macro_rules! ratchet_error {
     };
 }
 
-impl RatchetError {
-    /// Check if this error is retryable
-    pub fn is_retryable(&self) -> bool {
-        match self {
-            RatchetError::Network(_) => true,
-            RatchetError::Timeout(_) => true,
-            RatchetError::Storage(StorageError::ConnectionFailed(_)) => true,
-            RatchetError::Service(ServiceError::Unavailable(_)) => true,
-            RatchetError::Execution(ExecutionError::WorkerError(_)) => true,
-            _ => false,
+// Implement the standardized error trait for RatchetError
+impl StandardizedError for RatchetError {
+    fn metadata(&self) -> ErrorMetadata {
+        use std::collections::HashMap;
+
+        let (code, category, retryable, retry_delay, http_status) = match self {
+            RatchetError::Task(TaskError::NotFound(_)) => (
+                "TASK_NOT_FOUND", ErrorCategory::NotFound, false, None, 404
+            ),
+            RatchetError::Task(TaskError::ValidationFailed(_)) => (
+                "TASK_VALIDATION_FAILED", ErrorCategory::Validation, false, None, 400
+            ),
+            RatchetError::Task(TaskError::Disabled(_)) => (
+                "TASK_DISABLED", ErrorCategory::Client, false, None, 403
+            ),
+            RatchetError::Task(TaskError::Deprecated(_)) => (
+                "TASK_DEPRECATED", ErrorCategory::Client, false, None, 410
+            ),
+            RatchetError::Task(TaskError::VersionMismatch { .. }) => (
+                "TASK_VERSION_MISMATCH", ErrorCategory::Client, false, None, 400
+            ),
+            RatchetError::Task(TaskError::InvalidSource(_)) => (
+                "TASK_INVALID_SOURCE", ErrorCategory::Validation, false, None, 400
+            ),
+            RatchetError::Execution(ExecutionError::NotFound(_)) => (
+                "EXECUTION_NOT_FOUND", ErrorCategory::NotFound, false, None, 404
+            ),
+            RatchetError::Execution(ExecutionError::Failed(_)) => (
+                "EXECUTION_FAILED", ErrorCategory::Server, false, None, 500
+            ),
+            RatchetError::Execution(ExecutionError::Cancelled) => (
+                "EXECUTION_CANCELLED", ErrorCategory::Client, false, None, 400
+            ),
+            RatchetError::Execution(ExecutionError::Timeout(_)) => (
+                "EXECUTION_TIMEOUT", ErrorCategory::Network, true, Some(Duration::from_secs(2)), 408
+            ),
+            RatchetError::Execution(ExecutionError::InvalidState(_)) => (
+                "EXECUTION_INVALID_STATE", ErrorCategory::Client, false, None, 400
+            ),
+            RatchetError::Execution(ExecutionError::WorkerError(_)) => (
+                "EXECUTION_WORKER_ERROR", ErrorCategory::Server, true, Some(Duration::from_secs(1)), 500
+            ),
+            RatchetError::ExecutionError(_) => (
+                "EXECUTION_ERROR", ErrorCategory::Server, false, None, 500
+            ),
+            RatchetError::Storage(StorageError::NotFound) => (
+                "ENTITY_NOT_FOUND", ErrorCategory::NotFound, false, None, 404
+            ),
+            RatchetError::Storage(StorageError::ConnectionFailed(_)) => (
+                "STORAGE_CONNECTION_FAILED", ErrorCategory::Network, true, Some(Duration::from_secs(1)), 503
+            ),
+            RatchetError::Storage(StorageError::QueryFailed(_)) => (
+                "STORAGE_QUERY_FAILED", ErrorCategory::Server, false, None, 500
+            ),
+            RatchetError::Storage(StorageError::TransactionFailed(_)) => (
+                "STORAGE_TRANSACTION_FAILED", ErrorCategory::Server, true, Some(Duration::from_millis(500)), 500
+            ),
+            RatchetError::Storage(StorageError::MigrationFailed(_)) => (
+                "STORAGE_MIGRATION_FAILED", ErrorCategory::Configuration, false, None, 500
+            ),
+            RatchetError::Storage(StorageError::DuplicateKey(_)) => (
+                "STORAGE_DUPLICATE_KEY", ErrorCategory::Client, false, None, 409
+            ),
+            RatchetError::Config(_) => (
+                "CONFIG_ERROR", ErrorCategory::Configuration, false, None, 500
+            ),
+            RatchetError::Validation(_) => (
+                "VALIDATION_ERROR", ErrorCategory::Validation, false, None, 400
+            ),
+            RatchetError::Service(ServiceError::NotFound(_)) => (
+                "SERVICE_NOT_FOUND", ErrorCategory::NotFound, false, None, 404
+            ),
+            RatchetError::Service(ServiceError::Unavailable(_)) => (
+                "SERVICE_UNAVAILABLE", ErrorCategory::Network, true, Some(Duration::from_secs(5)), 503
+            ),
+            RatchetError::Service(ServiceError::InitializationFailed(_)) => (
+                "SERVICE_INITIALIZATION_FAILED", ErrorCategory::Configuration, false, None, 500
+            ),
+            RatchetError::Service(ServiceError::DependencyInjectionFailed(_)) => (
+                "SERVICE_DEPENDENCY_INJECTION_FAILED", ErrorCategory::Configuration, false, None, 500
+            ),
+            RatchetError::Plugin(PluginError::NotFound(_)) => (
+                "PLUGIN_NOT_FOUND", ErrorCategory::NotFound, false, None, 404
+            ),
+            RatchetError::Plugin(PluginError::LoadFailed(_)) => (
+                "PLUGIN_LOAD_FAILED", ErrorCategory::Configuration, false, None, 500
+            ),
+            RatchetError::Plugin(PluginError::InitializationFailed(_)) => (
+                "PLUGIN_INITIALIZATION_FAILED", ErrorCategory::Configuration, false, None, 500
+            ),
+            RatchetError::Plugin(PluginError::ApiVersionMismatch { .. }) => (
+                "PLUGIN_API_VERSION_MISMATCH", ErrorCategory::Configuration, false, None, 500
+            ),
+            RatchetError::Plugin(PluginError::CapabilityNotSupported(_)) => (
+                "PLUGIN_CAPABILITY_NOT_SUPPORTED", ErrorCategory::Client, false, None, 400
+            ),
+            RatchetError::Network(_) => (
+                "NETWORK_ERROR", ErrorCategory::Network, true, Some(Duration::from_secs(1)), 503
+            ),
+            RatchetError::Io(_) => (
+                "IO_ERROR", ErrorCategory::Server, true, Some(Duration::from_millis(500)), 500
+            ),
+            RatchetError::Serialization(_) => (
+                "SERIALIZATION_ERROR", ErrorCategory::Client, false, None, 400
+            ),
+            RatchetError::Timeout(_) => (
+                "TIMEOUT", ErrorCategory::Network, true, Some(Duration::from_secs(2)), 408
+            ),
+            RatchetError::Other(_) => (
+                "INTERNAL_ERROR", ErrorCategory::Server, false, None, 500
+            ),
+        };
+
+        ErrorMetadata {
+            code: code.to_string(),
+            http_status,
+            retryable,
+            retry_delay,
+            category,
+            context: HashMap::new(),
         }
     }
+}
 
-    /// Get the error code for API responses
-    pub fn error_code(&self) -> &'static str {
+impl RatchetError {
+    /// Check if this error is retryable (backward compatibility)
+    pub fn is_retryable(&self) -> bool {
+        StandardizedError::is_retryable(self)
+    }
+
+    /// Get the error code for API responses (backward compatibility)
+    pub fn error_code(&self) -> &str {
+        // We need to return a &str, but StandardizedError returns String
+        // For backward compatibility, we'll keep the original implementation
         match self {
             RatchetError::Task(TaskError::NotFound(_)) => "TASK_NOT_FOUND",
             RatchetError::Execution(ExecutionError::NotFound(_)) => "EXECUTION_NOT_FOUND",
@@ -287,20 +410,9 @@ impl RatchetError {
         }
     }
 
-    /// Get the HTTP status code for this error
+    /// Get the HTTP status code for this error (backward compatibility)
     pub fn status_code(&self) -> u16 {
-        match self {
-            RatchetError::Task(TaskError::NotFound(_)) => 404,
-            RatchetError::Execution(ExecutionError::NotFound(_)) => 404,
-            RatchetError::Storage(StorageError::NotFound) => 404,
-            RatchetError::Validation(_) => 400,
-            RatchetError::Config(_) => 500,
-            RatchetError::Task(TaskError::Disabled(_)) => 403,
-            RatchetError::Task(TaskError::Deprecated(_)) => 410,
-            RatchetError::Timeout(_) => 408,
-            RatchetError::Service(ServiceError::Unavailable(_)) => 503,
-            _ => 500,
-        }
+        StandardizedError::http_status(self)
     }
 }
 
