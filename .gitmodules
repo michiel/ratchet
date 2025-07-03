@@ -1,0 +1,3 @@
+[submodule "axum-mcp-external"]
+	path = axum-mcp-external
+	url = https://github.com/michiel/axum-mcp.git
