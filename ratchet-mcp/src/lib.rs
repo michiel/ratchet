@@ -42,6 +42,10 @@
 //!     └─────────────────┘
 //! ```
 
+// Import axum-mcp selectively to avoid conflicts
+// pub use axum_mcp as axum_mcp_lib; // Temporarily disabled due to compilation issues
+
+// Keep existing ratchet-mcp modules
 pub mod protocol;
 pub mod transport;
 
@@ -59,12 +63,16 @@ pub mod metrics;
 pub mod monitoring;
 pub mod recovery;
 
+// Ratchet-specific modules that extend axum-mcp
+// pub mod ratchet_server; // Temporarily disabled due to axum-mcp compilation issues
+
 // Re-export commonly used types
 pub use error::{McpError, McpResult};
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpCapabilities, McpMessage, McpMethod};
 
 #[cfg(feature = "server")]
 pub use server::{McpServer, McpServerConfig, McpTool, ToolRegistry};
+// pub use ratchet_server::{RatchetMcpServer, RatchetToolRegistry, RatchetServerState}; // Temporarily disabled
 
 #[cfg(feature = "client")]
 pub use client::{McpClient, McpClientConfig, ServerConnection};

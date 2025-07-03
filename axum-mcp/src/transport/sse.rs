@@ -142,12 +142,12 @@ impl SseTransport {
             .header("Connection", "keep-alive");
 
         let response = builder.send().await.map_err(|e| McpError::ConnectionFailed {
-            reason: format!("Failed to connect to SSE endpoint: {}", e),
+            message: format!("Failed to connect to SSE endpoint: {}", e),
         })?;
 
         if !response.status().is_success() {
             return Err(McpError::ConnectionFailed {
-                reason: format!("SSE connection failed with status: {}", response.status()),
+                message: format!("SSE connection failed with status: {}", response.status()),
             });
         }
 
@@ -303,7 +303,7 @@ impl McpTransport for SseTransport {
             Some(data) => {
                 // Parse JSON response
                 let response: JsonRpcResponse = serde_json::from_str(&data).map_err(|e| McpError::Serialization {
-                    details: format!("Failed to parse SSE response: {}", e),
+                    message: format!("Failed to parse SSE response: {}", e),
                 })?;
 
                 // Update health
@@ -319,7 +319,7 @@ impl McpTransport for SseTransport {
                 health.mark_failure("SSE stream ended".to_string());
 
                 Err(McpError::ConnectionFailed {
-                    reason: "SSE stream ended".to_string(),
+                    message: "SSE stream ended".to_string(),
                 })
             }
         }

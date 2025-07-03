@@ -52,6 +52,7 @@ impl McpServerState for SimpleServerState {
         axum_mcp::protocol::ServerInfo {
             name: "Minimal MCP Server".to_string(),
             version: "1.0.0".to_string(),
+            metadata: std::collections::HashMap::new(),
         }
     }
 }
@@ -107,6 +108,7 @@ impl ToolRegistry for EchoToolRegistry {
                             text: format!("Echo: {}", message)
                         }],
                         is_error: false,
+                        metadata: std::collections::HashMap::new(),
                     });
                 }
             }

@@ -9,7 +9,7 @@ use crate::{
     error::{McpError, McpResult},
     protocol::{
         InitializeParams, InitializeResult, JsonRpcRequest, JsonRpcResponse, 
-        McpMethod, StandardMethod, Tool, ToolsCallParams, ToolsCallResult, 
+        StandardMethod, Tool, ToolsCallParams, ToolsCallResult, 
         ToolsListResult, BatchRequest, BatchResult, BatchItemResult,
         generate_request_id,
     },
@@ -96,10 +96,10 @@ where
         
         // Handle the request based on method type
         let result = match method {
-            McpMethod::Standard(standard_method) => {
+            InternalMcpMethod::Standard(standard_method) => {
                 self.handle_standard_method(standard_method, request.params, &context).await
             }
-            McpMethod::Custom(custom_method) => {
+            InternalMcpMethod::Custom(custom_method) => {
                 self.state.handle_custom_method(&custom_method, request.params, &context).await
             }
         };
@@ -289,9 +289,12 @@ where
                 )).await;
                 
                 BatchItemResult {
-                    id: item.id,
+                    id: item.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
                     result: if result.error.is_none() { result.result } else { None },
                     error: result.error,
+                    execution_time_ms: 0, // TODO: Add timing
+                    skipped: false,
+                    metadata: HashMap::new(),
                 }
             })
             .buffer_unordered(max_parallel)
@@ -313,9 +316,12 @@ where
             let result = self.handle_request(item.clone(), context.security.clone()).await;
             
             let batch_result = BatchItemResult {
-                id: item.id,
+                id: item.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
                 result: if result.error.is_none() { result.result } else { None },
                 error: result.error.clone(),
+                execution_time_ms: 0, // TODO: Add timing
+                skipped: false,
+                metadata: HashMap::new(),
             };
             
             results.push(batch_result);
@@ -339,7 +345,7 @@ where
     /// Validate a request
     async fn validate_request(&self, request: &JsonRpcRequest, context: &SecurityContext) -> McpResult<()> {
         // Check if method requires initialization
-        if let Ok(McpMethod::Standard(method)) = self.parse_method(&request.method) {
+        if let Ok(InternalMcpMethod::Standard(method)) = self.parse_method(&request.method) {
             if method.requires_initialization() && !context.is_authenticated() {
                 // For simplicity, we'll consider system context as "initialized"
                 // Real implementations might track initialization state
@@ -355,15 +361,15 @@ where
     }
     
     /// Parse a method string into an MCP method
-    fn parse_method(&self, method: &str) -> McpResult<McpMethod> {
+    fn parse_method(&self, method: &str) -> McpResult<InternalMcpMethod> {
         // Try to parse as standard method first
         if let Ok(standard_method) = serde_json::from_value::<StandardMethod>(
             serde_json::Value::String(method.to_string())
         ) {
-            Ok(McpMethod::Standard(standard_method))
+            Ok(InternalMcpMethod::Standard(standard_method))
         } else {
             // Treat as custom method
-            Ok(McpMethod::Custom(method.to_string()))
+            Ok(InternalMcpMethod::Custom(method.to_string()))
         }
     }
     
@@ -399,7 +405,7 @@ where
 
 /// MCP method enumeration
 #[derive(Debug, Clone)]
-pub enum McpMethod {
+enum InternalMcpMethod {
     /// Standard MCP protocol method
     Standard(StandardMethod),
     /// Custom application-specific method

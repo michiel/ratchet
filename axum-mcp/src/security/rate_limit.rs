@@ -127,7 +127,7 @@ impl RateLimiter {
                     self.config.window_duration.as_secs(),
                     self.config.max_requests
                 ),
-                retry_after: Some(retry_after),
+                retry_after: Some(retry_after.as_secs()),
             });
         }
 
@@ -154,7 +154,7 @@ impl RateLimiter {
                     state.total_requests + count,
                     self.config.max_requests
                 ),
-                retry_after: Some(retry_after),
+                retry_after: Some(retry_after.as_secs()),
             });
         }
 

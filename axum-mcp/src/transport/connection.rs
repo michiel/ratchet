@@ -305,7 +305,7 @@ impl ConnectionPool {
         tokio::time::timeout(self.config.connection_timeout, transport.connect())
             .await
             .map_err(|_| McpError::ConnectionTimeout {
-                timeout: self.config.connection_timeout,
+                message: format!("Connection timeout after {:?}", self.config.connection_timeout),
             })??;
 
         // Create connection wrapper

@@ -59,6 +59,17 @@ pub enum McpError {
     #[error("Rate limit exceeded: {message}")]
     RateLimit { message: String },
 
+    /// Rate limit exceeded with details
+    #[error("Rate limit exceeded: {message}")]
+    RateLimitExceeded { 
+        message: String,
+        retry_after: Option<u64>,
+    },
+
+    /// Network errors
+    #[error("Network error: {message}")]
+    Network { message: String },
+
     /// Validation errors
     #[error("Validation error: {message}")]
     Validation { message: String },
@@ -74,6 +85,14 @@ pub enum McpError {
     /// Connection errors
     #[error("Connection error: {message}")]
     Connection { message: String },
+
+    /// Connection failed
+    #[error("Connection failed: {message}")]
+    ConnectionFailed { message: String },
+
+    /// Connection timeout
+    #[error("Connection timeout: {message}")]
+    ConnectionTimeout { message: String },
 
     /// Internal server errors
     #[error("Internal error: {message}")]
@@ -91,9 +110,13 @@ impl McpError {
             McpError::Protocol { .. } => StatusCode::BAD_REQUEST,
             McpError::Configuration { .. } => StatusCode::BAD_REQUEST,
             McpError::RateLimit { .. } => StatusCode::TOO_MANY_REQUESTS,
+            McpError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+            McpError::Network { .. } => StatusCode::SERVICE_UNAVAILABLE,
             McpError::ServerTimeout { .. } => StatusCode::REQUEST_TIMEOUT,
             McpError::ClientTimeout { .. } => StatusCode::REQUEST_TIMEOUT,
             McpError::Connection { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            McpError::ConnectionFailed { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            McpError::ConnectionTimeout { .. } => StatusCode::REQUEST_TIMEOUT,
             McpError::Transport { .. } => StatusCode::SERVICE_UNAVAILABLE,
             McpError::ToolExecution { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             McpError::Session { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -112,6 +135,7 @@ impl McpError {
             McpError::Authentication { .. } => -32000, // Server error (auth)
             McpError::Authorization { .. } => -32000, // Server error (authz)
             McpError::RateLimit { .. } => -32000, // Server error (rate limit)
+            McpError::RateLimitExceeded { .. } => -32000, // Server error (rate limit)
             McpError::ToolExecution { .. } => -32000, // Server error (execution)
             _ => -32603, // Internal error
         }
@@ -126,6 +150,7 @@ impl McpError {
             McpError::Validation { message } => message.clone(),
             McpError::Protocol { message } => message.clone(),
             McpError::RateLimit { .. } => "Rate limit exceeded".to_string(),
+            McpError::RateLimitExceeded { .. } => "Rate limit exceeded".to_string(),
             McpError::ServerTimeout { .. } => "Request timeout".to_string(),
             McpError::ClientTimeout { .. } => "Request timeout".to_string(),
             _ => "Internal server error".to_string(),

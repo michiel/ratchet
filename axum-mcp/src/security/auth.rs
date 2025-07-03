@@ -329,7 +329,7 @@ impl McpAuthManager {
     /// List active sessions
     pub async fn list_sessions(&self) -> Vec<ClientContext> {
         let sessions = self.sessions.read().await;
-        sessions.values().cloned().collect()
+        sessions.values().map(|ctx| ctx.client.clone()).collect()
     }
 
     /// Clean up expired sessions
@@ -337,7 +337,9 @@ impl McpAuthManager {
         let mut sessions = self.sessions.write().await;
         let cutoff = Utc::now() - max_age;
 
-        sessions.retain(|_, context| context.authenticated_at > cutoff);
+        sessions.retain(|_, context| {
+            context.authenticated_at.map_or(false, |auth_time| auth_time > cutoff)
+        });
     }
 }
 
@@ -346,7 +348,7 @@ mod tests {
     use super::*;
     use crate::security::permissions::{RateLimits, ResourceQuotas};
 
-    fn create_test_api_key_config() -> McpAuth {
+    fn create_test_api_key_config() -> McpAuthConfig {
         let mut keys = HashMap::new();
         keys.insert(
             "test-key-123".to_string(),
@@ -366,7 +368,7 @@ mod tests {
             },
         );
 
-        McpAuth::ApiKey { keys }
+        McpAuthConfig::ApiKey { keys }
     }
 
     #[tokio::test]
@@ -378,9 +380,9 @@ mod tests {
         let result = auth_manager.authenticate(Some("Bearer test-key-123")).await;
         assert!(result.is_ok());
 
-        let client = result.unwrap();
-        assert_eq!(client.name, "Test Client");
-        assert!(client.permissions.can_execute_tasks);
+        let context = result.unwrap();
+        assert_eq!(context.client.client_id.as_ref().unwrap(), "Test Client");
+        assert!(context.permissions.can_execute_tasks);
 
         // Test invalid API key
         let result = auth_manager.authenticate(Some("Bearer invalid-key")).await;
@@ -397,27 +399,28 @@ mod tests {
         let auth_manager = McpAuthManager::new(config);
 
         // Authenticate and create session
-        let client = auth_manager.authenticate(Some("Bearer test-key-123")).await.unwrap();
+        let context = auth_manager.authenticate(Some("Bearer test-key-123")).await.unwrap();
+        let session_id = context.client.session_id.as_ref().unwrap();
 
         // Get session
-        let session = auth_manager.get_session(&client.session_id).await;
+        let session = auth_manager.get_session(session_id).await;
         assert!(session.is_some());
-        assert_eq!(session.unwrap().id, client.id);
+        assert_eq!(session.unwrap().client.session_id.as_ref().unwrap(), session_id);
 
         // Remove session
-        auth_manager.remove_session(&client.session_id).await;
-        let session = auth_manager.get_session(&client.session_id).await;
+        auth_manager.remove_session(session_id).await;
+        let session = auth_manager.get_session(session_id).await;
         assert!(session.is_none());
     }
 
     #[tokio::test]
     async fn test_no_auth() {
-        let auth_manager = McpAuthManager::new(McpAuth::None);
+        let auth_manager = McpAuthManager::new(McpAuthConfig::None);
 
         let result = auth_manager.authenticate(None).await;
         assert!(result.is_ok());
 
-        let client = result.unwrap();
-        assert_eq!(client.id, "anonymous");
+        let context = result.unwrap();
+        assert!(!context.is_authenticated());
     }
 }

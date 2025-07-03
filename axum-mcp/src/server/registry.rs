@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::{
     error::{McpError, McpResult},
     protocol::{Tool, ToolContent, ToolsCallResult},
-    security::SecurityContext,
+    security::{SecurityContext},
 };
 
 /// MCP tool definition with execution capability
@@ -164,6 +164,7 @@ pub trait ToolRegistry: Send + Sync {
 }
 
 /// Simple in-memory tool registry implementation
+#[derive(Clone)]
 pub struct InMemoryToolRegistry {
     tools: HashMap<String, McpTool>,
 }

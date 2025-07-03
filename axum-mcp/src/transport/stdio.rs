@@ -83,7 +83,7 @@ impl StdioTransport {
         }
 
         let mut child = cmd.spawn().map_err(|e| McpError::ConnectionFailed {
-            reason: format!("Failed to spawn process '{}': {}", self.command, e),
+            message: format!("Failed to spawn process '{}': {}", self.command, e),
         })?;
 
         // Take stdin and stdout handles
@@ -116,7 +116,7 @@ impl StdioTransport {
 
         if bytes_read == 0 {
             return Err(McpError::ConnectionFailed {
-                reason: "Process closed stdout".to_string(),
+                message: "Process closed stdout".to_string(),
             });
         }
 
@@ -199,7 +199,7 @@ impl McpTransport for StdioTransport {
         if !self.is_process_running() {
             self.connected = false;
             return Err(McpError::ConnectionFailed {
-                reason: "Child process has terminated".to_string(),
+                message: "Child process has terminated".to_string(),
             });
         }
 
@@ -207,7 +207,7 @@ impl McpTransport for StdioTransport {
 
         // Serialize message to JSON
         let json = serde_json::to_string(&message).map_err(|e| McpError::Serialization {
-            details: format!("Failed to serialize request: {}", e),
+            message: format!("Failed to serialize request: {}", e),
         })?;
 
         // Send the message
@@ -238,7 +238,7 @@ impl McpTransport for StdioTransport {
         if !self.is_process_running() {
             self.connected = false;
             return Err(McpError::ConnectionFailed {
-                reason: "Child process has terminated".to_string(),
+                message: "Child process has terminated".to_string(),
             });
         }
 
@@ -257,7 +257,7 @@ impl McpTransport for StdioTransport {
 
         // Parse JSON response
         let response: JsonRpcResponse = serde_json::from_str(&line).map_err(|e| McpError::Serialization {
-            details: format!("Failed to parse response: {}", e),
+            message: format!("Failed to parse response: {}", e),
         })?;
 
         // Update health

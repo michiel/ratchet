@@ -7,10 +7,10 @@ pub mod registry;
 pub mod service;
 
 pub use config::McpServerConfig;
-pub use handler::{McpHandlerState};
+pub use handler::McpHandlerState;
 pub use progress::{ProgressReporter, ProgressUpdate, ProgressLevel};
 pub use registry::{ToolRegistry, ToolExecutionContext, McpTool, InMemoryToolRegistry};
-pub use service::{McpServer, McpServerState};
+pub use service::McpServer;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -49,19 +49,21 @@ pub trait McpServerState: Send + Sync + Clone + 'static {
         ServerInfo {
             name: "MCP Server".to_string(),
             version: "0.1.0".to_string(),
+            metadata: HashMap::new(),
         }
     }
     
     /// Get server capabilities
     fn server_capabilities(&self) -> ServerCapabilities {
         ServerCapabilities {
+            experimental: HashMap::new(),
+            logging: None,
+            prompts: None,
+            resources: None,
             tools: Some(crate::protocol::ToolsCapability {
                 list_changed: false,
             }),
-            resources: None,
-            prompts: None,
-            completion: None,
-            experimental: HashMap::new(),
+            batch: None,
         }
     }
     
@@ -76,7 +78,6 @@ pub trait McpServerState: Send + Sync + Clone + 'static {
             protocol_version,
             capabilities: self.server_capabilities(),
             server_info: self.server_info(),
-            instructions: None,
         })
     }
     
