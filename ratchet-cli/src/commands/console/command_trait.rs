@@ -6,7 +6,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::pin::Pin;
 use futures::Stream;
-use tokio::sync::mpsc;
 
 use super::enhanced_mcp_client::EnhancedMcpClient;
 

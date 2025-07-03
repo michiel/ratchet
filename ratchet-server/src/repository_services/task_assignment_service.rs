@@ -368,7 +368,7 @@ impl std::error::Error for TaskAssignmentError {}
 
 #[cfg(test)]
 mod tests {
-    use super::{TaskAssignmentService, TaskRepositoryAssignment, AssignTaskRequest};
+    
     
     // TODO: Add comprehensive tests for task assignment operations
     // This would include:

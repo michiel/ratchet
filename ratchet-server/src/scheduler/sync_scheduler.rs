@@ -525,7 +525,7 @@ impl Clone for SyncScheduler {
 
 #[cfg(test)]
 mod tests {
-    use super::{SyncScheduler, SyncSchedulerConfig, SyncSchedule};
+    
     
     // TODO: Add comprehensive tests for sync scheduler
     // This would include:

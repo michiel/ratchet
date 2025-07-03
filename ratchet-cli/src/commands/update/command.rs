@@ -129,10 +129,13 @@ impl UpdateCommand {
 
         // Sort by modification time (newest first)
         backup_files.sort_by(|a, b| {
-            let a_meta = std::fs::metadata(a).unwrap_or_else(|_| std::fs::metadata(".").unwrap());
-            let b_meta = std::fs::metadata(b).unwrap_or_else(|_| std::fs::metadata(".").unwrap());
-            b_meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                .cmp(&a_meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH))
+            let a_modified = std::fs::metadata(a)
+                .and_then(|meta| meta.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let b_modified = std::fs::metadata(b)
+                .and_then(|meta| meta.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            b_modified.cmp(&a_modified)
         });
 
         let latest_backup = &backup_files[0];

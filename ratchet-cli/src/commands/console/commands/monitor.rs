@@ -1,8 +1,8 @@
 //! Monitoring and dashboard commands for real-time system oversight
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::commands::console::{

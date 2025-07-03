@@ -29,7 +29,9 @@ impl CommandParser {
         }
 
         let mut args_iter = parts.iter();
-        let category = args_iter.next().unwrap().clone();
+        let category = args_iter.next()
+            .expect("First argument should exist after empty check")
+            .clone();
 
         let action = if let Some(action) = args_iter.next() {
             action.clone()

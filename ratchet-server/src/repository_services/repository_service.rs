@@ -702,7 +702,7 @@ impl EnhancedRepositoryService {
 
 #[cfg(test)]
 mod tests {
-    use super::{EnhancedRepositoryService, RepositorySyncStatus};
+    
     
     // TODO: Add comprehensive tests for repository service operations
     // This would include:

@@ -46,6 +46,7 @@ rand = "0.8"
 sha2 = "0.10"
 
 # Internal dependencies
+axum-mcp = { path = "../axum-mcp-external" }
 ratchet-interfaces = { path = "../ratchet-interfaces" }
 ratchet-core = { path = "../ratchet-core" }
 ratchet-api-types = { path = "../ratchet-api-types" }
@@ -72,6 +73,7 @@ transport-sse = ["ratchet-http/server"]
 transport-streamable-http = ["ratchet-http/server"]
 
 [dev-dependencies]
+tracing-subscriber = "0.3"
 tokio-test = "0.4"
 sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 fastrand = { workspace = true }

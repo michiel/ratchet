@@ -67,7 +67,8 @@ mod tests {
     #[test]
     fn test_platform_detection() {
         let detector = DefaultPlatformDetector::new();
-        let platform = detector.detect_platform().unwrap();
+        let platform = detector.detect_platform()
+            .expect("Platform detection should work on supported systems");
         
         // Basic sanity checks
         assert!(!platform.os.is_empty());
