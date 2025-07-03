@@ -30,7 +30,7 @@ cron = { workspace = true }
 sha2 = "0.10"
 hex = "0.4"
 serde_yaml = { workspace = true }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { workspace = true, features = ["json"] }
 urlencoding = "2.1"
 
 # Database dependencies (optional)
