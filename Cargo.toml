@@ -67,7 +67,7 @@ base64 = "0.22"
 http = "1.0"
 http-body = "1.0"
 hyper = "1.0"
-lru = "0.10"
+lru = "0.16"
 ahash = "0.8"
 fastrand = "2.0"
 # HTTP stack dependencies
@@ -97,7 +97,7 @@ once_cell = "1.20"
 # Remove older version conflicts
 bitflags = "2.6"
 # Git libraries
-gix = { version = "0.66", default-features = false, features = ["blocking-http-transport-reqwest", "blocking-http-transport-reqwest-rust-tls", "credentials", "worktree-mutation"] }
+gix = { version = "0.73", default-features = false, features = ["blocking-http-transport-reqwest", "blocking-http-transport-reqwest-rust-tls", "credentials", "worktree-mutation"] }
 
 # Development/Testing Dependencies (for benchmarks and property testing)
 [workspace.dev-dependencies]
