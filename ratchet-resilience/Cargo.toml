@@ -15,7 +15,7 @@ thiserror = { workspace = true }
 async-trait = "0.1"
 log = { workspace = true }
 chrono = { workspace = true }
-rand = "0.8"
+rand = "0.9"
 parking_lot = "0.12"
 humantime-serde = "1.1"
 futures = "0.3"
